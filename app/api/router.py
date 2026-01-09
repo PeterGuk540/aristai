@@ -1,0 +1,18 @@
+from fastapi import APIRouter
+from app.api.routes import courses, sessions, posts, polls, reports
+from app.core.config import get_settings
+
+api_router = APIRouter()
+
+# Include all route modules
+api_router.include_router(courses.router, prefix="/courses", tags=["courses"])
+api_router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
+api_router.include_router(posts.router, prefix="/posts", tags=["posts"])
+api_router.include_router(polls.router, prefix="/polls", tags=["polls"])
+api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+
+# Debug routes only available when DEBUG=true
+settings = get_settings()
+if settings.debug:
+    from app.api.routes import debug
+    api_router.include_router(debug.router, prefix="/debug", tags=["debug"])

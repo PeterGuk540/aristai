@@ -1,0 +1,20 @@
+# Development overrides - enables hot reload
+#
+# Usage:
+#   Dev (with reload): docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   Stable (no reload): docker compose -f docker-compose.yml up
+#
+# Note: --reload with bind mounts can be slow on Windows/macOS
+# If you experience high CPU or reload loops, use the stable command above.
+
+version: '3.8'
+
+services:
+  api:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    # Celery doesn't have built-in reload; restart container on code changes:
+    #   docker compose -f docker-compose.yml -f docker-compose.dev.yml restart worker
+    # Or use watchmedo (requires watchdog in requirements.txt):
+    command: watchmedo auto-restart --directory=/app --pattern="*.py" --recursive -- celery -A worker.celery_app worker --loglevel=info

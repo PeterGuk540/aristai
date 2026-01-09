@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip
+
+# Install Streamlit UI dependencies (not backend requirements)
+COPY requirements-ui.txt .
+RUN pip install --no-cache-dir -r requirements-ui.txt
+
+# Copy application code
+COPY . .
+
+# Default command (overridden in docker-compose)
+CMD ["streamlit", "run", "ui/app.py", "--server.port=8501", "--server.address=0.0.0.0"]

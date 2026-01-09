@@ -1,0 +1,9 @@
+# Ensure LF line endings for all text files (critical for Docker/Linux)
+* text=auto eol=lf
+
+# Explicitly mark binary files
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary

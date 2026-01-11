@@ -14,10 +14,12 @@ An AI-powered platform for synchronous classroom discussions with instructor cop
 ## Tech Stack
 
 - **Backend**: Python 3.11, FastAPI
-- **Database**: PostgreSQL
+- **Database**: PostgreSQL (required - see note below)
 - **Task Queue**: Redis + Celery
 - **LLM Workflows**: LangGraph
 - **UI**: Streamlit (MVP)
+
+> **Note**: This project requires PostgreSQL. The database migrations use PostgreSQL-specific features (`ENUM` types) and will not work with SQLite or other databases.
 
 ## Quick Start
 
@@ -26,13 +28,11 @@ An AI-powered platform for synchronous classroom discussions with instructor cop
 cp .env.example .env
 # Edit .env to add OPENAI_API_KEY or ANTHROPIC_API_KEY
 
-# 2. Start all services
+# 2. Start all services (this installs all dependencies including email-validator)
 docker compose up --build
 
 # 3. Run database migrations (first time only)
-# Review the autogenerate output to ensure all tables are detected
-docker compose exec api alembic revision --autogenerate -m "Initial migration"
-# Inspect alembic/versions/*.py to verify tables before applying
+# An initial migration is provided in alembic/versions/001_initial_migration.py
 docker compose exec api alembic upgrade head
 
 # Access the services:
@@ -40,6 +40,8 @@ docker compose exec api alembic upgrade head
 # - API Docs (Swagger): http://localhost:8000/docs
 # - Streamlit UI: http://localhost:8501
 ```
+
+> **Important**: If running outside Docker, ensure you `pip install -r requirements.txt` first. The `email-validator` package is required for `/api/users/` endpoints to work (used by `pydantic.EmailStr`).
 
 ## Development with Hot Reload
 
@@ -80,6 +82,11 @@ aristai/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/health` | Health check |
+| POST | `/api/users/` | Create a user |
+| GET | `/api/users/` | List users (optional role filter) |
+| GET | `/api/users/{id}` | Get user |
+| PATCH | `/api/users/{id}` | Update user |
+| DELETE | `/api/users/{id}` | Delete user |
 | POST | `/api/courses/` | Create a course |
 | GET | `/api/courses/` | List courses |
 | GET | `/api/courses/{id}` | Get course |
@@ -89,6 +96,7 @@ aristai/
 | POST | `/api/sessions/{id}/case` | Post a case |
 | POST | `/api/sessions/{id}/start_live_copilot` | Start copilot (async) |
 | POST | `/api/sessions/{id}/stop_live_copilot` | Stop copilot |
+| GET | `/api/sessions/{id}/copilot_status` | Check copilot status |
 | GET | `/api/sessions/{id}/interventions` | Get interventions |
 | GET | `/api/posts/session/{id}` | Get posts |
 | POST | `/api/posts/session/{id}` | Create post |

@@ -148,7 +148,8 @@ def parse_syllabus(state: PlanningState) -> PlanningState:
 
     if parsed:
         state["parsed_syllabus"] = parsed
-        state["total_sessions"] = parsed.get("total_sessions", 8)
+        # Guard against zero/None: ensure at least 1 session
+        state["total_sessions"] = max(parsed.get("total_sessions", 8) or 1, 1)
     else:
         state["errors"].append("Failed to parse syllabus response")
         state["parsed_syllabus"] = {
@@ -365,10 +366,12 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
         logger.info(f"Starting planning workflow for course {course_id}: {course.title}")
 
         # Only delete auto-generated sessions (preserves manual sessions)
+        # Manual sessions have model_name = None; auto-generated have a model name
         deleted_count = db.query(SessionModel).filter(
             SessionModel.course_id == course_id,
             SessionModel.status == "draft",
             SessionModel.plan_json.isnot(None),
+            SessionModel.model_name.isnot(None),  # Only delete if model_name is set (auto-generated)
         ).delete(synchronize_session='fetch')
 
         if deleted_count > 0:

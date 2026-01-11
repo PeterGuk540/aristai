@@ -15,6 +15,16 @@ class PostLabelUpdate(BaseModel):
     labels: List[str]
 
 
+class PostPinUpdate(BaseModel):
+    pinned: bool
+
+
+class PostModerationUpdate(BaseModel):
+    """Combined moderation update for labels and/or pinned status."""
+    labels: Optional[List[str]] = None
+    pinned: Optional[bool] = None
+
+
 # Response schemas
 class PostResponse(BaseSchema):
     id: int
@@ -23,4 +33,5 @@ class PostResponse(BaseSchema):
     content: str
     parent_post_id: Optional[int] = None
     labels_json: Optional[List[str]] = None
+    pinned: bool = False
     created_at: datetime

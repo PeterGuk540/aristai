@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.models.post import Post
 from app.models.session import Session as SessionModel
 from app.models.user import User
-from app.schemas.post import PostCreate, PostResponse, PostLabelUpdate
+from app.schemas.post import PostCreate, PostResponse, PostLabelUpdate, PostPinUpdate, PostModerationUpdate
 
 router = APIRouter()
 
@@ -72,6 +72,48 @@ def label_post(post_id: int, label_update: PostLabelUpdate, db: Session = Depend
 
     try:
         post.labels_json = label_update.labels
+        db.commit()
+        db.refresh(post)
+        return post
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.post("/{post_id}/pin", response_model=PostResponse)
+def pin_post(post_id: int, pin_update: PostPinUpdate, db: Session = Depends(get_db)):
+    """Pin or unpin a post (instructor action)."""
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    try:
+        post.pinned = pin_update.pinned
+        db.commit()
+        db.refresh(post)
+        return post
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.patch("/{post_id}/moderate", response_model=PostResponse)
+def moderate_post(post_id: int, moderation: PostModerationUpdate, db: Session = Depends(get_db)):
+    """
+    Update moderation fields on a post (instructor action).
+
+    Allows updating labels and/or pinned status in a single request.
+    Only provided fields are updated.
+    """
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    try:
+        if moderation.labels is not None:
+            post.labels_json = moderation.labels
+        if moderation.pinned is not None:
+            post.pinned = moderation.pinned
         db.commit()
         db.refresh(post)
         return post

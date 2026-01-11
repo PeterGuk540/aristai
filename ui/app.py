@@ -161,13 +161,74 @@ elif page == "Forum":
                 if result:
                     st.success("Post submitted!")
 
-        # View posts
+        # View posts with moderation controls
         st.subheader("Discussion Thread")
+        if st.button("Refresh Posts"):
+            st.rerun()
+
         posts = api_get(f"/posts/session/{session_id}")
         if posts:
-            for post in posts:
-                st.markdown(f"**User {post['user_id']}** ({format_timestamp(post.get('created_at'))})")
+            # Show pinned posts first
+            pinned_posts = [p for p in posts if p.get('pinned')]
+            unpinned_posts = [p for p in posts if not p.get('pinned')]
+
+            for post in pinned_posts + unpinned_posts:
+                post_id = post['id']
+                is_pinned = post.get('pinned', False)
+                labels = post.get('labels_json') or []
+
+                # Post header with badges
+                header_parts = [f"**User {post['user_id']}**"]
+                if is_pinned:
+                    header_parts.append("📌 PINNED")
+                if "high-quality" in labels:
+                    header_parts.append("⭐ High Quality")
+                if "needs-clarification" in labels:
+                    header_parts.append("❓ Needs Clarification")
+                header_parts.append(f"({format_timestamp(post.get('created_at'))})")
+
+                st.markdown(" | ".join(header_parts))
                 st.write(post['content'])
+
+                # Moderation controls (expandable)
+                with st.expander(f"Moderate Post #{post_id}", expanded=False):
+                    mod_col1, mod_col2 = st.columns(2)
+
+                    with mod_col1:
+                        # Pin/Unpin button
+                        pin_label = "Unpin" if is_pinned else "Pin"
+                        if st.button(f"{pin_label}", key=f"pin_{post_id}"):
+                            result = api_post(f"/posts/{post_id}/pin", {"pinned": not is_pinned})
+                            if result:
+                                st.success(f"Post {'unpinned' if is_pinned else 'pinned'}!")
+                                st.rerun()
+
+                    with mod_col2:
+                        # Quick label buttons
+                        if st.button("Mark High Quality", key=f"hq_{post_id}"):
+                            new_labels = list(set(labels + ["high-quality"]))
+                            if "needs-clarification" in new_labels:
+                                new_labels.remove("needs-clarification")
+                            result = api_post(f"/posts/{post_id}/label", {"labels": new_labels})
+                            if result:
+                                st.success("Marked as high quality!")
+                                st.rerun()
+
+                        if st.button("Needs Clarification", key=f"nc_{post_id}"):
+                            new_labels = list(set(labels + ["needs-clarification"]))
+                            if "high-quality" in new_labels:
+                                new_labels.remove("high-quality")
+                            result = api_post(f"/posts/{post_id}/label", {"labels": new_labels})
+                            if result:
+                                st.success("Marked as needs clarification!")
+                                st.rerun()
+
+                        if labels and st.button("Clear Labels", key=f"cl_{post_id}"):
+                            result = api_post(f"/posts/{post_id}/label", {"labels": []})
+                            if result:
+                                st.success("Labels cleared!")
+                                st.rerun()
+
                 st.divider()
         else:
             st.info("No posts yet.")

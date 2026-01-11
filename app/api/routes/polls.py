@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.core.database import get_db
 from app.models.poll import Poll, PollVote
 from app.models.session import Session as SessionModel
+from app.models.user import User
 from app.schemas.poll import PollCreate, PollResponse, PollVoteCreate, PollResultsResponse
 
 router = APIRouter()
@@ -38,6 +39,19 @@ def vote_on_poll(poll_id: int, vote: PollVoteCreate, db: Session = Depends(get_d
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
 
+    # Validate user_id exists
+    user = db.query(User).filter(User.id == vote.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    # Check if user has already voted on this poll
+    existing_vote = db.query(PollVote).filter(
+        PollVote.poll_id == poll_id,
+        PollVote.user_id == vote.user_id
+    ).first()
+    if existing_vote:
+        raise HTTPException(status_code=400, detail="User has already voted on this poll")
+
     # Validate option_index is within range
     options = poll.options_json or []
     if vote.option_index < 0 or vote.option_index >= len(options):
@@ -51,9 +65,12 @@ def vote_on_poll(poll_id: int, vote: PollVoteCreate, db: Session = Depends(get_d
         db.add(db_vote)
         db.commit()
         return {"status": "vote_recorded"}
-    except IntegrityError:
+    except IntegrityError as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail="User has already voted on this poll")
+        # Check if it's a duplicate vote constraint violation
+        if "poll_votes_poll_id_user_id_key" in str(e.orig) or "unique" in str(e.orig).lower():
+            raise HTTPException(status_code=400, detail="User has already voted on this poll")
+        raise HTTPException(status_code=400, detail="Vote constraint violation")
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

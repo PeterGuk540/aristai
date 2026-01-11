@@ -33,8 +33,14 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
         if not course:
             return {"error": "Course not found", "course_id": course_id}
 
-        # Idempotency: delete existing generated sessions for this course
-        db.query(SessionModel).filter(SessionModel.course_id == course_id).delete()
+        # Only delete auto-generated sessions (status='draft' and has plan_json)
+        # Preserves manually created sessions and sessions with existing discussions
+        db.query(SessionModel).filter(
+            SessionModel.course_id == course_id,
+            SessionModel.status == "draft",
+            SessionModel.plan_json.isnot(None),
+            SessionModel.model_name == "placeholder"  # Only delete placeholder sessions
+        ).delete(synchronize_session='fetch')
 
         # TODO: Implement LangGraph workflow
         # For now, return a placeholder structure

@@ -30,6 +30,10 @@ class Session(Base):
     model_name = Column(String(100), nullable=True)
     prompt_version = Column(String(50), nullable=True)
 
+    # Copilot state tracking
+    copilot_active = Column(Integer, default=0)  # 0=inactive, 1=active
+    copilot_task_id = Column(String(255), nullable=True)  # Celery task ID
+
     # Relationships with cascades
     course = relationship("Course", back_populates="sessions")
     cases = relationship("Case", back_populates="session", cascade="all, delete-orphan")

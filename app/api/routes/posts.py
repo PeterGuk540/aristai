@@ -5,6 +5,7 @@ from typing import List
 from app.core.database import get_db
 from app.models.post import Post
 from app.models.session import Session as SessionModel
+from app.models.user import User
 from app.schemas.post import PostCreate, PostResponse, PostLabelUpdate
 
 router = APIRouter()
@@ -37,6 +38,11 @@ def create_post(session_id: int, post: PostCreate, db: Session = Depends(get_db)
     session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    # Validate user_id exists
+    user = db.query(User).filter(User.id == post.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
 
     # Validate parent_post_id if provided
     if post.parent_post_id is not None:

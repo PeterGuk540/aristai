@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from app.api.routes import courses, sessions, posts, polls, reports
+from app.api.routes import courses, sessions, posts, polls, reports, users
 from app.core.config import get_settings
 
 api_router = APIRouter()
 
 # Include all route modules
+api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(courses.router, prefix="/courses", tags=["courses"])
 api_router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 api_router.include_router(posts.router, prefix="/posts", tags=["posts"])

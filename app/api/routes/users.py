@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from typing import List
+from typing import List, Optional
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
@@ -42,7 +42,7 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 def list_users(
     skip: int = 0,
     limit: int = 100,
-    role: str = None,
+    role: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """List all users with optional role filter."""

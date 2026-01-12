@@ -300,6 +300,66 @@ curl http://localhost:8000/api/reports/session/1
 # Open http://localhost:8501, go to Reports page, enter session ID, click "View Latest Report"
 ```
 
+### Milestone 4: Live Instructor Copilot
+
+**Acceptance Criteria**: While students post, instructor sees live prompts/flags/activities tied to current discussion.
+
+**Validation Steps**:
+
+```bash
+# 1. Ensure session is live with some posts (from Milestone 2)
+curl -X PATCH http://localhost:8000/api/sessions/1/status \
+  -H "Content-Type: application/json" \
+  -d '{"status": "live"}'
+
+# 2. Start the live copilot (async)
+curl -X POST http://localhost:8000/api/sessions/1/start_live_copilot
+# Returns: {"task_id": "<uuid>", "status": "copilot_started"}
+
+# 3. Add more student posts to trigger analysis
+curl -X POST http://localhost:8000/api/posts/session/1 \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 2, "content": "I think neural networks are the same as decision trees."}'
+
+curl -X POST http://localhost:8000/api/posts/session/1 \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 2, "content": "Can we use clustering for classification problems?"}'
+
+# 4. Wait for copilot iteration (runs every 90 seconds)
+sleep 100
+
+# 5. Check copilot status
+curl http://localhost:8000/api/sessions/1/copilot_status
+# Expected: {"session_id": 1, "copilot_active": true, "task_id": "<uuid>"}
+
+# 6. Fetch interventions
+curl http://localhost:8000/api/sessions/1/interventions
+# Expected: JSON array with structured suggestions containing:
+# - rolling_summary
+# - confusion_points (with evidence_post_ids)
+# - instructor_prompts
+# - reengagement_activity
+# - poll_suggestion (optional)
+# - overall_assessment
+
+# 7. Stop copilot
+curl -X POST http://localhost:8000/api/sessions/1/stop_live_copilot
+# Expected: {"session_id": 1, "status": "stop_requested", "was_active": true}
+
+# 8. Verify in UI
+# Open http://localhost:8501, go to Forum page, click "View Interventions"
+```
+
+**Intervention Structure**:
+
+Each intervention contains:
+- `rolling_summary`: 2-3 sentence summary of recent discussion
+- `confusion_points`: Array of identified misconceptions with `evidence_post_ids`
+- `instructor_prompts`: 2-3 actionable prompts for the instructor
+- `reengagement_activity`: Suggested activity (poll, quick write, think-pair-share)
+- `poll_suggestion`: Optional poll question with 3-5 options
+- `overall_assessment`: Engagement level, understanding level, discussion quality
+
 ## Smoke Test Checklist
 
 After `docker compose up --build`:

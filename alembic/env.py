@@ -4,8 +4,8 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 # Import Base and all models so metadata is populated
-from app.core.database import Base
-import app.models  # This imports all models via app/models/__init__.py
+from api.core.database import Base
+import api.models  # This imports all models via api/models/__init__.py
 
 # Alembic Config object
 config = context.config

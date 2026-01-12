@@ -11,7 +11,7 @@ version: '3.8'
 
 services:
   api:
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
   worker:
     # Celery doesn't have built-in reload; restart container on code changes:

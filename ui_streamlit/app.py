@@ -721,37 +721,60 @@ elif page == "Reports":
         if report:
             st.subheader(f"Report Version {report.get('version', 'N/A')}")
 
-            # Observability Panel
-            with st.expander("Observability Summary", expanded=False):
+            # Enhanced Observability Panel (Milestone 6)
+            with st.expander("Observability Summary", expanded=True):
                 obs_col1, obs_col2, obs_col3, obs_col4 = st.columns(4)
 
                 with obs_col1:
                     model_name = report.get('model_name', 'N/A')
-                    is_fallback = model_name == 'fallback' if model_name else False
+                    used_fallback = report.get('used_fallback', 0)
                     st.metric("Model", model_name or "N/A")
-                    if is_fallback:
+                    if used_fallback == 1 or model_name == 'fallback':
                         st.caption("⚠️ Fallback mode (no LLM)")
 
                 with obs_col2:
-                    st.metric("Prompt Version", report.get('prompt_version', 'N/A'))
-
-                with obs_col3:
-                    created = report.get('created_at', '')
-                    updated = report.get('updated_at', '')
-                    if created and updated and created != updated:
-                        # Calculate approximate execution time
-                        try:
-                            created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
-                            updated_dt = datetime.fromisoformat(updated.replace('Z', '+00:00'))
-                            duration = (updated_dt - created_dt).total_seconds()
-                            st.metric("Execution Time", f"{duration:.1f}s")
-                        except:
-                            st.metric("Execution Time", "N/A")
+                    exec_time = report.get('execution_time_seconds')
+                    if exec_time is not None:
+                        st.metric("Execution Time", f"{exec_time:.1f}s")
                     else:
                         st.metric("Execution Time", "N/A")
 
+                with obs_col3:
+                    total_tokens = report.get('total_tokens')
+                    if total_tokens:
+                        st.metric("Tokens Used", f"{total_tokens:,}")
+                        prompt_tokens = report.get('prompt_tokens', 0)
+                        completion_tokens = report.get('completion_tokens', 0)
+                        st.caption(f"Prompt: {prompt_tokens:,} | Completion: {completion_tokens:,}")
+                    else:
+                        st.metric("Tokens Used", "N/A")
+
                 with obs_col4:
+                    cost = report.get('estimated_cost_usd')
+                    if cost is not None:
+                        st.metric("Estimated Cost", f"${cost:.4f}")
+                    else:
+                        st.metric("Estimated Cost", "N/A")
+
+                # Second row of observability info
+                obs_col5, obs_col6, obs_col7, obs_col8 = st.columns(4)
+
+                with obs_col5:
                     st.metric("Report ID", report.get('id', 'N/A'))
+
+                with obs_col6:
+                    st.metric("Prompt Version", report.get('prompt_version', 'N/A'))
+
+                with obs_col7:
+                    retry_count = report.get('retry_count', 0)
+                    st.metric("Retries", retry_count)
+
+                with obs_col8:
+                    error_msg = report.get('error_message')
+                    if error_msg:
+                        st.error(f"Error: {error_msg[:50]}...")
+                    else:
+                        st.success("No errors")
 
                 st.caption(f"Generated: {format_timestamp(report.get('created_at'))}")
 
@@ -808,6 +831,26 @@ elif page == "Reports":
                     if report_json.get('student_summary'):
                         with st.expander("Student Summary"):
                             st.json(report_json['student_summary'])
+
+                    # Poll results embedded in report (Milestone 5)
+                    if report_json.get('poll_results'):
+                        with st.expander("Poll Results (Embedded)", expanded=True):
+                            for poll in report_json['poll_results']:
+                                st.markdown(f"**{poll.get('question', 'Unknown Poll')}**")
+                                st.caption(f"Total votes: {poll.get('total_votes', 0)}")
+                                for opt in poll.get('options', []):
+                                    pct = opt.get('percentage', 0)
+                                    votes = opt.get('votes', 0)
+                                    bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
+                                    st.text(f"  {bar} {pct:.0f}% ({votes}) - {opt.get('text', '')}")
+                                if poll.get('interpretation'):
+                                    st.info(f"📊 {poll['interpretation']}")
+                                st.markdown("---")
+
+                    # Observability embedded in report (Milestone 6)
+                    if report_json.get('observability'):
+                        with st.expander("Observability Metadata"):
+                            st.json(report_json['observability'])
                 else:
                     st.info("No JSON data available.")
 

@@ -14,8 +14,8 @@ Each iteration:
    - 1 re-engagement activity
    - Optional poll suggestion
 4. Includes evidence_post_ids for citations
+5. Tracks token usage and cost (Milestone 6)
 """
-import json
 import logging
 import time
 from datetime import datetime
@@ -23,13 +23,20 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from api.core.config import get_settings
 from api.core.database import SessionLocal
 from api.models.session import Session as SessionModel
 from api.models.course import Course
 from api.models.post import Post
 from api.models.user import User
 from api.models.intervention import Intervention
+from workflows.llm_utils import (
+    get_llm_with_tracking,
+    invoke_llm_with_metrics,
+    parse_json_response,
+    format_posts_for_prompt,
+    create_rolling_summary,
+    LLMMetrics,
+)
 from workflows.prompts.copilot_prompts import COPILOT_ANALYSIS_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -41,78 +48,7 @@ MIN_POSTS_FOR_ANALYSIS = 1  # Minimum posts needed to generate interventions
 DEFAULT_POSTS_LIMIT = 20  # Default number of recent posts to analyze
 
 
-# ============ LLM Helpers ============
-
-def get_llm():
-    """Get the appropriate LLM based on available API keys."""
-    settings = get_settings()
-
-    if settings.openai_api_key:
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model="gpt-4o-mini",
-            api_key=settings.openai_api_key,
-            temperature=0.7,
-        ), "gpt-4o-mini"
-    elif settings.anthropic_api_key:
-        from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(
-            model="claude-3-haiku-20240307",
-            api_key=settings.anthropic_api_key,
-            temperature=0.7,
-        ), "claude-3-haiku"
-    else:
-        return None, None
-
-
-def invoke_llm(llm, prompt: str) -> Optional[str]:
-    """Invoke LLM and return text response."""
-    try:
-        response = llm.invoke(prompt)
-        return response.content
-    except Exception as e:
-        logger.exception(f"LLM invocation failed: {e}")
-        return None
-
-
-def parse_json_response(response: str) -> Optional[Dict[str, Any]]:
-    """Parse JSON from LLM response, handling markdown code blocks."""
-    if not response:
-        return None
-
-    text = response.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON: {e}\nResponse: {text[:500]}")
-        return None
-
-
 # ============ Data Formatting ============
-
-def format_posts_for_prompt(posts: List[Dict[str, Any]]) -> str:
-    """Format posts for inclusion in prompts."""
-    if not posts:
-        return "No posts in this discussion yet."
-
-    lines = []
-    for p in posts:
-        role_label = "INSTRUCTOR" if p["author_role"] == "instructor" else "STUDENT"
-        pinned = " [PINNED]" if p.get("pinned") else ""
-        labels = f" [{', '.join(p.get('labels', []))}]" if p.get("labels") else ""
-        lines.append(f"[Post #{p['post_id']}] ({role_label}{pinned}{labels}) {p['timestamp']}")
-        lines.append(f"  {p['content']}")
-        lines.append("")
-    return "\n".join(lines)
-
 
 def format_session_plan(plan_json: Optional[Dict[str, Any]]) -> str:
     """Format session plan for inclusion in prompts."""
@@ -242,7 +178,7 @@ def run_copilot_single_iteration(
     2. Fetch last N posts
     3. Invoke LLM for comprehensive analysis
     4. Parse response and structure intervention data
-    5. Save intervention to database
+    5. Save intervention to database with observability metrics
 
     Args:
         session_id: The session to analyze
@@ -252,6 +188,8 @@ def run_copilot_single_iteration(
     Returns:
         Dict with generated interventions and metadata
     """
+    start_time = time.time()
+
     # Get session with course info
     session = (
         db.query(SessionModel)
@@ -289,11 +227,18 @@ def run_copilot_single_iteration(
     # Reverse to get chronological order for analysis
     posts = list(reversed(posts))
     posts_data = get_posts_data(posts, db)
-    posts_text = format_posts_for_prompt(posts_data)
+
+    # Apply rolling summary for token control (Milestone 6)
+    recent_posts, older_summary = create_rolling_summary(posts_data, max_posts=posts_limit)
+    posts_text = format_posts_for_prompt(recent_posts)
+    if older_summary:
+        posts_text = older_summary + "\n\n" + posts_text
+
     session_plan_text = format_session_plan(session.plan_json)
 
     # Get LLM
-    llm, model_name = get_llm()
+    llm, model_name = get_llm_with_tracking()
+    metrics = LLMMetrics(model_name=model_name or "fallback")
 
     if llm is None:
         # No LLM available - use fallback
@@ -302,35 +247,40 @@ def run_copilot_single_iteration(
             session_id, posts_data, session.plan_json
         )
         model_name = "fallback"
+        metrics.used_fallback = True
+        metrics.execution_time_seconds = round(time.time() - start_time, 3)
     else:
         # Build prompt
         prompt = COPILOT_ANALYSIS_PROMPT.format(
             session_title=session.title,
             session_plan=session_plan_text,
             objectives=objectives_text,
-            post_count=len(posts_data),
+            post_count=len(recent_posts),
             posts_text=posts_text,
         )
 
-        # Invoke LLM
+        # Invoke LLM with metrics tracking
         logger.info(f"Invoking LLM for copilot analysis on session {session_id}")
-        response = invoke_llm(llm, prompt)
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+        metrics = response.metrics
 
-        if not response:
+        if not response.success or not response.content:
             logger.error("LLM returned empty response, using fallback")
             intervention_data = generate_fallback_intervention(
                 session_id, posts_data, session.plan_json
             )
             model_name = "fallback"
+            metrics.used_fallback = True
         else:
             # Parse LLM response
-            parsed = parse_json_response(response)
+            parsed = parse_json_response(response.content)
             if not parsed:
                 logger.error("Failed to parse LLM response, using fallback")
                 intervention_data = generate_fallback_intervention(
                     session_id, posts_data, session.plan_json
                 )
                 model_name = "fallback"
+                metrics.used_fallback = True
             else:
                 # Successful LLM analysis
                 intervention_data = parsed
@@ -354,7 +304,10 @@ def run_copilot_single_iteration(
     else:
         intervention_type = "prompt"
 
-    # Save intervention to DB
+    # Calculate final execution time
+    execution_time = round(time.time() - start_time, 3)
+
+    # Save intervention to DB with observability fields
     db_intervention = Intervention(
         session_id=session_id,
         intervention_type=intervention_type,
@@ -362,6 +315,15 @@ def run_copilot_single_iteration(
         model_name=model_name,
         prompt_version="v1.0",
         evidence_post_ids=evidence_post_ids,
+        # Observability fields (Milestone 6)
+        execution_time_seconds=execution_time,
+        total_tokens=metrics.total_tokens,
+        prompt_tokens=metrics.prompt_tokens,
+        completion_tokens=metrics.completion_tokens,
+        estimated_cost_usd=metrics.estimated_cost_usd,
+        error_message=metrics.error_message,
+        used_fallback=1 if metrics.used_fallback else 0,
+        posts_analyzed=len(posts_data),
     )
     db.add(db_intervention)
     db.commit()
@@ -369,7 +331,8 @@ def run_copilot_single_iteration(
 
     logger.info(
         f"Copilot iteration complete for session {session_id}: "
-        f"type={intervention_type}, evidence_posts={len(evidence_post_ids)}"
+        f"type={intervention_type}, evidence_posts={len(evidence_post_ids)}, "
+        f"tokens={metrics.total_tokens}, cost=${metrics.estimated_cost_usd:.4f}"
     )
 
     return {
@@ -379,6 +342,12 @@ def run_copilot_single_iteration(
         "posts_analyzed": len(posts_data),
         "evidence_post_ids": evidence_post_ids,
         "model_name": model_name,
+        "observability": {
+            "execution_time_seconds": execution_time,
+            "total_tokens": metrics.total_tokens,
+            "estimated_cost_usd": metrics.estimated_cost_usd,
+            "used_fallback": metrics.used_fallback,
+        },
     }
 
 
@@ -405,6 +374,8 @@ def run_copilot_workflow(
     total_interventions = 0
     iterations = 0
     start_time = time.time()
+    total_tokens = 0
+    total_cost = 0.0
 
     try:
         # Mark session as having active copilot
@@ -435,6 +406,10 @@ def run_copilot_workflow(
                 result = run_copilot_single_iteration(session_id, db, posts_limit)
                 if result.get("intervention_id"):
                     total_interventions += 1
+                    # Accumulate observability metrics
+                    obs = result.get("observability", {})
+                    total_tokens += obs.get("total_tokens", 0)
+                    total_cost += obs.get("estimated_cost_usd", 0)
                 iterations += 1
                 logger.info(
                     f"Copilot iteration {iterations} complete for session {session_id}, "
@@ -457,6 +432,10 @@ def run_copilot_workflow(
             "total_interventions": total_interventions,
             "iterations": iterations,
             "duration_seconds": int(time.time() - start_time),
+            "observability": {
+                "total_tokens": total_tokens,
+                "total_cost_usd": round(total_cost, 4),
+            },
         }
 
     except Exception as e:

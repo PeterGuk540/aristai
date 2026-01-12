@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Float, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from api.core.database import Base
@@ -17,6 +17,16 @@ class Intervention(Base):
     model_name = Column(String(100), nullable=True)
     prompt_version = Column(String(50), nullable=True)
     evidence_post_ids = Column(JSON, nullable=True)  # List of post IDs that triggered this
+
+    # Observability fields (Milestone 6)
+    execution_time_seconds = Column(Float, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    estimated_cost_usd = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
+    used_fallback = Column(Integer, default=0)  # 0=LLM used, 1=fallback used
+    posts_analyzed = Column(Integer, nullable=True)
 
     # Relationships
     session = relationship("Session", back_populates="interventions")

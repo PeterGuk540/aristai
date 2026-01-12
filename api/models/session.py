@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, Float
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -29,6 +29,12 @@ class Session(Base):
     # Metadata for LLM tracking
     model_name = Column(String(100), nullable=True)
     prompt_version = Column(String(50), nullable=True)
+
+    # Observability fields for planning (Milestone 6)
+    planning_execution_time_seconds = Column(Float, nullable=True)
+    planning_total_tokens = Column(Integer, nullable=True)
+    planning_estimated_cost_usd = Column(Float, nullable=True)
+    planning_used_fallback = Column(Integer, default=0)
 
     # Copilot state tracking
     copilot_active = Column(Integer, default=0)  # 0=inactive, 1=active

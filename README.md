@@ -462,3 +462,245 @@ draft -> scheduled -> live -> completed
 - **completed**: Discussion ended, ready for report generation
 
 Use `PATCH /api/sessions/{id}/status` or the Streamlit UI to transition between states.
+
+### Milestone 5: Poll Results as Classroom Evidence
+
+**Acceptance Criteria**: Poll results are automatically included in reports as classroom state evidence.
+
+**Validation Steps**:
+
+```bash
+# 1. Create a poll during a live session
+curl -X POST http://localhost:8000/api/polls/session/1 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Which ML approach is best for customer churn prediction?",
+    "options_json": ["Logistic Regression", "Random Forest", "Neural Network", "Unsupervised Clustering"]
+  }'
+# Note the poll ID returned
+
+# 2. Cast some votes
+curl -X POST http://localhost:8000/api/polls/1/vote \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 2, "option_index": 0}'
+
+curl -X POST http://localhost:8000/api/polls/1/vote \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 3, "option_index": 1}'
+
+# 3. Check poll results
+curl http://localhost:8000/api/polls/1/results
+# Expected: {"poll_id": 1, "question": "...", "options": [...], "vote_counts": [...], "total_votes": 2}
+
+# 4. Generate report (polls are automatically included)
+curl -X POST http://localhost:8000/api/reports/session/1/generate
+
+# 5. Wait and fetch report
+sleep 60
+curl http://localhost:8000/api/reports/session/1
+# Expected: report_json contains "poll_results" section with:
+# - question
+# - total_votes
+# - options (with votes, percentage)
+# - interpretation (AI-generated analysis)
+
+# 6. Verify in UI
+# Open Reports page, go to "JSON Data" tab
+# Expand "Poll Results (Embedded)" section
+```
+
+**Poll Evidence Structure**:
+
+```json
+{
+  "poll_results": [
+    {
+      "poll_id": 1,
+      "question": "Which ML approach is best for customer churn prediction?",
+      "total_votes": 25,
+      "options": [
+        {"text": "Logistic Regression", "votes": 12, "percentage": 48.0},
+        {"text": "Random Forest", "votes": 8, "percentage": 32.0},
+        {"text": "Neural Network", "votes": 3, "percentage": 12.0},
+        {"text": "Unsupervised Clustering", "votes": 2, "percentage": 8.0}
+      ],
+      "interpretation": "Class strongly favors Logistic Regression, showing good understanding of supervised classification approaches."
+    }
+  ]
+}
+```
+
+### Milestone 6: Observability & Evaluation
+
+**Acceptance Criteria**: All LLM calls track execution time, tokens, cost. Rolling summary controls token usage. Golden set evaluation available.
+
+#### Observability Fields
+
+All workflows (reports, copilot, session planning) now track:
+
+| Field | Description |
+|-------|-------------|
+| `execution_time_seconds` | Time taken to generate response |
+| `total_tokens` | Total tokens used (prompt + completion) |
+| `prompt_tokens` | Tokens in the prompt |
+| `completion_tokens` | Tokens in the response |
+| `estimated_cost_usd` | Estimated cost based on model pricing |
+| `error_message` | Error description if generation failed |
+| `retry_count` | Number of retry attempts |
+| `used_fallback` | 1 if fallback mode was used (no LLM) |
+
+**Validation Steps**:
+
+```bash
+# 1. Generate a report
+curl -X POST http://localhost:8000/api/reports/session/1/generate
+sleep 60
+
+# 2. Check observability fields
+curl http://localhost:8000/api/reports/session/1
+# Expected response includes:
+# - execution_time_seconds
+# - total_tokens
+# - prompt_tokens
+# - completion_tokens
+# - estimated_cost_usd
+# - model_name
+# - used_fallback
+
+# 3. Check intervention observability
+curl http://localhost:8000/api/sessions/1/interventions
+# Each intervention includes observability fields
+
+# 4. Verify in UI
+# Open Reports page, check "Observability Summary" panel
+# Shows: Model, Execution Time, Tokens Used, Estimated Cost
+```
+
+#### Token Control: Rolling Summary
+
+For long discussions, the system uses rolling summary to control token usage:
+
+- **Recent posts**: Last N posts (configurable, default 20) are included in full
+- **Older posts**: Summarized into a brief context paragraph
+- **Benefit**: Prevents token explosion while maintaining context
+
+This is automatically applied in both copilot and report workflows.
+
+#### Golden Set Evaluation
+
+A golden set evaluation harness is provided for testing LLM output quality.
+
+**Location**: `tests/golden_sets/`
+
+**Files**:
+- `sample_data.py` - Sample inputs and expected output structures
+- `evaluator.py` - Evaluation harness with scoring logic
+- `test_workflows.py` - pytest integration tests
+
+**Sample Categories**:
+
+| Workflow | Samples | Purpose |
+|----------|---------|---------|
+| Session Planning | 3 | Test plan generation quality |
+| Live Copilot | 3 | Test real-time intervention quality |
+| Report Generation | 2 | Test report structure and evidence |
+
+**Running Evaluations**:
+
+```bash
+# Run offline evaluation (validates test structure)
+python -m tests.golden_sets.evaluator
+
+# Run with verbose output
+python -m tests.golden_sets.evaluator --verbose
+
+# Evaluate specific workflow
+python -m tests.golden_sets.evaluator --workflow copilot
+
+# Evaluate specific sample
+python -m tests.golden_sets.evaluator --sample-id planning_001
+
+# Run pytest unit tests
+pytest tests/golden_sets/test_workflows.py -v
+```
+
+**Evaluation Metrics**:
+
+Each sample is scored on:
+
+1. **Structure Score (60%)**: Required keys present, minimum counts met
+2. **Quality Score (40%)**: Keyword presence, evidence citation, appropriate responses
+
+**Pass threshold**: 70% overall score
+
+**Sample Output**:
+
+```
+============================================================
+GOLDEN SET EVALUATION REPORT
+============================================================
+Timestamp: 2025-01-11T12:00:00
+Mode: offline
+
+OVERALL METRICS
+----------------------------------------
+Total Samples:       8
+Passed:              8 (100.0%)
+Failed:              0
+
+Avg Structure Score: 100.0%
+Avg Quality Score:   100.0%
+Avg Overall Score:   100.0%
+
+SESSION_PLANNING WORKFLOW
+----------------------------------------
+  [PASS] planning_001: Ethics Case Discussion
+         Structure: 100.0% | Quality: 100.0% | Overall: 100.0%
+  [PASS] planning_002: Healthcare Decision Making
+         Structure: 100.0% | Quality: 100.0% | Overall: 100.0%
+  ...
+============================================================
+```
+
+**Extending Golden Sets**:
+
+To add new test cases, edit `tests/golden_sets/sample_data.py`:
+
+```python
+{
+    "id": "copilot_004",
+    "name": "New Test Case",
+    "input": {
+        "session_title": "...",
+        "session_plan": {...},
+        "posts": [...]
+    },
+    "expected_structure": {
+        "required_keys": ["rolling_summary", "confusion_points"],
+        "confusion_points_min_count": 1,
+    },
+    "quality_criteria": {
+        "should_cite_evidence": True,
+    }
+}
+```
+
+---
+
+## Cost Estimates
+
+Based on model pricing (as of January 2025):
+
+| Model | Prompt (per 1M tokens) | Completion (per 1M tokens) |
+|-------|------------------------|---------------------------|
+| gpt-4o-mini | $0.15 | $0.60 |
+| gpt-4o | $2.50 | $10.00 |
+| claude-3-haiku | $0.25 | $1.25 |
+| claude-3-5-sonnet | $3.00 | $15.00 |
+
+**Typical costs per operation**:
+- Session planning: ~1,000-2,000 tokens → $0.001-0.003
+- Copilot iteration: ~1,500-3,000 tokens → $0.002-0.005
+- Report generation: ~3,000-5,000 tokens → $0.003-0.008
+
+*Note: Actual costs vary based on discussion length and model choice.*

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, UniqueConstraint, Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from api.core.database import Base
@@ -21,6 +21,16 @@ class Report(Base):
     # Metadata for LLM tracking
     model_name = Column(String(100), nullable=True)
     prompt_version = Column(String(50), nullable=True)
+
+    # Observability fields (Milestone 6)
+    execution_time_seconds = Column(Float, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    estimated_cost_usd = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
+    retry_count = Column(Integer, default=0)
+    used_fallback = Column(Integer, default=0)  # 0=LLM used, 1=fallback used
 
     # Relationships
     session = relationship("Session", back_populates="reports")

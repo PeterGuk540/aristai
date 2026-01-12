@@ -12,3 +12,13 @@ class InterventionResponse(BaseSchema):
     model_name: Optional[str] = None
     prompt_version: Optional[str] = None
     evidence_post_ids: Optional[List[int]] = None
+
+    # Observability fields (Milestone 6)
+    execution_time_seconds: Optional[float] = None
+    total_tokens: Optional[int] = None
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    estimated_cost_usd: Optional[float] = None
+    error_message: Optional[str] = None
+    used_fallback: Optional[int] = 0
+    posts_analyzed: Optional[int] = None

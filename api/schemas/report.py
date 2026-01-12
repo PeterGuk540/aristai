@@ -13,3 +13,13 @@ class ReportResponse(BaseSchema):
     updated_at: Optional[datetime] = None
     model_name: Optional[str] = None
     prompt_version: Optional[str] = None
+
+    # Observability fields (Milestone 6)
+    execution_time_seconds: Optional[float] = None
+    total_tokens: Optional[int] = None
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    estimated_cost_usd: Optional[float] = None
+    error_message: Optional[str] = None
+    retry_count: Optional[int] = 0
+    used_fallback: Optional[int] = 0

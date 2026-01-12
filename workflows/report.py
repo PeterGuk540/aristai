@@ -5,18 +5,23 @@ This workflow generates structured feedback reports after a session ends.
 Uses LangGraph for orchestration with the following pipeline:
     Cluster → AlignToObjectives → Misconceptions → BestPracticeAnswer → StudentSummary
 
+Includes:
+- Poll results as classroom state evidence (Milestone 5)
+- Token tracking and cost metrics (Milestone 6)
+- Rolling summary for token control (Milestone 6)
+
 All claims about student contributions include post_id citations.
 Hallucination guardrails: "insufficient evidence" when claims aren't supported.
 """
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, TypedDict, Optional
 
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
 
-from api.core.config import get_settings
 from api.core.database import SessionLocal
 from api.models.session import Session as SessionModel
 from api.models.course import Course, CourseResource
@@ -24,6 +29,15 @@ from api.models.post import Post
 from api.models.user import User
 from api.models.poll import Poll, PollVote
 from api.models.report import Report
+from workflows.llm_utils import (
+    get_llm_with_tracking,
+    invoke_llm_with_metrics,
+    parse_json_response,
+    format_posts_for_prompt,
+    create_rolling_summary,
+    LLMMetrics,
+    aggregate_metrics,
+)
 from workflows.prompts.report_prompts import (
     CLUSTER_POSTS_PROMPT,
     ALIGN_OBJECTIVES_PROMPT,
@@ -48,6 +62,10 @@ class ReportState(TypedDict):
     objectives: List[str]
     resources_text: str
     posts: List[Dict[str, Any]]  # {post_id, author_role, content, timestamp, pinned, labels}
+    older_posts_summary: Optional[str]  # Summary of older posts for token control
+
+    # Poll data (Milestone 5)
+    poll_results: List[Dict[str, Any]]
 
     # After Cluster
     clusters: Optional[Dict[str, Any]]
@@ -73,73 +91,9 @@ class ReportState(TypedDict):
     prompt_version: str
     errors: List[str]
 
-
-# ============ LLM Helpers ============
-
-def get_llm():
-    """Get the appropriate LLM based on available API keys."""
-    settings = get_settings()
-
-    if settings.openai_api_key:
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model="gpt-4o-mini",
-            api_key=settings.openai_api_key,
-            temperature=0.7,
-        ), "gpt-4o-mini"
-    elif settings.anthropic_api_key:
-        from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(
-            model="claude-3-haiku-20240307",
-            api_key=settings.anthropic_api_key,
-            temperature=0.7,
-        ), "claude-3-haiku"
-    else:
-        return None, None
-
-
-def invoke_llm(llm, prompt: str) -> Optional[str]:
-    """Invoke LLM and return text response."""
-    try:
-        response = llm.invoke(prompt)
-        return response.content
-    except Exception as e:
-        logger.exception(f"LLM invocation failed: {e}")
-        return None
-
-
-def parse_json_response(response: str) -> Optional[Dict[str, Any]]:
-    """Parse JSON from LLM response, handling markdown code blocks."""
-    if not response:
-        return None
-
-    text = response.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON: {e}\nResponse: {text[:500]}")
-        return None
-
-
-def format_posts_for_prompt(posts: List[Dict[str, Any]]) -> str:
-    """Format posts for inclusion in prompts."""
-    lines = []
-    for p in posts:
-        role_label = "INSTRUCTOR" if p["author_role"] == "instructor" else "STUDENT"
-        pinned = " [PINNED]" if p.get("pinned") else ""
-        labels = f" [{', '.join(p.get('labels', []))}]" if p.get("labels") else ""
-        lines.append(f"[Post #{p['post_id']}] ({role_label}{pinned}{labels}) {p['timestamp']}")
-        lines.append(f"  {p['content']}")
-        lines.append("")
-    return "\n".join(lines) if lines else "No posts in this discussion."
+    # Observability (Milestone 6)
+    llm_metrics: List[LLMMetrics]
+    start_time: float
 
 
 # ============ Workflow Nodes ============
@@ -158,27 +112,34 @@ def cluster_posts(state: ReportState) -> ReportState:
         state["errors"].append("No posts to analyze")
         return state
 
-    llm, model_name = get_llm()
+    llm, model_name = get_llm_with_tracking()
     state["model_name"] = model_name or "fallback"
 
     session_topics = []
     if state["session_plan"]:
         session_topics = state["session_plan"].get("topics", [])
 
+    # Include older posts summary if available
+    posts_text = format_posts_for_prompt(state["posts"])
+    if state.get("older_posts_summary"):
+        posts_text = state["older_posts_summary"] + "\n\n" + posts_text
+
     if llm:
         prompt = CLUSTER_POSTS_PROMPT.format(
             session_title=state["session_title"],
             session_topics=", ".join(session_topics) if session_topics else "General discussion",
-            posts_formatted=format_posts_for_prompt(state["posts"]),
+            posts_formatted=posts_text,
         )
 
-        response = invoke_llm(llm, prompt)
-        clusters = parse_json_response(response)
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+        state["llm_metrics"].append(response.metrics)
 
-        if clusters:
-            state["clusters"] = clusters
-            logger.info(f"Cluster: Found {len(clusters.get('clusters', []))} themes")
-            return state
+        if response.success:
+            clusters = parse_json_response(response.content)
+            if clusters:
+                state["clusters"] = clusters
+                logger.info(f"Cluster: Found {len(clusters.get('clusters', []))} themes")
+                return state
 
     # Fallback clustering
     student_posts = [p for p in state["posts"] if p["author_role"] == "student"]
@@ -209,7 +170,7 @@ def align_to_objectives(state: ReportState) -> ReportState:
     """Node 2: Align discussion to learning objectives."""
     logger.info("AlignToObjectives: Mapping clusters to objectives")
 
-    llm, _ = get_llm()
+    llm, model_name = get_llm_with_tracking()
 
     if llm and state["objectives"]:
         prompt = ALIGN_OBJECTIVES_PROMPT.format(
@@ -218,13 +179,15 @@ def align_to_objectives(state: ReportState) -> ReportState:
             posts_formatted=format_posts_for_prompt(state["posts"]),
         )
 
-        response = invoke_llm(llm, prompt)
-        alignment = parse_json_response(response)
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+        state["llm_metrics"].append(response.metrics)
 
-        if alignment:
-            state["objectives_alignment"] = alignment
-            logger.info(f"AlignToObjectives: Found {len(alignment.get('strong_contributions', []))} strong contributions")
-            return state
+        if response.success:
+            alignment = parse_json_response(response.content)
+            if alignment:
+                state["objectives_alignment"] = alignment
+                logger.info(f"AlignToObjectives: Found {len(alignment.get('strong_contributions', []))} strong contributions")
+                return state
 
     # Fallback alignment
     pinned_posts = [p for p in state["posts"] if p.get("pinned")]
@@ -256,7 +219,7 @@ def identify_misconceptions(state: ReportState) -> ReportState:
     """Node 3: Identify misconceptions with corrections."""
     logger.info("Misconceptions: Analyzing for incorrect understanding")
 
-    llm, _ = get_llm()
+    llm, model_name = get_llm_with_tracking()
 
     session_topics = state["session_plan"].get("topics", []) if state["session_plan"] else []
 
@@ -268,13 +231,15 @@ def identify_misconceptions(state: ReportState) -> ReportState:
             posts_formatted=format_posts_for_prompt(state["posts"]),
         )
 
-        response = invoke_llm(llm, prompt)
-        misconceptions = parse_json_response(response)
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+        state["llm_metrics"].append(response.metrics)
 
-        if misconceptions:
-            state["misconceptions"] = misconceptions
-            logger.info(f"Misconceptions: Found {len(misconceptions.get('misconceptions', []))} issues")
-            return state
+        if response.success:
+            misconceptions = parse_json_response(response.content)
+            if misconceptions:
+                state["misconceptions"] = misconceptions
+                logger.info(f"Misconceptions: Found {len(misconceptions.get('misconceptions', []))} issues")
+                return state
 
     # Fallback - check for posts marked as needing clarification
     needs_clarification = [p for p in state["posts"] if "needs-clarification" in (p.get("labels") or [])]
@@ -301,7 +266,7 @@ def generate_best_practice(state: ReportState) -> ReportState:
     """Node 4: Generate best-practice answer grounded in materials."""
     logger.info("BestPracticeAnswer: Generating ideal answer")
 
-    llm, _ = get_llm()
+    llm, model_name = get_llm_with_tracking()
 
     case_prompt = state["case_prompt"] or "No specific case provided"
     if state["session_plan"] and state["session_plan"].get("case_prompt"):
@@ -316,13 +281,15 @@ def generate_best_practice(state: ReportState) -> ReportState:
             objectives="\n".join(f"- {obj}" for obj in state["objectives"]) if state["objectives"] else "No objectives specified.",
         )
 
-        response = invoke_llm(llm, prompt)
-        best_practice = parse_json_response(response)
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+        state["llm_metrics"].append(response.metrics)
 
-        if best_practice:
-            state["best_practice"] = best_practice
-            logger.info("BestPracticeAnswer: Generated successfully")
-            return state
+        if response.success:
+            best_practice = parse_json_response(response.content)
+            if best_practice:
+                state["best_practice"] = best_practice
+                logger.info("BestPracticeAnswer: Generated successfully")
+                return state
 
     # Fallback
     key_concepts = []
@@ -350,7 +317,7 @@ def generate_student_summary(state: ReportState) -> ReportState:
     """Node 5: Generate student-facing summary."""
     logger.info("StudentSummary: Creating student feedback")
 
-    llm, _ = get_llm()
+    llm, model_name = get_llm_with_tracking()
 
     strong_contributions = state["objectives_alignment"].get("strong_contributions", []) if state["objectives_alignment"] else []
     misconceptions = state["misconceptions"].get("misconceptions", []) if state["misconceptions"] else []
@@ -366,13 +333,15 @@ def generate_student_summary(state: ReportState) -> ReportState:
             objectives_coverage=json.dumps(objectives_coverage, indent=2) if objectives_coverage else "Objectives not analyzed",
         )
 
-        response = invoke_llm(llm, prompt)
-        summary = parse_json_response(response)
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+        state["llm_metrics"].append(response.metrics)
 
-        if summary:
-            state["student_summary"] = summary
-            logger.info("StudentSummary: Generated successfully")
-            return state
+        if response.success:
+            summary = parse_json_response(response.content)
+            if summary:
+                state["student_summary"] = summary
+                logger.info("StudentSummary: Generated successfully")
+                return state
 
     # Fallback summary
     state["student_summary"] = {
@@ -414,12 +383,15 @@ def generate_student_summary(state: ReportState) -> ReportState:
 # ============ Report Generation ============
 
 def compile_report(state: ReportState) -> Dict[str, Any]:
-    """Compile all workflow outputs into final report_json."""
+    """Compile all workflow outputs into final report_json, including poll results."""
     clusters = state["clusters"] or {}
     alignment = state["objectives_alignment"] or {}
     misconceptions = state["misconceptions"] or {}
     best_practice = state["best_practice"] or {}
     student_summary = state["student_summary"] or {}
+
+    # Aggregate LLM metrics
+    aggregated_metrics = aggregate_metrics(state["llm_metrics"])
 
     return {
         "session_id": state["session_id"],
@@ -432,6 +404,7 @@ def compile_report(state: ReportState) -> Dict[str, Any]:
             "student_posts": clusters.get("participation_summary", {}).get("student_posts", 0),
             "instructor_posts": clusters.get("participation_summary", {}).get("instructor_posts", 0),
             "discussion_quality": clusters.get("discussion_quality", "unknown"),
+            "posts_summarized": len(state["posts"]) if state.get("older_posts_summary") else 0,
         },
 
         "theme_clusters": clusters.get("clusters", []),
@@ -451,12 +424,27 @@ def compile_report(state: ReportState) -> Dict[str, Any]:
         "practice_questions": student_summary.get("practice_questions", []),
 
         "gaps": alignment.get("gaps", []),
+
+        # Poll results as classroom evidence (Milestone 5)
+        "poll_results": state.get("poll_results", []),
+
+        # Observability metadata (Milestone 6)
+        "observability": {
+            "total_tokens": aggregated_metrics.total_tokens,
+            "prompt_tokens": aggregated_metrics.prompt_tokens,
+            "completion_tokens": aggregated_metrics.completion_tokens,
+            "estimated_cost_usd": aggregated_metrics.estimated_cost_usd,
+            "execution_time_seconds": round(time.time() - state["start_time"], 2),
+            "llm_calls": len(state["llm_metrics"]),
+            "used_fallback": aggregated_metrics.used_fallback,
+        },
+
         "errors": state["errors"] if state["errors"] else None,
     }
 
 
 def generate_markdown_report(report_json: Dict[str, Any]) -> str:
-    """Generate markdown version of the report."""
+    """Generate markdown version of the report, including poll results."""
     lines = [
         f"# Session Report: {report_json['session_title']}",
         f"*Generated: {report_json['generated_at'][:19].replace('T', ' ')} UTC*",
@@ -528,6 +516,29 @@ def generate_markdown_report(report_json: Dict[str, Any]) -> str:
         lines.append(f"No significant misconceptions identified. Overall understanding: {report_json['overall_understanding']}")
         lines.append("")
 
+    # Poll Results as Classroom Evidence (Milestone 5)
+    poll_results = report_json.get("poll_results", [])
+    if poll_results:
+        lines.append("## Classroom Evidence (Poll Results)")
+        lines.append("")
+        lines.append("The following polls were conducted during this session to gauge understanding:")
+        lines.append("")
+        for poll in poll_results:
+            lines.append(f"### Poll: {poll.get('question', 'Unknown')}")
+            lines.append(f"*Total votes: {poll.get('total_votes', 0)}*")
+            lines.append("")
+            options = poll.get("options", [])
+            counts = poll.get("vote_counts", [])
+            total = poll.get("total_votes", 1) or 1
+            for opt, count in zip(options, counts):
+                pct = (count / total * 100)
+                bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
+                lines.append(f"- {opt}: **{count}** ({pct:.1f}%) {bar}")
+            lines.append("")
+            if poll.get("interpretation"):
+                lines.append(f"*Interpretation: {poll['interpretation']}*")
+                lines.append("")
+
     # Best Practice Answer
     if best_practice:
         lines.append("## Best Practice Answer")
@@ -592,6 +603,18 @@ def generate_markdown_report(report_json: Dict[str, Any]) -> str:
                 lines.append(f"   *Tests: {q['related_objective']}*")
             lines.append("")
 
+    # Observability footer
+    obs = report_json.get("observability", {})
+    if obs:
+        lines.append("---")
+        lines.append("")
+        lines.append("*Report Metadata:*")
+        lines.append(f"- Model: {report_json.get('model_name', 'N/A')}")
+        lines.append(f"- Tokens: {obs.get('total_tokens', 'N/A')} (prompt: {obs.get('prompt_tokens', 'N/A')}, completion: {obs.get('completion_tokens', 'N/A')})")
+        lines.append(f"- Estimated cost: ${obs.get('estimated_cost_usd', 0):.4f}")
+        lines.append(f"- Execution time: {obs.get('execution_time_seconds', 'N/A')}s")
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -619,6 +642,60 @@ def build_report_graph() -> StateGraph:
     return workflow.compile()
 
 
+# ============ Poll Results Fetching (Milestone 5) ============
+
+def fetch_poll_results(db: Session, session_id: int) -> List[Dict[str, Any]]:
+    """
+    Fetch all poll results for a session.
+
+    Returns list of poll results with vote counts and percentages.
+    """
+    polls = db.query(Poll).filter(Poll.session_id == session_id).all()
+
+    poll_results = []
+    for poll in polls:
+        votes = db.query(PollVote).filter(PollVote.poll_id == poll.id).all()
+        options = poll.options_json or []
+
+        # Count votes per option
+        vote_counts = [0] * len(options)
+        for v in votes:
+            if 0 <= v.option_index < len(options):
+                vote_counts[v.option_index] += 1
+
+        total_votes = len(votes)
+
+        # Generate interpretation based on results
+        interpretation = None
+        if total_votes > 0:
+            max_votes = max(vote_counts)
+            max_idx = vote_counts.index(max_votes)
+            max_pct = (max_votes / total_votes * 100)
+
+            if max_pct >= 70:
+                interpretation = f"Strong consensus ({max_pct:.0f}%) around: {options[max_idx]}"
+            elif max_pct >= 50:
+                interpretation = f"Majority ({max_pct:.0f}%) chose: {options[max_idx]}"
+            else:
+                interpretation = "Mixed responses indicate diverse perspectives or potential confusion."
+
+        poll_results.append({
+            "poll_id": poll.id,
+            "question": poll.question,
+            "options": options,
+            "vote_counts": vote_counts,
+            "total_votes": total_votes,
+            "percentages": [
+                round((c / total_votes * 100), 1) if total_votes > 0 else 0
+                for c in vote_counts
+            ],
+            "interpretation": interpretation,
+            "created_at": poll.created_at.isoformat() if poll.created_at else None,
+        })
+
+    return poll_results
+
+
 # ============ Main Entry Point ============
 
 def run_report_workflow(session_id: int) -> Dict[str, Any]:
@@ -627,6 +704,11 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
 
     Pipeline: Cluster → AlignToObjectives → Misconceptions → BestPracticeAnswer → StudentSummary
 
+    Includes:
+    - Poll results as classroom evidence (Milestone 5)
+    - Token tracking and observability (Milestone 6)
+    - Rolling summary for token control (Milestone 6)
+
     Args:
         session_id: ID of the session to generate report for
 
@@ -634,6 +716,9 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
         Dict with generated report and metadata
     """
     db: Session = SessionLocal()
+    start_time = time.time()
+    error_message = None
+
     try:
         # Load session with course
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
@@ -667,6 +752,9 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
             for post, user in posts_with_users
         ]
 
+        # Apply rolling summary for token control (Milestone 6)
+        recent_posts, older_summary = create_rolling_summary(posts_data, max_posts=30)
+
         # Load course resources
         resources = db.query(CourseResource).filter(CourseResource.course_id == course.id).all()
         resources_text = "\n\n".join(
@@ -682,6 +770,10 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
         # Prepare objectives
         objectives = course.objectives_json if isinstance(course.objectives_json, list) else []
 
+        # Fetch poll results (Milestone 5)
+        poll_results = fetch_poll_results(db, session_id)
+        logger.info(f"Found {len(poll_results)} polls for session {session_id}")
+
         # Prepare initial state
         initial_state: ReportState = {
             "session_id": session_id,
@@ -691,7 +783,9 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
             "syllabus_text": course.syllabus_text or "",
             "objectives": objectives,
             "resources_text": resources_text,
-            "posts": posts_data,
+            "posts": recent_posts,
+            "older_posts_summary": older_summary,
+            "poll_results": poll_results,
             "clusters": None,
             "objectives_alignment": None,
             "misconceptions": None,
@@ -702,6 +796,8 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
             "model_name": "",
             "prompt_version": "v1.0",
             "errors": [],
+            "llm_metrics": [],
+            "start_time": start_time,
         }
 
         # Run LangGraph workflow
@@ -711,6 +807,11 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
         # Compile final report
         report_json = compile_report(final_state)
         report_md = generate_markdown_report(report_json)
+
+        # Aggregate metrics for database storage
+        aggregated_metrics = aggregate_metrics(final_state["llm_metrics"])
+        execution_time = round(time.time() - start_time, 2)
+        used_fallback = 1 if aggregated_metrics.used_fallback or final_state["model_name"] == "fallback" else 0
 
         # Save to database
         version = f"v_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
@@ -722,6 +823,14 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
             report_json=report_json,
             model_name=final_state["model_name"],
             prompt_version=final_state["prompt_version"],
+            # Observability fields (Milestone 6)
+            execution_time_seconds=execution_time,
+            total_tokens=aggregated_metrics.total_tokens,
+            prompt_tokens=aggregated_metrics.prompt_tokens,
+            completion_tokens=aggregated_metrics.completion_tokens,
+            estimated_cost_usd=aggregated_metrics.estimated_cost_usd,
+            used_fallback=used_fallback,
+            error_message=aggregated_metrics.error_message,
         )
         db.add(db_report)
         db.commit()
@@ -733,12 +842,39 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
             "version": version,
             "report_json": report_json,
             "report_md": report_md,
+            "observability": {
+                "execution_time_seconds": execution_time,
+                "total_tokens": aggregated_metrics.total_tokens,
+                "estimated_cost_usd": aggregated_metrics.estimated_cost_usd,
+                "used_fallback": used_fallback == 1,
+            },
         }
 
     except Exception as e:
         db.rollback()
+        error_message = str(e)
         logger.exception(f"Report workflow failed for session {session_id}")
-        return {"error": str(e), "session_id": session_id}
+
+        # Try to save error report
+        try:
+            execution_time = round(time.time() - start_time, 2)
+            version = f"error_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            db_report = Report(
+                session_id=session_id,
+                version=version,
+                report_md=None,
+                report_json={"error": error_message},
+                model_name="error",
+                prompt_version="v1.0",
+                execution_time_seconds=execution_time,
+                error_message=error_message,
+            )
+            db.add(db_report)
+            db.commit()
+        except Exception:
+            pass
+
+        return {"error": error_message, "session_id": session_id}
 
     finally:
         db.close()

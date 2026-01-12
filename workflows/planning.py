@@ -6,9 +6,11 @@ Uses LangGraph for orchestration with the following pipeline:
     ParseSyllabus -> PlanPerSession -> DesignFlow -> ConsistencyCheck
 
 Supports both OpenAI and Anthropic LLMs.
+Includes observability tracking (Milestone 6).
 """
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, TypedDict, Optional
 
@@ -19,6 +21,13 @@ from api.core.config import get_settings
 from api.core.database import SessionLocal
 from api.models.course import Course
 from api.models.session import Session as SessionModel
+from workflows.llm_utils import (
+    get_llm_with_tracking,
+    invoke_llm_with_metrics,
+    parse_json_response,
+    LLMMetrics,
+    aggregate_metrics,
+)
 from workflows.prompts.planning_prompts import (
     PARSE_SYLLABUS_PROMPT,
     PLAN_SESSION_PROMPT,
@@ -57,61 +66,10 @@ class PlanningState(TypedDict):
     prompt_version: str
     errors: List[str]
 
-
-# ============ LLM Helpers ============
-
-def get_llm():
-    """Get the appropriate LLM based on available API keys."""
-    settings = get_settings()
-
-    if settings.openai_api_key:
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model="gpt-4o-mini",
-            api_key=settings.openai_api_key,
-            temperature=0.7,
-        ), "gpt-4o-mini"
-    elif settings.anthropic_api_key:
-        from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(
-            model="claude-3-haiku-20240307",
-            api_key=settings.anthropic_api_key,
-            temperature=0.7,
-        ), "claude-3-haiku"
-    else:
-        return None, None
-
-
-def invoke_llm(llm, prompt: str) -> Optional[str]:
-    """Invoke LLM and return text response."""
-    try:
-        response = llm.invoke(prompt)
-        return response.content
-    except Exception as e:
-        logger.exception(f"LLM invocation failed: {e}")
-        return None
-
-
-def parse_json_response(response: str) -> Optional[Dict[str, Any]]:
-    """Parse JSON from LLM response, handling markdown code blocks."""
-    if not response:
-        return None
-
-    # Strip markdown code blocks if present
-    text = response.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    text = text.strip()
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON: {e}\nResponse: {text[:500]}")
-        return None
+    # Observability (Milestone 6)
+    llm_metrics: List[LLMMetrics]
+    start_time: float
+    used_fallback: bool
 
 
 # ============ Workflow Nodes ============
@@ -120,9 +78,10 @@ def parse_syllabus(state: PlanningState) -> PlanningState:
     """Node 1: Parse syllabus and extract structure."""
     logger.info(f"ParseSyllabus: Processing course {state['course_id']}")
 
-    llm, model_name = get_llm()
+    llm, model_name = get_llm_with_tracking()
     if not llm:
         state["errors"].append("No LLM API key configured")
+        state["used_fallback"] = True
         # Fallback to reasonable defaults
         state["parsed_syllabus"] = {
             "course_summary": f"Course: {state['course_title']}",
@@ -143,23 +102,28 @@ def parse_syllabus(state: PlanningState) -> PlanningState:
         objectives="\n".join(f"- {obj}" for obj in state["objectives"]) or "No objectives provided.",
     )
 
-    response = invoke_llm(llm, prompt)
-    parsed = parse_json_response(response)
+    response = invoke_llm_with_metrics(llm, prompt, model_name)
+    state["llm_metrics"].append(response.metrics)
 
-    if parsed:
-        state["parsed_syllabus"] = parsed
-        # Guard against zero/None: ensure at least 1 session
-        state["total_sessions"] = max(parsed.get("total_sessions", 8) or 1, 1)
-    else:
-        state["errors"].append("Failed to parse syllabus response")
-        state["parsed_syllabus"] = {
-            "course_summary": state["course_title"],
-            "total_sessions": 8,
-            "main_topics": state["objectives"][:5] if state["objectives"] else [],
-            "key_concepts": [],
-            "objectives_breakdown": [],
-        }
-        state["total_sessions"] = 8
+    if response.success:
+        parsed = parse_json_response(response.content)
+        if parsed:
+            state["parsed_syllabus"] = parsed
+            # Guard against zero/None: ensure at least 1 session
+            state["total_sessions"] = max(parsed.get("total_sessions", 8) or 1, 1)
+            logger.info(f"ParseSyllabus: Determined {state['total_sessions']} sessions")
+            return state
+
+    # Fallback if LLM failed
+    state["errors"].append("Failed to parse syllabus response")
+    state["parsed_syllabus"] = {
+        "course_summary": state["course_title"],
+        "total_sessions": 8,
+        "main_topics": state["objectives"][:5] if state["objectives"] else [],
+        "key_concepts": [],
+        "objectives_breakdown": [],
+    }
+    state["total_sessions"] = 8
 
     logger.info(f"ParseSyllabus: Determined {state['total_sessions']} sessions")
     return state
@@ -169,7 +133,7 @@ def plan_per_session(state: PlanningState) -> PlanningState:
     """Node 2: Generate plan for each session."""
     logger.info(f"PlanPerSession: Generating {state['total_sessions']} session plans")
 
-    llm, _ = get_llm()
+    llm, model_name = get_llm_with_tracking()
     session_plans = []
     parsed = state["parsed_syllabus"] or {}
     main_topics = parsed.get("main_topics", [])
@@ -211,15 +175,18 @@ def plan_per_session(state: PlanningState) -> PlanningState:
                 previous_sessions=previous_sessions,
             )
 
-            response = invoke_llm(llm, prompt)
-            plan = parse_json_response(response)
+            response = invoke_llm_with_metrics(llm, prompt, model_name)
+            state["llm_metrics"].append(response.metrics)
 
-            if plan:
-                plan["session_number"] = session_num  # Ensure correct number
-                session_plans.append(plan)
-                continue
+            if response.success:
+                plan = parse_json_response(response.content)
+                if plan:
+                    plan["session_number"] = session_num  # Ensure correct number
+                    session_plans.append(plan)
+                    continue
 
         # Fallback plan if LLM fails or not available
+        state["used_fallback"] = True
         session_plans.append({
             "session_number": session_num,
             "title": f"Session {session_num}: {session_topics[0] if session_topics else 'Topic'}",
@@ -240,7 +207,7 @@ def design_flow(state: PlanningState) -> PlanningState:
     """Node 3: Design instructional flow with checkpoints for each session."""
     logger.info("DesignFlow: Adding flow and checkpoints to sessions")
 
-    llm, _ = get_llm()
+    llm, model_name = get_llm_with_tracking()
     sessions_with_flow = []
 
     for plan in state["session_plans"]:
@@ -249,17 +216,20 @@ def design_flow(state: PlanningState) -> PlanningState:
                 session_plan=json.dumps(plan, indent=2)
             )
 
-            response = invoke_llm(llm, prompt)
-            flow_data = parse_json_response(response)
+            response = invoke_llm_with_metrics(llm, prompt, model_name)
+            state["llm_metrics"].append(response.metrics)
 
-            if flow_data:
-                plan["flow"] = flow_data.get("flow", [])
-                plan["checkpoints"] = flow_data.get("checkpoints", [])
-                plan["total_duration_minutes"] = flow_data.get("total_duration_minutes", 55)
-                sessions_with_flow.append(plan)
-                continue
+            if response.success:
+                flow_data = parse_json_response(response.content)
+                if flow_data:
+                    plan["flow"] = flow_data.get("flow", [])
+                    plan["checkpoints"] = flow_data.get("checkpoints", [])
+                    plan["total_duration_minutes"] = flow_data.get("total_duration_minutes", 55)
+                    sessions_with_flow.append(plan)
+                    continue
 
         # Fallback flow
+        state["used_fallback"] = True
         plan["flow"] = [
             {"phase": "intro", "duration_minutes": 5, "activity": "Welcome and overview"},
             {"phase": "theory", "duration_minutes": 15, "activity": f"Present: {plan.get('topics', ['topic'])[0]}"},
@@ -287,7 +257,7 @@ def consistency_check(state: PlanningState) -> PlanningState:
     """Node 4: Check consistency and coverage across all session plans."""
     logger.info("ConsistencyCheck: Validating session plans")
 
-    llm, _ = get_llm()
+    llm, model_name = get_llm_with_tracking()
 
     if llm:
         prompt = CONSISTENCY_CHECK_PROMPT.format(
@@ -296,15 +266,18 @@ def consistency_check(state: PlanningState) -> PlanningState:
             session_plans=json.dumps(state["sessions_with_flow"], indent=2),
         )
 
-        response = invoke_llm(llm, prompt)
-        report = parse_json_response(response)
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+        state["llm_metrics"].append(response.metrics)
 
-        if report:
-            state["consistency_report"] = report
-            logger.info(f"ConsistencyCheck: Quality score {report.get('overall_quality_score', 'N/A')}/10")
-            return state
+        if response.success:
+            report = parse_json_response(response.content)
+            if report:
+                state["consistency_report"] = report
+                logger.info(f"ConsistencyCheck: Quality score {report.get('overall_quality_score', 'N/A')}/10")
+                return state
 
     # Fallback report
+    state["used_fallback"] = True
     state["consistency_report"] = {
         "objectives_coverage": {
             "fully_covered": state["objectives"],
@@ -354,9 +327,11 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
         course_id: ID of the course to generate plans for
 
     Returns:
-        Dict with generated plans, consistency report, and metadata
+        Dict with generated plans, consistency report, metadata, and observability
     """
     db: Session = SessionLocal()
+    start_time = time.time()
+
     try:
         # Load course
         course = db.query(Course).filter(Course.id == course_id).first()
@@ -394,13 +369,21 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
             "model_name": "",
             "prompt_version": "v1.0",
             "errors": [],
+            # Observability (Milestone 6)
+            "llm_metrics": [],
+            "start_time": start_time,
+            "used_fallback": False,
         }
 
         # Run LangGraph workflow
         graph = build_planning_graph()
         final_state = graph.invoke(initial_state)
 
-        # Persist session plans to database
+        # Calculate aggregated observability metrics
+        execution_time = round(time.time() - start_time, 3)
+        aggregated = aggregate_metrics(final_state["llm_metrics"])
+
+        # Persist session plans to database with observability fields
         version = f"v_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
 
         for plan in final_state["sessions_with_flow"]:
@@ -411,14 +394,22 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
                 plan_version=version,
                 model_name=final_state["model_name"],
                 prompt_version=final_state["prompt_version"],
+                # Observability fields (Milestone 6)
+                planning_execution_time_seconds=execution_time,
+                planning_total_tokens=aggregated.total_tokens if aggregated.total_tokens > 0 else None,
+                planning_estimated_cost_usd=aggregated.estimated_cost_usd if aggregated.estimated_cost_usd > 0 else None,
+                planning_used_fallback=1 if final_state["used_fallback"] else 0,
             )
             db.add(db_session)
 
         db.commit()
 
-        logger.info(f"Planning workflow complete: {len(final_state['sessions_with_flow'])} sessions created")
+        logger.info(
+            f"Planning workflow complete: {len(final_state['sessions_with_flow'])} sessions created, "
+            f"tokens={aggregated.total_tokens}, cost=${aggregated.estimated_cost_usd:.4f}"
+        )
 
-        # Return results
+        # Return results with observability
         return {
             "course_id": course_id,
             "course_title": course.title,
@@ -429,6 +420,15 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
             "prompt_version": final_state["prompt_version"],
             "version": version,
             "errors": final_state["errors"] if final_state["errors"] else None,
+            # Observability (Milestone 6)
+            "observability": {
+                "execution_time_seconds": execution_time,
+                "total_tokens": aggregated.total_tokens,
+                "prompt_tokens": aggregated.prompt_tokens,
+                "completion_tokens": aggregated.completion_tokens,
+                "estimated_cost_usd": aggregated.estimated_cost_usd,
+                "used_fallback": final_state["used_fallback"],
+            },
         }
 
     except Exception as e:

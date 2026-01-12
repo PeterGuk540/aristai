@@ -34,8 +34,9 @@ from workflows.llm_utils import (
     invoke_llm_with_metrics,
     parse_json_response,
     format_posts_for_prompt,
-    create_rolling_summary,
+    create_rolling_summary_with_metadata,
     LLMMetrics,
+    RollingSummaryResult,
     aggregate_metrics,
 )
 from workflows.prompts.report_prompts import (
@@ -63,6 +64,9 @@ class ReportState(TypedDict):
     resources_text: str
     posts: List[Dict[str, Any]]  # {post_id, author_role, content, timestamp, pinned, labels}
     older_posts_summary: Optional[str]  # Summary of older posts for token control
+
+    # Rolling summary metadata (Milestone 6)
+    rolling_summary_metadata: Optional[Dict[str, Any]]
 
     # Poll data (Milestone 5)
     poll_results: List[Dict[str, Any]]
@@ -389,6 +393,7 @@ def compile_report(state: ReportState) -> Dict[str, Any]:
     misconceptions = state["misconceptions"] or {}
     best_practice = state["best_practice"] or {}
     student_summary = state["student_summary"] or {}
+    rolling_meta = state.get("rolling_summary_metadata") or {}
 
     # Aggregate LLM metrics
     aggregated_metrics = aggregate_metrics(state["llm_metrics"])
@@ -400,11 +405,10 @@ def compile_report(state: ReportState) -> Dict[str, Any]:
         "model_name": state["model_name"],
 
         "summary": {
-            "total_posts": clusters.get("participation_summary", {}).get("total_posts", len(state["posts"])),
+            "total_posts": rolling_meta.get("total_posts", len(state["posts"])),
             "student_posts": clusters.get("participation_summary", {}).get("student_posts", 0),
             "instructor_posts": clusters.get("participation_summary", {}).get("instructor_posts", 0),
             "discussion_quality": clusters.get("discussion_quality", "unknown"),
-            "posts_summarized": len(state["posts"]) if state.get("older_posts_summary") else 0,
         },
 
         "theme_clusters": clusters.get("clusters", []),
@@ -428,6 +432,15 @@ def compile_report(state: ReportState) -> Dict[str, Any]:
         # Poll results as classroom evidence (Milestone 5)
         "poll_results": state.get("poll_results", []),
 
+        # Rolling summary metadata for explainability (Milestone 6)
+        "rolling_summary": {
+            "summarization_applied": rolling_meta.get("summarization_applied", False),
+            "total_posts": rolling_meta.get("total_posts", len(state["posts"])),
+            "posts_summarized": rolling_meta.get("posts_summarized", 0),
+            "recent_posts_analyzed": rolling_meta.get("recent_posts_analyzed", len(state["posts"])),
+            "older_posts_summary": rolling_meta.get("older_posts_summary"),
+        },
+
         # Observability metadata (Milestone 6)
         "observability": {
             "total_tokens": aggregated_metrics.total_tokens,
@@ -437,6 +450,7 @@ def compile_report(state: ReportState) -> Dict[str, Any]:
             "execution_time_seconds": round(time.time() - state["start_time"], 2),
             "llm_calls": len(state["llm_metrics"]),
             "used_fallback": aggregated_metrics.used_fallback,
+            "retry_count": aggregated_metrics.retry_count,
         },
 
         "errors": state["errors"] if state["errors"] else None,
@@ -753,7 +767,18 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
         ]
 
         # Apply rolling summary for token control (Milestone 6)
-        recent_posts, older_summary = create_rolling_summary(posts_data, max_posts=30)
+        rolling_result = create_rolling_summary_with_metadata(posts_data, max_posts=30)
+        recent_posts = rolling_result.recent_posts
+        older_summary = rolling_result.older_summary_text
+
+        # Build rolling summary metadata for explainability
+        rolling_summary_metadata = {
+            "summarization_applied": rolling_result.summarization_applied,
+            "total_posts": rolling_result.total_posts,
+            "posts_summarized": rolling_result.posts_summarized,
+            "recent_posts_analyzed": rolling_result.recent_posts_count,
+            "older_posts_summary": rolling_result.older_summary_text,
+        }
 
         # Load course resources
         resources = db.query(CourseResource).filter(CourseResource.course_id == course.id).all()
@@ -785,6 +810,7 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
             "resources_text": resources_text,
             "posts": recent_posts,
             "older_posts_summary": older_summary,
+            "rolling_summary_metadata": rolling_summary_metadata,
             "poll_results": poll_results,
             "clusters": None,
             "objectives_alignment": None,
@@ -831,6 +857,7 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
             estimated_cost_usd=aggregated_metrics.estimated_cost_usd,
             used_fallback=used_fallback,
             error_message=aggregated_metrics.error_message,
+            retry_count=aggregated_metrics.retry_count,  # Track LLM retries
         )
         db.add(db_report)
         db.commit()

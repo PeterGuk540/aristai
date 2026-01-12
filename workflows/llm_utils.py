@@ -42,6 +42,7 @@ class LLMMetrics:
     execution_time_seconds: float = 0.0
     used_fallback: bool = False
     error_message: Optional[str] = None
+    retry_count: int = 0  # Number of retries for this invocation
 
 
 @dataclass
@@ -164,6 +165,46 @@ def invoke_llm_with_metrics(llm, prompt: str, model_name: str) -> LLMResponse:
         )
 
 
+def invoke_llm_with_retry(
+    llm,
+    prompt: str,
+    model_name: str,
+    max_retries: int = 2,
+    retry_delay: float = 1.0,
+) -> LLMResponse:
+    """
+    Invoke LLM with automatic retry on failure.
+
+    Args:
+        llm: LangChain LLM instance
+        prompt: The prompt to send
+        model_name: Name of the model for cost calculation
+        max_retries: Maximum number of retry attempts (default: 2)
+        retry_delay: Delay between retries in seconds (default: 1.0)
+
+    Returns:
+        LLMResponse with content, metrics, and retry count
+    """
+    retry_count = 0
+
+    for attempt in range(max_retries + 1):
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+
+        if response.success:
+            response.metrics.retry_count = retry_count
+            return response
+
+        # Failed - increment retry count and try again (unless last attempt)
+        if attempt < max_retries:
+            retry_count += 1
+            logger.warning(f"LLM call failed, retrying ({retry_count}/{max_retries})...")
+            time.sleep(retry_delay)
+
+    # All retries exhausted
+    response.metrics.retry_count = retry_count
+    return response
+
+
 def parse_json_response(response: str) -> Optional[Dict[str, Any]]:
     """Parse JSON from LLM response, handling markdown code blocks."""
     if not response:
@@ -186,6 +227,17 @@ def parse_json_response(response: str) -> Optional[Dict[str, Any]]:
 
 
 # ============ Rolling Summary for Token Control ============
+
+@dataclass
+class RollingSummaryResult:
+    """Result from rolling summary creation."""
+    recent_posts: List[Dict[str, Any]]
+    older_summary_text: Optional[str] = None
+    summarization_applied: bool = False
+    posts_summarized: int = 0
+    total_posts: int = 0
+    recent_posts_count: int = 0
+
 
 def create_rolling_summary(
     posts: List[Dict[str, Any]],
@@ -244,6 +296,49 @@ def create_rolling_summary(
     return recent_posts, older_summary
 
 
+def create_rolling_summary_with_metadata(
+    posts: List[Dict[str, Any]],
+    max_posts: int = 20,
+    summarize_older: bool = True,
+) -> RollingSummaryResult:
+    """
+    Create a rolling summary of posts with full metadata.
+
+    Enhanced version that returns metadata for explainability and QA.
+
+    Args:
+        posts: List of post dictionaries
+        max_posts: Maximum number of full posts to include
+        summarize_older: Whether to summarize older posts
+
+    Returns:
+        RollingSummaryResult with posts, summary text, and metadata
+    """
+    total_posts = len(posts)
+
+    if total_posts <= max_posts:
+        return RollingSummaryResult(
+            recent_posts=posts,
+            older_summary_text=None,
+            summarization_applied=False,
+            posts_summarized=0,
+            total_posts=total_posts,
+            recent_posts_count=total_posts,
+        )
+
+    recent_posts, older_summary = create_rolling_summary(posts, max_posts, summarize_older)
+    posts_summarized = total_posts - len(recent_posts)
+
+    return RollingSummaryResult(
+        recent_posts=recent_posts,
+        older_summary_text=older_summary,
+        summarization_applied=True,
+        posts_summarized=posts_summarized,
+        total_posts=total_posts,
+        recent_posts_count=len(recent_posts),
+    )
+
+
 def chunk_posts_for_analysis(
     posts: List[Dict[str, Any]],
     chunk_size: int = 15,
@@ -299,4 +394,5 @@ def aggregate_metrics(metrics_list: List[LLMMetrics]) -> LLMMetrics:
         execution_time_seconds=sum(m.execution_time_seconds for m in metrics_list),
         used_fallback=any(m.used_fallback for m in metrics_list),
         error_message=next((m.error_message for m in metrics_list if m.error_message), None),
+        retry_count=sum(m.retry_count for m in metrics_list),  # Total retries across all calls
     )

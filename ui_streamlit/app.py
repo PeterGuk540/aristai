@@ -838,19 +838,45 @@ elif page == "Reports":
                             for poll in report_json['poll_results']:
                                 st.markdown(f"**{poll.get('question', 'Unknown Poll')}**")
                                 st.caption(f"Total votes: {poll.get('total_votes', 0)}")
-                                for opt in poll.get('options', []):
-                                    pct = opt.get('percentage', 0)
-                                    votes = opt.get('votes', 0)
+
+                                # Handle the actual report JSON structure:
+                                # options: List[str], vote_counts: List[int], percentages: List[float]
+                                options = poll.get('options', [])
+                                vote_counts = poll.get('vote_counts', [])
+                                percentages = poll.get('percentages', [])
+
+                                for i, opt_text in enumerate(options):
+                                    votes = vote_counts[i] if i < len(vote_counts) else 0
+                                    pct = percentages[i] if i < len(percentages) else 0
                                     bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
-                                    st.text(f"  {bar} {pct:.0f}% ({votes}) - {opt.get('text', '')}")
+                                    st.text(f"  {bar} {pct:.0f}% ({votes}) - {opt_text}")
+
                                 if poll.get('interpretation'):
                                     st.info(f"📊 {poll['interpretation']}")
                                 st.markdown("---")
 
+                    # Rolling summary metadata (Milestone 6)
+                    if report_json.get('rolling_summary'):
+                        rs = report_json['rolling_summary']
+                        with st.expander("Rolling Summary (Token Control)"):
+                            if rs.get('summarization_applied'):
+                                st.warning(f"⚠️ Summarization applied: {rs.get('posts_summarized', 0)} older posts were summarized")
+                                st.metric("Total Posts", rs.get('total_posts', 0))
+                                st.metric("Posts Summarized", rs.get('posts_summarized', 0))
+                                st.metric("Recent Posts Analyzed", rs.get('recent_posts_analyzed', 0))
+                                if rs.get('older_posts_summary'):
+                                    st.text_area("Older Posts Summary", rs['older_posts_summary'], height=150, disabled=True)
+                            else:
+                                st.success("✅ All posts analyzed (no summarization needed)")
+                                st.metric("Total Posts Analyzed", rs.get('total_posts', 0))
+
                     # Observability embedded in report (Milestone 6)
                     if report_json.get('observability'):
                         with st.expander("Observability Metadata"):
-                            st.json(report_json['observability'])
+                            obs = report_json['observability']
+                            st.json(obs)
+                            if obs.get('retry_count', 0) > 0:
+                                st.warning(f"⚠️ {obs['retry_count']} LLM retries occurred during generation")
                 else:
                     st.info("No JSON data available.")
 

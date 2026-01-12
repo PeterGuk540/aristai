@@ -18,7 +18,7 @@ An AI-powered platform for synchronous classroom discussions with instructor cop
 - **Database**: PostgreSQL (required - see note below)
 - **Task Queue**: Redis + Celery
 - **LLM Workflows**: LangGraph
-- **UI**: Streamlit (MVP)
+- **UI**: Streamlit
 
 > **Note**: This project requires PostgreSQL. The database migrations use PostgreSQL-specific features (`ENUM` types) and will not work with SQLite or other databases.
 
@@ -148,6 +148,83 @@ docker compose restart worker
 | API_URL | http://api:8000 (docker) | API URL for Streamlit UI |
 
 Note: For local dev outside Docker, use `localhost:5433` for DB and `localhost:6379` for Redis. See `.env.example` for details.
+
+---
+
+## Streamlit UI Guide
+
+The Streamlit UI provides a complete interface for managing courses, sessions, discussions, and reports. Access it at **http://localhost:8501** after running `docker compose up`.
+
+### Pages Overview
+
+| Page | Purpose |
+|------|---------|
+| **Courses** | Create courses with syllabus + objectives, trigger plan generation |
+| **Sessions** | View session plans, create sessions, manage status (draft→live→completed) |
+| **Forum** | Post cases, view discussion thread, post replies, moderate posts |
+| **Instructor Console** | Live copilot suggestions, poll management, quick actions |
+| **Reports** | Generate reports, view formatted/raw markdown, export, observability panel |
+
+### Typical Workflow
+
+1. **Setup Course** (Courses page)
+   - Paste syllabus text
+   - Add learning objectives (one per line)
+   - Click "Create & Generate Plans" to auto-generate session plans
+
+2. **Start a Session** (Sessions page)
+   - Load a session by ID
+   - View the AI-generated plan (topics, goals, case study, discussion prompts)
+   - Click "Go Live" to start the session
+
+3. **Run Discussion** (Forum page)
+   - Post a case study for students
+   - Students post replies (use different user IDs)
+   - Moderate: pin important posts, label as high-quality or needs-clarification
+
+4. **Use Copilot** (Instructor Console)
+   - Click "Start Copilot" to begin real-time analysis (runs every 90 seconds)
+   - View suggestions: rolling summary, confusion points, instructor prompts
+   - Create polls from AI suggestions with one click
+   - Monitor poll results in real-time
+
+5. **Generate Report** (Reports page)
+   - Click "Generate Report" after discussion ends
+   - View formatted report with themes, misconceptions, best practices
+   - Export as markdown
+   - Check observability panel: model name, prompt version, execution time
+
+### Instructor Console Features
+
+The Instructor Console provides real-time support during live sessions:
+
+**Live Copilot Tab:**
+- Start/Stop copilot (runs every 90 seconds)
+- View rolling discussion summary
+- See confusion points with severity (🔴 high / 🟡 medium / 🟢 low)
+- Get 2-3 actionable instructor prompts
+- Suggested re-engagement activities
+- One-click poll creation from AI suggestions
+- Overall assessment: engagement, understanding, discussion quality
+
+**Polls Tab:**
+- Create polls manually
+- View poll results with bar charts
+- See vote counts and percentages
+
+**Quick Actions Tab:**
+- Go Live / End Session buttons
+- Generate feedback report
+
+### Report Observability Panel
+
+Each report includes an observability summary showing:
+- **Model**: Which LLM generated the report (gpt-4o-mini, claude-3-haiku, or fallback)
+- **Prompt Version**: Version of prompts used
+- **Execution Time**: How long report generation took
+- **Report ID**: Database identifier
+
+If you see "fallback" mode, it means no LLM API key was configured and default responses were used.
 
 ---
 

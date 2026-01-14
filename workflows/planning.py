@@ -230,9 +230,11 @@ def design_flow(state: PlanningState) -> PlanningState:
 
         # Fallback flow
         state["used_fallback"] = True
+        topics = plan.get('topics', [])
+        first_topic = topics[0] if topics else plan.get('title', 'the topic')
         plan["flow"] = [
             {"phase": "intro", "duration_minutes": 5, "activity": "Welcome and overview"},
-            {"phase": "theory", "duration_minutes": 15, "activity": f"Present: {plan.get('topics', ['topic'])[0]}"},
+            {"phase": "theory", "duration_minutes": 15, "activity": f"Present: {first_topic}"},
             {"phase": "case", "duration_minutes": 10, "activity": "Case study introduction"},
             {"phase": "discussion", "duration_minutes": 20, "activity": "Facilitated discussion"},
             {"phase": "wrap-up", "duration_minutes": 5, "activity": "Summary and next steps"},
@@ -241,7 +243,7 @@ def design_flow(state: PlanningState) -> PlanningState:
             {
                 "type": "poll",
                 "timing": "after_theory",
-                "question": f"How confident are you with {plan.get('topics', ['this topic'])[0]}?",
+                "question": f"How confident are you with {first_topic}?",
                 "options": ["Very confident", "Somewhat confident", "Need more practice"],
             }
         ]

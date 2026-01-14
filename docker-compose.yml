@@ -41,6 +41,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg2://aristai:aristai_dev@db:5432/aristai
       - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
     depends_on:
       db:
         condition: service_healthy
@@ -59,6 +60,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg2://aristai:aristai_dev@db:5432/aristai
       - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
     depends_on:
       db:
         condition: service_healthy

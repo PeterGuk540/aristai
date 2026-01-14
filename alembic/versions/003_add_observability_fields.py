@@ -6,7 +6,7 @@ Adds execution_time, token_usage, cost, error tracking to:
 - sessions (planning)
 
 Revision ID: 003_add_observability
-Revises: 002_add_pinned_to_posts
+Revises: 002_add_pinned
 Create Date: 2025-01-11
 """
 from alembic import op
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = '003_add_observability'
-down_revision = '002_add_pinned_to_posts'
+down_revision = '002_add_pinned'
 branch_labels = None
 depends_on = None
 

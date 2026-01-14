@@ -237,7 +237,12 @@ elif page == "Sessions":
                     if plan.get('readings'):
                         st.markdown("**Readings:**")
                         for reading in plan.get('readings', []):
-                            st.markdown(f"- {reading}")
+                            if isinstance(reading, dict):
+                                title = reading.get('title', 'Untitled')
+                                desc = reading.get('description', '')
+                                st.markdown(f"- **{title}**: {desc}")
+                            else:
+                                st.markdown(f"- {reading}")
 
                 # Case study
                 if plan.get('case'):

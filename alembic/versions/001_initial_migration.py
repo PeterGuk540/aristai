@@ -16,7 +16,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create user_role enum
+    # Create user_role enum (use postgresql.ENUM with create_type=False to control creation)
     user_role = postgresql.ENUM('instructor', 'student', name='user_role', create_type=False)
     user_role.create(op.get_bind(), checkfirst=True)
 
@@ -24,13 +24,13 @@ def upgrade() -> None:
     session_status = postgresql.ENUM('draft', 'scheduled', 'live', 'completed', name='session_status', create_type=False)
     session_status.create(op.get_bind(), checkfirst=True)
 
-    # Create users table
+    # Create users table - use postgresql.ENUM with create_type=False to prevent duplicate creation
     op.create_table(
         'users',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('name', sa.String(length=255), nullable=False),
         sa.Column('email', sa.String(length=255), nullable=False),
-        sa.Column('role', sa.Enum('instructor', 'student', name='user_role'), nullable=False),
+        sa.Column('role', postgresql.ENUM('instructor', 'student', name='user_role', create_type=False), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
@@ -72,7 +72,7 @@ def upgrade() -> None:
         sa.Column('course_id', sa.Integer(), nullable=False),
         sa.Column('title', sa.String(length=255), nullable=False),
         sa.Column('date', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('status', sa.Enum('draft', 'scheduled', 'live', 'completed', name='session_status'), nullable=True),
+        sa.Column('status', postgresql.ENUM('draft', 'scheduled', 'live', 'completed', name='session_status', create_type=False), nullable=True),
         sa.Column('plan_version', sa.String(length=50), nullable=True),
         sa.Column('plan_json', sa.JSON(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),

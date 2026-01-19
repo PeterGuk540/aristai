@@ -127,7 +127,7 @@ st.sidebar.markdown(f"[API Docs]({API_URL}/docs)")
 if page == "Courses":
     st.title("Course Management")
 
-    tab1, tab2 = st.tabs(["Create Course", "Existing Courses"])
+    tab1, tab2, tab3 = st.tabs(["Create Course", "Existing Courses", "Enrollment Management"])
 
     with tab1:
         st.subheader("Create New Course")
@@ -212,6 +212,74 @@ if page == "Courses":
                         st.markdown(f"**Created:** {format_timestamp(course.get('created_at'))}")
         else:
             st.info("No courses found. Create one above!")
+
+    with tab3:
+        st.subheader("Enrollment Management")
+        st.markdown("Enroll students in courses to track participation.")
+
+        # Course selector
+        courses = api_get("/courses/")
+        if courses:
+            enroll_course_options = {f"{c['title']} (ID: {c['id']})": c['id'] for c in courses}
+            selected_enroll_course = st.selectbox(
+                "Select Course",
+                list(enroll_course_options.keys()),
+                key="enroll_course_select"
+            )
+            enroll_course_id = enroll_course_options[selected_enroll_course]
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Currently Enrolled Students:**")
+                enrolled = api_get(f"/enrollments/course/{enroll_course_id}/students")
+                if enrolled:
+                    for student in enrolled:
+                        st.markdown(f"- {student['name']} (ID: {student['user_id']})")
+                else:
+                    st.info("No students enrolled yet.")
+
+            with col2:
+                st.markdown("**Enroll Students:**")
+
+                # Get all students
+                all_users = api_get("/users/?role=student") or api_get("/users/")
+                students = [u for u in (all_users or []) if u.get('role') == 'student']
+
+                if students:
+                    # Filter out already enrolled
+                    enrolled_ids = {e['user_id'] for e in (enrolled or [])}
+                    available_students = [s for s in students if s['id'] not in enrolled_ids]
+
+                    if available_students:
+                        student_options = {f"{s['name']} (ID: {s['id']})": s['id'] for s in available_students}
+                        selected_student = st.selectbox(
+                            "Select Student to Enroll",
+                            list(student_options.keys()),
+                            key="enroll_student_select"
+                        )
+                        student_id = student_options[selected_student]
+
+                        if st.button("Enroll Student", key="enroll_single"):
+                            result = api_post("/enrollments/", {
+                                "user_id": student_id,
+                                "course_id": enroll_course_id
+                            })
+                            if result:
+                                st.success(f"Student enrolled!")
+                                st.rerun()
+
+                        st.markdown("---")
+
+                    if st.button("Enroll All Students", key="enroll_all", type="primary"):
+                        result = api_post(f"/enrollments/course/{enroll_course_id}/enroll-all-students")
+                        if result:
+                            st.success(f"Enrolled {result.get('message', 'students')}")
+                            st.rerun()
+                else:
+                    st.info("No students found. Create student users first.")
+        else:
+            st.warning("No courses found. Create a course first.")
 
 
 # ============ SESSIONS PAGE ============

@@ -17,6 +17,7 @@ class Course(Base):
     # Relationships with cascades to avoid orphan rows
     resources = relationship("CourseResource", back_populates="course", cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="course", cascade="all, delete-orphan")
+    enrollments = relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
 
 
 class CourseResource(Base):

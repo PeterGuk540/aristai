@@ -23,3 +23,4 @@ class User(Base):
     # Relationships
     posts = relationship("Post", back_populates="user")
     poll_votes = relationship("PollVote", back_populates="user")
+    enrollments = relationship("Enrollment", back_populates="user", cascade="all, delete-orphan")

@@ -18,6 +18,16 @@ from api.models.session import SessionStatus
 router = APIRouter()
 
 
+@router.get("/{session_id}/cases", response_model=List[CaseResponse])
+def get_session_cases(session_id: int, db: Session = Depends(get_db)):
+    """Get all cases for a session."""
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return session.cases
+
+
 @router.post("/", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 def create_session(session: SessionCreate, db: Session = Depends(get_db)):
     """Create a new session."""

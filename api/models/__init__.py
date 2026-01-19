@@ -6,6 +6,7 @@ from api.models.post import Post
 from api.models.poll import Poll, PollVote
 from api.models.intervention import Intervention
 from api.models.report import Report
+from api.models.enrollment import Enrollment
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "PollVote",
     "Intervention",
     "Report",
+    "Enrollment",
 ]

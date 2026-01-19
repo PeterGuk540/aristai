@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from typing import List
+from typing import List, Optional
 from api.core.database import get_db
 from api.models.course import Course, CourseResource
+from api.models.session import Session as SessionModel
 from api.schemas.course import (
     CourseCreate,
     CourseResponse,
     CourseResourceCreate,
     CourseResourceResponse,
 )
+from api.schemas.session import SessionResponse
 
 router = APIRouter()
 
@@ -42,6 +44,26 @@ def list_courses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
     """List all courses."""
     courses = db.query(Course).offset(skip).limit(limit).all()
     return courses
+
+
+@router.get("/{course_id}/sessions", response_model=List[SessionResponse])
+def list_course_sessions(
+    course_id: int,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """List all sessions for a course."""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    query = db.query(SessionModel).filter(SessionModel.course_id == course_id)
+
+    if status:
+        query = query.filter(SessionModel.status == status)
+
+    sessions = query.order_by(SessionModel.created_at.desc()).all()
+    return sessions
 
 
 @router.post(

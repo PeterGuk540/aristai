@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from api.api.routes import courses, sessions, posts, polls, reports, users
+from api.api.routes import courses, sessions, posts, polls, reports, users, enrollments
 from api.core.config import get_settings
 
 api_router = APIRouter()
@@ -11,6 +11,7 @@ api_router.include_router(sessions.router, prefix="/sessions", tags=["sessions"]
 api_router.include_router(posts.router, prefix="/posts", tags=["posts"])
 api_router.include_router(polls.router, prefix="/polls", tags=["polls"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
+api_router.include_router(enrollments.router, prefix="/enrollments", tags=["enrollments"])
 
 # Debug routes only available when DEBUG=true
 settings = get_settings()

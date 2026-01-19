@@ -3,12 +3,14 @@ Report Workflow: Post-Discussion Feedback Generation
 
 This workflow generates structured feedback reports after a session ends.
 Uses LangGraph for orchestration with the following pipeline:
-    Cluster → AlignToObjectives → Misconceptions → BestPracticeAnswer → StudentSummary
+    Cluster → AlignToObjectives → Misconceptions → BestPracticeAnswer → StudentSummary → ScoreAnswers
 
 Includes:
 - Poll results as classroom state evidence (Milestone 5)
 - Token tracking and cost metrics (Milestone 6)
 - Rolling summary for token control (Milestone 6)
+- Participation tracking with enrollment data
+- Answer scoring comparing student posts to best practice
 
 All claims about student contributions include post_id citations.
 Hallucination guardrails: "insufficient evidence" when claims aren't supported.
@@ -21,14 +23,16 @@ from typing import Any, Dict, List, TypedDict, Optional
 
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from api.core.database import SessionLocal
 from api.models.session import Session as SessionModel
 from api.models.course import Course, CourseResource
 from api.models.post import Post
-from api.models.user import User
+from api.models.user import User, UserRole
 from api.models.poll import Poll, PollVote
 from api.models.report import Report
+from api.models.enrollment import Enrollment
 from workflows.llm_utils import (
     get_llm_with_tracking,
     invoke_llm_with_metrics,
@@ -45,6 +49,7 @@ from workflows.prompts.report_prompts import (
     MISCONCEPTIONS_PROMPT,
     BEST_PRACTICE_PROMPT,
     STUDENT_SUMMARY_PROMPT,
+    SCORE_ANSWERS_PROMPT,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,7 +67,7 @@ class ReportState(TypedDict):
     syllabus_text: str
     objectives: List[str]
     resources_text: str
-    posts: List[Dict[str, Any]]  # {post_id, author_role, content, timestamp, pinned, labels}
+    posts: List[Dict[str, Any]]  # {post_id, author_role, content, timestamp, pinned, labels, user_id, user_name}
     older_posts_summary: Optional[str]  # Summary of older posts for token control
 
     # Rolling summary metadata (Milestone 6)
@@ -70,6 +75,9 @@ class ReportState(TypedDict):
 
     # Poll data (Milestone 5)
     poll_results: List[Dict[str, Any]]
+
+    # Participation data
+    participation_metrics: Optional[Dict[str, Any]]
 
     # After Cluster
     clusters: Optional[Dict[str, Any]]
@@ -85,6 +93,9 @@ class ReportState(TypedDict):
 
     # After StudentSummary
     student_summary: Optional[Dict[str, Any]]
+
+    # After ScoreAnswers
+    answer_scores: Optional[Dict[str, Any]]
 
     # Final outputs
     report_json: Optional[Dict[str, Any]]
@@ -384,6 +395,128 @@ def generate_student_summary(state: ReportState) -> ReportState:
     return state
 
 
+def score_student_answers(state: ReportState) -> ReportState:
+    """Node 6: Score student answers against the best practice answer."""
+    logger.info("ScoreAnswers: Evaluating student responses")
+
+    # Only score student posts
+    student_posts = [p for p in state["posts"] if p["author_role"] == "student"]
+
+    if not student_posts:
+        state["answer_scores"] = {
+            "student_scores": [],
+            "class_statistics": None,
+            "note": "No student posts to score"
+        }
+        return state
+
+    best_practice = state.get("best_practice", {}).get("best_practice_answer", {})
+    if not best_practice:
+        state["answer_scores"] = {
+            "student_scores": [],
+            "class_statistics": None,
+            "note": "No best practice answer available for comparison"
+        }
+        return state
+
+    llm, model_name = get_llm_with_tracking()
+
+    if llm:
+        # Format student posts with user info
+        posts_formatted = "\n\n".join(
+            f"[Post #{p['post_id']} by User {p.get('user_id', 'Unknown')} ({p.get('user_name', 'Unknown')})]\n{p['content']}"
+            for p in student_posts
+        )
+
+        key_concepts = best_practice.get("key_concepts", [])
+
+        prompt = SCORE_ANSWERS_PROMPT.format(
+            best_practice_answer=best_practice.get("detailed_explanation", best_practice.get("summary", "")),
+            key_concepts="\n".join(f"- {c}" for c in key_concepts) if key_concepts else "See best practice answer",
+            student_posts=posts_formatted
+        )
+
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+        state["llm_metrics"].append(response.metrics)
+
+        if response.success:
+            scores = parse_json_response(response.content)
+            if scores:
+                state["answer_scores"] = scores
+                logger.info(f"ScoreAnswers: Scored {len(scores.get('student_scores', []))} posts")
+                return state
+
+    # Fallback - basic scoring based on post length and labels
+    fallback_scores = []
+    for p in student_posts:
+        # Simple heuristic scoring
+        score = 50  # Base score
+        content_len = len(p.get("content", ""))
+        if content_len > 200:
+            score += 15  # Longer responses get bonus
+        if content_len > 500:
+            score += 10  # Even longer get more
+        if "high-quality" in (p.get("labels") or []):
+            score += 25  # Instructor marked as high quality
+        if "needs-clarification" in (p.get("labels") or []):
+            score -= 20  # Needs work
+
+        score = max(0, min(100, score))  # Clamp to 0-100
+
+        fallback_scores.append({
+            "user_id": p.get("user_id"),
+            "user_name": p.get("user_name"),
+            "post_id": p["post_id"],
+            "score": score,
+            "key_points_covered": [],
+            "missing_points": [],
+            "feedback": "Automated scoring based on instructor labels and post length"
+        })
+
+    if fallback_scores:
+        scores_only = [s["score"] for s in fallback_scores]
+        avg_score = sum(scores_only) / len(scores_only)
+        highest = max(fallback_scores, key=lambda x: x["score"])
+        lowest = min(fallback_scores, key=lambda x: x["score"])
+
+        state["answer_scores"] = {
+            "student_scores": fallback_scores,
+            "class_statistics": {
+                "average_score": round(avg_score, 1),
+                "highest_score": highest["score"],
+                "lowest_score": lowest["score"],
+                "score_distribution": {
+                    "excellent": sum(1 for s in scores_only if s >= 90),
+                    "good": sum(1 for s in scores_only if 75 <= s < 90),
+                    "satisfactory": sum(1 for s in scores_only if 60 <= s < 75),
+                    "needs_improvement": sum(1 for s in scores_only if 40 <= s < 60),
+                    "insufficient": sum(1 for s in scores_only if s < 40),
+                }
+            },
+            "closest_to_correct": {
+                "user_id": highest.get("user_id"),
+                "user_name": highest.get("user_name"),
+                "post_id": highest.get("post_id"),
+                "score": highest.get("score")
+            },
+            "furthest_from_correct": {
+                "user_id": lowest.get("user_id"),
+                "user_name": lowest.get("user_name"),
+                "post_id": lowest.get("post_id"),
+                "score": lowest.get("score")
+            },
+            "note": "Fallback scoring used - LLM unavailable"
+        }
+    else:
+        state["answer_scores"] = {
+            "student_scores": [],
+            "class_statistics": None,
+            "note": "No scores generated"
+        }
+
+    return state
+
+
 # ============ Report Generation ============
 
 def compile_report(state: ReportState) -> Dict[str, Any]:
@@ -431,6 +564,12 @@ def compile_report(state: ReportState) -> Dict[str, Any]:
 
         # Poll results as classroom evidence (Milestone 5)
         "poll_results": state.get("poll_results", []),
+
+        # Participation metrics
+        "participation": state.get("participation_metrics", {}),
+
+        # Answer scoring
+        "answer_scores": state.get("answer_scores", {}),
 
         # Rolling summary metadata for explainability (Milestone 6)
         "rolling_summary": {
@@ -617,6 +756,65 @@ def generate_markdown_report(report_json: Dict[str, Any]) -> str:
                 lines.append(f"   *Tests: {q['related_objective']}*")
             lines.append("")
 
+    # Participation Metrics
+    participation = report_json.get("participation", {})
+    if participation and participation.get("total_enrolled_students", 0) > 0:
+        lines.append("---")
+        lines.append("")
+        lines.append("# Participation Summary")
+        lines.append("")
+        lines.append(f"- **Enrolled students**: {participation.get('total_enrolled_students', 'N/A')}")
+        lines.append(f"- **Students who participated**: {participation.get('participation_count', 0)}")
+        lines.append(f"- **Participation rate**: {participation.get('participation_rate', 0)}%")
+        lines.append("")
+
+        non_participants = participation.get("students_who_did_not_participate", [])
+        if non_participants:
+            lines.append("### Students Who Did Not Participate")
+            for s in non_participants:
+                lines.append(f"- {s.get('name', 'Unknown')} (ID: {s.get('user_id')})")
+            lines.append("")
+
+    # Answer Scoring
+    scores = report_json.get("answer_scores", {})
+    if scores and scores.get("student_scores"):
+        lines.append("---")
+        lines.append("")
+        lines.append("# Answer Scoring")
+        lines.append("")
+
+        stats = scores.get("class_statistics", {})
+        if stats:
+            lines.append(f"**Class Average:** {stats.get('average_score', 'N/A')}/100")
+            lines.append(f"**Highest Score:** {stats.get('highest_score', 'N/A')}")
+            lines.append(f"**Lowest Score:** {stats.get('lowest_score', 'N/A')}")
+            lines.append("")
+
+        # Show closest and furthest
+        closest = scores.get("closest_to_correct")
+        furthest = scores.get("furthest_from_correct")
+
+        if closest:
+            name = closest.get('user_name') or f"User {closest.get('user_id')}"
+            lines.append(f"🏆 **Closest to Correct:** {name} (Post #{closest.get('post_id')}) - Score: {closest.get('score')}")
+        if furthest:
+            name = furthest.get('user_name') or f"User {furthest.get('user_id')}"
+            lines.append(f"📚 **Needs Most Improvement:** {name} (Post #{furthest.get('post_id')}) - Score: {furthest.get('score')}")
+        lines.append("")
+
+        # Individual scores table
+        lines.append("### Individual Scores")
+        lines.append("")
+        lines.append("| Student | Post | Score | Feedback |")
+        lines.append("|---------|------|-------|----------|")
+
+        for s in sorted(scores["student_scores"], key=lambda x: x.get("score", 0), reverse=True):
+            name = s.get("user_name") or f"User {s.get('user_id')}"
+            feedback = s.get("feedback", "")[:50] + "..." if len(s.get("feedback", "")) > 50 else s.get("feedback", "")
+            lines.append(f"| {name} | #{s.get('post_id')} | {s.get('score')}/100 | {feedback} |")
+
+        lines.append("")
+
     # Observability footer
     obs = report_json.get("observability", {})
     if obs:
@@ -644,6 +842,7 @@ def build_report_graph() -> StateGraph:
     workflow.add_node("identify_misconceptions", identify_misconceptions)
     workflow.add_node("generate_best_practice", generate_best_practice)
     workflow.add_node("generate_student_summary", generate_student_summary)
+    workflow.add_node("score_student_answers", score_student_answers)
 
     # Define edges (linear flow)
     workflow.set_entry_point("cluster_posts")
@@ -651,7 +850,8 @@ def build_report_graph() -> StateGraph:
     workflow.add_edge("align_to_objectives", "identify_misconceptions")
     workflow.add_edge("identify_misconceptions", "generate_best_practice")
     workflow.add_edge("generate_best_practice", "generate_student_summary")
-    workflow.add_edge("generate_student_summary", END)
+    workflow.add_edge("generate_student_summary", "score_student_answers")
+    workflow.add_edge("score_student_answers", END)
 
     return workflow.compile()
 
@@ -710,6 +910,84 @@ def fetch_poll_results(db: Session, session_id: int) -> List[Dict[str, Any]]:
     return poll_results
 
 
+# ============ Participation Metrics ============
+
+def calculate_participation_metrics(
+    db: Session,
+    session_id: int,
+    course_id: int
+) -> Dict[str, Any]:
+    """
+    Calculate participation metrics for a session based on enrolled students.
+
+    Returns:
+        Dict with participation rate, participants, and non-participants
+    """
+    # Get enrolled students for the course
+    enrolled_students = (
+        db.query(User)
+        .join(Enrollment, User.id == Enrollment.user_id)
+        .filter(
+            Enrollment.course_id == course_id,
+            User.role == UserRole.student
+        )
+        .all()
+    )
+
+    enrolled_ids = {s.id for s in enrolled_students}
+    enrolled_count = len(enrolled_ids)
+
+    if enrolled_count == 0:
+        return {
+            "total_enrolled_students": 0,
+            "students_who_participated": [],
+            "participation_count": 0,
+            "students_who_did_not_participate": [],
+            "non_participation_count": 0,
+            "participation_rate": 0.0,
+            "note": "No students enrolled in course"
+        }
+
+    # Get students who posted in this session
+    posts_by_student = (
+        db.query(
+            Post.user_id,
+            User.name,
+            func.count(Post.id).label('post_count')
+        )
+        .join(User, Post.user_id == User.id)
+        .filter(
+            Post.session_id == session_id,
+            User.role == UserRole.student
+        )
+        .group_by(Post.user_id, User.name)
+        .all()
+    )
+
+    participated_ids = {p.user_id for p in posts_by_student}
+
+    students_who_participated = [
+        {"user_id": p.user_id, "name": p.name, "post_count": p.post_count}
+        for p in posts_by_student
+    ]
+
+    students_who_did_not_participate = [
+        {"user_id": s.id, "name": s.name}
+        for s in enrolled_students if s.id not in participated_ids
+    ]
+
+    participation_rate = (len(participated_ids) / enrolled_count * 100) if enrolled_count > 0 else 0.0
+
+    return {
+        "total_enrolled_students": enrolled_count,
+        "students_who_participated": students_who_participated,
+        "participation_count": len(participated_ids),
+        "students_who_did_not_participate": students_who_did_not_participate,
+        "non_participation_count": len(students_who_did_not_participate),
+        "participation_rate": round(participation_rate, 1)
+    }
+
+
 # ============ Main Entry Point ============
 
 def run_report_workflow(session_id: int) -> Dict[str, Any]:
@@ -757,6 +1035,8 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
         posts_data = [
             {
                 "post_id": post.id,
+                "user_id": user.id,
+                "user_name": user.name,
                 "author_role": user.role.value if user.role else "student",
                 "content": post.content,
                 "timestamp": post.created_at.isoformat() if post.created_at else "",
@@ -765,6 +1045,10 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
             }
             for post, user in posts_with_users
         ]
+
+        # Calculate participation metrics
+        participation_metrics = calculate_participation_metrics(db, session_id, course.id)
+        logger.info(f"Participation rate: {participation_metrics.get('participation_rate', 0)}%")
 
         # Apply rolling summary for token control (Milestone 6)
         rolling_result = create_rolling_summary_with_metadata(posts_data, max_posts=30)
@@ -812,11 +1096,13 @@ def run_report_workflow(session_id: int) -> Dict[str, Any]:
             "older_posts_summary": older_summary,
             "rolling_summary_metadata": rolling_summary_metadata,
             "poll_results": poll_results,
+            "participation_metrics": participation_metrics,
             "clusters": None,
             "objectives_alignment": None,
             "misconceptions": None,
             "best_practice": None,
             "student_summary": None,
+            "answer_scores": None,
             "report_json": None,
             "report_md": None,
             "model_name": "",

@@ -235,3 +235,77 @@ Guidelines:
 - If there's insufficient data for feedback, say "Keep up the good work!" generically
 
 Return ONLY valid JSON, no additional text."""
+
+
+SCORE_ANSWERS_PROMPT = """You are an educational assessment expert. Compare each student's response to the best-practice answer and assign a score.
+
+## Best Practice Answer
+{best_practice_answer}
+
+## Key Concepts That Should Be Addressed
+{key_concepts}
+
+## Student Posts to Evaluate
+{student_posts}
+
+## Scoring Rubric
+- 90-100: Excellent - Covers all key concepts with deep understanding
+- 75-89: Good - Covers most key concepts with solid understanding
+- 60-74: Satisfactory - Covers some key concepts, room for improvement
+- 40-59: Needs Improvement - Missing key concepts, shows partial understanding
+- 0-39: Insufficient - Does not demonstrate understanding of the topic
+
+## Instructions
+For each student post:
+1. Identify which key concepts they addressed
+2. Evaluate the accuracy and depth of their explanation
+3. Assign a score based on the rubric
+4. Provide brief feedback
+
+Return JSON in this exact format:
+{{
+    "student_scores": [
+        {{
+            "user_id": <int>,
+            "user_name": "<string or null if unknown>",
+            "post_id": <int>,
+            "score": <int 0-100>,
+            "key_points_covered": ["<concept1>", "<concept2>"],
+            "missing_points": ["<concept3>"],
+            "feedback": "<brief constructive feedback>"
+        }}
+    ],
+    "class_statistics": {{
+        "average_score": <float>,
+        "highest_score": <int>,
+        "lowest_score": <int>,
+        "score_distribution": {{
+            "excellent": <count 90-100>,
+            "good": <count 75-89>,
+            "satisfactory": <count 60-74>,
+            "needs_improvement": <count 40-59>,
+            "insufficient": <count 0-39>
+        }}
+    }},
+    "closest_to_correct": {{
+        "user_id": <int>,
+        "user_name": "<string or null>",
+        "post_id": <int>,
+        "score": <int>
+    }},
+    "furthest_from_correct": {{
+        "user_id": <int>,
+        "user_name": "<string or null>",
+        "post_id": <int>,
+        "score": <int>
+    }}
+}}
+
+Guidelines:
+- Score based on alignment with the best practice answer and key concepts
+- Be fair and consistent in scoring across all posts
+- Consider both accuracy and depth of understanding
+- Provide constructive feedback that helps students improve
+- If a post is very short or off-topic, score it lower with appropriate feedback
+
+Return ONLY valid JSON, no additional text."""

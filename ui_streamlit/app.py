@@ -1016,9 +1016,11 @@ elif page == "Reports":
                         furthest = scores.get('furthest_from_correct')
 
                         if closest:
-                            st.success(f"🏆 **Closest to Correct:** {closest.get('user_name', f'User {closest.get(\"user_id\")}')} - Score: {closest.get('score')}")
+                            closest_name = closest.get('user_name') or f"User {closest.get('user_id')}"
+                            st.success(f"🏆 **Closest to Correct:** {closest_name} - Score: {closest.get('score')}")
                         if furthest:
-                            st.warning(f"📚 **Needs Most Improvement:** {furthest.get('user_name', f'User {furthest.get(\"user_id\")}')} - Score: {furthest.get('score')}")
+                            furthest_name = furthest.get('user_name') or f"User {furthest.get('user_id')}"
+                            st.warning(f"📚 **Needs Most Improvement:** {furthest_name} - Score: {furthest.get('score')}")
 
                         student_scores = scores.get('student_scores', [])
                         if student_scores:

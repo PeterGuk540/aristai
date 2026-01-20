@@ -11,6 +11,10 @@ An AI-powered platform for synchronous classroom discussions with instructor cop
 - **Live Copilot**: Real-time suggestions for instructors during discussions
 - **Feedback Reports**: Post-discussion analysis with themes, contributions, and misconceptions
 - **Polls**: Interactive checkpoints with AI-suggested questions
+- **Role-Based UI**: Different views for instructors vs students
+- **Enrollment Management**: Track which students are enrolled in which courses
+- **Participation Tracking**: See who participated and who didn't in reports
+- **Answer Scoring**: AI scores student responses against best-practice answers
 
 ## Tech Stack
 
@@ -93,7 +97,9 @@ aristai/
 | GET | `/api/courses/` | List courses |
 | GET | `/api/courses/{id}` | Get course |
 | POST | `/api/courses/{id}/generate_plans` | Generate session plans (async) |
+| GET | `/api/courses/{id}/sessions` | List sessions for a course |
 | POST | `/api/sessions/` | Create a session |
+| GET | `/api/sessions/{id}/cases` | Get cases for a session |
 | GET | `/api/sessions/{id}` | Get session |
 | PATCH | `/api/sessions/{id}/status` | Update session status (publish) |
 | POST | `/api/sessions/{id}/case` | Post a case |
@@ -110,6 +116,11 @@ aristai/
 | GET | `/api/polls/{id}/results` | Get poll results |
 | POST | `/api/reports/session/{id}/generate` | Generate report (async) |
 | GET | `/api/reports/session/{id}` | Get report |
+| POST | `/api/enrollments/` | Enroll a user in a course |
+| DELETE | `/api/enrollments/{id}` | Unenroll a user |
+| GET | `/api/enrollments/course/{id}/students` | Get enrolled students |
+| GET | `/api/enrollments/user/{id}/courses` | Get user's enrolled courses |
+| POST | `/api/enrollments/course/{id}/enroll-all-students` | Bulk enroll all students |
 
 Debug endpoints (only when DEBUG=true):
 - `GET /api/debug/db_check` - Check database
@@ -159,11 +170,27 @@ The Streamlit UI provides a complete interface for managing courses, sessions, d
 
 | Page | Purpose |
 |------|---------|
-| **Courses** | Create courses with syllabus + objectives, trigger plan generation |
+| **Courses** | Create courses with syllabus + objectives, trigger plan generation, manage enrollment |
 | **Sessions** | View session plans, create sessions, manage status (draft→live→completed) |
-| **Forum** | Post cases, view discussion thread, post replies, moderate posts |
-| **Instructor Console** | Live copilot suggestions, poll management, quick actions |
-| **Reports** | Generate reports, view formatted/raw markdown, export, observability panel |
+| **Forum** | Post cases (instructor), view discussion thread, post replies, moderate posts (instructor) |
+| **Instructor Console** | Live copilot suggestions, poll management, quick actions (instructor only) |
+| **Reports** | Generate reports with participation tracking, answer scoring, export markdown |
+
+### Role-Based Access
+
+The UI adapts based on the selected user role:
+
+| Feature | Instructor | Student |
+|---------|------------|---------|
+| View Discussion | ✓ | ✓ |
+| Post Reply | ✓ | ✓ |
+| Post Case | ✓ | ✗ |
+| Moderate Posts (pin, label) | ✓ | ✗ |
+| Instructor Console | ✓ | ✗ |
+| Enrollment Management | ✓ | ✗ |
+| View Reports | ✓ | ✓ |
+
+Select your user in the sidebar under "User Context" to switch roles.
 
 ### Typical Workflow
 
@@ -171,6 +198,7 @@ The Streamlit UI provides a complete interface for managing courses, sessions, d
    - Paste syllabus text
    - Add learning objectives (one per line)
    - Click "Create & Generate Plans" to auto-generate session plans
+   - Go to "Enrollment Management" tab to enroll students
 
 2. **Start a Session** (Sessions page)
    - Load a session by ID
@@ -191,6 +219,8 @@ The Streamlit UI provides a complete interface for managing courses, sessions, d
 5. **Generate Report** (Reports page)
    - Click "Generate Report" after discussion ends
    - View formatted report with themes, misconceptions, best practices
+   - Check **Participation Metrics**: enrolled students, participation rate, who didn't participate
+   - Check **Answer Scoring**: individual scores, class average, closest/furthest from correct
    - Export as markdown
    - Check observability panel: model name, prompt version, execution time
 
@@ -215,6 +245,42 @@ The Instructor Console provides real-time support during live sessions:
 **Quick Actions Tab:**
 - Go Live / End Session buttons
 - Generate feedback report
+
+### Enrollment Management
+
+The Enrollment Management tab (Courses page) allows instructors to:
+- View currently enrolled students for each course
+- Enroll individual students via dropdown
+- Bulk enroll all students with one click
+
+Enrollment is required for participation tracking to work in reports.
+
+### Report Features
+
+#### Participation Tracking
+
+Reports include participation metrics showing:
+- **Total enrolled students**: Number of students enrolled in the course
+- **Participation rate**: Percentage of enrolled students who posted
+- **Students who participated**: Names and post counts
+- **Students who did NOT participate**: Names of students who didn't post
+
+#### Answer Scoring
+
+The AI scores each student's post against the best-practice answer:
+- **Individual scores**: 0-100 score for each student post
+- **Key points covered/missing**: What concepts each student addressed
+- **Feedback**: Brief constructive feedback per student
+- **Class statistics**: Average, highest, lowest scores
+- **Closest to correct**: Student with best understanding
+- **Furthest from correct**: Student needing most improvement
+
+Scoring rubric:
+- 90-100: Excellent - Covers all key concepts
+- 75-89: Good - Covers most key concepts
+- 60-74: Satisfactory - Covers some key concepts
+- 40-59: Needs Improvement - Missing key concepts
+- 0-39: Insufficient - Does not demonstrate understanding
 
 ### Report Observability Panel
 

@@ -47,7 +47,7 @@ interface PostWithReplies extends Post {
 }
 
 export default function ForumPage() {
-  const { user, isInstructor } = useUser();
+  const { currentUser: user, isInstructor } = useUser();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);

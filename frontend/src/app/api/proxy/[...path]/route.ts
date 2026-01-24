@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 // Backend API URL - set this in Vercel environment variables
 // New EC2: http://13.219.204.7:8000
 // API Gateway (with Cognito JWT): https://z4pdjzcvmi.execute-api.us-east-1.amazonaws.com
-const BACKEND_URL = process.env.BACKEND_API_URL || 'http://13.219.204.7:8000';
+// TEMPORARILY HARDCODED to bypass Vercel env var issue
+const BACKEND_URL = 'https://z4pdjzcvmi.execute-api.us-east-1.amazonaws.com';
 
 // Debug: Log the backend URL being used (remove after debugging)
 console.log('[Proxy] BACKEND_API_URL env:', process.env.BACKEND_API_URL);

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Backend API URL - set this in Vercel environment variables
-const BACKEND_URL = process.env.BACKEND_API_URL || 'http://3.85.224.97:8000';
+// New EC2: http://13.219.204.7:8000
+// API Gateway (with Cognito JWT): https://z4pdjzcvmi.execute-api.us-east-1.amazonaws.com
+const BACKEND_URL = process.env.BACKEND_API_URL || 'http://13.219.204.7:8000';
 
 export async function GET(
   request: NextRequest,

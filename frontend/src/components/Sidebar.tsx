@@ -11,9 +11,12 @@ import {
   GraduationCap,
   User,
   ChevronDown,
+  LogIn,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUser } from '@/lib/context';
+import { useAuth } from '@/lib/auth';
 
 const navigation = [
   { name: 'Courses', href: '/courses', icon: BookOpen },
@@ -26,6 +29,7 @@ const navigation = [
 export function Sidebar() {
   const pathname = usePathname();
   const { currentUser, setCurrentUser, users, isInstructor, loading } = useUser();
+  const { isAuthenticated, isLoading: authLoading, user: authUser, login, logout } = useAuth();
 
   return (
     <div className="flex h-full w-64 flex-col bg-white border-r border-gray-200">
@@ -33,6 +37,42 @@ export function Sidebar() {
       <div className="flex h-16 items-center gap-2 px-6 border-b border-gray-200">
         <GraduationCap className="h-8 w-8 text-primary-600" />
         <span className="text-xl font-bold text-gray-900">AristAI</span>
+      </div>
+
+      {/* Auth Status */}
+      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+        {authLoading ? (
+          <div className="text-sm text-gray-400">Loading...</div>
+        ) : isAuthenticated ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-primary-100 flex items-center justify-center">
+                <User className="h-4 w-4 text-primary-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {authUser?.name || authUser?.email}
+                </p>
+                <p className="text-xs text-gray-500 truncate">{authUser?.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={login}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            <LogIn className="h-4 w-4" />
+            Sign In with Cognito
+          </button>
+        )}
       </div>
 
       {/* Navigation */}

@@ -1,3 +1,5 @@
+import { getAccessToken } from './auth';
+
 // In production (Vercel), use the proxy route to avoid CORS/mixed-content issues
 // In development, call the backend directly
 const isProduction = process.env.NODE_ENV === 'production';
@@ -16,10 +18,17 @@ async function fetchApi<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
+  // Get auth token if available
+  const accessToken = getAccessToken();
+  const authHeaders: HeadersInit = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
+    : {};
+
   const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...options.headers,
     },
   });

@@ -5,6 +5,10 @@ import { NextRequest, NextResponse } from 'next/server';
 // API Gateway (with Cognito JWT): https://z4pdjzcvmi.execute-api.us-east-1.amazonaws.com
 const BACKEND_URL = process.env.BACKEND_API_URL || 'http://13.219.204.7:8000';
 
+// Debug: Log the backend URL being used (remove after debugging)
+console.log('[Proxy] BACKEND_API_URL env:', process.env.BACKEND_API_URL);
+console.log('[Proxy] Using BACKEND_URL:', BACKEND_URL);
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }

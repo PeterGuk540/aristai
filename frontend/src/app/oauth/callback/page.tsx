@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { exchangeCodeForToken as googleExchangeCode, getGoogleUserInfo } from '@/lib/google-auth';
-import { exchangeCodeForToken as msExchangeCode, getMicrosoftUserInfo } from '@/lib/ms-auth';
+import { exchangeCodeForToken, getGoogleUserInfo } from '@/lib/google-auth';
+import { getMicrosoftUserInfo } from '@/lib/ms-auth';
 import { api } from '@/lib/api';
 
 function OAuthCallbackContent() {
@@ -35,37 +35,31 @@ function OAuthCallbackContent() {
 
       try {
         // Exchange code for tokens
-        // Both Google and Microsoft use the same Cognito token endpoint
-        // The storeTokens function in each module checks the identity provider from the token
-        // and sets the appropriate auth marker
-
-        // Try Google exchange first (this will also work for Microsoft,
-        // but will only set GoogleAuthUser marker if provider is Google)
-        let result = await googleExchangeCode(code);
-
-        // Check if this was a Google login
-        let googleUser = getGoogleUserInfo();
-        if (result.success && googleUser) {
-          // Register or get user in the database
-          try {
-            await api.registerOrGetUser({
-              name: googleUser.name || googleUser.email.split('@')[0],
-              email: googleUser.email,
-              auth_provider: 'google',
-              cognito_sub: googleUser.sub,
-            });
-          } catch (apiError) {
-            console.error('Failed to register user in database:', apiError);
-          }
-          router.replace('/courses');
-          return;
-        }
-
-        // If Google exchange didn't identify a Google user, try Microsoft exchange
-        // This will properly set the MicrosoftAuthUser marker
-        result = await msExchangeCode(code);
+        // The storeTokens function in google-auth.ts checks the identity provider
+        // from the token's identities claim and sets the appropriate auth marker
+        // (GoogleAuthUser for Google, MicrosoftAuthUser for Microsoft)
+        const result = await exchangeCodeForToken(code);
 
         if (result.success) {
+          // Check if this was a Google login
+          const googleUser = getGoogleUserInfo();
+          if (googleUser) {
+            // Register or get user in the database
+            try {
+              await api.registerOrGetUser({
+                name: googleUser.name || googleUser.email.split('@')[0],
+                email: googleUser.email,
+                auth_provider: 'google',
+                cognito_sub: googleUser.sub,
+              });
+            } catch (apiError) {
+              console.error('Failed to register user in database:', apiError);
+            }
+            router.replace('/courses');
+            return;
+          }
+
+          // Check if this was a Microsoft login
           const msUser = getMicrosoftUserInfo();
           if (msUser) {
             try {
@@ -82,7 +76,9 @@ function OAuthCallbackContent() {
             return;
           }
 
-          // Success but no user info - still redirect
+          // Tokens stored but couldn't determine provider
+          // This shouldn't happen, but redirect anyway
+          console.warn('OAuth succeeded but could not identify provider');
           router.replace('/courses');
           return;
         }

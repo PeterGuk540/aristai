@@ -16,6 +16,7 @@ const STORAGE_PREFIX = `CognitoIdentityServiceProvider.${COGNITO_CONFIG.CLIENT_I
 
 // Separate prefix to track Google-specific login (to differentiate from Cognito SDK login)
 const GOOGLE_AUTH_MARKER = 'GoogleAuthUser';
+const MS_AUTH_MARKER = 'MicrosoftAuthUser';
 
 // Get the callback URL based on current environment
 function getRedirectUri(): string {
@@ -126,22 +127,25 @@ function storeTokens(tokens: {
   // This prevents collision with email/password users who use email as username
   const cognitoUsername = idTokenPayload['cognito:username'];
 
-  // Check if this is a federated identity (Google)
+  // Check if this is a federated identity (Google or Microsoft)
   // Federated users have an "identities" claim in the token
   const identities = idTokenPayload.identities;
   const isGoogleUser = identities && Array.isArray(identities) &&
     identities.some((id: any) => id.providerName === 'Google');
+  const isMicrosoftUser = identities && Array.isArray(identities) &&
+    identities.some((id: any) => id.providerName === 'Microsoft');
 
-  // Use cognito:username for Google users (should be "Google_xxx")
-  // This ensures Google login doesn't overwrite Cognito SDK login tokens
+  // Use cognito:username for federated users (should be "Google_xxx" or "Microsoft_xxx")
+  // This ensures federated login doesn't overwrite Cognito SDK login tokens
   let username: string;
-  if (isGoogleUser && cognitoUsername) {
-    username = cognitoUsername; // e.g., "Google_123456789"
+  if ((isGoogleUser || isMicrosoftUser) && cognitoUsername) {
+    username = cognitoUsername; // e.g., "Google_123456789" or "Microsoft_123456789"
   } else if (cognitoUsername) {
     username = cognitoUsername;
   } else {
-    // Fallback: create a Google-prefixed username from sub
-    username = `Google_${idTokenPayload.sub}`;
+    // Fallback: create a prefixed username from sub
+    const prefix = isGoogleUser ? 'Google' : isMicrosoftUser ? 'Microsoft' : 'Unknown';
+    username = `${prefix}_${idTokenPayload.sub}`;
   }
 
   if (!username) {
@@ -169,9 +173,13 @@ function storeTokens(tokens: {
     localStorage.setItem(`${userPrefix}.tokenExpiry`, expiresAt.toString());
   }
 
-  // Store Google auth marker to identify this as a Google login
+  // Store auth marker to identify the provider
   // This helps differentiate from Cognito SDK (email/password) login
-  localStorage.setItem(GOOGLE_AUTH_MARKER, username);
+  if (isGoogleUser) {
+    localStorage.setItem(GOOGLE_AUTH_MARKER, username);
+  } else if (isMicrosoftUser) {
+    localStorage.setItem(MS_AUTH_MARKER, username);
+  }
 }
 
 // Get the last authenticated Google user from localStorage

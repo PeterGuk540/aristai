@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './auth-context';
-import { isGoogleAuthenticated } from './google-auth';
 import { api } from './api';
 
 // User context that fetches role from database
@@ -32,15 +31,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Determine auth provider based on how user logged in
-  const getAuthProvider = useCallback((): 'cognito' | 'google' => {
-    return isGoogleAuthenticated() ? 'google' : 'cognito';
-  }, []);
-
-  // Fetch user from database by email and auth provider
-  const fetchUserFromDb = useCallback(async (email: string, authProvider: 'cognito' | 'google') => {
+  // Fetch user from database by email
+  // Note: We don't filter by auth_provider because the User model has unique email constraint.
+  // The same user can login via Cognito or Google and should see the same account.
+  const fetchUserFromDb = useCallback(async (email: string) => {
     try {
-      const userData = await api.getUserByEmail(email, authProvider);
+      const userData = await api.getUserByEmail(email);
       setDbUser(userData);
     } catch (error) {
       console.error('Failed to fetch user from database:', error);
@@ -50,25 +46,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
         name: email.split('@')[0],
         email: email,
         role: 'student',
-        auth_provider: authProvider,
       });
     }
   }, []);
 
   const refreshUser = useCallback(async () => {
     if (user?.email) {
-      const authProvider = getAuthProvider();
-      await fetchUserFromDb(user.email, authProvider);
+      await fetchUserFromDb(user.email);
     }
-  }, [user?.email, fetchUserFromDb, getAuthProvider]);
+  }, [user?.email, fetchUserFromDb]);
 
   // Fetch user from database when auth user changes
   useEffect(() => {
     const loadUser = async () => {
       if (!authLoading && isAuthenticated && user?.email) {
         setLoading(true);
-        const authProvider = getAuthProvider();
-        await fetchUserFromDb(user.email, authProvider);
+        await fetchUserFromDb(user.email);
         setLoading(false);
       } else if (!authLoading && !isAuthenticated) {
         setDbUser(null);
@@ -76,7 +69,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     };
     loadUser();
-  }, [authLoading, isAuthenticated, user?.email, fetchUserFromDb, getAuthProvider]);
+  }, [authLoading, isAuthenticated, user?.email, fetchUserFromDb]);
 
   // Determine if current user is an instructor
   const isInstructor = dbUser?.role === 'instructor';

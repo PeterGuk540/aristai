@@ -1,4 +1,5 @@
 import { getAccessToken } from './cognito-auth';
+import { getGoogleAccessToken } from './google-auth';
 
 // In production (Vercel), use the proxy route to avoid CORS/mixed-content issues
 // In development, call the backend directly
@@ -18,8 +19,9 @@ async function fetchApi<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
-  // Get auth token if available
-  const accessToken = await getAccessToken();
+  // Get auth token if available (check Google first, then Cognito SDK)
+  const googleToken = getGoogleAccessToken();
+  const accessToken = googleToken || await getAccessToken();
   const authHeaders: HeadersInit = accessToken
     ? { Authorization: `Bearer ${accessToken}` }
     : {};

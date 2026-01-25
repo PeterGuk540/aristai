@@ -8,6 +8,12 @@ import {
   signOut as cognitoSignOut,
   isAuthenticated as checkAuth,
 } from './cognito-auth';
+import {
+  isGoogleAuthenticated,
+  getGoogleUserInfo,
+  getGoogleAccessToken,
+  clearGoogleTokens,
+} from './google-auth';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -27,6 +33,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     try {
+      // Priority: Check Google tokens first (as per notebook requirements)
+      if (isGoogleAuthenticated()) {
+        const googleUser = getGoogleUserInfo();
+        if (googleUser) {
+          setUser({
+            email: googleUser.email,
+            name: googleUser.name,
+            sub: googleUser.sub,
+            emailVerified: googleUser.emailVerified,
+          });
+          setIsAuthenticated(true);
+          return;
+        }
+      }
+
+      // Then check Cognito SDK tokens
       const authenticated = await checkAuth();
       if (authenticated) {
         const currentUser = await getCurrentUser();
@@ -51,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const signOut = useCallback(() => {
+    // Clear both Google and Cognito tokens
+    clearGoogleTokens();
     cognitoSignOut();
     setUser(null);
     setIsAuthenticated(false);
@@ -58,6 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getAccessToken = useCallback(async () => {
+    // Priority: Check Google token first
+    const googleToken = getGoogleAccessToken();
+    if (googleToken) {
+      return googleToken;
+    }
+    // Fall back to Cognito SDK token
     return await getToken();
   }, []);
 

@@ -4,8 +4,10 @@ import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthCard, Input, Button, Alert } from '@/components/auth';
+import { GoogleLoginButton } from '@/components/GoogleLoginButton';
 import { signIn, completeNewPasswordChallenge, completeMfaChallenge, ChallengeResult } from '@/lib/cognito-auth';
 import { isAuthenticated } from '@/lib/cognito-auth';
+import { isGoogleAuthenticated } from '@/lib/google-auth';
 
 type ViewState = 'login' | 'new-password' | 'mfa';
 
@@ -30,9 +32,15 @@ export default function LoginPage() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  // Check if already authenticated
+  // Check if already authenticated (check Google first, then Cognito SDK)
   useEffect(() => {
     const checkAuth = async () => {
+      // Priority: Check Google tokens first
+      if (isGoogleAuthenticated()) {
+        router.replace('/dashboard');
+        return;
+      }
+      // Then check Cognito SDK tokens
       const authenticated = await isAuthenticated();
       if (authenticated) {
         router.replace('/dashboard');
@@ -282,6 +290,19 @@ export default function LoginPage() {
         <Button type="submit" loading={loading}>
           Sign in
         </Button>
+
+        {/* Divider */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white dark:bg-gray-800 text-gray-500">or</span>
+          </div>
+        </div>
+
+        {/* Google Sign-In */}
+        <GoogleLoginButton disabled={loading} />
 
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
           Don&apos;t have an account?{' '}

@@ -1,4 +1,4 @@
-import { getAccessToken } from './auth';
+import { getAccessToken } from './cognito-auth';
 
 // In production (Vercel), use the proxy route to avoid CORS/mixed-content issues
 // In development, call the backend directly
@@ -19,7 +19,7 @@ async function fetchApi<T>(
   const url = `${API_BASE}${endpoint}`;
 
   // Get auth token if available
-  const accessToken = getAccessToken();
+  const accessToken = await getAccessToken();
   const authHeaders: HeadersInit = accessToken
     ? { Authorization: `Bearer ${accessToken}` }
     : {};

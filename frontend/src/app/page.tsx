@@ -7,12 +7,13 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    router.push('/courses');
+    // Redirect to login page - if authenticated, login page will redirect to dashboard
+    router.replace('/login');
   }, [router]);
 
   return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-gray-500">Redirecting to courses...</div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
     </div>
   );
 }

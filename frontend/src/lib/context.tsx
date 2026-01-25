@@ -1,48 +1,46 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types';
-import { api } from './api';
+import React, { createContext, useContext, ReactNode } from 'react';
+import { useAuth } from './auth-context';
+
+// Simplified user context - for backward compatibility
+// In the new system, user info comes from Cognito auth
 
 interface UserContextType {
-  currentUser: User | null;
-  setCurrentUser: (user: User | null) => void;
-  users: User[];
+  currentUser: { id: number; name: string; email: string; role: string } | null;
+  setCurrentUser: (user: any) => void;
+  users: any[];
   isInstructor: boolean;
   loading: boolean;
-  refreshUsers: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user, isLoading } = useAuth();
 
-  const refreshUsers = async () => {
-    try {
-      const fetchedUsers = await api.getUsers();
-      setUsers(fetchedUsers);
-      // Auto-select first user if none selected
-      if (!currentUser && fetchedUsers.length > 0) {
-        setCurrentUser(fetchedUsers[0]);
+  // Map Cognito user to legacy format
+  // For now, we treat all authenticated users as instructors
+  // In a real app, you'd check Cognito groups or a database
+  const currentUser = user
+    ? {
+        id: 1,
+        name: user.name || user.email.split('@')[0],
+        email: user.email,
+        role: 'instructor', // Default to instructor for now
       }
-    } catch (error) {
-      console.error('Failed to fetch users:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    refreshUsers();
-  }, []);
-
-  const isInstructor = currentUser?.role === 'instructor';
+    : null;
 
   return (
-    <UserContext.Provider value={{ currentUser, setCurrentUser, users, isInstructor, loading, refreshUsers }}>
+    <UserContext.Provider
+      value={{
+        currentUser,
+        setCurrentUser: () => {}, // No-op for compatibility
+        users: currentUser ? [currentUser] : [],
+        isInstructor: true, // Default to true for now
+        loading: isLoading,
+      }}
+    >
       {children}
     </UserContext.Provider>
   );

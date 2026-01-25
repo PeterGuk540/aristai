@@ -62,8 +62,8 @@ export const api = {
   getUser: (id: number) =>
     fetchApi<any>(`/users/${id}`),
 
-  getUserByEmail: (email: string) =>
-    fetchApi<any>(`/users/by-email/${encodeURIComponent(email)}`),
+  getUserByEmail: (email: string, authProvider?: 'cognito' | 'google') =>
+    fetchApi<any>(`/users/by-email/${encodeURIComponent(email)}${authProvider ? `?auth_provider=${authProvider}` : ''}`),
 
   createUser: (data: { name: string; email: string; role: string }) =>
     fetchApi<any>('/users/', { method: 'POST', body: JSON.stringify(data) }),

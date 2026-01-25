@@ -34,11 +34,17 @@ def register_or_get_user(user_data: UserRegisterOrGet, db: Session = Depends(get
     """
     Register a new user or get existing user on login.
     Used by OAuth flows (Google, Cognito) to ensure user exists in database.
-    Returns existing user if email matches, creates new user otherwise.
+
+    Users are uniquely identified by email + auth_provider combination.
+    This allows the same email to have separate accounts for different auth methods
+    (e.g., email/password vs Google login).
     """
     try:
-        # Check if user already exists by email
-        existing_user = db.query(User).filter(User.email == user_data.email).first()
+        # Check if user already exists by email AND auth_provider
+        existing_user = db.query(User).filter(
+            User.email == user_data.email,
+            User.auth_provider == user_data.auth_provider
+        ).first()
 
         if existing_user:
             # Update cognito_sub if it was provided and not set
@@ -66,9 +72,12 @@ def register_or_get_user(user_data: UserRegisterOrGet, db: Session = Depends(get
 
 
 @router.get("/by-email/{email}", response_model=UserResponse)
-def get_user_by_email(email: str, db: Session = Depends(get_db)):
-    """Get a user by email address."""
-    user = db.query(User).filter(User.email == email).first()
+def get_user_by_email(email: str, auth_provider: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get a user by email address, optionally filtered by auth_provider."""
+    query = db.query(User).filter(User.email == email)
+    if auth_provider:
+        query = query.filter(User.auth_provider == auth_provider)
+    user = query.first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user

@@ -62,6 +62,9 @@ export const api = {
   getUser: (id: number) =>
     fetchApi<any>(`/users/${id}`),
 
+  getUserByEmail: (email: string) =>
+    fetchApi<any>(`/users/by-email/${encodeURIComponent(email)}`),
+
   createUser: (data: { name: string; email: string; role: string }) =>
     fetchApi<any>('/users/', { method: 'POST', body: JSON.stringify(data) }),
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -16,15 +16,17 @@ import {
   Moon,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { useUser } from '@/lib/context';
 import { UserMenu } from './UserMenu';
 import { cn } from '@/lib/utils';
 
-const navigation = [
-  { name: 'Courses', href: '/courses', icon: BookOpen },
-  { name: 'Sessions', href: '/sessions', icon: Calendar },
-  { name: 'Forum', href: '/forum', icon: MessageSquare },
-  { name: 'Console', href: '/console', icon: Settings },
-  { name: 'Reports', href: '/reports', icon: FileText },
+// Navigation items with optional instructor-only flag
+const allNavigation = [
+  { name: 'Courses', href: '/courses', icon: BookOpen, instructorOnly: false },
+  { name: 'Sessions', href: '/sessions', icon: Calendar, instructorOnly: false },
+  { name: 'Forum', href: '/forum', icon: MessageSquare, instructorOnly: false },
+  { name: 'Console', href: '/console', icon: Settings, instructorOnly: true },
+  { name: 'Reports', href: '/reports', icon: FileText, instructorOnly: false },
 ];
 
 interface AppShellProps {
@@ -35,8 +37,14 @@ export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
+  const { isInstructor } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+
+  // Filter navigation based on user role
+  const navigation = useMemo(() => {
+    return allNavigation.filter(item => !item.instructorOnly || isInstructor);
+  }, [isInstructor]);
 
   // Check authentication and redirect if not authenticated
   useEffect(() => {

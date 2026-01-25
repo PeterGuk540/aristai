@@ -1,5 +1,5 @@
-import { getAccessToken } from './cognito-auth';
-import { getGoogleAccessToken } from './google-auth';
+import { getIdToken } from './cognito-auth';
+import { getGoogleIdToken } from './google-auth';
 
 // In production (Vercel), use the proxy route to avoid CORS/mixed-content issues
 // In development, call the backend directly
@@ -19,11 +19,12 @@ async function fetchApi<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
-  // Get auth token if available (check Google first, then Cognito SDK)
-  const googleToken = getGoogleAccessToken();
-  const accessToken = googleToken || await getAccessToken();
-  const authHeaders: HeadersInit = accessToken
-    ? { Authorization: `Bearer ${accessToken}` }
+  // Get ID token for API calls (check Google first, then Cognito SDK)
+  // Note: API Gateway JWT authorizer requires ID token (has 'aud' claim), not access token
+  const googleToken = getGoogleIdToken();
+  const idToken = googleToken || await getIdToken();
+  const authHeaders: HeadersInit = idToken
+    ? { Authorization: `Bearer ${idToken}` }
     : {};
 
   const response = await fetch(url, {

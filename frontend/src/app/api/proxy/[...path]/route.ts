@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Backend API URL - API Gateway with Cognito JWT authentication
-// New API Gateway in us-east-2, using aristai-user-pool for JWT validation
-const BACKEND_URL = 'https://epbnok81ue.execute-api.us-east-2.amazonaws.com';
+// API Gateway in us-east-1 (same region as EC2), using aristai-user-pool for JWT validation
+const BACKEND_URL = 'https://koxlvlxb74.execute-api.us-east-1.amazonaws.com';
 
 export async function GET(
   request: NextRequest,

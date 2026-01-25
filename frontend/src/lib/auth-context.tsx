@@ -14,6 +14,12 @@ import {
   getGoogleAccessToken,
   clearGoogleTokens,
 } from './google-auth';
+import {
+  isMicrosoftAuthenticated,
+  getMicrosoftUserInfo,
+  getMicrosoftIdToken,
+  clearMicrosoftTokens,
+} from './ms-auth';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -48,7 +54,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Then check Cognito SDK tokens
+      // Then check Microsoft tokens
+      if (isMicrosoftAuthenticated()) {
+        const msUser = getMicrosoftUserInfo();
+        if (msUser) {
+          setUser({
+            email: msUser.email,
+            name: msUser.name,
+            sub: msUser.sub,
+            emailVerified: msUser.emailVerified,
+          });
+          setIsAuthenticated(true);
+          return;
+        }
+      }
+
+      // Finally check Cognito SDK tokens
       const authenticated = await checkAuth();
       if (authenticated) {
         const currentUser = await getCurrentUser();
@@ -73,8 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const signOut = useCallback(() => {
-    // Clear both Google and Cognito tokens
+    // Clear all auth tokens (Google, Microsoft, and Cognito)
     clearGoogleTokens();
+    clearMicrosoftTokens();
     cognitoSignOut();
     setUser(null);
     setIsAuthenticated(false);

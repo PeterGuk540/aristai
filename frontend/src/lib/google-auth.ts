@@ -3,12 +3,12 @@
 // Google Sign-In via Cognito Hosted UI
 // This implementation is independent from the Cognito SDK and uses localStorage directly
 
-// Configuration - Using friend's Cognito (same as cognito-auth.ts)
+// Configuration - AristAI dedicated User Pool (jaj-forum)
 const COGNITO_CONFIG = {
   REGION: 'us-east-2',
-  USER_POOL_ID: 'us-east-2_DEnz6h6Ea',
-  CLIENT_ID: '1rv3c7kkku7vvn8m4nepbmpdeo',
-  DOMAIN: 'jjh-968632-vo9qy8.auth.us-east-2.amazoncognito.com',
+  USER_POOL_ID: 'us-east-2_iw80U4Igi',
+  CLIENT_ID: '9utp3rva50qc07to376a8utkd',
+  DOMAIN: 'jaj-forum.auth.us-east-2.amazoncognito.com',
 };
 
 // Storage key prefix (matches Cognito SDK format)

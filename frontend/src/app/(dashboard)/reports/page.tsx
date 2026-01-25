@@ -610,6 +610,174 @@ export default function ReportsPage() {
     );
   };
 
+  // Student-only view: Show only their own performance
+  const renderStudentPerformance = () => {
+    if (!reportJson?.answer_scores) {
+      return (
+        <Card>
+          <CardContent className="py-8 text-center text-gray-500">
+            <Award className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <p>Your performance data is not available yet.</p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    const { answer_scores } = reportJson;
+    // For now, show all scores - in a real app, you'd filter by current user ID
+    const studentScores = answer_scores.student_scores || [];
+
+    if (studentScores.length === 0) {
+      return (
+        <Card>
+          <CardContent className="py-8 text-center text-gray-500">
+            <Award className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <p>No performance data found for this session.</p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {studentScores.map((score, index) => (
+          <Card key={`${score.user_id}-${score.post_id}`}>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Award className="h-5 w-5 text-yellow-500" />
+                Your Score
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Score display */}
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-medium">Overall Score</span>
+                <Badge
+                  variant={
+                    score.score >= 80
+                      ? 'success'
+                      : score.score >= 60
+                      ? 'warning'
+                      : 'error'
+                  }
+                  className="text-lg px-4 py-1"
+                >
+                  {score.score.toFixed(1)} / 100
+                </Badge>
+              </div>
+
+              {/* Score bar */}
+              <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${
+                    score.score >= 80
+                      ? 'bg-green-500'
+                      : score.score >= 60
+                      ? 'bg-yellow-500'
+                      : 'bg-red-500'
+                  }`}
+                  style={{ width: `${score.score}%` }}
+                />
+              </div>
+
+              {/* What you did well */}
+              {score.key_points_covered && score.key_points_covered.length > 0 && (
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-green-800 flex items-center gap-2 mb-2">
+                    <CheckCircle className="h-5 w-5" />
+                    What You Did Well
+                  </h4>
+                  <ul className="list-disc list-inside space-y-1">
+                    {score.key_points_covered.map((point, i) => (
+                      <li key={i} className="text-green-700">{point}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Gaps / Areas for improvement */}
+              {score.missing_points && score.missing_points.length > 0 && (
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-orange-800 flex items-center gap-2 mb-2">
+                    <AlertTriangle className="h-5 w-5" />
+                    Areas for Improvement
+                  </h4>
+                  <ul className="list-disc list-inside space-y-1">
+                    {score.missing_points.map((point, i) => (
+                      <li key={i} className="text-orange-700">{point}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Feedback */}
+              {score.feedback && (
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-blue-800 mb-2">Feedback</h4>
+                  <p className="text-blue-700">{score.feedback}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  };
+
+  // Student-only view: Best practice answer
+  const renderBestPractice = () => {
+    if (!reportJson?.best_practice_answer) {
+      return (
+        <Card>
+          <CardContent className="py-8 text-center text-gray-500">
+            <BookOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <p>Best practice answer is not available yet.</p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    const { best_practice_answer } = reportJson;
+
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Award className="h-5 w-5 text-yellow-500" />
+              Best Practice Answer
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <p className="text-gray-800 font-medium">{best_practice_answer.summary}</p>
+            </div>
+
+            {best_practice_answer.detailed_explanation && (
+              <div>
+                <h4 className="font-medium text-gray-700 mb-2">Detailed Explanation</h4>
+                <p className="text-gray-600">{best_practice_answer.detailed_explanation}</p>
+              </div>
+            )}
+
+            {best_practice_answer.key_concepts && best_practice_answer.key_concepts.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-700 mb-2">Key Concepts</h4>
+                <div className="flex flex-wrap gap-2">
+                  {best_practice_answer.key_concepts.map((concept, i) => (
+                    <Badge key={i} variant="info">
+                      {concept}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -701,20 +869,31 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          {/* Report Tabs */}
-          <Tabs defaultValue="summary">
-            <TabsList>
-              <TabsTrigger value="summary">Summary</TabsTrigger>
-              <TabsTrigger value="participation">Participation</TabsTrigger>
-              {isInstructor && <TabsTrigger value="scoring">Scoring</TabsTrigger>}
-            </TabsList>
+          {/* Report Tabs - Different views for instructors vs students */}
+          {isInstructor ? (
+            <Tabs defaultValue="summary">
+              <TabsList>
+                <TabsTrigger value="summary">Summary</TabsTrigger>
+                <TabsTrigger value="participation">Participation</TabsTrigger>
+                <TabsTrigger value="scoring">Scoring</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="summary">{renderSummary()}</TabsContent>
+              <TabsContent value="summary">{renderSummary()}</TabsContent>
+              <TabsContent value="participation">{renderParticipation()}</TabsContent>
+              <TabsContent value="scoring">{renderScoring()}</TabsContent>
+            </Tabs>
+          ) : (
+            /* Student view: Only scoring, best practice, what they did well, gaps */
+            <Tabs defaultValue="my-performance">
+              <TabsList>
+                <TabsTrigger value="my-performance">My Performance</TabsTrigger>
+                <TabsTrigger value="best-practice">Best Practice Answer</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="participation">{renderParticipation()}</TabsContent>
-
-            {isInstructor && <TabsContent value="scoring">{renderScoring()}</TabsContent>}
-          </Tabs>
+              <TabsContent value="my-performance">{renderStudentPerformance()}</TabsContent>
+              <TabsContent value="best-practice">{renderBestPractice()}</TabsContent>
+            </Tabs>
+          )}
         </div>
       )}
     </div>

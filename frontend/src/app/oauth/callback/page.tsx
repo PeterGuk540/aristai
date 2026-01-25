@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { exchangeCodeForToken } from '@/lib/google-auth';
+import { exchangeCodeForToken, getGoogleUserInfo } from '@/lib/google-auth';
+import { api } from '@/lib/api';
 
 function OAuthCallbackContent() {
   const router = useRouter();
@@ -36,6 +37,24 @@ function OAuthCallbackContent() {
         const result = await exchangeCodeForToken(code);
 
         if (result.success) {
+          // Get user info from the stored tokens
+          const userInfo = getGoogleUserInfo();
+
+          if (userInfo) {
+            // Register or get user in the database
+            try {
+              await api.registerOrGetUser({
+                name: userInfo.name || userInfo.email.split('@')[0],
+                email: userInfo.email,
+                auth_provider: 'google',
+                cognito_sub: userInfo.sub,
+              });
+            } catch (apiError) {
+              // Log but don't fail - user can still use the app
+              console.error('Failed to register user in database:', apiError);
+            }
+          }
+
           // Redirect to dashboard on success
           router.replace('/dashboard');
         } else {

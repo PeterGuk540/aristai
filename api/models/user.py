@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -18,10 +18,14 @@ class AuthProvider(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        # Unique constraint on (email, auth_provider) allows same email with different auth methods
+        UniqueConstraint('email', 'auth_provider', name='ix_users_email_auth_provider'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    email = Column(String(255), unique=True, nullable=False, index=True)
+    email = Column(String(255), nullable=False, index=True)  # Not unique alone, unique with auth_provider
     role = Column(SAEnum(UserRole, name="user_role"), nullable=False, default=UserRole.student)
     auth_provider = Column(SAEnum(AuthProvider, name="auth_provider"), nullable=False, default=AuthProvider.cognito)
     cognito_sub = Column(String(255), nullable=True, index=True)  # Cognito user sub ID

@@ -55,8 +55,8 @@ function OAuthCallbackContent() {
             }
           }
 
-          // Redirect to dashboard on success
-          router.replace('/dashboard');
+          // Redirect to courses page on success
+          router.replace('/courses');
         } else {
           setError(result.error || 'Failed to exchange code for tokens');
           setIsProcessing(false);

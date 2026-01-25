@@ -37,13 +37,13 @@ export default function LoginPage() {
     const checkAuth = async () => {
       // Priority: Check Google tokens first
       if (isGoogleAuthenticated()) {
-        router.replace('/dashboard');
+        router.replace('/courses');
         return;
       }
       // Then check Cognito SDK tokens
       const authenticated = await isAuthenticated();
       if (authenticated) {
-        router.replace('/dashboard');
+        router.replace('/courses');
       } else {
         setCheckingAuth(false);
       }
@@ -88,7 +88,7 @@ export default function LoginPage() {
     const result = await signIn(email, password, rememberMe);
 
     if (result.success) {
-      router.replace('/dashboard');
+      router.replace('/courses');
     } else if ('challenge' in result && result.challenge) {
       setChallenge(result.challenge);
       if (result.challenge.challengeName === 'NEW_PASSWORD_REQUIRED') {
@@ -116,7 +116,7 @@ export default function LoginPage() {
     const result = await completeNewPasswordChallenge(challenge.cognitoUser, newPassword);
 
     if (result.success) {
-      router.replace('/dashboard');
+      router.replace('/courses');
     } else {
       setError(result.error || 'Failed to set new password');
     }
@@ -135,7 +135,7 @@ export default function LoginPage() {
     const result = await completeMfaChallenge(challenge.cognitoUser, mfaCode, mfaType);
 
     if (result.success) {
-      router.replace('/dashboard');
+      router.replace('/courses');
     } else {
       setError(result.error || 'Invalid verification code');
     }
@@ -245,10 +245,8 @@ export default function LoginPage() {
             setEmail(e.target.value);
             if (emailError) validateEmail(e.target.value);
           }}
-          onBlur={() => validateEmail(email)}
           error={emailError || undefined}
           placeholder="you@example.com"
-          required
           autoComplete="email"
           autoFocus
         />
@@ -261,11 +259,9 @@ export default function LoginPage() {
             setPassword(e.target.value);
             if (passwordError) validatePassword(e.target.value);
           }}
-          onBlur={() => validatePassword(password)}
           error={passwordError || undefined}
           showPasswordToggle
           placeholder="Enter your password"
-          required
           autoComplete="current-password"
         />
 

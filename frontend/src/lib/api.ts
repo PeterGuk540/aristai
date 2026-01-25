@@ -65,6 +65,9 @@ export const api = {
   createUser: (data: { name: string; email: string; role: string }) =>
     fetchApi<any>('/users/', { method: 'POST', body: JSON.stringify(data) }),
 
+  registerOrGetUser: (data: { name: string; email: string; auth_provider: 'cognito' | 'google'; cognito_sub?: string }) =>
+    fetchApi<any>('/users/register-or-get', { method: 'POST', body: JSON.stringify(data) }),
+
   // Courses
   getCourses: () =>
     fetchApi<any[]>('/courses/'),

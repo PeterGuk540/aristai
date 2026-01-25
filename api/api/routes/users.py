@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List, Optional
 from api.core.database import get_db
 from api.models.user import User
-from api.schemas.user import UserCreate, UserUpdate, UserResponse
+from api.schemas.user import UserCreate, UserUpdate, UserResponse, UserRegisterOrGet
 
 router = APIRouter()
 
@@ -24,6 +24,42 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User with this email already exists"
         )
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.post("/register-or-get", response_model=UserResponse)
+def register_or_get_user(user_data: UserRegisterOrGet, db: Session = Depends(get_db)):
+    """
+    Register a new user or get existing user on login.
+    Used by OAuth flows (Google, Cognito) to ensure user exists in database.
+    Returns existing user if email matches, creates new user otherwise.
+    """
+    try:
+        # Check if user already exists by email
+        existing_user = db.query(User).filter(User.email == user_data.email).first()
+
+        if existing_user:
+            # Update cognito_sub if it was provided and not set
+            if user_data.cognito_sub and not existing_user.cognito_sub:
+                existing_user.cognito_sub = user_data.cognito_sub
+                db.commit()
+                db.refresh(existing_user)
+            return existing_user
+
+        # Create new user
+        db_user = User(
+            name=user_data.name,
+            email=user_data.email,
+            auth_provider=user_data.auth_provider,
+            cognito_sub=user_data.cognito_sub,
+            role="student"  # Default role for new users
+        )
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        return db_user
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

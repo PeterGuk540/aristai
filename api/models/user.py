@@ -11,6 +11,11 @@ class UserRole(str, enum.Enum):
     student = "student"
 
 
+class AuthProvider(str, enum.Enum):
+    cognito = "cognito"
+    google = "google"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -18,6 +23,8 @@ class User(Base):
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
     role = Column(SAEnum(UserRole, name="user_role"), nullable=False, default=UserRole.student)
+    auth_provider = Column(SAEnum(AuthProvider, name="auth_provider"), nullable=False, default=AuthProvider.cognito)
+    cognito_sub = Column(String(255), nullable=True, index=True)  # Cognito user sub ID
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

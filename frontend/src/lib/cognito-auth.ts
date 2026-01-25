@@ -78,6 +78,8 @@ export function parseCognitoError(error: any): string {
 }
 
 // Sign In
+// Note: We always use localStorage for simplicity - "Remember Me" can control session duration
+// The Cognito SDK has issues when mixing sessionStorage and localStorage
 export function signIn(
   email: string,
   password: string,
@@ -87,7 +89,9 @@ export function signIn(
     const cognitoUser = new CognitoUser({
       Username: email.toLowerCase(),
       Pool: userPool,
-      Storage: rememberMe ? localStorage : sessionStorage,
+      // Always use localStorage - the SDK's getCurrentUser() defaults to localStorage
+      // If not remembered, the session will still expire based on Cognito token expiry
+      Storage: localStorage,
     });
 
     const authDetails = new AuthenticationDetails({

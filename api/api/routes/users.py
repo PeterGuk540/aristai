@@ -65,6 +65,15 @@ def register_or_get_user(user_data: UserRegisterOrGet, db: Session = Depends(get
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
+@router.get("/by-email/{email}", response_model=UserResponse)
+def get_user_by_email(email: str, db: Session = Depends(get_db)):
+    """Get a user by email address."""
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(user_id: int, db: Session = Depends(get_db)):
     """Get a user by ID."""

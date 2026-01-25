@@ -14,6 +14,9 @@ const COGNITO_CONFIG = {
 // Storage key prefix (matches Cognito SDK format)
 const STORAGE_PREFIX = `CognitoIdentityServiceProvider.${COGNITO_CONFIG.CLIENT_ID}`;
 
+// Separate prefix to track Google-specific login (to differentiate from Cognito SDK login)
+const GOOGLE_AUTH_MARKER = 'GoogleAuthUser';
+
 // Get the callback URL based on current environment
 function getRedirectUri(): string {
   if (typeof window === 'undefined') {
@@ -118,8 +121,28 @@ function storeTokens(tokens: {
     return;
   }
 
-  // Use email or sub as username (Cognito uses email for Google federated users)
-  const username = idTokenPayload.email || idTokenPayload.sub || idTokenPayload['cognito:username'];
+  // For Google federated users, cognito:username should be like "Google_<sub>"
+  // We use cognito:username first to ensure Google users have a distinct username
+  // This prevents collision with email/password users who use email as username
+  const cognitoUsername = idTokenPayload['cognito:username'];
+
+  // Check if this is a federated identity (Google)
+  // Federated users have an "identities" claim in the token
+  const identities = idTokenPayload.identities;
+  const isGoogleUser = identities && Array.isArray(identities) &&
+    identities.some((id: any) => id.providerName === 'Google');
+
+  // Use cognito:username for Google users (should be "Google_xxx")
+  // This ensures Google login doesn't overwrite Cognito SDK login tokens
+  let username: string;
+  if (isGoogleUser && cognitoUsername) {
+    username = cognitoUsername; // e.g., "Google_123456789"
+  } else if (cognitoUsername) {
+    username = cognitoUsername;
+  } else {
+    // Fallback: create a Google-prefixed username from sub
+    username = `Google_${idTokenPayload.sub}`;
+  }
 
   if (!username) {
     console.error('No username found in token');
@@ -145,6 +168,10 @@ function storeTokens(tokens: {
     const expiresAt = Date.now() + tokens.expires_in * 1000;
     localStorage.setItem(`${userPrefix}.tokenExpiry`, expiresAt.toString());
   }
+
+  // Store Google auth marker to identify this as a Google login
+  // This helps differentiate from Cognito SDK (email/password) login
+  localStorage.setItem(GOOGLE_AUTH_MARKER, username);
 }
 
 // Get the last authenticated Google user from localStorage
@@ -157,8 +184,15 @@ export function getGoogleUsername(): string | null {
 export function isGoogleAuthenticated(): boolean {
   if (typeof window === 'undefined') return false;
 
+  // First check if there's a Google auth marker - this indicates Google login was used
+  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
+  if (!googleUser) return false;
+
   const username = getGoogleUsername();
   if (!username) return false;
+
+  // Verify the username matches the Google auth marker
+  if (username !== googleUser) return false;
 
   const userPrefix = `${STORAGE_PREFIX}.${username}`;
   const idToken = localStorage.getItem(`${userPrefix}.idToken`);
@@ -200,8 +234,12 @@ export interface GoogleAuthUser {
 export function getGoogleUserInfo(): GoogleAuthUser | null {
   if (typeof window === 'undefined') return null;
 
+  // Check Google auth marker first
+  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
+  if (!googleUser) return null;
+
   const username = getGoogleUsername();
-  if (!username) return null;
+  if (!username || username !== googleUser) return null;
 
   const userPrefix = `${STORAGE_PREFIX}.${username}`;
   const idToken = localStorage.getItem(`${userPrefix}.idToken`);
@@ -224,8 +262,12 @@ export function getGoogleUserInfo(): GoogleAuthUser | null {
 export function getGoogleAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
 
+  // Check Google auth marker first
+  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
+  if (!googleUser) return null;
+
   const username = getGoogleUsername();
-  if (!username) return null;
+  if (!username || username !== googleUser) return null;
 
   const userPrefix = `${STORAGE_PREFIX}.${username}`;
   return localStorage.getItem(`${userPrefix}.accessToken`);
@@ -235,8 +277,12 @@ export function getGoogleAccessToken(): string | null {
 export function getGoogleIdToken(): string | null {
   if (typeof window === 'undefined') return null;
 
+  // Check Google auth marker first
+  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
+  if (!googleUser) return null;
+
   const username = getGoogleUsername();
-  if (!username) return null;
+  if (!username || username !== googleUser) return null;
 
   const userPrefix = `${STORAGE_PREFIX}.${username}`;
   return localStorage.getItem(`${userPrefix}.idToken`);
@@ -246,24 +292,25 @@ export function getGoogleIdToken(): string | null {
 export function clearGoogleTokens(): void {
   if (typeof window === 'undefined') return;
 
-  const username = getGoogleUsername();
-  if (username) {
-    const userPrefix = `${STORAGE_PREFIX}.${username}`;
+  // Get the Google username before clearing
+  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
+
+  if (googleUser) {
+    const userPrefix = `${STORAGE_PREFIX}.${googleUser}`;
     localStorage.removeItem(`${userPrefix}.idToken`);
     localStorage.removeItem(`${userPrefix}.accessToken`);
     localStorage.removeItem(`${userPrefix}.refreshToken`);
     localStorage.removeItem(`${userPrefix}.tokenExpiry`);
   }
 
-  // Also clear from the general prefix
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith(STORAGE_PREFIX)) {
-      keysToRemove.push(key);
-    }
+  // Clear the Google auth marker
+  localStorage.removeItem(GOOGLE_AUTH_MARKER);
+
+  // Clear LastAuthUser only if it matches the Google user
+  const lastAuthUser = localStorage.getItem(`${STORAGE_PREFIX}.LastAuthUser`);
+  if (lastAuthUser && lastAuthUser === googleUser) {
+    localStorage.removeItem(`${STORAGE_PREFIX}.LastAuthUser`);
   }
-  keysToRemove.forEach(key => localStorage.removeItem(key));
 }
 
 // Export config for reference

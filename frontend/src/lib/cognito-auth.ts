@@ -9,11 +9,11 @@ import {
   ISignUpResult,
 } from 'amazon-cognito-identity-js';
 
-// Cognito configuration - AristAI dedicated User Pool
+// Cognito configuration - AristAI User Pool (us-east-1)
 const COGNITO_CONFIG = {
-  REGION: 'us-east-2',
-  USER_POOL_ID: 'us-east-2_iw80U4Igi',
-  CLIENT_ID: '9utp3rva50qc07to376a8utkd',
+  REGION: 'us-east-1',
+  USER_POOL_ID: 'us-east-1_61m8CDReq',
+  CLIENT_ID: '5pocqbihafgjur6t5f6aoqusir',
 };
 
 // Initialize the User Pool

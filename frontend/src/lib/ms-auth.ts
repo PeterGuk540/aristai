@@ -1,7 +1,7 @@
 'use client';
 
-// Google Sign-In via Cognito Hosted UI
-// This implementation is independent from the Cognito SDK and uses localStorage directly
+// Microsoft Sign-In via Cognito Hosted UI
+// This implementation is similar to google-auth.ts but for Microsoft OIDC
 
 // Configuration - AristAI User Pool (us-east-1)
 const COGNITO_CONFIG = {
@@ -14,8 +14,8 @@ const COGNITO_CONFIG = {
 // Storage key prefix (matches Cognito SDK format)
 const STORAGE_PREFIX = `CognitoIdentityServiceProvider.${COGNITO_CONFIG.CLIENT_ID}`;
 
-// Separate prefix to track Google-specific login (to differentiate from Cognito SDK login)
-const GOOGLE_AUTH_MARKER = 'GoogleAuthUser';
+// Separate prefix to track Microsoft-specific login
+const MS_AUTH_MARKER = 'MicrosoftAuthUser';
 
 // Get the callback URL based on current environment
 function getRedirectUri(): string {
@@ -25,14 +25,14 @@ function getRedirectUri(): string {
   return `${window.location.origin}/oauth/callback`;
 }
 
-// Generate Google login URL using Cognito Hosted UI
-export function getGoogleLoginUrl(): string {
+// Generate Microsoft login URL using Cognito Hosted UI
+export function getMicrosoftLoginUrl(): string {
   const redirectUri = getRedirectUri();
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: COGNITO_CONFIG.CLIENT_ID,
     redirect_uri: redirectUri,
-    identity_provider: 'Google',
+    identity_provider: 'Microsoft',
     scope: 'email openid profile',
   });
 
@@ -121,27 +121,23 @@ function storeTokens(tokens: {
     return;
   }
 
-  // For Google federated users, cognito:username should be like "Google_<sub>"
-  // We use cognito:username first to ensure Google users have a distinct username
-  // This prevents collision with email/password users who use email as username
+  // For Microsoft federated users, cognito:username should be like "Microsoft_<sub>"
   const cognitoUsername = idTokenPayload['cognito:username'];
 
-  // Check if this is a federated identity (Google)
-  // Federated users have an "identities" claim in the token
+  // Check if this is a federated identity (Microsoft)
   const identities = idTokenPayload.identities;
-  const isGoogleUser = identities && Array.isArray(identities) &&
-    identities.some((id: any) => id.providerName === 'Google');
+  const isMicrosoftUser = identities && Array.isArray(identities) &&
+    identities.some((id: any) => id.providerName === 'Microsoft');
 
-  // Use cognito:username for Google users (should be "Google_xxx")
-  // This ensures Google login doesn't overwrite Cognito SDK login tokens
+  // Use cognito:username for Microsoft users
   let username: string;
-  if (isGoogleUser && cognitoUsername) {
-    username = cognitoUsername; // e.g., "Google_123456789"
+  if (isMicrosoftUser && cognitoUsername) {
+    username = cognitoUsername;
   } else if (cognitoUsername) {
     username = cognitoUsername;
   } else {
-    // Fallback: create a Google-prefixed username from sub
-    username = `Google_${idTokenPayload.sub}`;
+    // Fallback: create a Microsoft-prefixed username from sub
+    username = `Microsoft_${idTokenPayload.sub}`;
   }
 
   if (!username) {
@@ -150,7 +146,6 @@ function storeTokens(tokens: {
   }
 
   // Store in Cognito SDK format
-  // Format: CognitoIdentityServiceProvider.{clientId}.{username}.{tokenType}
   const userPrefix = `${STORAGE_PREFIX}.${username}`;
 
   localStorage.setItem(`${userPrefix}.idToken`, tokens.id_token);
@@ -169,30 +164,29 @@ function storeTokens(tokens: {
     localStorage.setItem(`${userPrefix}.tokenExpiry`, expiresAt.toString());
   }
 
-  // Store Google auth marker to identify this as a Google login
-  // This helps differentiate from Cognito SDK (email/password) login
-  localStorage.setItem(GOOGLE_AUTH_MARKER, username);
+  // Store Microsoft auth marker to identify this as a Microsoft login
+  localStorage.setItem(MS_AUTH_MARKER, username);
 }
 
-// Get the last authenticated Google user from localStorage
-export function getGoogleUsername(): string | null {
+// Get the last authenticated Microsoft user from localStorage
+export function getMicrosoftUsername(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(`${STORAGE_PREFIX}.LastAuthUser`);
 }
 
-// Check if user is authenticated via Google (tokens exist and not expired)
-export function isGoogleAuthenticated(): boolean {
+// Check if user is authenticated via Microsoft (tokens exist and not expired)
+export function isMicrosoftAuthenticated(): boolean {
   if (typeof window === 'undefined') return false;
 
-  // First check if there's a Google auth marker - this indicates Google login was used
-  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
-  if (!googleUser) return false;
+  // First check if there's a Microsoft auth marker
+  const msUser = localStorage.getItem(MS_AUTH_MARKER);
+  if (!msUser) return false;
 
-  const username = getGoogleUsername();
+  const username = getMicrosoftUsername();
   if (!username) return false;
 
-  // Verify the username matches the Google auth marker
-  if (username !== googleUser) return false;
+  // Verify the username matches the Microsoft auth marker
+  if (username !== msUser) return false;
 
   const userPrefix = `${STORAGE_PREFIX}.${username}`;
   const idToken = localStorage.getItem(`${userPrefix}.idToken`);
@@ -205,7 +199,6 @@ export function isGoogleAuthenticated(): boolean {
   if (expiryStr) {
     const expiry = parseInt(expiryStr, 10);
     if (Date.now() > expiry) {
-      // Token expired - could implement refresh here
       return false;
     }
   }
@@ -213,7 +206,7 @@ export function isGoogleAuthenticated(): boolean {
   // Verify token is not expired by checking exp claim
   const payload = parseJwt(idToken);
   if (payload && payload.exp) {
-    const expTime = payload.exp * 1000; // Convert to milliseconds
+    const expTime = payload.exp * 1000;
     if (Date.now() > expTime) {
       return false;
     }
@@ -222,24 +215,23 @@ export function isGoogleAuthenticated(): boolean {
   return true;
 }
 
-// Get user info from stored Google tokens
-export interface GoogleAuthUser {
+// Get user info from stored Microsoft tokens
+export interface MicrosoftAuthUser {
   email: string;
   name?: string;
   sub: string;
   emailVerified?: boolean;
-  picture?: string;
 }
 
-export function getGoogleUserInfo(): GoogleAuthUser | null {
+export function getMicrosoftUserInfo(): MicrosoftAuthUser | null {
   if (typeof window === 'undefined') return null;
 
-  // Check Google auth marker first
-  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
-  if (!googleUser) return null;
+  // Check Microsoft auth marker first
+  const msUser = localStorage.getItem(MS_AUTH_MARKER);
+  if (!msUser) return null;
 
-  const username = getGoogleUsername();
-  if (!username || username !== googleUser) return null;
+  const username = getMicrosoftUsername();
+  if (!username || username !== msUser) return null;
 
   const userPrefix = `${STORAGE_PREFIX}.${username}`;
   const idToken = localStorage.getItem(`${userPrefix}.idToken`);
@@ -254,61 +246,45 @@ export function getGoogleUserInfo(): GoogleAuthUser | null {
     name: payload.name || payload['cognito:username'],
     sub: payload.sub,
     emailVerified: payload.email_verified,
-    picture: payload.picture,
   };
 }
 
-// Get access token for API calls
-export function getGoogleAccessToken(): string | null {
+// Get ID token for API calls
+export function getMicrosoftIdToken(): string | null {
   if (typeof window === 'undefined') return null;
 
-  // Check Google auth marker first
-  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
-  if (!googleUser) return null;
+  // Check Microsoft auth marker first
+  const msUser = localStorage.getItem(MS_AUTH_MARKER);
+  if (!msUser) return null;
 
-  const username = getGoogleUsername();
-  if (!username || username !== googleUser) return null;
-
-  const userPrefix = `${STORAGE_PREFIX}.${username}`;
-  return localStorage.getItem(`${userPrefix}.accessToken`);
-}
-
-// Get ID token
-export function getGoogleIdToken(): string | null {
-  if (typeof window === 'undefined') return null;
-
-  // Check Google auth marker first
-  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
-  if (!googleUser) return null;
-
-  const username = getGoogleUsername();
-  if (!username || username !== googleUser) return null;
+  const username = getMicrosoftUsername();
+  if (!username || username !== msUser) return null;
 
   const userPrefix = `${STORAGE_PREFIX}.${username}`;
   return localStorage.getItem(`${userPrefix}.idToken`);
 }
 
-// Clear all Google auth tokens from localStorage
-export function clearGoogleTokens(): void {
+// Clear all Microsoft auth tokens from localStorage
+export function clearMicrosoftTokens(): void {
   if (typeof window === 'undefined') return;
 
-  // Get the Google username before clearing
-  const googleUser = localStorage.getItem(GOOGLE_AUTH_MARKER);
+  // Get the Microsoft username before clearing
+  const msUser = localStorage.getItem(MS_AUTH_MARKER);
 
-  if (googleUser) {
-    const userPrefix = `${STORAGE_PREFIX}.${googleUser}`;
+  if (msUser) {
+    const userPrefix = `${STORAGE_PREFIX}.${msUser}`;
     localStorage.removeItem(`${userPrefix}.idToken`);
     localStorage.removeItem(`${userPrefix}.accessToken`);
     localStorage.removeItem(`${userPrefix}.refreshToken`);
     localStorage.removeItem(`${userPrefix}.tokenExpiry`);
   }
 
-  // Clear the Google auth marker
-  localStorage.removeItem(GOOGLE_AUTH_MARKER);
+  // Clear the Microsoft auth marker
+  localStorage.removeItem(MS_AUTH_MARKER);
 
-  // Clear LastAuthUser only if it matches the Google user
+  // Clear LastAuthUser only if it matches the Microsoft user
   const lastAuthUser = localStorage.getItem(`${STORAGE_PREFIX}.LastAuthUser`);
-  if (lastAuthUser && lastAuthUser === googleUser) {
+  if (lastAuthUser && lastAuthUser === msUser) {
     localStorage.removeItem(`${STORAGE_PREFIX}.LastAuthUser`);
   }
 }

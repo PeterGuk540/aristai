@@ -3,6 +3,7 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './auth-context';
 import { isGoogleAuthenticated } from './google-auth';
+import { isMicrosoftAuthenticated } from './ms-auth';
 import { api } from './api';
 
 // User context that fetches role from database
@@ -33,14 +34,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // Determine auth provider based on how user logged in
-  const getAuthProvider = useCallback((): 'cognito' | 'google' => {
-    return isGoogleAuthenticated() ? 'google' : 'cognito';
+  const getAuthProvider = useCallback((): 'cognito' | 'google' | 'microsoft' => {
+    if (isGoogleAuthenticated()) return 'google';
+    if (isMicrosoftAuthenticated()) return 'microsoft';
+    return 'cognito';
   }, []);
 
   // Fetch user from database by email and auth provider
   // Users are uniquely identified by (email, auth_provider) combination
   // This allows separate accounts for the same email with different auth methods
-  const fetchUserFromDb = useCallback(async (email: string, authProvider: 'cognito' | 'google') => {
+  const fetchUserFromDb = useCallback(async (email: string, authProvider: 'cognito' | 'google' | 'microsoft') => {
     try {
       const userData = await api.getUserByEmail(email, authProvider);
       setDbUser(userData);

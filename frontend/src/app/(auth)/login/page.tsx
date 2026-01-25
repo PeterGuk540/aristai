@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthCard, Input, Button, Alert } from '@/components/auth';
 import { GoogleLoginButton } from '@/components/GoogleLoginButton';
+import { MicrosoftLoginButton } from '@/components/MicrosoftLoginButton';
 import { signIn, completeNewPasswordChallenge, completeMfaChallenge, ChallengeResult } from '@/lib/cognito-auth';
 import { isAuthenticated } from '@/lib/cognito-auth';
 import { isGoogleAuthenticated } from '@/lib/google-auth';
+import { isMicrosoftAuthenticated } from '@/lib/ms-auth';
 
 type ViewState = 'login' | 'new-password' | 'mfa';
 
@@ -32,7 +34,7 @@ export default function LoginPage() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  // Check if already authenticated (check Google first, then Cognito SDK)
+  // Check if already authenticated (check Google first, then Microsoft, then Cognito SDK)
   useEffect(() => {
     const checkAuth = async () => {
       // Priority: Check Google tokens first
@@ -40,7 +42,12 @@ export default function LoginPage() {
         router.replace('/courses');
         return;
       }
-      // Then check Cognito SDK tokens
+      // Then check Microsoft tokens
+      if (isMicrosoftAuthenticated()) {
+        router.replace('/courses');
+        return;
+      }
+      // Finally check Cognito SDK tokens
       const authenticated = await isAuthenticated();
       if (authenticated) {
         router.replace('/courses');
@@ -297,8 +304,9 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Google Sign-In */}
+        {/* Social Sign-In Buttons */}
         <GoogleLoginButton disabled={loading} />
+        <MicrosoftLoginButton disabled={loading} />
 
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
           Don&apos;t have an account?{' '}

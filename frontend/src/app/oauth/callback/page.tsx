@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { exchangeCodeForToken, getGoogleUserInfo } from '@/lib/google-auth';
+import { exchangeCodeForToken as googleExchangeCode, getGoogleUserInfo } from '@/lib/google-auth';
+import { exchangeCodeForToken as msExchangeCode, getMicrosoftUserInfo } from '@/lib/ms-auth';
 import { api } from '@/lib/api';
 
 function OAuthCallbackContent() {
@@ -34,33 +35,61 @@ function OAuthCallbackContent() {
 
       try {
         // Exchange code for tokens
-        const result = await exchangeCodeForToken(code);
+        // Both Google and Microsoft use the same Cognito token endpoint
+        // The storeTokens function in each module checks the identity provider from the token
+        // and sets the appropriate auth marker
+
+        // Try Google exchange first (this will also work for Microsoft,
+        // but will only set GoogleAuthUser marker if provider is Google)
+        let result = await googleExchangeCode(code);
+
+        // Check if this was a Google login
+        let googleUser = getGoogleUserInfo();
+        if (result.success && googleUser) {
+          // Register or get user in the database
+          try {
+            await api.registerOrGetUser({
+              name: googleUser.name || googleUser.email.split('@')[0],
+              email: googleUser.email,
+              auth_provider: 'google',
+              cognito_sub: googleUser.sub,
+            });
+          } catch (apiError) {
+            console.error('Failed to register user in database:', apiError);
+          }
+          router.replace('/courses');
+          return;
+        }
+
+        // If Google exchange didn't identify a Google user, try Microsoft exchange
+        // This will properly set the MicrosoftAuthUser marker
+        result = await msExchangeCode(code);
 
         if (result.success) {
-          // Get user info from the stored tokens
-          const userInfo = getGoogleUserInfo();
-
-          if (userInfo) {
-            // Register or get user in the database
+          const msUser = getMicrosoftUserInfo();
+          if (msUser) {
             try {
               await api.registerOrGetUser({
-                name: userInfo.name || userInfo.email.split('@')[0],
-                email: userInfo.email,
-                auth_provider: 'google',
-                cognito_sub: userInfo.sub,
+                name: msUser.name || msUser.email.split('@')[0],
+                email: msUser.email,
+                auth_provider: 'microsoft',
+                cognito_sub: msUser.sub,
               });
             } catch (apiError) {
-              // Log but don't fail - user can still use the app
               console.error('Failed to register user in database:', apiError);
             }
+            router.replace('/courses');
+            return;
           }
 
-          // Redirect to courses page on success
+          // Success but no user info - still redirect
           router.replace('/courses');
-        } else {
-          setError(result.error || 'Failed to exchange code for tokens');
-          setIsProcessing(false);
+          return;
         }
+
+        // Exchange failed
+        setError(result.error || 'Failed to exchange code for tokens');
+        setIsProcessing(false);
       } catch (err) {
         console.error('OAuth callback error:', err);
         setError(err instanceof Error ? err.message : 'An unexpected error occurred');

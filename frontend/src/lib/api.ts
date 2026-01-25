@@ -1,5 +1,6 @@
 import { getIdToken } from './cognito-auth';
 import { getGoogleIdToken } from './google-auth';
+import { getMicrosoftIdToken } from './ms-auth';
 
 // In production (Vercel), use the proxy route to avoid CORS/mixed-content issues
 // In development, call the backend directly
@@ -19,10 +20,11 @@ async function fetchApi<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
-  // Get ID token for API calls (check Google first, then Cognito SDK)
+  // Get ID token for API calls (check Google first, then Microsoft, then Cognito SDK)
   // Note: API Gateway JWT authorizer requires ID token (has 'aud' claim), not access token
   const googleToken = getGoogleIdToken();
-  const idToken = googleToken || await getIdToken();
+  const msToken = getMicrosoftIdToken();
+  const idToken = googleToken || msToken || await getIdToken();
   const authHeaders: HeadersInit = idToken
     ? { Authorization: `Bearer ${idToken}` }
     : {};
@@ -63,13 +65,13 @@ export const api = {
   getUser: (id: number) =>
     fetchApi<any>(`/users/${id}`),
 
-  getUserByEmail: (email: string, authProvider?: 'cognito' | 'google') =>
+  getUserByEmail: (email: string, authProvider?: 'cognito' | 'google' | 'microsoft') =>
     fetchApi<any>(`/users/by-email/${encodeURIComponent(email)}${authProvider ? `?auth_provider=${authProvider}` : ''}`),
 
   createUser: (data: { name: string; email: string; role: string }) =>
     fetchApi<any>('/users/', { method: 'POST', body: JSON.stringify(data) }),
 
-  registerOrGetUser: (data: { name: string; email: string; auth_provider: 'cognito' | 'google'; cognito_sub?: string }) =>
+  registerOrGetUser: (data: { name: string; email: string; auth_provider: 'cognito' | 'google' | 'microsoft'; cognito_sub?: string }) =>
     fetchApi<any>('/users/register-or-get', { method: 'POST', body: JSON.stringify(data) }),
 
   // Courses

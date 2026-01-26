@@ -170,6 +170,9 @@ export const api = {
 
   unenroll: (enrollmentId: number) =>
     fetchApi<void>(`/enrollments/${enrollmentId}`, { method: 'DELETE' }),
+
+  getUserEnrolledCourses: (userId: number) =>
+    fetchApi<any[]>(`/enrollments/user/${userId}/courses`),
 };
 
 export { ApiError };

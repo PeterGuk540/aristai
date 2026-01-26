@@ -18,6 +18,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useUser } from '@/lib/context';
 import { UserMenu } from './UserMenu';
+import { Onboarding, useOnboarding } from './Onboarding';
 import { cn } from '@/lib/utils';
 
 // Navigation items with optional instructor-only flag and enrollment requirement
@@ -37,9 +38,13 @@ export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
-  const { isInstructor, hasEnrollments } = useUser();
+  const { currentUser, isInstructor, isAdmin, hasEnrollments } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+
+  // Determine the effective role for onboarding
+  const effectiveRole = isAdmin ? 'admin' : isInstructor ? 'instructor' : 'student';
+  const { showOnboarding, completeOnboarding, isReady } = useOnboarding(currentUser?.id, currentUser?.role);
 
   // Filter navigation based on user role and enrollment status
   const navigation = useMemo(() => {
@@ -83,8 +88,8 @@ export function AppShell({ children }: AppShellProps) {
     }
   };
 
-  // Show loading state while checking auth
-  if (isLoading) {
+  // Show loading state while checking auth or onboarding
+  if (isLoading || !isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
@@ -193,6 +198,15 @@ export function AppShell({ children }: AppShellProps) {
         {/* Page content */}
         <main className="p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
+
+      {/* Onboarding overlay */}
+      {showOnboarding && currentUser && (
+        <Onboarding
+          role={effectiveRole}
+          userName={currentUser.name}
+          onComplete={completeOnboarding}
+        />
+      )}
     </div>
   );
 }

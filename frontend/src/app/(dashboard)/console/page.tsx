@@ -15,6 +15,8 @@ import {
   XCircle,
   UserPlus,
   Clock,
+  Upload,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
@@ -60,6 +62,12 @@ export default function ConsolePage() {
   // Instructor requests
   const [instructorRequests, setInstructorRequests] = useState<User[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
+
+  // Roster upload
+  const [rosterCourseId, setRosterCourseId] = useState<number | null>(null);
+  const [rosterFile, setRosterFile] = useState<File | null>(null);
+  const [uploadingRoster, setUploadingRoster] = useState(false);
+  const [rosterResults, setRosterResults] = useState<any>(null);
 
   const fetchCourses = async () => {
     try {
@@ -142,6 +150,23 @@ export default function ConsolePage() {
     } catch (error) {
       console.error('Failed to reject request:', error);
       alert('Failed to reject request');
+    }
+  };
+
+  const handleRosterUpload = async () => {
+    if (!rosterCourseId || !rosterFile) return;
+
+    setUploadingRoster(true);
+    setRosterResults(null);
+    try {
+      const results = await api.uploadRosterCsv(rosterCourseId, rosterFile);
+      setRosterResults(results);
+      setRosterFile(null);
+    } catch (error: any) {
+      console.error('Failed to upload roster:', error);
+      alert(`Failed to upload roster: ${error.message}`);
+    } finally {
+      setUploadingRoster(false);
     }
   };
 
@@ -495,6 +520,10 @@ export default function ConsolePage() {
                 <Badge variant="error" className="ml-2">{instructorRequests.length}</Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="roster">
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+              Roster Upload
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="copilot">
@@ -786,6 +815,122 @@ export default function ConsolePage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="roster">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-5 w-5" />
+                  Upload Student Roster
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-blue-900 mb-2">CSV Format</h4>
+                  <p className="text-sm text-blue-700 mb-2">
+                    Upload a CSV file with student emails. The system will:
+                  </p>
+                  <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
+                    <li>Find existing users by email and enroll them</li>
+                    <li>Create new student accounts for unknown emails</li>
+                    <li>Skip students already enrolled in the course</li>
+                  </ul>
+                  <div className="mt-3 p-3 bg-white rounded border border-blue-200 font-mono text-xs">
+                    email,name<br />
+                    student1@university.edu,John Doe<br />
+                    student2@university.edu,Jane Smith
+                  </div>
+                  <p className="text-xs text-blue-600 mt-2">
+                    * &quot;name&quot; column is optional. If omitted, email prefix is used as name.
+                  </p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <Select
+                    label="Select Course"
+                    value={rosterCourseId?.toString() || ''}
+                    onChange={(e) => setRosterCourseId(Number(e.target.value))}
+                  >
+                    <option value="">Select a course...</option>
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id}>
+                        {course.title}
+                      </option>
+                    ))}
+                  </Select>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      CSV File
+                    </label>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => setRosterFile(e.target.files?.[0] || null)}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                    />
+                    {rosterFile && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Selected: {rosterFile.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleRosterUpload}
+                  disabled={uploadingRoster || !rosterCourseId || !rosterFile}
+                  className="w-full md:w-auto"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {uploadingRoster ? 'Uploading...' : 'Upload Roster'}
+                </Button>
+
+                {rosterResults && (
+                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-medium text-gray-900 mb-3">Upload Results</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <div className="text-center p-3 bg-white rounded">
+                        <div className="text-2xl font-bold text-green-600">
+                          {rosterResults.created_and_enrolled_count}
+                        </div>
+                        <div className="text-xs text-gray-500">Created & Enrolled</div>
+                      </div>
+                      <div className="text-center p-3 bg-white rounded">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {rosterResults.existing_enrolled_count}
+                        </div>
+                        <div className="text-xs text-gray-500">Existing Enrolled</div>
+                      </div>
+                      <div className="text-center p-3 bg-white rounded">
+                        <div className="text-2xl font-bold text-gray-600">
+                          {rosterResults.already_enrolled_count}
+                        </div>
+                        <div className="text-xs text-gray-500">Already Enrolled</div>
+                      </div>
+                      <div className="text-center p-3 bg-white rounded">
+                        <div className="text-2xl font-bold text-red-600">
+                          {rosterResults.error_count}
+                        </div>
+                        <div className="text-xs text-gray-500">Errors</div>
+                      </div>
+                    </div>
+
+                    {rosterResults.details?.errors?.length > 0 && (
+                      <div className="mt-4">
+                        <h5 className="text-sm font-medium text-red-700 mb-2">Errors:</h5>
+                        <ul className="text-sm text-red-600 list-disc list-inside">
+                          {rosterResults.details.errors.map((err: string, i: number) => (
+                            <li key={i}>{err}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>

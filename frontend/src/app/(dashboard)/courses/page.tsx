@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { BookOpen, Plus, Users, Sparkles, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, Search, UserPlus } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, EnrolledStudent, User } from '@/types';
@@ -22,7 +22,7 @@ import {
 } from '@/components/ui';
 
 export default function CoursesPage() {
-  const { isInstructor } = useUser();
+  const { isInstructor, currentUser } = useUser();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -37,6 +37,18 @@ export default function CoursesPage() {
   const [enrolledStudents, setEnrolledStudents] = useState<EnrolledStudent[]>([]);
   const [allStudents, setAllStudents] = useState<User[]>([]);
   const [enrolling, setEnrolling] = useState(false);
+
+  // Bulk enrollment
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<number>>(new Set());
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+
+  // Join code management
+  const [copiedCourseId, setCopiedCourseId] = useState<number | null>(null);
+  const [regeneratingCode, setRegeneratingCode] = useState<number | null>(null);
+
+  // Student join course
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
 
   const fetchCourses = async () => {
     try {
@@ -142,8 +154,91 @@ export default function CoursesPage() {
     }
   };
 
+  const handleBulkEnroll = async () => {
+    if (!selectedCourseId || selectedStudentIds.size === 0) return;
+
+    setEnrolling(true);
+    try {
+      const result = await api.bulkEnrollStudents(Array.from(selectedStudentIds), selectedCourseId);
+      alert(result.message || 'Students enrolled!');
+      setSelectedStudentIds(new Set());
+      fetchEnrollment(selectedCourseId);
+    } catch (error) {
+      console.error('Failed to bulk enroll students:', error);
+      alert('Failed to enroll students');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const handleCopyJoinCode = async (courseId: number, joinCode: string) => {
+    try {
+      await navigator.clipboard.writeText(joinCode);
+      setCopiedCourseId(courseId);
+      setTimeout(() => setCopiedCourseId(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  };
+
+  const handleRegenerateJoinCode = async (courseId: number) => {
+    setRegeneratingCode(courseId);
+    try {
+      const updatedCourse = await api.regenerateJoinCode(courseId);
+      setCourses(courses.map(c => c.id === courseId ? updatedCourse : c));
+    } catch (error) {
+      console.error('Failed to regenerate join code:', error);
+      alert('Failed to regenerate join code');
+    } finally {
+      setRegeneratingCode(null);
+    }
+  };
+
+  const handleJoinCourse = async () => {
+    if (!joinCode.trim() || !currentUser) return;
+
+    setJoining(true);
+    try {
+      const result = await api.joinCourseByCode(joinCode.trim(), currentUser.id);
+      alert(`Successfully enrolled in "${result.course_title}"!`);
+      setJoinCode('');
+      fetchCourses();
+    } catch (error: any) {
+      console.error('Failed to join course:', error);
+      alert(error.message || 'Failed to join course. Please check the code and try again.');
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const toggleStudentSelection = (studentId: number) => {
+    const newSelection = new Set(selectedStudentIds);
+    if (newSelection.has(studentId)) {
+      newSelection.delete(studentId);
+    } else {
+      newSelection.add(studentId);
+    }
+    setSelectedStudentIds(newSelection);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedStudentIds.size === filteredAvailableStudents.length) {
+      setSelectedStudentIds(new Set());
+    } else {
+      setSelectedStudentIds(new Set(filteredAvailableStudents.map(s => s.id)));
+    }
+  };
+
   const enrolledIds = new Set(enrolledStudents.map((s) => s.user_id));
   const availableStudents = allStudents.filter((s) => !enrolledIds.has(s.id));
+
+  const filteredAvailableStudents = useMemo(() => {
+    if (!studentSearchQuery.trim()) return availableStudents;
+    const query = studentSearchQuery.toLowerCase();
+    return availableStudents.filter(
+      s => s.name.toLowerCase().includes(query) || s.email.toLowerCase().includes(query)
+    );
+  }, [availableStudents, studentSearchQuery]);
 
   return (
     <div className="p-6">
@@ -163,6 +258,7 @@ export default function CoursesPage() {
           <TabsTrigger value="courses">Courses</TabsTrigger>
           {isInstructor && <TabsTrigger value="create">Create Course</TabsTrigger>}
           {isInstructor && <TabsTrigger value="enrollment">Enrollment</TabsTrigger>}
+          {!isInstructor && <TabsTrigger value="join">Join Course</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="courses">
@@ -217,6 +313,42 @@ export default function CoursesPage() {
                         )}
                       </div>
                     </div>
+                    {isInstructor && course.join_code && (
+                      <div className="mt-4 pt-4 border-t border-gray-100">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Key className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm text-gray-600">Join Code:</span>
+                            <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono font-bold text-primary-600">
+                              {course.join_code}
+                            </code>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleCopyJoinCode(course.id, course.join_code!)}
+                              title="Copy join code"
+                            >
+                              {copiedCourseId === course.id ? (
+                                <Check className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRegenerateJoinCode(course.id)}
+                              disabled={regeneratingCode === course.id}
+                              title="Regenerate join code"
+                            >
+                              <RefreshCw className={`h-4 w-4 ${regeneratingCode === course.id ? 'animate-spin' : ''}`} />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
                       <span className="text-xs text-gray-500">
                         Created: {formatTimestamp(course.created_at)}
@@ -311,7 +443,11 @@ export default function CoursesPage() {
                 <Select
                   label="Select Course"
                   value={selectedCourseId?.toString() || ''}
-                  onChange={(e) => setSelectedCourseId(Number(e.target.value))}
+                  onChange={(e) => {
+                    setSelectedCourseId(Number(e.target.value));
+                    setSelectedStudentIds(new Set());
+                    setStudentSearchQuery('');
+                  }}
                 >
                   <option value="">Select a course...</option>
                   {courses.map((course) => (
@@ -328,14 +464,17 @@ export default function CoursesPage() {
                         Enrolled Students ({enrolledStudents.length})
                       </h4>
                       {enrolledStudents.length > 0 ? (
-                        <ul className="space-y-2">
+                        <ul className="space-y-2 max-h-96 overflow-y-auto">
                           {enrolledStudents.map((student) => (
                             <li
                               key={student.user_id}
                               className="flex items-center gap-2 text-sm text-gray-700 bg-green-50 px-3 py-2 rounded"
                             >
                               <Users className="h-4 w-4 text-green-600" />
-                              {student.name}
+                              <div>
+                                <div className="font-medium">{student.name}</div>
+                                <div className="text-xs text-gray-500">{student.email}</div>
+                              </div>
                             </li>
                           ))}
                         </ul>
@@ -345,47 +484,132 @@ export default function CoursesPage() {
                     </div>
 
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-3">Enroll Students</h4>
+                      <h4 className="font-medium text-gray-900 mb-3">
+                        Student Pool ({availableStudents.length} available)
+                      </h4>
                       {availableStudents.length > 0 ? (
                         <div className="space-y-3">
-                          <Select
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                handleEnrollStudent(Number(e.target.value));
-                                e.target.value = '';
-                              }
-                            }}
-                            disabled={enrolling}
-                          >
-                            <option value="">Select student to enroll...</option>
-                            {availableStudents.map((student) => (
-                              <option key={student.id} value={student.id}>
-                                {student.name}
-                              </option>
-                            ))}
-                          </Select>
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                              placeholder="Search by name or email..."
+                              value={studentSearchQuery}
+                              onChange={(e) => setStudentSearchQuery(e.target.value)}
+                              className="pl-10"
+                            />
+                          </div>
 
-                          <div className="pt-2 border-t">
+                          <div className="border rounded-lg max-h-64 overflow-y-auto">
+                            <div className="sticky top-0 bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
+                              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedStudentIds.size === filteredAvailableStudents.length && filteredAvailableStudents.length > 0}
+                                  onChange={toggleSelectAll}
+                                  className="rounded border-gray-300"
+                                />
+                                Select All ({filteredAvailableStudents.length})
+                              </label>
+                              {selectedStudentIds.size > 0 && (
+                                <span className="text-xs text-primary-600 font-medium">
+                                  {selectedStudentIds.size} selected
+                                </span>
+                              )}
+                            </div>
+                            {filteredAvailableStudents.length > 0 ? (
+                              <ul className="divide-y">
+                                {filteredAvailableStudents.map((student) => (
+                                  <li
+                                    key={student.id}
+                                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                    onClick={() => toggleStudentSelection(student.id)}
+                                  >
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedStudentIds.has(student.id)}
+                                        onChange={() => toggleStudentSelection(student.id)}
+                                        className="rounded border-gray-300"
+                                      />
+                                      <div>
+                                        <div className="text-sm font-medium text-gray-900">{student.name}</div>
+                                        <div className="text-xs text-gray-500">{student.email}</div>
+                                      </div>
+                                    </label>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-sm text-gray-500 p-3">No students match your search.</p>
+                            )}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={handleBulkEnroll}
+                              disabled={enrolling || selectedStudentIds.size === 0}
+                              className="flex-1"
+                            >
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Enroll Selected ({selectedStudentIds.size})
+                            </Button>
                             <Button
                               onClick={handleEnrollAll}
                               disabled={enrolling}
-                              className="w-full"
+                              variant="outline"
                             >
-                              <Users className="h-4 w-4 mr-2" />
-                              Enroll All Students
+                              Enroll All
                             </Button>
                           </div>
                         </div>
                       ) : (
                         <p className="text-sm text-gray-500">
                           {allStudents.length === 0
-                            ? 'No students in the system.'
-                            : 'All students are already enrolled.'}
+                            ? 'No students in the system yet. Students can sign up and will appear here.'
+                            : 'All students are already enrolled in this course.'}
                         </p>
                       )}
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {!isInstructor && (
+          <TabsContent value="join">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Key className="h-5 w-5" />
+                  Join a Course
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-4">
+                  Enter the join code provided by your instructor to enroll in a course.
+                </p>
+                <div className="flex gap-3 max-w-md">
+                  <Input
+                    placeholder="Enter join code (e.g., ABC12345)"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    className="font-mono text-lg tracking-wider"
+                    maxLength={8}
+                  />
+                  <Button
+                    onClick={handleJoinCourse}
+                    disabled={joining || !joinCode.trim()}
+                  >
+                    {joining ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <UserPlus className="h-4 w-4 mr-2" />
+                    )}
+                    Join
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

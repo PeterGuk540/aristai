@@ -34,5 +34,16 @@ class CourseResponse(BaseSchema):
     title: str
     syllabus_text: Optional[str] = None
     objectives_json: Optional[List[Any]] = None
+    join_code: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+
+class JoinCourseRequest(BaseModel):
+    join_code: str
+
+
+class JoinCourseResponse(BaseModel):
+    message: str
+    course_id: int
+    course_title: str

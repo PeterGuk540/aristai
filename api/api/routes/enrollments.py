@@ -164,3 +164,55 @@ def enroll_all_students(course_id: int, db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+class BulkEnrollRequest(BaseModel):
+    user_ids: List[int]
+    course_id: int
+
+
+@router.post("/bulk", status_code=status.HTTP_201_CREATED)
+def bulk_enroll_students(request: BulkEnrollRequest, db: Session = Depends(get_db)):
+    """Bulk enroll selected students in a course."""
+    course = db.query(Course).filter(Course.id == request.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    # Get already enrolled user IDs for this course
+    existing_enrollments = db.query(Enrollment.user_id).filter(
+        Enrollment.course_id == request.course_id
+    ).all()
+    enrolled_ids = {e.user_id for e in existing_enrollments}
+
+    # Validate all user_ids exist
+    valid_users = db.query(User).filter(User.id.in_(request.user_ids)).all()
+    valid_user_ids = {u.id for u in valid_users}
+
+    invalid_ids = set(request.user_ids) - valid_user_ids
+    if invalid_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid user IDs: {list(invalid_ids)}"
+        )
+
+    # Enroll students not yet enrolled
+    new_enrollments = []
+    already_enrolled = []
+    for user_id in request.user_ids:
+        if user_id in enrolled_ids:
+            already_enrolled.append(user_id)
+        else:
+            enrollment = Enrollment(user_id=user_id, course_id=request.course_id)
+            db.add(enrollment)
+            new_enrollments.append(user_id)
+
+    try:
+        db.commit()
+        return {
+            "message": f"Enrolled {len(new_enrollments)} students",
+            "newly_enrolled_user_ids": new_enrollments,
+            "already_enrolled_user_ids": already_enrolled
+        }
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

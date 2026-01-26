@@ -13,6 +13,7 @@ export interface Course {
   title: string;
   syllabus_text?: string;
   objectives_json?: string[];
+  join_code?: string;
   created_at: string;
   updated_at: string;
 }

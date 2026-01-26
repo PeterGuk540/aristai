@@ -87,6 +87,12 @@ export const api = {
   generatePlans: (courseId: number) =>
     fetchApi<any>(`/courses/${courseId}/generate_plans`, { method: 'POST' }),
 
+  regenerateJoinCode: (courseId: number) =>
+    fetchApi<any>(`/courses/${courseId}/regenerate-join-code`, { method: 'POST' }),
+
+  joinCourseByCode: (joinCode: string, userId: number) =>
+    fetchApi<any>(`/courses/join?user_id=${userId}`, { method: 'POST', body: JSON.stringify({ join_code: joinCode }) }),
+
   getCourseSessions: (courseId: number) =>
     fetchApi<any[]>(`/courses/${courseId}/sessions`),
 
@@ -158,6 +164,9 @@ export const api = {
 
   enrollAllStudents: (courseId: number) =>
     fetchApi<any>(`/enrollments/course/${courseId}/enroll-all-students`, { method: 'POST' }),
+
+  bulkEnrollStudents: (userIds: number[], courseId: number) =>
+    fetchApi<any>('/enrollments/bulk', { method: 'POST', body: JSON.stringify({ user_ids: userIds, course_id: courseId }) }),
 
   unenroll: (enrollmentId: number) =>
     fetchApi<void>(`/enrollments/${enrollmentId}`, { method: 'DELETE' }),

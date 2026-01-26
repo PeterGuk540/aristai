@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from typing import List
 from pydantic import BaseModel
 from datetime import datetime
+import csv
+import io
 from api.core.database import get_db
 from api.models.enrollment import Enrollment
 from api.models.user import User, UserRole
@@ -213,6 +215,117 @@ def bulk_enroll_students(request: BulkEnrollRequest, db: Session = Depends(get_d
             "newly_enrolled_user_ids": new_enrollments,
             "already_enrolled_user_ids": already_enrolled
         }
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.post("/course/{course_id}/upload-roster", status_code=status.HTTP_201_CREATED)
+async def upload_roster_csv(course_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Upload a CSV roster file to create/find users and enroll them in a course.
+
+    CSV format: email,name (header row required)
+    - If user exists by email, they are enrolled
+    - If user doesn't exist, a new student account is created and enrolled
+    """
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    # Validate file type
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+
+    try:
+        # Read file content
+        content = await file.read()
+        decoded = content.decode('utf-8')
+        reader = csv.DictReader(io.StringIO(decoded))
+
+        # Validate headers
+        if not reader.fieldnames or 'email' not in [f.lower() for f in reader.fieldnames]:
+            raise HTTPException(
+                status_code=400,
+                detail="CSV must have 'email' column. Optional: 'name' column"
+            )
+
+        # Normalize fieldnames for case-insensitive access
+        fieldnames = {f.lower(): f for f in reader.fieldnames}
+
+        # Get already enrolled user IDs
+        existing_enrollments = db.query(Enrollment.user_id).filter(
+            Enrollment.course_id == course_id
+        ).all()
+        enrolled_ids = {e.user_id for e in existing_enrollments}
+
+        results = {
+            "created_and_enrolled": [],
+            "existing_enrolled": [],
+            "already_enrolled": [],
+            "errors": []
+        }
+
+        for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
+            try:
+                # Get values with case-insensitive keys
+                email = row.get(fieldnames.get('email', 'email'), '').strip().lower()
+                name = row.get(fieldnames.get('name', 'name'), '').strip() if 'name' in fieldnames else ''
+
+                if not email:
+                    results["errors"].append(f"Row {row_num}: Missing email")
+                    continue
+
+                # Check if user exists
+                user = db.query(User).filter(User.email == email).first()
+
+                if user:
+                    # User exists - check if already enrolled
+                    if user.id in enrolled_ids:
+                        results["already_enrolled"].append(email)
+                    else:
+                        # Enroll existing user
+                        enrollment = Enrollment(user_id=user.id, course_id=course_id)
+                        db.add(enrollment)
+                        enrolled_ids.add(user.id)
+                        results["existing_enrolled"].append(email)
+                else:
+                    # Create new user as student
+                    if not name:
+                        name = email.split('@')[0]  # Use email prefix as name if not provided
+
+                    new_user = User(
+                        name=name,
+                        email=email,
+                        role=UserRole.student
+                    )
+                    db.add(new_user)
+                    db.flush()  # Get the user ID
+
+                    # Enroll new user
+                    enrollment = Enrollment(user_id=new_user.id, course_id=course_id)
+                    db.add(enrollment)
+                    enrolled_ids.add(new_user.id)
+                    results["created_and_enrolled"].append(email)
+
+            except Exception as e:
+                results["errors"].append(f"Row {row_num}: {str(e)}")
+
+        db.commit()
+
+        return {
+            "message": f"Processed roster for course {course_id}",
+            "created_and_enrolled_count": len(results["created_and_enrolled"]),
+            "existing_enrolled_count": len(results["existing_enrolled"]),
+            "already_enrolled_count": len(results["already_enrolled"]),
+            "error_count": len(results["errors"]),
+            "details": results
+        }
+
+    except csv.Error as e:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

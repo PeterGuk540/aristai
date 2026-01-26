@@ -186,6 +186,31 @@ export const api = {
 
   rejectInstructorRequest: (userId: number) =>
     fetchApi<any>(`/users/${userId}/reject-instructor`, { method: 'POST' }),
+
+  // CSV Roster Upload
+  uploadRosterCsv: async (courseId: number, file: File) => {
+    const url = `${isProduction ? '/api/proxy' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/api'}/enrollments/course/${courseId}/upload-roster`;
+
+    const googleToken = getGoogleIdToken();
+    const msToken = getMicrosoftIdToken();
+    const idToken = googleToken || msToken || await getIdToken();
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new ApiError(response.status, error.detail || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  },
 };
 
 export { ApiError };

@@ -53,10 +53,21 @@ export default function CoursesPage() {
   const fetchCourses = async () => {
     try {
       setLoading(true);
-      const data = await api.getCourses();
-      setCourses(data);
-      if (data.length > 0 && !selectedCourseId) {
-        setSelectedCourseId(data[0].id);
+
+      if (isInstructor) {
+        // Instructors see all courses
+        const data = await api.getCourses();
+        setCourses(data);
+        if (data.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(data[0].id);
+        }
+      } else if (currentUser) {
+        // Students only see enrolled courses
+        const enrolledCourses = await api.getUserEnrolledCourses(currentUser.id);
+        // enrolledCourses returns {course_id, course_title, ...}, we need to fetch full course details
+        const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));
+        const fullCourses = await Promise.all(coursePromises);
+        setCourses(fullCourses);
       }
     } catch (error) {
       console.error('Failed to fetch courses:', error);
@@ -79,8 +90,10 @@ export default function CoursesPage() {
   };
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
+    if (currentUser) {
+      fetchCourses();
+    }
+  }, [currentUser, isInstructor]);
 
   useEffect(() => {
     if (selectedCourseId) {
@@ -268,7 +281,14 @@ export default function CoursesPage() {
             <Card>
               <CardContent className="py-8 text-center text-gray-500">
                 <BookOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>No courses found. Create one to get started!</p>
+                {isInstructor ? (
+                  <p>No courses found. Create one to get started!</p>
+                ) : (
+                  <div>
+                    <p className="mb-2">You are not enrolled in any courses yet.</p>
+                    <p className="text-sm">Use the "Join Course" tab to enter a course code from your instructor.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ) : (

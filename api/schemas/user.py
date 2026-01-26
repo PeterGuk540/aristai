@@ -55,4 +55,5 @@ class UserResponse(BaseSchema):
     cognito_sub: Optional[str] = None
     instructor_request_status: InstructorRequestStatus = InstructorRequestStatus.none
     instructor_request_date: Optional[datetime] = None
+    is_admin: bool = False
     created_at: datetime

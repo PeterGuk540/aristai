@@ -178,14 +178,14 @@ export const api = {
   requestInstructorStatus: (userId: number) =>
     fetchApi<any>(`/users/${userId}/request-instructor`, { method: 'POST' }),
 
-  getInstructorRequests: () =>
-    fetchApi<any[]>('/users/instructor-requests'),
+  getInstructorRequests: (adminUserId: number) =>
+    fetchApi<any[]>(`/users/instructor-requests?admin_user_id=${adminUserId}`),
 
-  approveInstructorRequest: (userId: number) =>
-    fetchApi<any>(`/users/${userId}/approve-instructor`, { method: 'POST' }),
+  approveInstructorRequest: (userId: number, adminUserId: number) =>
+    fetchApi<any>(`/users/${userId}/approve-instructor?admin_user_id=${adminUserId}`, { method: 'POST' }),
 
-  rejectInstructorRequest: (userId: number) =>
-    fetchApi<any>(`/users/${userId}/reject-instructor`, { method: 'POST' }),
+  rejectInstructorRequest: (userId: number, adminUserId: number) =>
+    fetchApi<any>(`/users/${userId}/reject-instructor?admin_user_id=${adminUserId}`, { method: 'POST' }),
 
   // CSV Roster Upload
   uploadRosterCsv: async (courseId: number, file: File) => {

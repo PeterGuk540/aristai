@@ -169,8 +169,13 @@ def request_instructor_status(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/instructor-requests", response_model=List[UserResponse])
-def list_instructor_requests(db: Session = Depends(get_db)):
-    """List all pending instructor requests. (For instructors/admins)"""
+def list_instructor_requests(admin_user_id: int, db: Session = Depends(get_db)):
+    """List all pending instructor requests. (Admin only)"""
+    # Verify admin
+    admin = db.query(User).filter(User.id == admin_user_id).first()
+    if not admin or not admin.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     requests = db.query(User).filter(
         User.instructor_request_status == InstructorRequestStatus.pending
     ).order_by(User.instructor_request_date.desc()).all()
@@ -178,8 +183,13 @@ def list_instructor_requests(db: Session = Depends(get_db)):
 
 
 @router.post("/{user_id}/approve-instructor", response_model=UserResponse)
-def approve_instructor_request(user_id: int, db: Session = Depends(get_db)):
-    """Approve an instructor request and promote user to instructor role."""
+def approve_instructor_request(user_id: int, admin_user_id: int, db: Session = Depends(get_db)):
+    """Approve an instructor request and promote user to instructor role. (Admin only)"""
+    # Verify admin
+    admin = db.query(User).filter(User.id == admin_user_id).first()
+    if not admin or not admin.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -199,8 +209,13 @@ def approve_instructor_request(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{user_id}/reject-instructor", response_model=UserResponse)
-def reject_instructor_request(user_id: int, db: Session = Depends(get_db)):
-    """Reject an instructor request."""
+def reject_instructor_request(user_id: int, admin_user_id: int, db: Session = Depends(get_db)):
+    """Reject an instructor request. (Admin only)"""
+    # Verify admin
+    admin = db.query(User).filter(User.id == admin_user_id).first()
+    if not admin or not admin.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

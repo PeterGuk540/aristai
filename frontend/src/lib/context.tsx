@@ -15,6 +15,8 @@ interface DbUser {
   email: string;
   role: string;
   auth_provider?: string;
+  instructor_request_status?: 'none' | 'pending' | 'approved' | 'rejected';
+  instructor_request_date?: string;
 }
 
 interface UserContextType {

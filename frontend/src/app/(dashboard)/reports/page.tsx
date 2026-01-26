@@ -36,7 +36,7 @@ import {
 } from '@/components/ui';
 
 export default function ReportsPage() {
-  const { isInstructor } = useUser();
+  const { isInstructor, currentUser } = useUser();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -47,10 +47,21 @@ export default function ReportsPage() {
 
   const fetchCourses = async () => {
     try {
-      const data = await api.getCourses();
-      setCourses(data);
-      if (data.length > 0 && !selectedCourseId) {
-        setSelectedCourseId(data[0].id);
+      if (isInstructor) {
+        const data = await api.getCourses();
+        setCourses(data);
+        if (data.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(data[0].id);
+        }
+      } else if (currentUser) {
+        // Students only see courses they're enrolled in
+        const enrolledCourses = await api.getUserEnrolledCourses(currentUser.id);
+        const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));
+        const fullCourses = await Promise.all(coursePromises);
+        setCourses(fullCourses);
+        if (fullCourses.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(fullCourses[0].id);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch courses:', error);
@@ -60,9 +71,9 @@ export default function ReportsPage() {
   const fetchSessions = async (courseId: number) => {
     try {
       const data = await api.getCourseSessions(courseId);
-      // Include completed sessions for reports
+      // Only show completed sessions for reports
       const completedSessions = data.filter(
-        (s: Session) => s.status === 'completed' || s.status === 'live'
+        (s: Session) => s.status === 'completed'
       );
       setSessions(completedSessions);
       if (completedSessions.length > 0) {
@@ -111,8 +122,10 @@ export default function ReportsPage() {
   };
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
+    if (currentUser) {
+      fetchCourses();
+    }
+  }, [currentUser, isInstructor]);
 
   useEffect(() => {
     if (selectedCourseId) {

@@ -67,10 +67,21 @@ export default function ForumPage() {
 
   const fetchCourses = async () => {
     try {
-      const data = await api.getCourses();
-      setCourses(data);
-      if (data.length > 0 && !selectedCourseId) {
-        setSelectedCourseId(data[0].id);
+      if (isInstructor) {
+        const data = await api.getCourses();
+        setCourses(data);
+        if (data.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(data[0].id);
+        }
+      } else if (user) {
+        // Students only see courses they're enrolled in
+        const enrolledCourses = await api.getUserEnrolledCourses(user.id);
+        const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));
+        const fullCourses = await Promise.all(coursePromises);
+        setCourses(fullCourses);
+        if (fullCourses.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(fullCourses[0].id);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch courses:', error);
@@ -114,8 +125,10 @@ export default function ForumPage() {
   }, [selectedSessionId]);
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
+    if (user) {
+      fetchCourses();
+    }
+  }, [user, isInstructor]);
 
   useEffect(() => {
     if (selectedCourseId) {

@@ -44,13 +44,14 @@ export function TabsList({ children, className }: TabsListProps) {
   );
 }
 
-interface TabsTriggerProps {
+export interface TabsTriggerProps {
   value: string;
   children: ReactNode;
   className?: string;
+  disabled?: boolean;
 }
 
-export function TabsTrigger({ value, children, className }: TabsTriggerProps) {
+export function TabsTrigger({ value, children, className, disabled }: TabsTriggerProps) {
   const context = useContext(TabsContext);
   if (!context) throw new Error('TabsTrigger must be used within Tabs');
 
@@ -59,12 +60,14 @@ export function TabsTrigger({ value, children, className }: TabsTriggerProps) {
 
   return (
     <button
-      onClick={() => setActiveTab(value)}
+      onClick={() => !disabled && setActiveTab(value)}
+      disabled={disabled}
       className={cn(
         'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
         isActive
           ? 'bg-white text-gray-900 shadow-sm'
           : 'text-gray-600 hover:text-gray-900',
+        disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
     >

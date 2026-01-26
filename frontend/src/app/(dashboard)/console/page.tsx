@@ -13,10 +13,12 @@ import {
   Zap,
   CheckCircle,
   XCircle,
+  UserPlus,
+  Clock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
-import { Course, Session, Intervention, PollResults } from '@/types';
+import { Course, Session, Intervention, PollResults, User } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import {
   Button,
@@ -54,6 +56,10 @@ export default function ConsolePage() {
   // Case posting
   const [casePrompt, setCasePrompt] = useState('');
   const [postingCase, setPostingCase] = useState(false);
+
+  // Instructor requests
+  const [instructorRequests, setInstructorRequests] = useState<User[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
 
   const fetchCourses = async () => {
     try {
@@ -107,8 +113,41 @@ export default function ConsolePage() {
     }
   }, [selectedSessionId]);
 
+  const fetchInstructorRequests = async () => {
+    setLoadingRequests(true);
+    try {
+      const requests = await api.getInstructorRequests();
+      setInstructorRequests(requests);
+    } catch (error) {
+      console.error('Failed to fetch instructor requests:', error);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const handleApproveRequest = async (userId: number) => {
+    try {
+      await api.approveInstructorRequest(userId);
+      fetchInstructorRequests();
+    } catch (error) {
+      console.error('Failed to approve request:', error);
+      alert('Failed to approve request');
+    }
+  };
+
+  const handleRejectRequest = async (userId: number) => {
+    try {
+      await api.rejectInstructorRequest(userId);
+      fetchInstructorRequests();
+    } catch (error) {
+      console.error('Failed to reject request:', error);
+      alert('Failed to reject request');
+    }
+  };
+
   useEffect(() => {
     fetchCourses();
+    fetchInstructorRequests();
   }, []);
 
   useEffect(() => {
@@ -450,6 +489,12 @@ export default function ConsolePage() {
             <TabsTrigger value="copilot">AI Copilot</TabsTrigger>
             <TabsTrigger value="polls">Polls</TabsTrigger>
             <TabsTrigger value="cases">Post Case</TabsTrigger>
+            <TabsTrigger value="requests">
+              Instructor Requests
+              {instructorRequests.length > 0 && (
+                <Badge variant="error" className="ml-2">{instructorRequests.length}</Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="copilot">
@@ -679,6 +724,70 @@ export default function ConsolePage() {
                   <MessageSquare className="h-4 w-4 mr-2" />
                   Post Case
                 </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="requests">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <UserPlus className="h-5 w-5" />
+                    Pending Instructor Requests
+                  </CardTitle>
+                  <Button onClick={fetchInstructorRequests} variant="outline" size="sm">
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingRequests ? (
+                  <div className="text-center py-8 text-gray-500">Loading...</div>
+                ) : instructorRequests.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <UserPlus className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No pending instructor requests.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {instructorRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                      >
+                        <div>
+                          <p className="font-medium text-gray-900">{request.name}</p>
+                          <p className="text-sm text-gray-500">{request.email}</p>
+                          <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                            <Clock className="h-3 w-3" />
+                            Requested: {request.instructor_request_date
+                              ? formatTimestamp(request.instructor_request_date)
+                              : 'Unknown'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleApproveRequest(request.id)}
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRejectRequest(request.id)}
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

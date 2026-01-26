@@ -13,6 +13,14 @@ class UserRole(str, Enum):
 class AuthProvider(str, Enum):
     cognito = "cognito"
     google = "google"
+    microsoft = "microsoft"
+
+
+class InstructorRequestStatus(str, Enum):
+    none = "none"
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
 
 
 # Request schemas
@@ -45,4 +53,6 @@ class UserResponse(BaseSchema):
     role: UserRole
     auth_provider: AuthProvider
     cognito_sub: Optional[str] = None
+    instructor_request_status: InstructorRequestStatus = InstructorRequestStatus.none
+    instructor_request_date: Optional[datetime] = None
     created_at: datetime

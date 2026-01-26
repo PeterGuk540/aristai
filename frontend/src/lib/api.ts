@@ -173,6 +173,19 @@ export const api = {
 
   getUserEnrolledCourses: (userId: number) =>
     fetchApi<any[]>(`/enrollments/user/${userId}/courses`),
+
+  // Instructor Request Workflow
+  requestInstructorStatus: (userId: number) =>
+    fetchApi<any>(`/users/${userId}/request-instructor`, { method: 'POST' }),
+
+  getInstructorRequests: () =>
+    fetchApi<any[]>('/users/instructor-requests'),
+
+  approveInstructorRequest: (userId: number) =>
+    fetchApi<any>(`/users/${userId}/approve-instructor`, { method: 'POST' }),
+
+  rejectInstructorRequest: (userId: number) =>
+    fetchApi<any>(`/users/${userId}/reject-instructor`, { method: 'POST' }),
 };
 
 export { ApiError };

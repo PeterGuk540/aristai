@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, Search, UserPlus } from 'lucide-react';
+import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, Search, UserPlus, GraduationCap, Clock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, EnrolledStudent, User } from '@/types';
@@ -22,7 +22,7 @@ import {
 } from '@/components/ui';
 
 export default function CoursesPage() {
-  const { isInstructor, currentUser } = useUser();
+  const { isInstructor, currentUser, refreshUser } = useUser();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -49,6 +49,9 @@ export default function CoursesPage() {
   // Student join course
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
+
+  // Instructor request
+  const [requestingInstructor, setRequestingInstructor] = useState(false);
 
   const fetchCourses = async () => {
     try {
@@ -224,6 +227,22 @@ export default function CoursesPage() {
     }
   };
 
+  const handleRequestInstructor = async () => {
+    if (!currentUser) return;
+
+    setRequestingInstructor(true);
+    try {
+      await api.requestInstructorStatus(currentUser.id);
+      await refreshUser();
+      alert('Instructor access request submitted! An instructor will review your request.');
+    } catch (error: any) {
+      console.error('Failed to request instructor status:', error);
+      alert(error.message || 'Failed to submit request. Please try again.');
+    } finally {
+      setRequestingInstructor(false);
+    }
+  };
+
   const toggleStudentSelection = (studentId: number) => {
     const newSelection = new Set(selectedStudentIds);
     if (newSelection.has(studentId)) {
@@ -272,6 +291,7 @@ export default function CoursesPage() {
           {isInstructor && <TabsTrigger value="create">Create Course</TabsTrigger>}
           {isInstructor && <TabsTrigger value="enrollment">Enrollment</TabsTrigger>}
           {!isInstructor && <TabsTrigger value="join">Join Course</TabsTrigger>}
+          {!isInstructor && <TabsTrigger value="instructor">Become Instructor</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="courses">
@@ -630,6 +650,67 @@ export default function CoursesPage() {
                     Join
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {!isInstructor && (
+          <TabsContent value="instructor">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5" />
+                  Request Instructor Access
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {currentUser?.instructor_request_status === 'pending' ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-yellow-800 mb-2">
+                      <Clock className="h-5 w-5" />
+                      <span className="font-medium">Request Pending</span>
+                    </div>
+                    <p className="text-sm text-yellow-700">
+                      Your instructor access request is being reviewed. An existing instructor will approve or reject your request.
+                    </p>
+                  </div>
+                ) : currentUser?.instructor_request_status === 'rejected' ? (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-red-800 mb-2">
+                      <span className="font-medium">Request Rejected</span>
+                    </div>
+                    <p className="text-sm text-red-700 mb-4">
+                      Your previous request was not approved. If you believe this was a mistake, please contact an administrator.
+                    </p>
+                    <Button
+                      onClick={handleRequestInstructor}
+                      disabled={requestingInstructor}
+                      variant="outline"
+                    >
+                      <GraduationCap className="h-4 w-4 mr-2" />
+                      Request Again
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      If you are an instructor and need to create and manage courses, you can request instructor access.
+                      An existing instructor will review and approve your request.
+                    </p>
+                    <Button
+                      onClick={handleRequestInstructor}
+                      disabled={requestingInstructor}
+                    >
+                      {requestingInstructor ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <GraduationCap className="h-4 w-4 mr-2" />
+                      )}
+                      Request Instructor Access
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

@@ -39,7 +39,7 @@ import {
 } from '@/components/ui';
 
 export default function ConsolePage() {
-  const { isInstructor } = useUser();
+  const { isInstructor, isAdmin, currentUser } = useUser();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -122,9 +122,10 @@ export default function ConsolePage() {
   }, [selectedSessionId]);
 
   const fetchInstructorRequests = async () => {
+    if (!currentUser?.id || !isAdmin) return;
     setLoadingRequests(true);
     try {
-      const requests = await api.getInstructorRequests();
+      const requests = await api.getInstructorRequests(currentUser.id);
       setInstructorRequests(requests);
     } catch (error) {
       console.error('Failed to fetch instructor requests:', error);
@@ -134,8 +135,9 @@ export default function ConsolePage() {
   };
 
   const handleApproveRequest = async (userId: number) => {
+    if (!currentUser?.id) return;
     try {
-      await api.approveInstructorRequest(userId);
+      await api.approveInstructorRequest(userId, currentUser.id);
       fetchInstructorRequests();
     } catch (error) {
       console.error('Failed to approve request:', error);
@@ -144,8 +146,9 @@ export default function ConsolePage() {
   };
 
   const handleRejectRequest = async (userId: number) => {
+    if (!currentUser?.id) return;
     try {
-      await api.rejectInstructorRequest(userId);
+      await api.rejectInstructorRequest(userId, currentUser.id);
       fetchInstructorRequests();
     } catch (error) {
       console.error('Failed to reject request:', error);
@@ -172,8 +175,13 @@ export default function ConsolePage() {
 
   useEffect(() => {
     fetchCourses();
-    fetchInstructorRequests();
   }, []);
+
+  useEffect(() => {
+    if (isAdmin && currentUser?.id) {
+      fetchInstructorRequests();
+    }
+  }, [isAdmin, currentUser?.id]);
 
   useEffect(() => {
     if (selectedCourseId) {
@@ -501,7 +509,7 @@ export default function ConsolePage() {
         </Select>
       </div>
 
-      <Tabs defaultValue={selectedSessionId ? "copilot" : "requests"}>
+      <Tabs defaultValue={selectedSessionId ? "copilot" : (isAdmin ? "requests" : "copilot")}>
         <TabsList>
           <TabsTrigger value="copilot" disabled={!selectedSessionId}>
             AI Copilot
@@ -512,16 +520,20 @@ export default function ConsolePage() {
           <TabsTrigger value="cases" disabled={!selectedSessionId}>
             Post Case
           </TabsTrigger>
-          <TabsTrigger value="requests">
-            Instructor Requests
-            {instructorRequests.length > 0 && (
-              <Badge variant="error" className="ml-2">{instructorRequests.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="roster">
-            <FileSpreadsheet className="h-4 w-4 mr-1" />
-            Roster Upload
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="requests">
+              Instructor Requests
+              {instructorRequests.length > 0 && (
+                <Badge variant="error" className="ml-2">{instructorRequests.length}</Badge>
+              )}
+            </TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="roster">
+              <FileSpreadsheet className="h-4 w-4 mr-1" />
+              Roster Upload
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {!selectedSessionId && (

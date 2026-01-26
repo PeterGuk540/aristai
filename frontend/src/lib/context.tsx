@@ -17,6 +17,7 @@ interface DbUser {
   auth_provider?: string;
   instructor_request_status?: 'none' | 'pending' | 'approved' | 'rejected';
   instructor_request_date?: string;
+  is_admin?: boolean;
 }
 
 interface UserContextType {
@@ -24,6 +25,7 @@ interface UserContextType {
   setCurrentUser: (user: DbUser | null) => void;
   users: DbUser[];
   isInstructor: boolean;
+  isAdmin: boolean;
   hasEnrollments: boolean;
   loading: boolean;
   refreshUser: () => Promise<void>;
@@ -103,6 +105,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   // Determine if current user is an instructor
   const isInstructor = dbUser?.role === 'instructor';
+  const isAdmin = dbUser?.is_admin === true;
 
   return (
     <UserContext.Provider
@@ -111,6 +114,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setCurrentUser: setDbUser,
         users: dbUser ? [dbUser] : [],
         isInstructor,
+        isAdmin,
         hasEnrollments,
         loading: authLoading || loading,
         refreshUser,

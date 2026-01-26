@@ -22,6 +22,7 @@ interface UserContextType {
   setCurrentUser: (user: DbUser | null) => void;
   users: DbUser[];
   isInstructor: boolean;
+  hasEnrollments: boolean;
   loading: boolean;
   refreshUser: () => Promise<void>;
 }
@@ -31,6 +32,7 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export function UserProvider({ children }: { children: ReactNode }) {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
+  const [hasEnrollments, setHasEnrollments] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Determine auth provider based on how user logged in
@@ -47,6 +49,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       const userData = await api.getUserByEmail(email, authProvider);
       setDbUser(userData);
+
+      // Check if user has any enrollments (only for students)
+      if (userData.role !== 'instructor' && userData.id) {
+        try {
+          const enrollments = await api.getUserEnrolledCourses(userData.id);
+          setHasEnrollments(enrollments.length > 0);
+        } catch {
+          setHasEnrollments(false);
+        }
+      } else {
+        // Instructors always have access
+        setHasEnrollments(true);
+      }
     } catch (error) {
       console.error('Failed to fetch user from database:', error);
       // Fallback: create a temporary user object with student role
@@ -57,6 +72,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         role: 'student',
         auth_provider: authProvider,
       });
+      setHasEnrollments(false);
     }
   }, []);
 
@@ -93,6 +109,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setCurrentUser: setDbUser,
         users: dbUser ? [dbUser] : [],
         isInstructor,
+        hasEnrollments,
         loading: authLoading || loading,
         refreshUser,
       }}

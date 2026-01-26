@@ -20,13 +20,13 @@ import { useUser } from '@/lib/context';
 import { UserMenu } from './UserMenu';
 import { cn } from '@/lib/utils';
 
-// Navigation items with optional instructor-only flag
+// Navigation items with optional instructor-only flag and enrollment requirement
 const allNavigation = [
-  { name: 'Courses', href: '/courses', icon: BookOpen, instructorOnly: false },
-  { name: 'Sessions', href: '/sessions', icon: Calendar, instructorOnly: false },
-  { name: 'Forum', href: '/forum', icon: MessageSquare, instructorOnly: false },
-  { name: 'Console', href: '/console', icon: Settings, instructorOnly: true },
-  { name: 'Reports', href: '/reports', icon: FileText, instructorOnly: false },
+  { name: 'Courses', href: '/courses', icon: BookOpen, instructorOnly: false, requiresEnrollment: false },
+  { name: 'Sessions', href: '/sessions', icon: Calendar, instructorOnly: false, requiresEnrollment: true },
+  { name: 'Forum', href: '/forum', icon: MessageSquare, instructorOnly: false, requiresEnrollment: true },
+  { name: 'Console', href: '/console', icon: Settings, instructorOnly: true, requiresEnrollment: false },
+  { name: 'Reports', href: '/reports', icon: FileText, instructorOnly: false, requiresEnrollment: true },
 ];
 
 interface AppShellProps {
@@ -37,14 +37,20 @@ export function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
-  const { isInstructor } = useUser();
+  const { isInstructor, hasEnrollments } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
-  // Filter navigation based on user role
+  // Filter navigation based on user role and enrollment status
   const navigation = useMemo(() => {
-    return allNavigation.filter(item => !item.instructorOnly || isInstructor);
-  }, [isInstructor]);
+    return allNavigation.filter(item => {
+      // Hide instructor-only items for non-instructors
+      if (item.instructorOnly && !isInstructor) return false;
+      // Hide enrollment-required items for students without enrollments
+      if (item.requiresEnrollment && !isInstructor && !hasEnrollments) return false;
+      return true;
+    });
+  }, [isInstructor, hasEnrollments]);
 
   // Check authentication and redirect if not authenticated
   useEffect(() => {

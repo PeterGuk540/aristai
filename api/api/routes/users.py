@@ -84,6 +84,21 @@ def get_user_by_email(email: str, auth_provider: Optional[str] = None, db: Sessi
     return user
 
 
+# IMPORTANT: This route must be before /{user_id} to avoid path conflicts
+@router.get("/instructor-requests", response_model=List[UserResponse])
+def list_instructor_requests(admin_user_id: int, db: Session = Depends(get_db)):
+    """List all pending instructor requests. (Admin only)"""
+    # Verify admin
+    admin = db.query(User).filter(User.id == admin_user_id).first()
+    if not admin or not admin.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    requests = db.query(User).filter(
+        User.instructor_request_status == InstructorRequestStatus.pending
+    ).order_by(User.instructor_request_date.desc()).all()
+    return requests
+
+
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(user_id: int, db: Session = Depends(get_db)):
     """Get a user by ID."""
@@ -166,20 +181,6 @@ def request_instructor_status(user_id: int, db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-
-@router.get("/instructor-requests", response_model=List[UserResponse])
-def list_instructor_requests(admin_user_id: int, db: Session = Depends(get_db)):
-    """List all pending instructor requests. (Admin only)"""
-    # Verify admin
-    admin = db.query(User).filter(User.id == admin_user_id).first()
-    if not admin or not admin.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    requests = db.query(User).filter(
-        User.instructor_request_status == InstructorRequestStatus.pending
-    ).order_by(User.instructor_request_date.desc()).all()
-    return requests
 
 
 @router.post("/{user_id}/approve-instructor", response_model=UserResponse)

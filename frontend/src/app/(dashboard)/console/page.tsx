@@ -501,30 +501,35 @@ export default function ConsolePage() {
         </Select>
       </div>
 
-      {!selectedSessionId ? (
-        <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            <Bot className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p>Select a live session to use the instructor console.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Tabs defaultValue="copilot">
-          <TabsList>
-            <TabsTrigger value="copilot">AI Copilot</TabsTrigger>
-            <TabsTrigger value="polls">Polls</TabsTrigger>
-            <TabsTrigger value="cases">Post Case</TabsTrigger>
-            <TabsTrigger value="requests">
-              Instructor Requests
-              {instructorRequests.length > 0 && (
-                <Badge variant="error" className="ml-2">{instructorRequests.length}</Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="roster">
-              <FileSpreadsheet className="h-4 w-4 mr-1" />
-              Roster Upload
-            </TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue={selectedSessionId ? "copilot" : "requests"}>
+        <TabsList>
+          <TabsTrigger value="copilot" disabled={!selectedSessionId}>
+            AI Copilot
+          </TabsTrigger>
+          <TabsTrigger value="polls" disabled={!selectedSessionId}>
+            Polls
+          </TabsTrigger>
+          <TabsTrigger value="cases" disabled={!selectedSessionId}>
+            Post Case
+          </TabsTrigger>
+          <TabsTrigger value="requests">
+            Instructor Requests
+            {instructorRequests.length > 0 && (
+              <Badge variant="error" className="ml-2">{instructorRequests.length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="roster">
+            <FileSpreadsheet className="h-4 w-4 mr-1" />
+            Roster Upload
+          </TabsTrigger>
+        </TabsList>
+
+        {!selectedSessionId && (
+          <div className="mt-4 mb-4 p-4 bg-gray-50 rounded-lg text-center text-gray-600">
+            <Bot className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+            <p className="text-sm">Select a live session above to use AI Copilot, Polls, and Post Case features.</p>
+          </div>
+        )}
 
           <TabsContent value="copilot">
             <div className="grid lg:grid-cols-3 gap-6">
@@ -937,7 +942,6 @@ export default function ConsolePage() {
             </Card>
           </TabsContent>
         </Tabs>
-      )}
     </div>
   );
 }

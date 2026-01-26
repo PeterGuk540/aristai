@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List, Optional
+from datetime import datetime
 from api.core.database import get_db
-from api.models.user import User
+from api.models.user import User, InstructorRequestStatus, UserRole
 from api.schemas.user import UserCreate, UserUpdate, UserResponse, UserRegisterOrGet
 
 router = APIRouter()
@@ -136,6 +137,82 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     try:
         db.delete(user)
         db.commit()
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+# Instructor Request Workflow Endpoints
+
+@router.post("/{user_id}/request-instructor", response_model=UserResponse)
+def request_instructor_status(user_id: int, db: Session = Depends(get_db)):
+    """Request instructor status for a student account."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.role == UserRole.instructor:
+        raise HTTPException(status_code=400, detail="User is already an instructor")
+
+    if user.instructor_request_status == InstructorRequestStatus.pending:
+        raise HTTPException(status_code=400, detail="Request already pending")
+
+    try:
+        user.instructor_request_status = InstructorRequestStatus.pending
+        user.instructor_request_date = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+        return user
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.get("/instructor-requests", response_model=List[UserResponse])
+def list_instructor_requests(db: Session = Depends(get_db)):
+    """List all pending instructor requests. (For instructors/admins)"""
+    requests = db.query(User).filter(
+        User.instructor_request_status == InstructorRequestStatus.pending
+    ).order_by(User.instructor_request_date.desc()).all()
+    return requests
+
+
+@router.post("/{user_id}/approve-instructor", response_model=UserResponse)
+def approve_instructor_request(user_id: int, db: Session = Depends(get_db)):
+    """Approve an instructor request and promote user to instructor role."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.instructor_request_status != InstructorRequestStatus.pending:
+        raise HTTPException(status_code=400, detail="No pending request for this user")
+
+    try:
+        user.role = UserRole.instructor
+        user.instructor_request_status = InstructorRequestStatus.approved
+        db.commit()
+        db.refresh(user)
+        return user
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.post("/{user_id}/reject-instructor", response_model=UserResponse)
+def reject_instructor_request(user_id: int, db: Session = Depends(get_db)):
+    """Reject an instructor request."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.instructor_request_status != InstructorRequestStatus.pending:
+        raise HTTPException(status_code=400, detail="No pending request for this user")
+
+    try:
+        user.instructor_request_status = InstructorRequestStatus.rejected
+        db.commit()
+        db.refresh(user)
+        return user
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

@@ -1,9 +1,14 @@
 // User types
+export type InstructorRequestStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
 export interface User {
   id: number;
   name: string;
   email: string;
   role: 'instructor' | 'student';
+  auth_provider?: 'cognito' | 'google' | 'microsoft';
+  instructor_request_status?: InstructorRequestStatus;
+  instructor_request_date?: string;
   created_at: string;
 }
 

@@ -1,15 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from typing import List, Optional
 from api.core.database import get_db
-from api.models.course import Course, CourseResource
+from api.models.course import Course, CourseResource, generate_join_code
 from api.models.session import Session as SessionModel
+from api.models.enrollment import Enrollment
+from api.models.user import User, UserRole
 from api.schemas.course import (
     CourseCreate,
     CourseResponse,
     CourseResourceCreate,
     CourseResourceResponse,
+    JoinCourseRequest,
+    JoinCourseResponse,
 )
 from api.schemas.session import SessionResponse
 
@@ -20,7 +24,13 @@ router = APIRouter()
 def create_course(course: CourseCreate, db: Session = Depends(get_db)):
     """Create a new course with syllabus and objectives."""
     try:
-        db_course = Course(**course.model_dump())
+        # Generate a unique join code
+        join_code = generate_join_code()
+        # Ensure uniqueness (retry if collision)
+        while db.query(Course).filter(Course.join_code == join_code).first():
+            join_code = generate_join_code()
+
+        db_course = Course(**course.model_dump(), join_code=join_code)
         db.add(db_course)
         db.commit()
         db.refresh(db_course)
@@ -102,3 +112,65 @@ def generate_session_plans(course_id: int, db: Session = Depends(get_db)):
 
     task = generate_plans_task.delay(course_id)
     return {"task_id": task.id, "status": "queued"}
+
+
+@router.post("/{course_id}/regenerate-join-code", response_model=CourseResponse)
+def regenerate_join_code(course_id: int, db: Session = Depends(get_db)):
+    """Regenerate the join code for a course (instructor only)."""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    try:
+        # Generate a new unique join code
+        new_code = generate_join_code()
+        while db.query(Course).filter(Course.join_code == new_code).first():
+            new_code = generate_join_code()
+
+        course.join_code = new_code
+        db.commit()
+        db.refresh(course)
+        return course
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.post("/join", response_model=JoinCourseResponse)
+def join_course_by_code(
+    request: JoinCourseRequest,
+    user_id: int,  # This would come from auth in production
+    db: Session = Depends(get_db)
+):
+    """Student joins a course using a join code."""
+    # Find course by join code
+    course = db.query(Course).filter(Course.join_code == request.join_code.upper()).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Invalid join code")
+
+    # Verify user exists and is a student
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if already enrolled
+    existing = db.query(Enrollment).filter(
+        Enrollment.user_id == user_id,
+        Enrollment.course_id == course.id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Already enrolled in this course")
+
+    try:
+        # Create enrollment
+        enrollment = Enrollment(user_id=user_id, course_id=course.id)
+        db.add(enrollment)
+        db.commit()
+        return JoinCourseResponse(
+            message="Successfully enrolled in course",
+            course_id=course.id,
+            course_title=course.title
+        )
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

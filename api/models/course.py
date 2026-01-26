@@ -1,7 +1,17 @@
+import secrets
+import string
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from api.core.database import Base
+
+
+def generate_join_code(length: int = 8) -> str:
+    """Generate a random alphanumeric join code."""
+    alphabet = string.ascii_uppercase + string.digits
+    # Exclude confusing characters like 0, O, I, 1
+    alphabet = alphabet.replace('0', '').replace('O', '').replace('I', '').replace('1', '')
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 
 class Course(Base):
@@ -11,6 +21,7 @@ class Course(Base):
     title = Column(String(255), nullable=False)
     syllabus_text = Column(Text, nullable=True)
     objectives_json = Column(JSON, nullable=True)
+    join_code = Column(String(20), unique=True, nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

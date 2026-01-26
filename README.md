@@ -47,6 +47,11 @@ An AI-powered platform for synchronous classroom discussions with instructor cop
 - Tailwind CSS
 - Deployed on Vercel
 
+**Authentication:**
+- AWS Cognito (email/password)
+- Google OAuth
+- Microsoft OAuth
+
 **Legacy UI:**
 - Streamlit (still available at port 8501)
 
@@ -164,23 +169,49 @@ aristai/
 
 ---
 
-## Role-Based Access
+## Role-Based Access (Three-Tier System)
 
-| Feature | Student | Instructor |
-|---------|---------|------------|
-| View courses/sessions | ✓ | ✓ |
-| Create courses/sessions | ✗ | ✓ |
-| View forum posts | ✓ | ✓ |
-| Create posts/replies | ✓ | ✓ |
-| Pin/label posts | ✗ | ✓ |
-| Access Instructor Console | ✗ | ✓ |
-| Start/stop copilot | ✗ | ✓ |
-| Create polls | ✗ | ✓ |
-| Vote on polls | ✓ | ✓ |
-| View reports | ✓ | ✓ |
-| Generate reports | ✗ | ✓ |
-| View scoring details | ✗ | ✓ |
-| Manage enrollment | ✗ | ✓ |
+AristAI uses a three-tier role system:
+
+| Role | Description |
+|------|-------------|
+| **Admin** | Full system access. Can approve/reject instructor requests and upload CSV rosters. |
+| **Instructor** | Can create courses, manage sessions, enroll students, and use AI copilot features. |
+| **Student** | Can view enrolled courses, participate in discussions, and request instructor access. |
+
+### Permissions Matrix
+
+| Feature | Student | Instructor | Admin |
+|---------|---------|------------|-------|
+| View enrolled courses/sessions | ✓ | ✓ | ✓ |
+| Create courses/sessions | ✗ | ✓ | ✓ |
+| View forum posts | ✓ | ✓ | ✓ |
+| Create posts/replies | ✓ | ✓ | ✓ |
+| Pin/label posts | ✗ | ✓ | ✓ |
+| Access Instructor Console | ✗ | ✓ | ✓ |
+| Start/stop copilot | ✗ | ✓ | ✓ |
+| Create polls | ✗ | ✓ | ✓ |
+| Vote on polls | ✓ | ✓ | ✓ |
+| View reports | ✓ | ✓ | ✓ |
+| Generate reports | ✗ | ✓ | ✓ |
+| View scoring details | ✗ | ✓ | ✓ |
+| Manage enrollment | ✗ | ✓ | ✓ |
+| Request instructor access | ✓ | ✗ | ✗ |
+| Approve/reject instructor requests | ✗ | ✗ | ✓ |
+| Upload CSV roster | ✗ | ✗ | ✓ |
+
+### Instructor Request Workflow
+
+1. **Student requests**: Student clicks "Become Instructor" in Courses page
+2. **Admin reviews**: Admin sees pending requests in Console > Instructor Requests tab
+3. **Admin approves/rejects**: Request is approved (user promoted to instructor) or rejected
+
+### CSV Roster Upload (Admin Only)
+
+Admins can bulk-enroll students via CSV upload in Console > Roster Upload:
+- CSV format: `email,name` (with header row)
+- New users are automatically created with `student` role
+- Existing users are enrolled without modification
 
 ---
 
@@ -287,7 +318,7 @@ Produces comprehensive report including:
 
 | Model | Description |
 |-------|-------------|
-| **User** | id, name, email, role (instructor/student) |
+| **User** | id, name, email, role, auth_provider, is_admin, instructor_request_status |
 | **Course** | id, title, syllabus_text, objectives_json |
 | **Enrollment** | user_id, course_id (tracks enrollment) |
 | **Session** | id, course_id, title, status, plan_json |

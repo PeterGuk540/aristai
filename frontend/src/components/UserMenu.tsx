@@ -1,11 +1,15 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { User, LogOut, Settings, ChevronDown } from 'lucide-react';
+import { User, LogOut, Settings, ChevronDown, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 
-export function UserMenu() {
+interface UserMenuProps {
+  onShowGuide?: () => void;
+}
+
+export function UserMenu({ onShowGuide }: UserMenuProps) {
   const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -89,6 +93,25 @@ export function UserMenu() {
 
           {/* Menu items */}
           <div className="py-1">
+            {onShowGuide && (
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  onShowGuide();
+                }}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-2 text-sm',
+                  'text-gray-700 dark:text-gray-200',
+                  'hover:bg-gray-100 dark:hover:bg-gray-700',
+                  'transition-colors duration-200'
+                )}
+                role="menuitem"
+              >
+                <HelpCircle className="h-4 w-4" />
+                View Guide
+              </button>
+            )}
+
             <button
               onClick={() => {
                 setIsOpen(false);

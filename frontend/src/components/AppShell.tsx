@@ -44,7 +44,7 @@ export function AppShell({ children }: AppShellProps) {
 
   // Determine the effective role for onboarding
   const effectiveRole = isAdmin ? 'admin' : isInstructor ? 'instructor' : 'student';
-  const { showOnboarding, completeOnboarding, isReady } = useOnboarding(currentUser?.id, currentUser?.role);
+  const { showOnboarding, completeOnboarding, showGuide, isReady } = useOnboarding(currentUser?.id, currentUser?.role);
 
   // Filter navigation based on user role and enrollment status
   const navigation = useMemo(() => {
@@ -191,7 +191,7 @@ export function AppShell({ children }: AppShellProps) {
             </button>
 
             {/* User menu */}
-            <UserMenu />
+            <UserMenu onShowGuide={showGuide} />
           </div>
         </header>
 

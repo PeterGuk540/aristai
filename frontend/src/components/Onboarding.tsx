@@ -151,17 +151,17 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-gray-900/95 transition-opacity duration-300 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 transition-opacity duration-300 ${
         isVisible ? 'opacity-100' : 'opacity-0'
       }`}
     >
       <div className="max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">{content.title}</h1>
-            <p className="text-gray-400 text-lg">{content.subtitle}</p>
-            <p className="text-purple-400 mt-2">Hello, {userName}!</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{content.title}</h1>
+            <p className="text-gray-600 dark:text-gray-400 text-lg">{content.subtitle}</p>
+            <p className="text-primary-600 dark:text-primary-400 mt-2">Hello, {userName}!</p>
           </div>
 
           {/* Features Grid */}
@@ -169,26 +169,26 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
             {content.features.map((feature, index) => (
               <div
                 key={index}
-                className="bg-gray-700/50 rounded-lg p-4 border border-gray-600 hover:border-purple-500 transition-colors"
+                className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600 hover:border-primary-500 dark:hover:border-primary-500 transition-colors"
               >
                 <div className="text-2xl mb-2">{feature.icon}</div>
-                <h3 className="text-white font-semibold mb-1">{feature.title}</h3>
-                <p className="text-gray-400 text-sm">{feature.description}</p>
+                <h3 className="text-gray-900 dark:text-white font-semibold mb-1">{feature.title}</h3>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">{feature.description}</p>
               </div>
             ))}
           </div>
 
           {/* Navigation Guide */}
-          <div className="bg-gray-700/30 rounded-lg p-6 mb-8">
-            <h2 className="text-white font-semibold mb-4">Your Navigation</h2>
+          <div className="bg-gray-100 dark:bg-gray-700/30 rounded-lg p-6 mb-8">
+            <h2 className="text-gray-900 dark:text-white font-semibold mb-4">Your Navigation</h2>
             <div className="flex flex-wrap gap-3">
               {content.navigation.map((nav, index) => (
                 <div
                   key={index}
-                  className="bg-gray-800 rounded-lg px-4 py-2 border border-gray-600"
+                  className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2 border border-gray-200 dark:border-gray-600"
                 >
-                  <span className="text-purple-400 font-medium">{nav.name}</span>
-                  <span className="text-gray-500 text-sm ml-2">- {nav.description}</span>
+                  <span className="text-primary-600 dark:text-primary-400 font-medium">{nav.name}</span>
+                  <span className="text-gray-500 dark:text-gray-500 text-sm ml-2">- {nav.description}</span>
                 </div>
               ))}
             </div>
@@ -198,12 +198,12 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
           <div className="text-center">
             <Button
               onClick={handleComplete}
-              className="px-8 py-3 text-lg bg-purple-600 hover:bg-purple-700"
+              className="px-8 py-3 text-lg bg-primary-600 hover:bg-primary-700"
             >
               I Got It!
             </Button>
-            <p className="text-gray-500 text-sm mt-3">
-              You can always find help in the documentation
+            <p className="text-gray-500 dark:text-gray-500 text-sm mt-3">
+              You can access this guide anytime from the user menu
             </p>
           </div>
         </div>
@@ -240,5 +240,10 @@ export function useOnboarding(userId: number | undefined, role: string | undefin
     setShowOnboarding(false);
   };
 
-  return { showOnboarding, completeOnboarding, isReady };
+  // Allow manually showing the guide again
+  const showGuide = () => {
+    setShowOnboarding(true);
+  };
+
+  return { showOnboarding, completeOnboarding, showGuide, isReady };
 }

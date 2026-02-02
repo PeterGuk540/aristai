@@ -209,7 +209,7 @@ export const api = {
 
   // Voice Assistant
   transcribeAudio: async (blob: Blob) => {
-    const url = `${isProduction ? DIRECT_API_BASE : API_BASE}/voice/transcribe`;
+    const url = `${API_BASE}/voice/transcribe`;
     const googleToken = getGoogleIdToken();
     const msToken = getMicrosoftIdToken();
     const idToken = googleToken || msToken || await getIdToken();

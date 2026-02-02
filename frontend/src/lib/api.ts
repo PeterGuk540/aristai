@@ -5,7 +5,9 @@ import { getMicrosoftIdToken } from './ms-auth';
 // In production (Vercel), use the proxy route to avoid CORS/mixed-content issues
 // In development, call the backend directly
 const isProduction = process.env.NODE_ENV === 'production';
-const API_BASE = isProduction ? '/api/proxy' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/api';
+const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = isProduction ? '/api/proxy' : `${DIRECT_API_URL}/api`;
+const DIRECT_API_BASE = `${DIRECT_API_URL}/api`;
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -13,6 +15,23 @@ class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+
+const formatApiErrorMessage = (detail: unknown): string => {
+  if (!detail) {
+    return 'Unknown error';
+  }
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  if (detail instanceof Error) {
+    return detail.message || 'Unknown error';
+  }
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return String(detail);
+  }
+};
 
 async function fetchApi<T>(
   endpoint: string,
@@ -40,7 +59,8 @@ async function fetchApi<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new ApiError(response.status, error.detail || `HTTP ${response.status}`);
+    const message = formatApiErrorMessage(error?.detail ?? error);
+    throw new ApiError(response.status, message || `HTTP ${response.status}`);
   }
 
   // Handle 204 No Content
@@ -189,7 +209,7 @@ export const api = {
 
   // Voice Assistant
   transcribeAudio: async (blob: Blob) => {
-    const url = `${API_BASE}/voice/transcribe`;
+    const url = `${isProduction ? DIRECT_API_BASE : API_BASE}/voice/transcribe`;
     const googleToken = getGoogleIdToken();
     const msToken = getMicrosoftIdToken();
     const idToken = googleToken || msToken || await getIdToken();
@@ -202,7 +222,8 @@ export const api = {
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new ApiError(response.status, error.detail || `HTTP ${response.status}`);
+      const message = formatApiErrorMessage(error?.detail ?? error);
+      throw new ApiError(response.status, message || `HTTP ${response.status}`);
     }
     return response.json() as Promise<{ transcript: string; language?: string; duration_seconds?: number }>;
   },
@@ -243,7 +264,8 @@ export const api = {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new ApiError(response.status, error.detail || `HTTP ${response.status}`);
+      const message = formatApiErrorMessage(error?.detail ?? error);
+      throw new ApiError(response.status, message || `HTTP ${response.status}`);
     }
 
     return response.json();

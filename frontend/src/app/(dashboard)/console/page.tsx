@@ -17,10 +17,13 @@ import {
   Clock,
   Upload,
   FileSpreadsheet,
+  Mic,
+  MicOff,
+  Volume2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
-import { Course, Session, Intervention, PollResults, User } from '@/types';
+import { Course, Session, Intervention, PollResults, User, VoicePlan, VoiceStepResult, VoiceAuditEntry } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import {
   Button,
@@ -68,6 +71,18 @@ export default function ConsolePage() {
   const [rosterFile, setRosterFile] = useState<File | null>(null);
   const [uploadingRoster, setUploadingRoster] = useState(false);
   const [rosterResults, setRosterResults] = useState<any>(null);
+
+  // Voice assistant
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorderRef, setMediaRecorderRef] = useState<MediaRecorder | null>(null);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceTextInput, setVoiceTextInput] = useState('');
+  const [voicePlan, setVoicePlan] = useState<VoicePlan | null>(null);
+  const [voiceResults, setVoiceResults] = useState<VoiceStepResult[]>([]);
+  const [voiceSummary, setVoiceSummary] = useState('');
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceAudits, setVoiceAudits] = useState<VoiceAuditEntry[]>([]);
+  const [voiceError, setVoiceError] = useState('');
 
   const fetchCourses = async () => {
     try {
@@ -300,6 +315,119 @@ export default function ConsolePage() {
     }
   };
 
+  // Voice assistant handlers
+  const startRecording = async () => {
+    setVoiceError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        await processAudio(blob);
+      };
+      recorder.start();
+      setMediaRecorderRef(recorder);
+      setIsRecording(true);
+    } catch (err: any) {
+      setVoiceError('Microphone access denied or unavailable.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef && mediaRecorderRef.state !== 'inactive') {
+      mediaRecorderRef.stop();
+    }
+    setIsRecording(false);
+  };
+
+  const processAudio = async (blob: Blob) => {
+    setVoiceLoading(true);
+    setVoiceError('');
+    setVoicePlan(null);
+    setVoiceResults([]);
+    setVoiceSummary('');
+    try {
+      const transcribeResult = await api.transcribeAudio(blob);
+      setVoiceTranscript(transcribeResult.transcript);
+      const planResult = await api.voicePlan(transcribeResult.transcript);
+      setVoicePlan(planResult.plan);
+    } catch (err: any) {
+      setVoiceError('Voice processing failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
+  const handleTextPlan = async () => {
+    if (!voiceTextInput.trim()) return;
+    setVoiceLoading(true);
+    setVoiceError('');
+    setVoicePlan(null);
+    setVoiceResults([]);
+    setVoiceSummary('');
+    try {
+      setVoiceTranscript(voiceTextInput);
+      const planResult = await api.voicePlan(voiceTextInput);
+      setVoicePlan(planResult.plan);
+      setVoiceTextInput('');
+    } catch (err: any) {
+      setVoiceError('Planning failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
+  const handleConfirmExecute = async () => {
+    if (!voicePlan) return;
+    setVoiceLoading(true);
+    setVoiceError('');
+    try {
+      const result = await api.voiceExecute(voicePlan, true, currentUser?.id);
+      setVoiceResults(result.results);
+      setVoiceSummary(result.summary);
+      // TTS via browser SpeechSynthesis
+      if (result.summary && 'speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(result.summary);
+        speechSynthesis.speak(utterance);
+      }
+    } catch (err: any) {
+      setVoiceError('Execution failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
+  const handleExecuteReadOnly = async () => {
+    if (!voicePlan) return;
+    setVoiceLoading(true);
+    setVoiceError('');
+    try {
+      const result = await api.voiceExecute(voicePlan, false, currentUser?.id);
+      setVoiceResults(result.results);
+      setVoiceSummary(result.summary);
+      if (result.summary && 'speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(result.summary);
+        speechSynthesis.speak(utterance);
+      }
+    } catch (err: any) {
+      setVoiceError('Execution failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
+  const fetchVoiceAudits = async () => {
+    try {
+      const result = await api.voiceAudit(currentUser?.id);
+      setVoiceAudits(result.audits);
+    } catch (err) {
+      console.error('Failed to fetch voice audits:', err);
+    }
+  };
+
   const renderIntervention = (intervention: Intervention) => {
     const suggestion = intervention.suggestion_json;
 
@@ -519,6 +647,10 @@ export default function ConsolePage() {
           </TabsTrigger>
           <TabsTrigger value="cases" disabled={!selectedSessionId}>
             Post Case
+          </TabsTrigger>
+          <TabsTrigger value="voice">
+            <Mic className="h-4 w-4 mr-1" />
+            Voice Assistant
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="requests">
@@ -772,6 +904,217 @@ export default function ConsolePage() {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="voice">
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Left column: Input + Plan */}
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Mic className="h-5 w-5" />
+                      Voice Input
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Push-to-talk */}
+                    <div>
+                      <Button
+                        onMouseDown={startRecording}
+                        onMouseUp={stopRecording}
+                        onMouseLeave={() => { if (isRecording) stopRecording(); }}
+                        variant={isRecording ? 'danger' : 'primary'}
+                        disabled={voiceLoading}
+                        className="w-full"
+                      >
+                        {isRecording ? (
+                          <><MicOff className="h-4 w-4 mr-2" />Recording... Release to stop</>
+                        ) : (
+                          <><Mic className="h-4 w-4 mr-2" />Hold to Talk</>
+                        )}
+                      </Button>
+                    </div>
+
+                    {/* Text fallback */}
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Or type a command..."
+                        value={voiceTextInput}
+                        onChange={(e) => setVoiceTextInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleTextPlan(); }}
+                      />
+                      <Button
+                        onClick={handleTextPlan}
+                        disabled={voiceLoading || !voiceTextInput.trim()}
+                        variant="outline"
+                      >
+                        Send
+                      </Button>
+                    </div>
+
+                    {voiceLoading && (
+                      <p className="text-sm text-gray-500 animate-pulse">Processing...</p>
+                    )}
+
+                    {voiceError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                        {voiceError}
+                      </div>
+                    )}
+
+                    {voiceTranscript && (
+                      <div className="p-3 bg-gray-50 rounded">
+                        <h4 className="text-sm font-medium text-gray-700 mb-1">Transcript</h4>
+                        <p className="text-sm text-gray-600">{voiceTranscript}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Action Plan */}
+                {voicePlan && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Action Plan</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="p-3 bg-blue-50 rounded">
+                        <p className="text-sm font-medium text-blue-900">{voicePlan.intent}</p>
+                        <p className="text-xs text-blue-700 mt-1">{voicePlan.rationale}</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        {voicePlan.steps.map((step, i) => (
+                          <div
+                            key={i}
+                            className={`p-2 rounded border-l-4 ${
+                              step.mode === 'write'
+                                ? 'bg-orange-50 border-orange-500'
+                                : 'bg-blue-50 border-blue-500'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{step.tool_name}</span>
+                              <Badge variant={step.mode === 'write' ? 'warning' : 'info'}>
+                                {step.mode}
+                              </Badge>
+                            </div>
+                            <pre className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">
+                              {JSON.stringify(step.args, null, 2)}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        {voicePlan.required_confirmations.length > 0 ? (
+                          <Button onClick={handleConfirmExecute} disabled={voiceLoading}>
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Confirm & Execute
+                          </Button>
+                        ) : voicePlan.steps.length > 0 ? (
+                          <Button onClick={handleExecuteReadOnly} disabled={voiceLoading}>
+                            <Play className="h-4 w-4 mr-2" />
+                            Execute (Read Only)
+                          </Button>
+                        ) : null}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Right column: Results + Audit */}
+              <div className="space-y-4">
+                {/* Results */}
+                {voiceResults.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Results</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {voiceSummary && (
+                        <div className="p-3 bg-green-50 rounded flex items-start gap-2">
+                          <Volume2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-green-800">{voiceSummary}</p>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        {voiceResults.map((r, i) => (
+                          <div
+                            key={i}
+                            className={`p-2 rounded ${
+                              r.success
+                                ? 'bg-green-50'
+                                : r.skipped
+                                ? 'bg-yellow-50'
+                                : 'bg-red-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{r.tool_name}</span>
+                              {r.success && <Badge variant="success">OK</Badge>}
+                              {r.skipped && <Badge variant="warning">Skipped</Badge>}
+                              {!r.success && !r.skipped && <Badge variant="error">Error</Badge>}
+                            </div>
+                            {r.error && (
+                              <p className="text-xs text-red-600 mt-1">{r.error}</p>
+                            )}
+                            {r.skipped_reason && (
+                              <p className="text-xs text-yellow-700 mt-1">{r.skipped_reason}</p>
+                            )}
+                            {r.success && r.result && (
+                              <pre className="text-xs text-gray-500 mt-1 whitespace-pre-wrap max-h-32 overflow-auto">
+                                {JSON.stringify(r.result, null, 2)}
+                              </pre>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Audit Trail */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Audit Trail</CardTitle>
+                      <Button onClick={fetchVoiceAudits} variant="outline" size="sm">
+                        <RefreshCw className="h-4 w-4 mr-1" />
+                        Refresh
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {voiceAudits.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        No voice audit entries yet. Use the voice assistant to see history here.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-[400px] overflow-auto">
+                        {voiceAudits.map((a) => (
+                          <div key={a.id} className="p-3 bg-gray-50 rounded">
+                            <p className="text-sm font-medium text-gray-900">
+                              {a.plan_json?.intent || 'Unknown intent'}
+                            </p>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-xs text-gray-500">
+                                {formatTimestamp(a.created_at)}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                {a.tool_calls?.length || 0} tool calls
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="requests">

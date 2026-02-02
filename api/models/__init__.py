@@ -7,6 +7,7 @@ from api.models.poll import Poll, PollVote
 from api.models.intervention import Intervention
 from api.models.report import Report
 from api.models.enrollment import Enrollment
+from api.models.voice_audit import VoiceAudit
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "Intervention",
     "Report",
     "Enrollment",
+    "VoiceAudit",
 ]

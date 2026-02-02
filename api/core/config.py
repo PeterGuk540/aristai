@@ -19,7 +19,15 @@ class Settings(BaseSettings):
     app_name: str = "AristAI"
     debug: bool = False
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # Voice Assistant
+    voice_asr_provider: str = "stub"       # "stub" | "whisper"
+    voice_tts_provider: str = "stub"       # "stub" | "elevenlabs"
+    elevenlabs_api_key: str = ""
+    voice_max_seconds: int = 30
+    voice_max_mb: int = 5
+    voice_rate_limit_per_min: int = 10
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
 @lru_cache

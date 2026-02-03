@@ -1,0 +1,14 @@
+# MCP Server dependencies (add to main requirements.txt)
+
+# MCP Protocol
+mcp>=0.9.0
+
+# Async support
+aiofiles>=23.0.0
+
+# Audio processing (for local voice handling)
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# WebSocket support (already in FastAPI)
+websockets>=12.0

@@ -1,3 +1,4 @@
+from .voice_converse_router import router as voice_converse_router
 from fastapi import APIRouter
 from api.api.routes import courses, sessions, posts, polls, reports, users, enrollments, voice
 from api.core.config import get_settings
@@ -13,6 +14,7 @@ api_router.include_router(polls.router, prefix="/polls", tags=["polls"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(enrollments.router, prefix="/enrollments", tags=["enrollments"])
 api_router.include_router(voice.router, prefix="/voice", tags=["voice"])
+api_router.include_router(voice_converse_router)
 
 # Debug routes only available when DEBUG=true
 settings = get_settings()

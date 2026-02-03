@@ -21,6 +21,7 @@ from api.core.database import get_db
 from api.models.course import Course
 from api.models.session import Session as SessionModel, SessionStatus
 from mcp_server.server import TOOL_REGISTRY
+from workflows.voice_orchestrator import run_voice_orchestrator, generate_summary
 
 # Import your existing dependencies
 # from .auth import get_current_user
@@ -60,7 +61,7 @@ NAVIGATION_PATTERNS = {
     r'\b(go to|open|show|navigate to|take me to)\s+(the\s+)?(dashboard|home)\b': '/dashboard',
 }
 
-# Action intent patterns (these will trigger MCP tool execution)
+# Action intent patterns (regex fallback)
 ACTION_PATTERNS = {
     'list_courses': [
         r'\b(list|show|get|what are)\s+(all\s+)?(my\s+)?courses\b',
@@ -121,6 +122,29 @@ def detect_action_intent(text: str) -> Optional[str]:
         for pattern in patterns:
             if re.search(pattern, text_lower):
                 return action
+    return None
+
+
+def _validate_tool_args(tool_name: str, args: dict, schema: dict) -> Optional[str]:
+    required = schema.get("required", [])
+    properties = schema.get("properties", {})
+
+    for field in required:
+        if field not in args:
+            return f"Missing required field '{field}' for tool '{tool_name}'"
+
+    for field, value in args.items():
+        expected = properties.get(field, {}).get("type")
+        if not expected:
+            continue
+        if expected == "integer" and not isinstance(value, int):
+            return f"Field '{field}' must be integer"
+        if expected == "string" and not isinstance(value, str):
+            return f"Field '{field}' must be string"
+        if expected == "array" and not isinstance(value, list):
+            return f"Field '{field}' must be array"
+        if expected == "boolean" and not isinstance(value, bool):
+            return f"Field '{field}' must be boolean"
     return None
 
 
@@ -236,23 +260,35 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             suggestions=get_page_suggestions(nav_path)
         )
     
-    # Check for action intent
+    plan_result = run_voice_orchestrator(transcript)
+    plan = plan_result.get("plan") if plan_result else None
+    if plan and plan.get("steps"):
+        results, summary = execute_plan_steps(plan.get("steps", []), db)
+        return ConverseResponse(
+            message=summary,
+            action=ActionResponse(type='execute', executed=True),
+            results=results,
+            suggestions=["Anything else I can help with?"],
+        )
+
+    # Check for action intent (fallback)
     action = detect_action_intent(transcript)
     if action:
         # Execute the action and get results
         results = await execute_action(action, request.user_id, request.current_page, db)
+
         
         return ConverseResponse(
             message=generate_conversational_response(
-                'execute', 
-                action, 
+                'execute',
+                action,
                 results=results,
                 context=request.context,
-                current_page=request.current_page
+                current_page=request.current_page,
             ),
             action=ActionResponse(type='execute', executed=True),
             results=results,
-            suggestions=get_action_suggestions(action)
+            suggestions=get_action_suggestions(action),
         )
     
     # No clear intent - try to be helpful
@@ -359,6 +395,47 @@ async def execute_action(
     except Exception as e:
         print(f"Action execution failed: {e}")
         return None
+
+
+def execute_plan_steps(steps: List[Dict[str, Any]], db: Session) -> tuple[list[dict], str]:
+    results = []
+    for step in steps:
+        tool_name = step.get("tool_name")
+        args = step.get("args", {})
+        tool_entry = TOOL_REGISTRY.get(tool_name)
+        if not tool_entry:
+            results.append({
+                "tool": tool_name,
+                "success": False,
+                "error": f"Unknown tool: {tool_name}",
+            })
+            continue
+
+        error = _validate_tool_args(tool_name, args, tool_entry.get("parameters", {}))
+        if error:
+            results.append({
+                "tool": tool_name,
+                "success": False,
+                "error": error,
+            })
+            continue
+
+        try:
+            result = tool_entry["handler"](db, **args)
+            results.append({
+                "tool": tool_name,
+                "success": True,
+                "result": result,
+            })
+        except Exception as exc:
+            results.append({
+                "tool": tool_name,
+                "success": False,
+                "error": str(exc),
+            })
+
+    summary = generate_summary(results)
+    return results, summary
 
 
 def get_page_suggestions(path: str) -> List[str]:

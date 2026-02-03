@@ -10,12 +10,17 @@ This module provides a conversational AI interface that:
 Add this router to your main API router.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Optional, List, Any, Dict
-import json
+from typing import Optional, List, Any, Dict, Tuple
 import re
-from datetime import datetime
+
+from sqlalchemy.orm import Session
+
+from api.core.database import get_db
+from api.models.course import Course
+from api.models.session import Session as SessionModel, SessionStatus
+from mcp_server.server import TOOL_REGISTRY
 
 # Import your existing dependencies
 # from .auth import get_current_user
@@ -209,7 +214,7 @@ def generate_conversational_response(
 
 
 @router.post("/converse", response_model=ConverseResponse)
-async def voice_converse(request: ConverseRequest):
+async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)):
     """
     Conversational voice endpoint that processes natural language
     and returns appropriate responses with actions.
@@ -235,7 +240,7 @@ async def voice_converse(request: ConverseRequest):
     action = detect_action_intent(transcript)
     if action:
         # Execute the action and get results
-        results = await execute_action(action, request.user_id, request.current_page)
+        results = await execute_action(action, request.user_id, request.current_page, db)
         
         return ConverseResponse(
             message=generate_conversational_response(
@@ -258,30 +263,99 @@ async def voice_converse(request: ConverseRequest):
     )
 
 
-async def execute_action(action: str, user_id: Optional[int], current_page: Optional[str]) -> Optional[Any]:
-    """Execute an MCP tool and return results"""
-    # This would integrate with your MCP server
-    # For now, returning mock data - replace with actual MCP calls
-    
+def _parse_ids_from_path(current_page: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
+    """Extract course/session IDs from the current URL path."""
+    if not current_page:
+        return None, None
+    course_match = re.search(r"/courses/(\d+)", current_page)
+    session_match = re.search(r"/sessions/(\d+)", current_page)
+    course_id = int(course_match.group(1)) if course_match else None
+    session_id = int(session_match.group(1)) if session_match else None
+    return course_id, session_id
+
+
+def _resolve_course_id(db: Session, current_page: Optional[str]) -> Optional[int]:
+    course_id, _ = _parse_ids_from_path(current_page)
+    if course_id:
+        return course_id
+    course = db.query(Course).order_by(Course.created_at.desc()).first()
+    return course.id if course else None
+
+
+def _resolve_session_id(db: Session, current_page: Optional[str]) -> Optional[int]:
+    _, session_id = _parse_ids_from_path(current_page)
+    if session_id:
+        return session_id
+    session = (
+        db.query(SessionModel)
+        .filter(SessionModel.status == SessionStatus.live)
+        .order_by(SessionModel.created_at.desc())
+        .first()
+    )
+    if session:
+        return session.id
+    session = db.query(SessionModel).order_by(SessionModel.created_at.desc()).first()
+    return session.id if session else None
+
+
+def _execute_tool(db: Session, tool_name: str, args: Dict[str, Any]) -> Optional[Any]:
+    tool_info = TOOL_REGISTRY.get(tool_name)
+    if not tool_info:
+        return None
+    handler = tool_info["handler"]
+    return handler(db, **args)
+
+
+async def execute_action(
+    action: str,
+    user_id: Optional[int],
+    current_page: Optional[str],
+    db: Session,
+) -> Optional[Any]:
+    """Execute an MCP tool and return results."""
     try:
         if action == 'list_courses':
-            # Call your actual API
-            # courses = await mcp_server.call_tool('list_courses', {})
-            # return courses
-            return []  # Replace with actual implementation
-        
+            return _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
+
         if action == 'list_sessions':
-            return []  # Replace with actual implementation
-        
+            course_id = _resolve_course_id(db, current_page)
+            if not course_id:
+                return []
+            return _execute_tool(db, 'list_sessions', {"course_id": course_id})
+
         if action == 'get_interventions':
-            return []  # Replace with actual implementation
-        
+            session_id = _resolve_session_id(db, current_page)
+            if not session_id:
+                return []
+            return _execute_tool(db, 'get_copilot_suggestions', {"session_id": session_id})
+
         if action == 'list_enrollments':
-            return []  # Replace with actual implementation
-        
-        # For actions that don't return data
+            course_id = _resolve_course_id(db, current_page)
+            if not course_id:
+                return []
+            return _execute_tool(db, 'get_enrolled_students', {"course_id": course_id})
+
+        if action == 'start_copilot':
+            session_id = _resolve_session_id(db, current_page)
+            if not session_id:
+                return None
+            return _execute_tool(db, 'start_copilot', {"session_id": session_id})
+
+        if action == 'stop_copilot':
+            session_id = _resolve_session_id(db, current_page)
+            if not session_id:
+                return None
+            return _execute_tool(db, 'stop_copilot', {"session_id": session_id})
+
+        if action == 'generate_report':
+            session_id = _resolve_session_id(db, current_page)
+            if not session_id:
+                return None
+            return _execute_tool(db, 'generate_report', {"session_id": session_id})
+
+        # For actions that need more info (like create_poll), prompt user for details.
         return None
-        
+
     except Exception as e:
         print(f"Action execution failed: {e}")
         return None

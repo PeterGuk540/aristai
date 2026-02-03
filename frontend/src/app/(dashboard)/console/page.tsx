@@ -18,12 +18,10 @@ import {
   Upload,
   FileSpreadsheet,
   Mic,
-  MicOff,
-  Volume2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
-import { Course, Session, Intervention, PollResults, User, VoicePlan, VoiceStepResult, VoiceAuditEntry } from '@/types';
+import { Course, Session, Intervention, PollResults, User } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import {
   Button,
@@ -40,6 +38,8 @@ import {
   TabsTrigger,
   TabsContent,
 } from '@/components/ui';
+// Import the new VoiceTabContent component
+import { VoiceTabContent } from '@/components/voice';
 
 export default function ConsolePage() {
   const { isInstructor, isAdmin, currentUser } = useUser();
@@ -71,18 +71,6 @@ export default function ConsolePage() {
   const [rosterFile, setRosterFile] = useState<File | null>(null);
   const [uploadingRoster, setUploadingRoster] = useState(false);
   const [rosterResults, setRosterResults] = useState<any>(null);
-
-  // Voice assistant
-  const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorderRef, setMediaRecorderRef] = useState<MediaRecorder | null>(null);
-  const [voiceTranscript, setVoiceTranscript] = useState('');
-  const [voiceTextInput, setVoiceTextInput] = useState('');
-  const [voicePlan, setVoicePlan] = useState<VoicePlan | null>(null);
-  const [voiceResults, setVoiceResults] = useState<VoiceStepResult[]>([]);
-  const [voiceSummary, setVoiceSummary] = useState('');
-  const [voiceLoading, setVoiceLoading] = useState(false);
-  const [voiceAudits, setVoiceAudits] = useState<VoiceAuditEntry[]>([]);
-  const [voiceError, setVoiceError] = useState('');
 
   const fetchCourses = async () => {
     try {
@@ -312,119 +300,6 @@ export default function ConsolePage() {
   const removePollOption = (index: number) => {
     if (pollOptions.length > 2) {
       setPollOptions(pollOptions.filter((_, i) => i !== index));
-    }
-  };
-
-  // Voice assistant handlers
-  const startRecording = async () => {
-    setVoiceError('');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => chunks.push(e.data);
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        await processAudio(blob);
-      };
-      recorder.start();
-      setMediaRecorderRef(recorder);
-      setIsRecording(true);
-    } catch (err: any) {
-      setVoiceError('Microphone access denied or unavailable.');
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef && mediaRecorderRef.state !== 'inactive') {
-      mediaRecorderRef.stop();
-    }
-    setIsRecording(false);
-  };
-
-  const processAudio = async (blob: Blob) => {
-    setVoiceLoading(true);
-    setVoiceError('');
-    setVoicePlan(null);
-    setVoiceResults([]);
-    setVoiceSummary('');
-    try {
-      const transcribeResult = await api.transcribeAudio(blob);
-      setVoiceTranscript(transcribeResult.transcript);
-      const planResult = await api.voicePlan(transcribeResult.transcript);
-      setVoicePlan(planResult.plan);
-    } catch (err: any) {
-      setVoiceError('Voice processing failed: ' + (err.message || 'Unknown error'));
-    } finally {
-      setVoiceLoading(false);
-    }
-  };
-
-  const handleTextPlan = async () => {
-    if (!voiceTextInput.trim()) return;
-    setVoiceLoading(true);
-    setVoiceError('');
-    setVoicePlan(null);
-    setVoiceResults([]);
-    setVoiceSummary('');
-    try {
-      setVoiceTranscript(voiceTextInput);
-      const planResult = await api.voicePlan(voiceTextInput);
-      setVoicePlan(planResult.plan);
-      setVoiceTextInput('');
-    } catch (err: any) {
-      setVoiceError('Planning failed: ' + (err.message || 'Unknown error'));
-    } finally {
-      setVoiceLoading(false);
-    }
-  };
-
-  const handleConfirmExecute = async () => {
-    if (!voicePlan) return;
-    setVoiceLoading(true);
-    setVoiceError('');
-    try {
-      const result = await api.voiceExecute(voicePlan, true, currentUser?.id);
-      setVoiceResults(result.results);
-      setVoiceSummary(result.summary);
-      // TTS via browser SpeechSynthesis
-      if (result.summary && 'speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(result.summary);
-        speechSynthesis.speak(utterance);
-      }
-    } catch (err: any) {
-      setVoiceError('Execution failed: ' + (err.message || 'Unknown error'));
-    } finally {
-      setVoiceLoading(false);
-    }
-  };
-
-  const handleExecuteReadOnly = async () => {
-    if (!voicePlan) return;
-    setVoiceLoading(true);
-    setVoiceError('');
-    try {
-      const result = await api.voiceExecute(voicePlan, false, currentUser?.id);
-      setVoiceResults(result.results);
-      setVoiceSummary(result.summary);
-      if (result.summary && 'speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(result.summary);
-        speechSynthesis.speak(utterance);
-      }
-    } catch (err: any) {
-      setVoiceError('Execution failed: ' + (err.message || 'Unknown error'));
-    } finally {
-      setVoiceLoading(false);
-    }
-  };
-
-  const fetchVoiceAudits = async () => {
-    try {
-      const result = await api.voiceAudit(currentUser?.id);
-      setVoiceAudits(result.audits);
-    } catch (err) {
-      console.error('Failed to fetch voice audits:', err);
     }
   };
 
@@ -675,628 +550,422 @@ export default function ConsolePage() {
           </div>
         )}
 
-          <TabsContent value="copilot">
-            <div className="grid lg:grid-cols-3 gap-6">
-              {/* Copilot Control */}
-              <div className="lg:col-span-1">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Bot className="h-5 w-5" />
-                      Copilot Control
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className="text-sm font-medium">Status:</span>
-                      {copilotActive ? (
-                        <Badge variant="success">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Active
-                        </Badge>
-                      ) : (
-                        <Badge variant="default">
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Inactive
-                        </Badge>
-                      )}
-                    </div>
+        <TabsContent value="copilot">
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Copilot Control */}
+            <div className="lg:col-span-1">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bot className="h-5 w-5" />
+                    Copilot Control
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-sm font-medium">Status:</span>
+                    {copilotActive ? (
+                      <Badge variant="success">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Active
+                      </Badge>
+                    ) : (
+                      <Badge variant="default">
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Inactive
+                      </Badge>
+                    )}
+                  </div>
 
-                    <div className="space-y-2">
-                      {!copilotActive ? (
-                        <Button onClick={handleStartCopilot} className="w-full">
-                          <Play className="h-4 w-4 mr-2" />
-                          Start Copilot
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={handleStopCopilot}
-                          variant="secondary"
-                          className="w-full"
-                        >
-                          <Square className="h-4 w-4 mr-2" />
-                          Stop Copilot
-                        </Button>
-                      )}
-
+                  <div className="space-y-2">
+                    {!copilotActive ? (
+                      <Button onClick={handleStartCopilot} className="w-full">
+                        <Play className="h-4 w-4 mr-2" />
+                        Start Copilot
+                      </Button>
+                    ) : (
                       <Button
-                        onClick={fetchInterventions}
-                        variant="outline"
+                        onClick={handleStopCopilot}
+                        variant="secondary"
                         className="w-full"
                       >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Refresh Interventions
+                        <Square className="h-4 w-4 mr-2" />
+                        Stop Copilot
                       </Button>
-                    </div>
+                    )}
 
-                    <p className="text-xs text-gray-500 mt-4">
-                      The copilot monitors discussion and provides real-time suggestions.
-                      {copilotActive && ' Auto-refreshing every 15 seconds.'}
+                    <Button
+                      onClick={fetchInterventions}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh Interventions
+                    </Button>
+                  </div>
+
+                  <p className="text-xs text-gray-500 mt-4">
+                    The copilot monitors discussion and provides real-time suggestions.
+                    {copilotActive && ' Auto-refreshing every 15 seconds.'}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Interventions */}
+            <div className="lg:col-span-2">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Interventions ({interventions.length})
+              </h3>
+              {loading ? (
+                <div className="text-center py-8 text-gray-500">Loading...</div>
+              ) : interventions.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-gray-500">
+                    <Zap className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                    <p>No interventions yet.</p>
+                    <p className="text-sm mt-2">
+                      {copilotActive
+                        ? 'The copilot is analyzing the discussion...'
+                        : 'Start the copilot to receive suggestions.'}
                     </p>
                   </CardContent>
                 </Card>
-              </div>
-
-              {/* Interventions */}
-              <div className="lg:col-span-2">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Interventions ({interventions.length})
-                </h3>
-                {loading ? (
-                  <div className="text-center py-8 text-gray-500">Loading...</div>
-                ) : interventions.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-8 text-center text-gray-500">
-                      <Zap className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                      <p>No interventions yet.</p>
-                      <p className="text-sm mt-2">
-                        {copilotActive
-                          ? 'The copilot is analyzing the discussion...'
-                          : 'Start the copilot to receive suggestions.'}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="max-h-[600px] overflow-auto">
-                    {interventions.map(renderIntervention)}
-                  </div>
-                )}
-              </div>
+              ) : (
+                <div className="max-h-[600px] overflow-auto">
+                  {interventions.map(renderIntervention)}
+                </div>
+              )}
             </div>
-          </TabsContent>
+          </div>
+        </TabsContent>
 
-          <TabsContent value="polls">
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Create Poll */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Create Poll</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Input
-                    label="Question"
-                    placeholder="What do you think about...?"
-                    value={pollQuestion}
-                    onChange={(e) => setPollQuestion(e.target.value)}
-                  />
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Options
-                    </label>
-                    {pollOptions.map((option, index) => (
-                      <div key={index} className="flex gap-2 mb-2">
-                        <Input
-                          placeholder={`Option ${index + 1}`}
-                          value={option}
-                          onChange={(e) => updatePollOption(index, e.target.value)}
-                        />
-                        {pollOptions.length > 2 && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => removePollOption(index)}
-                          >
-                            Remove
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    {pollOptions.length < 6 && (
-                      <Button variant="outline" size="sm" onClick={addPollOption}>
-                        Add Option
-                      </Button>
-                    )}
-                  </div>
-
-                  <Button
-                    onClick={handleCreatePoll}
-                    disabled={creatingPoll || !pollQuestion.trim()}
-                    className="w-full"
-                  >
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Create Poll
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Poll Results */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Poll Results</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {activePollId ? (
-                    <div className="space-y-4">
-                      <Button onClick={handleFetchPollResults} variant="outline">
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Refresh Results
-                      </Button>
-
-                      {pollResults ? (
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-3">
-                            {pollResults.question}
-                          </h4>
-                          <div className="space-y-2">
-                            {pollResults.options.map((option, index) => {
-                              const percentage =
-                                pollResults.total_votes > 0
-                                  ? (pollResults.vote_counts[index] / pollResults.total_votes) *
-                                    100
-                                  : 0;
-
-                              return (
-                                <div key={index}>
-                                  <div className="flex justify-between text-sm mb-1">
-                                    <span>{option}</span>
-                                    <span className="text-gray-500">
-                                      {pollResults.vote_counts[index]} votes ({percentage.toFixed(0)}
-                                      %)
-                                    </span>
-                                  </div>
-                                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div
-                                      className="h-full bg-primary-600 rounded-full transition-all"
-                                      style={{ width: `${percentage}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <p className="text-sm text-gray-500 mt-4">
-                            Total votes: {pollResults.total_votes}
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-gray-500">Click refresh to load results.</p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500">Create a poll to see results here.</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="cases">
+        <TabsContent value="polls">
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Create Poll */}
             <Card>
               <CardHeader>
-                <CardTitle>Post Case Study</CardTitle>
+                <CardTitle>Create Poll</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Textarea
-                  label="Case Prompt"
-                  placeholder="Describe the case study scenario for students to discuss..."
-                  rows={6}
-                  value={casePrompt}
-                  onChange={(e) => setCasePrompt(e.target.value)}
+                <Input
+                  label="Question"
+                  placeholder="What do you think about...?"
+                  value={pollQuestion}
+                  onChange={(e) => setPollQuestion(e.target.value)}
                 />
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Options
+                  </label>
+                  {pollOptions.map((option, index) => (
+                    <div key={index} className="flex gap-2 mb-2">
+                      <Input
+                        placeholder={`Option ${index + 1}`}
+                        value={option}
+                        onChange={(e) => updatePollOption(index, e.target.value)}
+                      />
+                      {pollOptions.length > 2 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removePollOption(index)}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {pollOptions.length < 6 && (
+                    <Button variant="outline" size="sm" onClick={addPollOption}>
+                      Add Option
+                    </Button>
+                  )}
+                </div>
+
                 <Button
-                  onClick={handlePostCase}
-                  disabled={postingCase || !casePrompt.trim()}
+                  onClick={handleCreatePoll}
+                  disabled={creatingPoll || !pollQuestion.trim()}
+                  className="w-full"
                 >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Post Case
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Create Poll
                 </Button>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="voice">
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Left column: Input + Plan */}
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Mic className="h-5 w-5" />
-                      Voice Input
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Push-to-talk */}
-                    <div>
-                      <Button
-                        onMouseDown={startRecording}
-                        onMouseUp={stopRecording}
-                        onMouseLeave={() => { if (isRecording) stopRecording(); }}
-                        variant={isRecording ? 'danger' : 'primary'}
-                        disabled={voiceLoading}
-                        className="w-full"
-                      >
-                        {isRecording ? (
-                          <><MicOff className="h-4 w-4 mr-2" />Recording... Release to stop</>
-                        ) : (
-                          <><Mic className="h-4 w-4 mr-2" />Hold to Talk</>
-                        )}
-                      </Button>
-                    </div>
-
-                    {/* Text fallback */}
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Or type a command..."
-                        value={voiceTextInput}
-                        onChange={(e) => setVoiceTextInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleTextPlan(); }}
-                      />
-                      <Button
-                        onClick={handleTextPlan}
-                        disabled={voiceLoading || !voiceTextInput.trim()}
-                        variant="outline"
-                      >
-                        Send
-                      </Button>
-                    </div>
-
-                    {voiceLoading && (
-                      <p className="text-sm text-gray-500 animate-pulse">Processing...</p>
-                    )}
-
-                    {voiceError && (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                        {voiceError}
-                      </div>
-                    )}
-
-                    {voiceTranscript && (
-                      <div className="p-3 bg-gray-50 rounded">
-                        <h4 className="text-sm font-medium text-gray-700 mb-1">Transcript</h4>
-                        <p className="text-sm text-gray-600">{voiceTranscript}</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Action Plan */}
-                {voicePlan && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Action Plan</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="p-3 bg-blue-50 rounded">
-                        <p className="text-sm font-medium text-blue-900">{voicePlan.intent}</p>
-                        <p className="text-xs text-blue-700 mt-1">{voicePlan.rationale}</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        {voicePlan.steps.map((step, i) => (
-                          <div
-                            key={i}
-                            className={`p-2 rounded border-l-4 ${
-                              step.mode === 'write'
-                                ? 'bg-orange-50 border-orange-500'
-                                : 'bg-blue-50 border-blue-500'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">{step.tool_name}</span>
-                              <Badge variant={step.mode === 'write' ? 'warning' : 'info'}>
-                                {step.mode}
-                              </Badge>
-                            </div>
-                            <pre className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">
-                              {JSON.stringify(step.args, null, 2)}
-                            </pre>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="flex gap-2 pt-2">
-                        {voicePlan.required_confirmations.length > 0 ? (
-                          <Button onClick={handleConfirmExecute} disabled={voiceLoading}>
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Confirm & Execute
-                          </Button>
-                        ) : voicePlan.steps.length > 0 ? (
-                          <Button onClick={handleExecuteReadOnly} disabled={voiceLoading}>
-                            <Play className="h-4 w-4 mr-2" />
-                            Execute (Read Only)
-                          </Button>
-                        ) : null}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-
-              {/* Right column: Results + Audit */}
-              <div className="space-y-4">
-                {/* Results */}
-                {voiceResults.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Results</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {voiceSummary && (
-                        <div className="p-3 bg-green-50 rounded flex items-start gap-2">
-                          <Volume2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-green-800">{voiceSummary}</p>
-                        </div>
-                      )}
-                      <div className="space-y-2">
-                        {voiceResults.map((r, i) => (
-                          <div
-                            key={i}
-                            className={`p-2 rounded ${
-                              r.success
-                                ? 'bg-green-50'
-                                : r.skipped
-                                ? 'bg-yellow-50'
-                                : 'bg-red-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">{r.tool_name}</span>
-                              {r.success && <Badge variant="success">OK</Badge>}
-                              {r.skipped && <Badge variant="warning">Skipped</Badge>}
-                              {!r.success && !r.skipped && <Badge variant="error">Error</Badge>}
-                            </div>
-                            {r.error && (
-                              <p className="text-xs text-red-600 mt-1">{r.error}</p>
-                            )}
-                            {r.skipped_reason && (
-                              <p className="text-xs text-yellow-700 mt-1">{r.skipped_reason}</p>
-                            )}
-                            {r.success && r.result && (
-                              <pre className="text-xs text-gray-500 mt-1 whitespace-pre-wrap max-h-32 overflow-auto">
-                                {JSON.stringify(r.result, null, 2)}
-                              </pre>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Audit Trail */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle>Audit Trail</CardTitle>
-                      <Button onClick={fetchVoiceAudits} variant="outline" size="sm">
-                        <RefreshCw className="h-4 w-4 mr-1" />
-                        Refresh
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {voiceAudits.length === 0 ? (
-                      <p className="text-sm text-gray-500 text-center py-4">
-                        No voice audit entries yet. Use the voice assistant to see history here.
-                      </p>
-                    ) : (
-                      <div className="space-y-2 max-h-[400px] overflow-auto">
-                        {voiceAudits.map((a) => (
-                          <div key={a.id} className="p-3 bg-gray-50 rounded">
-                            <p className="text-sm font-medium text-gray-900">
-                              {a.plan_json?.intent || 'Unknown intent'}
-                            </p>
-                            <div className="flex items-center gap-3 mt-1">
-                              <span className="text-xs text-gray-500">
-                                {formatTimestamp(a.created_at)}
-                              </span>
-                              <span className="text-xs text-gray-400">
-                                {a.tool_calls?.length || 0} tool calls
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="requests">
+            {/* Poll Results */}
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <UserPlus className="h-5 w-5" />
-                    Pending Instructor Requests
-                  </CardTitle>
-                  <Button onClick={fetchInstructorRequests} variant="outline" size="sm">
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Refresh
-                  </Button>
-                </div>
+                <CardTitle>Poll Results</CardTitle>
               </CardHeader>
               <CardContent>
-                {loadingRequests ? (
-                  <div className="text-center py-8 text-gray-500">Loading...</div>
-                ) : instructorRequests.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <UserPlus className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>No pending instructor requests.</p>
+                {activePollId ? (
+                  <div className="space-y-4">
+                    <Button onClick={handleFetchPollResults} variant="outline">
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Refresh Results
+                    </Button>
+
+                    {pollResults ? (
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-3">
+                          {pollResults.question}
+                        </h4>
+                        <div className="space-y-2">
+                          {pollResults.options.map((option, index) => {
+                            const percentage =
+                              pollResults.total_votes > 0
+                                ? (pollResults.vote_counts[index] / pollResults.total_votes) *
+                                  100
+                                : 0;
+
+                            return (
+                              <div key={index}>
+                                <div className="flex justify-between text-sm mb-1">
+                                  <span>{option}</span>
+                                  <span className="text-gray-500">
+                                    {pollResults.vote_counts[index]} votes ({percentage.toFixed(0)}
+                                    %)
+                                  </span>
+                                </div>
+                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-primary-600 rounded-full transition-all"
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p className="text-sm text-gray-500 mt-4">
+                          Total votes: {pollResults.total_votes}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500">Click refresh to load results.</p>
+                    )}
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {instructorRequests.map((request) => (
-                      <div
-                        key={request.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                      >
-                        <div>
-                          <p className="font-medium text-gray-900">{request.name}</p>
-                          <p className="text-sm text-gray-500">{request.email}</p>
-                          <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
-                            <Clock className="h-3 w-3" />
-                            Requested: {request.instructor_request_date
-                              ? formatTimestamp(request.instructor_request_date)
-                              : 'Unknown'}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => handleApproveRequest(request.id)}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRejectRequest(request.id)}
-                          >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Reject
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-gray-500">Create a poll to see results here.</p>
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          </div>
+        </TabsContent>
 
-          <TabsContent value="roster">
-            <Card>
-              <CardHeader>
+        <TabsContent value="cases">
+          <Card>
+            <CardHeader>
+              <CardTitle>Post Case Study</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                label="Case Prompt"
+                placeholder="Describe the case study scenario for students to discuss..."
+                rows={6}
+                value={casePrompt}
+                onChange={(e) => setCasePrompt(e.target.value)}
+              />
+
+              <Button
+                onClick={handlePostCase}
+                disabled={postingCase || !casePrompt.trim()}
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Post Case
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* NEW: Enhanced Voice Assistant Tab */}
+        <TabsContent value="voice">
+          <VoiceTabContent />
+        </TabsContent>
+
+        <TabsContent value="requests">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-5 w-5" />
-                  Upload Student Roster
+                  <UserPlus className="h-5 w-5" />
+                  Pending Instructor Requests
                 </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-2">CSV Format</h4>
-                  <p className="text-sm text-blue-700 mb-2">
-                    Upload a CSV file with student emails. The system will:
-                  </p>
-                  <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
-                    <li>Find existing users by email and enroll them</li>
-                    <li>Create new student accounts for unknown emails</li>
-                    <li>Skip students already enrolled in the course</li>
-                  </ul>
-                  <div className="mt-3 p-3 bg-white rounded border border-blue-200 font-mono text-xs">
-                    email,name<br />
-                    student1@university.edu,John Doe<br />
-                    student2@university.edu,Jane Smith
-                  </div>
-                  <p className="text-xs text-blue-600 mt-2">
-                    * &quot;name&quot; column is optional. If omitted, email prefix is used as name.
-                  </p>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                  <Select
-                    label="Select Course"
-                    value={rosterCourseId?.toString() || ''}
-                    onChange={(e) => setRosterCourseId(Number(e.target.value))}
-                  >
-                    <option value="">Select a course...</option>
-                    {courses.map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.title}
-                      </option>
-                    ))}
-                  </Select>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      CSV File
-                    </label>
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={(e) => setRosterFile(e.target.files?.[0] || null)}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
-                    />
-                    {rosterFile && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Selected: {rosterFile.name}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <Button
-                  onClick={handleRosterUpload}
-                  disabled={uploadingRoster || !rosterCourseId || !rosterFile}
-                  className="w-full md:w-auto"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  {uploadingRoster ? 'Uploading...' : 'Upload Roster'}
+                <Button onClick={fetchInstructorRequests} variant="outline" size="sm">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
                 </Button>
-
-                {rosterResults && (
-                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium text-gray-900 mb-3">Upload Results</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      <div className="text-center p-3 bg-white rounded">
-                        <div className="text-2xl font-bold text-green-600">
-                          {rosterResults.created_and_enrolled_count}
-                        </div>
-                        <div className="text-xs text-gray-500">Created & Enrolled</div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingRequests ? (
+                <div className="text-center py-8 text-gray-500">Loading...</div>
+              ) : instructorRequests.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <UserPlus className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No pending instructor requests.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {instructorRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                    >
+                      <div>
+                        <p className="font-medium text-gray-900">{request.name}</p>
+                        <p className="text-sm text-gray-500">{request.email}</p>
+                        <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                          <Clock className="h-3 w-3" />
+                          Requested: {request.instructor_request_date
+                            ? formatTimestamp(request.instructor_request_date)
+                            : 'Unknown'}
+                        </p>
                       </div>
-                      <div className="text-center p-3 bg-white rounded">
-                        <div className="text-2xl font-bold text-blue-600">
-                          {rosterResults.existing_enrolled_count}
-                        </div>
-                        <div className="text-xs text-gray-500">Existing Enrolled</div>
-                      </div>
-                      <div className="text-center p-3 bg-white rounded">
-                        <div className="text-2xl font-bold text-gray-600">
-                          {rosterResults.already_enrolled_count}
-                        </div>
-                        <div className="text-xs text-gray-500">Already Enrolled</div>
-                      </div>
-                      <div className="text-center p-3 bg-white rounded">
-                        <div className="text-2xl font-bold text-red-600">
-                          {rosterResults.error_count}
-                        </div>
-                        <div className="text-xs text-gray-500">Errors</div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleApproveRequest(request.id)}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleRejectRequest(request.id)}
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Reject
+                        </Button>
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                    {rosterResults.details?.errors?.length > 0 && (
-                      <div className="mt-4">
-                        <h5 className="text-sm font-medium text-red-700 mb-2">Errors:</h5>
-                        <ul className="text-sm text-red-600 list-disc list-inside">
-                          {rosterResults.details.errors.map((err: string, i: number) => (
-                            <li key={i}>{err}</li>
-                          ))}
-                        </ul>
+        <TabsContent value="roster">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5" />
+                Upload Student Roster
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">CSV Format</h4>
+                <p className="text-sm text-blue-700 mb-2">
+                  Upload a CSV file with student emails. The system will:
+                </p>
+                <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
+                  <li>Find existing users by email and enroll them</li>
+                  <li>Create new student accounts for unknown emails</li>
+                  <li>Skip students already enrolled in the course</li>
+                </ul>
+                <div className="mt-3 p-3 bg-white rounded border border-blue-200 font-mono text-xs">
+                  email,name<br />
+                  student1@university.edu,John Doe<br />
+                  student2@university.edu,Jane Smith
+                </div>
+                <p className="text-xs text-blue-600 mt-2">
+                  * &quot;name&quot; column is optional. If omitted, email prefix is used as name.
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <Select
+                  label="Select Course"
+                  value={rosterCourseId?.toString() || ''}
+                  onChange={(e) => setRosterCourseId(Number(e.target.value))}
+                >
+                  <option value="">Select a course...</option>
+                  {courses.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.title}
+                    </option>
+                  ))}
+                </Select>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    CSV File
+                  </label>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={(e) => setRosterFile(e.target.files?.[0] || null)}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                  />
+                  {rosterFile && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Selected: {rosterFile.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                onClick={handleRosterUpload}
+                disabled={uploadingRoster || !rosterCourseId || !rosterFile}
+                className="w-full md:w-auto"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {uploadingRoster ? 'Uploading...' : 'Upload Roster'}
+              </Button>
+
+              {rosterResults && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <h4 className="font-medium text-gray-900 mb-3">Upload Results</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="text-center p-3 bg-white rounded">
+                      <div className="text-2xl font-bold text-green-600">
+                        {rosterResults.created_and_enrolled_count}
                       </div>
-                    )}
+                      <div className="text-xs text-gray-500">Created & Enrolled</div>
+                    </div>
+                    <div className="text-center p-3 bg-white rounded">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {rosterResults.existing_enrolled_count}
+                      </div>
+                      <div className="text-xs text-gray-500">Existing Enrolled</div>
+                    </div>
+                    <div className="text-center p-3 bg-white rounded">
+                      <div className="text-2xl font-bold text-gray-600">
+                        {rosterResults.already_enrolled_count}
+                      </div>
+                      <div className="text-xs text-gray-500">Already Enrolled</div>
+                    </div>
+                    <div className="text-center p-3 bg-white rounded">
+                      <div className="text-2xl font-bold text-red-600">
+                        {rosterResults.error_count}
+                      </div>
+                      <div className="text-xs text-gray-500">Errors</div>
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+
+                  {rosterResults.details?.errors?.length > 0 && (
+                    <div className="mt-4">
+                      <h5 className="text-sm font-medium text-red-700 mb-2">Errors:</h5>
+                      <ul className="text-sm text-red-600 list-disc list-inside">
+                        {rosterResults.details.errors.map((err: string, i: number) => (
+                          <li key={i}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

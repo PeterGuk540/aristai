@@ -1,6 +1,6 @@
 'use client';
 
-import { AppShell } from '@/components/AppShell';
+import { AppShellHandsFree } from '@/components/AppShellHandsFree';
 import { AuthProvider } from '@/lib/auth-context';
 import { UserProvider } from '@/lib/context';
 
@@ -12,7 +12,7 @@ export default function DashboardLayout({
   return (
     <AuthProvider>
       <UserProvider>
-        <AppShell>{children}</AppShell>
+        <AppShellHandsFree>{children}</AppShellHandsFree>
       </UserProvider>
     </AuthProvider>
   );

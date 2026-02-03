@@ -78,6 +78,23 @@ export const api = {
   // Health - note: health endpoint might not work through proxy, but that's ok
   health: () => fetch(HEALTH_URL).then(r => r.json()).catch(() => ({ status: 'unknown' })),
 
+  voiceConverse: async (request: {
+    transcript: string;
+    context?: string[];
+    user_id?: number;
+    current_page?: string;
+  }): Promise<{
+    message: string;
+    action?: { type: 'navigate' | 'execute' | 'info'; target?: string; executed?: boolean };
+    results?: any[];
+    suggestions?: string[];
+  }> => {
+    return fetchApi('/voice/converse', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
   // Users
   getUsers: (role?: string) =>
     fetchApi<any[]>(`/users/${role ? `?role=${role}` : ''}`),

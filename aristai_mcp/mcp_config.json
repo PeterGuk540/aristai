@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "aristai": {
+      "command": "python",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "DATABASE_URL": "postgresql+psycopg2://aristai:aristai_dev@localhost:5433/aristai",
+        "REDIS_URL": "redis://localhost:6379/0",
+        "PYTHONPATH": "${workspaceFolder}"
+      }
+    },
+    "voicemode": {
+      "command": "uvx",
+      "args": ["voicemode"],
+      "env": {
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+      }
+    }
+  }
+}

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Voice Assistant
-    voice_asr_provider: str = "stub"       # "stub" | "whisper"
+    voice_asr_provider: str = "whisper"       # "stub" | "whisper"
     voice_tts_provider: str = "stub"       # "stub" | "elevenlabs"
     elevenlabs_api_key: str = ""
     voice_max_seconds: int = 30

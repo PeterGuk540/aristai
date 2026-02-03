@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 from langgraph.graph import StateGraph, END
 
-from api.mcp.tools import get_tool_descriptions
+from mcp_server.server import TOOL_REGISTRY
 from workflows.llm_utils import (
     get_llm_with_tracking,
     invoke_llm_with_metrics,
@@ -56,7 +56,7 @@ def build_plan(state: VoiceOrchestratorState) -> VoiceOrchestratorState:
         }
         return state
 
-    tool_descriptions = get_tool_descriptions()
+    tool_descriptions = _build_tool_descriptions()
     system = VOICE_PLAN_SYSTEM_PROMPT.format(tool_descriptions=tool_descriptions)
     user = VOICE_PLAN_USER_PROMPT.format(transcript=state["transcript"])
     full_prompt = f"{system}\n\n{user}"
@@ -83,6 +83,22 @@ def build_plan(state: VoiceOrchestratorState) -> VoiceOrchestratorState:
         "required_confirmations": [],
     }
     return state
+
+
+def _build_tool_descriptions() -> str:
+    lines = []
+    for name, entry in TOOL_REGISTRY.items():
+        params = entry.get("parameters", {})
+        properties = params.get("properties", {})
+        required = set(params.get("required", []))
+        fields = []
+        for field_name, field_info in properties.items():
+            type_name = field_info.get("type", "any")
+            marker = "required" if field_name in required else "optional"
+            fields.append(f"{field_name}: {type_name} ({marker})")
+        fields_str = ", ".join(fields)
+        lines.append(f"- {name}({fields_str}) [mode={entry.get('mode', 'read')}]")
+    return "\n".join(lines)
 
 
 def build_voice_orchestrator_graph():

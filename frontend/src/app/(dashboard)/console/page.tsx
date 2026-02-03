@@ -17,7 +17,6 @@ import {
   Clock,
   Upload,
   FileSpreadsheet,
-  Mic,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
@@ -39,7 +38,6 @@ import {
   TabsContent,
 } from '@/components/ui';
 // Import the new VoiceTabContent component
-import { VoiceTabContent } from '@/components/voice';
 
 export default function ConsolePage() {
   const { isInstructor, isAdmin, currentUser } = useUser();
@@ -523,10 +521,6 @@ export default function ConsolePage() {
           <TabsTrigger value="cases" disabled={!selectedSessionId}>
             Post Case
           </TabsTrigger>
-          <TabsTrigger value="voice">
-            <Mic className="h-4 w-4 mr-1" />
-            Voice Assistant
-          </TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="requests">
               Instructor Requests
@@ -779,11 +773,6 @@ export default function ConsolePage() {
               </Button>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* NEW: Enhanced Voice Assistant Tab */}
-        <TabsContent value="voice">
-          <VoiceTabContent />
         </TabsContent>
 
         <TabsContent value="requests">

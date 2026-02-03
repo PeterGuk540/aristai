@@ -9,7 +9,7 @@ Endpoints:
 """
 import hashlib
 import logging
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
 from sqlalchemy.orm import Session
@@ -18,7 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from api.core.database import get_db
 from api.core.config import get_settings
 from api.models.voice_audit import VoiceAudit
-from api.mcp.tools import TOOL_REGISTRY
+from mcp_server.server import TOOL_REGISTRY
 from api.schemas.voice import (
     TranscribeResponse,
     PlanRequest,
@@ -91,6 +91,29 @@ def create_plan(request: PlanRequest):
     )
 
 
+def _validate_tool_args(tool_name: str, args: dict, schema: dict) -> Optional[str]:
+    required = schema.get("required", [])
+    properties = schema.get("properties", {})
+
+    for field in required:
+        if field not in args:
+            return f"Missing required field '{field}' for tool '{tool_name}'"
+
+    for field, value in args.items():
+        expected = properties.get(field, {}).get("type")
+        if not expected:
+            continue
+        if expected == "integer" and not isinstance(value, int):
+            return f"Field '{field}' must be integer"
+        if expected == "string" and not isinstance(value, str):
+            return f"Field '{field}' must be string"
+        if expected == "array" and not isinstance(value, list):
+            return f"Field '{field}' must be array"
+        if expected == "boolean" and not isinstance(value, bool):
+            return f"Field '{field}' must be boolean"
+    return None
+
+
 @router.post("/execute", response_model=ExecuteResponse, status_code=status.HTTP_200_OK)
 def execute_plan(
     request: ExecuteRequest,
@@ -127,19 +150,18 @@ def execute_plan(
             continue
 
         # Validate args against schema
-        try:
-            validated = tool_entry["args_schema"](**step.args)
-        except Exception as e:
+        error = _validate_tool_args(step.tool_name, step.args, tool_entry.get("parameters", {}))
+        if error:
             results.append(StepResult(
                 tool_name=step.tool_name,
                 success=False,
-                error=f"Invalid args: {str(e)}",
+                error=error,
             ))
             continue
 
         # Execute tool
         try:
-            tool_result = tool_entry["fn"](db=db, **validated.model_dump())
+            tool_result = tool_entry["handler"](db, **step.args)
             results.append(StepResult(
                 tool_name=step.tool_name,
                 success=True,

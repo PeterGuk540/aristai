@@ -277,6 +277,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         # Execute the action and get results
         results = await execute_action(action, request.user_id, request.current_page, db)
 
+        
         return ConverseResponse(
             message=generate_conversational_response(
                 'execute',

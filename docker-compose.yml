@@ -41,6 +41,8 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg2://aristai:aristai_dev@db:5432/aristai
       - REDIS_URL=redis://redis:6379/0
+      - VOICE_ASR_PROVIDER=whisper
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - PYTHONPATH=/app
     depends_on:
       db:

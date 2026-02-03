@@ -6,9 +6,3 @@ export { VoiceSettings } from './VoiceSettings';
 export { VoiceHistory } from './VoiceHistory';
 export { VoiceFab } from './VoiceFab';
 export { VoiceTabContent } from './VoiceTabContent';
-
-// Add these lines at the end of the existing index.ts
-export { ConversationalVoice } from './ConversationalVoice';
-export type { ConversationState } from './ConversationalVoice';
-export { VoiceOnboarding } from './VoiceOnboarding';
-export { VoiceWaveformMini } from './VoiceWaveformMini';

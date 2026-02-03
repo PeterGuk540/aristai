@@ -52,15 +52,9 @@ async function handleProxy(
   const targetUrl = `${BACKEND_URL}/api/${path}${queryString}`;
 
   try {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-
-    // Forward Authorization header if present
-    const authHeader = request.headers.get('Authorization');
-    if (authHeader) {
-      headers['Authorization'] = authHeader;
-    }
+    const headers = new Headers(request.headers);
+    headers.delete('host');
+    headers.delete('content-length');
 
     const fetchOptions: RequestInit = {
       method,
@@ -70,8 +64,8 @@ async function handleProxy(
     // Include body for POST, PUT, PATCH requests
     if (['POST', 'PUT', 'PATCH'].includes(method)) {
       try {
-        const body = await request.text();
-        if (body) {
+        const body = await request.arrayBuffer();
+        if (body.byteLength > 0) {
           fetchOptions.body = body;
         }
       } catch {

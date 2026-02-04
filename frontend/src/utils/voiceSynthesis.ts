@@ -1,3 +1,5 @@
+import { API_BASE, getAuthHeaders } from '../lib/api';
+
 /**
  * Voice synthesis utilities for AristAI voice assistant
  * Replaces browser Speech Synthesis with backend ElevenLabs Agent API calls
@@ -5,10 +7,12 @@
 
 export const playBackendAudio = async (text: string): Promise<void> => {
   try {
-    const response = await fetch('/api/voice/synthesize', {
+    const authHeaders = await getAuthHeaders();
+    const response = await fetch(`${API_BASE}/voice/synthesize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify({ text }),
     });

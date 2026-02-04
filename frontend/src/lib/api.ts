@@ -7,8 +7,8 @@ import { getMicrosoftIdToken } from './ms-auth';
 const isProduction = process.env.NODE_ENV === 'production';
 const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const useProxy = isProduction;
-const API_BASE = useProxy ? '/api/proxy' : `${DIRECT_API_URL}/api`;
-const DIRECT_API_BASE = `${DIRECT_API_URL}/api`;
+export const API_BASE = useProxy ? '/api/proxy' : `${DIRECT_API_URL}/api`;
+export const DIRECT_API_BASE = `${DIRECT_API_URL}/api`;
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -34,20 +34,23 @@ const formatApiErrorMessage = (detail: unknown): string => {
   }
 };
 
+export const getAuthHeaders = async (): Promise<HeadersInit> => {
+  // Get ID token for API calls (check Google first, then Microsoft, then Cognito SDK)
+  // Note: API Gateway JWT authorizer requires ID token (has 'aud' claim), not access token
+  const googleToken = getGoogleIdToken();
+  const msToken = getMicrosoftIdToken();
+  const idToken = googleToken || msToken || await getIdToken();
+
+  return idToken ? { Authorization: `Bearer ${idToken}` } : {};
+};
+
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
-  // Get ID token for API calls (check Google first, then Microsoft, then Cognito SDK)
-  // Note: API Gateway JWT authorizer requires ID token (has 'aud' claim), not access token
-  const googleToken = getGoogleIdToken();
-  const msToken = getMicrosoftIdToken();
-  const idToken = googleToken || msToken || await getIdToken();
-  const authHeaders: HeadersInit = idToken
-    ? { Authorization: `Bearer ${idToken}` }
-    : {};
+  const authHeaders = await getAuthHeaders();
 
   const response = await fetch(url, {
     ...options,

@@ -31,6 +31,9 @@ from api.schemas.voice import (
 from api.services import asr, tts
 
 logger = logging.getLogger(__name__)
+
+# Export for proper imports
+__all__ = ['synthesize', 'voice_synthesize']
 router = APIRouter()
 
 @router.post("/synthesize", response_model=None)
@@ -221,12 +224,18 @@ def execute_plan(
 async def voice_synthesize(request: Request):
     """Standard TTS endpoint for frontend voice components."""
     try:
+        logger.info("=== VOICE SYNTHESIS REQUEST ===")
         data = await request.json()
         text = data.get("text", "")
+        logger.info(f"Text to synthesize: {text}")
+        
         if not text:
+            logger.warning("Empty text received")
             raise HTTPException(status_code=400, detail="Text is required")
         
+        logger.info("Calling TTS service...")
         result = tts.synthesize(text)
+        logger.info(f"TTS success: {len(result.audio_bytes)} bytes, type: {result.content_type}")
         
         return Response(
             content=result.audio_bytes,
@@ -234,8 +243,10 @@ async def voice_synthesize(request: Request):
             headers={"Cache-Control": "no-cache"}
         )
     except Exception as e:
-        logger.exception(f"TTS synthesis failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"TTS synthesis failed: {type(e).__name__}: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Voice synthesis error: {str(e)}")
 
 
 @router.get("/audit", response_model=VoiceAuditListResponse, status_code=status.HTTP_200_OK)

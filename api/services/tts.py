@@ -63,52 +63,63 @@ def _synthesize_elevenlabs(text: str, settings) -> TTSResult:
 
 
 def _synthesize_elevenlabs_agent(text: str, settings) -> TTSResult:
-    """TTS via ElevenLabs Conversational Agent API (fallback to regular TTS for now)."""
+    """TTS via ElevenLabs Conversational Agent API - actual Agent implementation!"""
     import httpx
     import base64
 
     if not settings.elevenlabs_api_key:
         raise ValueError("ELEVENLABS_API_KEY required for ElevenLabs Agent provider")
     
-    # For now, use regular TTS API which is faster and more reliable
-    # Agent simulation is complex and has timeout issues
-    voice_id = settings.elevenlabs_voice_id or "21m00Tcm4TlvDq8ikWAM"
-    model_id = settings.elevenlabs_model_id or "eleven_turbo_v2"
+    if not settings.elevenlabs_agent_id:
+        raise ValueError("ELEVENLABS_AGENT_ID required for ElevenLabs Agent provider")
+
+    # Use the actual ElevenLabs Agent API instead of regular TTS
+    agent_url = f"https://api.elevenlabs.io/v1/convai/agents/{settings.elevenlabs_agent_id}/simulate-conversation"
     
-    tts_url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    # Create a simple Agent API request (not complex simulation)
+    payload = {
+        "text": text,
+        "language": "en",
+        "voice_settings": {
+            "stability": 0.75,
+            "similarity_boost": 0.75,
+            "style": "moderate"
+        }
+    }
 
     headers = {
         "xi-api-key": settings.elevenlabs_api_key,
         "Content-Type": "application/json",
     }
 
-    payload = {
-        "text": text,
-        "model_id": model_id,
-    }
-
     try:
         resp = httpx.post(
-            tts_url,
+            agent_url,
             headers=headers,
             json=payload,
             timeout=30.0,
         )
         resp.raise_for_status()
         
-        # Get audio from regular TTS response
-        if resp.content:
-            return TTSResult(audio_bytes=resp.content, content_type="audio/mpeg")
+        # Get audio from Agent response
+        response_data = resp.json()
+        
+        # Check for audio_base64 in response
+        if "audio_base64" in response_data:
+            audio_base64 = response_data["audio_base64"]
+            audio_bytes = base64.b64decode(audio_base64)
+            logger.info(f"✅ Agent API success: {len(audio_bytes)} bytes")
+            return TTSResult(audio_bytes=audio_bytes, content_type="audio/mpeg")
         else:
-            logger.error(f"No audio content in TTS response")
-            raise ValueError("TTS response missing audio data")
+            logger.error(f"No audio in Agent response: {list(response_data.keys())}")
+            raise ValueError("Agent response missing audio_base64")
             
     except httpx.HTTPError as e:
-        logger.error(f"ElevenLabs TTS API error: {e}")
-        raise ValueError(f"ElevenLabs TTS API error: {e}")
+        logger.error(f"ElevenLabs Agent API error: {e}")
+        raise ValueError(f"ElevenLabs Agent API error: {e}")
     except Exception as e:
-        logger.error(f"Unexpected error in ElevenLabs TTS: {e}")
-        raise ValueError(f"ElevenLabs TTS error: {e}")
+        logger.error(f"Unexpected error in ElevenLabs Agent: {e}")
+        raise ValueError(f"ElevenLabs Agent error: {e}")
 
 
 def _synthesize_elevenlabs_realtime(text: str, settings) -> TTSResult:

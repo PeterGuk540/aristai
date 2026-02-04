@@ -19,7 +19,7 @@ export type ConversationState =
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant' | 'user-transcript';
+  role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
   action?: {
@@ -27,8 +27,6 @@ interface Message {
     target?: string;
     executed?: boolean;
   };
-  isTranscript?: boolean;
-  isInterim?: boolean;
 }
 
 interface ConversationalVoiceProps {
@@ -434,6 +432,14 @@ export function ConversationalVoice({
         },
         onStatusChange: ({ status }: { status: string }) => {
           console.log('📊 Status changed:', status);
+          
+          // Emit status event for debugging
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('voice-status', {
+              detail: `[${new Date().toISOString()}] Status: ${status}`
+            }));
+          }
+          
           // Map SDK statuses to our state
           switch (status) {
             case 'connecting':
@@ -464,43 +470,35 @@ export function ConversationalVoice({
         onMessage: ({ source, message }: { source: "user" | "ai"; message: string }) => {
           console.log('💬 Message received:', { source, message });
           
+          // Emit events for debugging
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('voice-message', {
+              detail: `[${new Date().toISOString()}] ${source}: ${message}`
+            }));
+          }
+          
           if (source === 'user') {
-            // Don't duplicate - onTranscription handles user messages
-            console.log('User message from SDK:', message);
+            // Add user message (this should be the transcribed speech)
+            addUserMessage(message);
+            console.log('🎤 User speech transcribed:', message);
+            
+            // Emit transcription event
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('voice-transcription', {
+                detail: `[${new Date().toISOString()}] Transcription: ${message}`
+              }));
+            }
           } else if (source === 'ai') {
             // Add AI response message
             addAssistantMessage(message);
+            console.log('🤖 AI response:', message);
             
             // Auto-execute actions based on AI message content
             handleActionExecution(message, onNavigate, addAssistantMessage);
           }
         },
         
-        // Add transcription callback for live speech-to-text display
-        onTranscription: (transcript: string, isFinal: boolean) => {
-          console.log('🎤 Transcription received:', { transcript, isFinal });
-          
-          if (isFinal) {
-            // Add final user transcript as a message
-            addUserMessage(transcript);
-          } else {
-            // Show interim transcript
-            setMessages(prev => {
-              const filtered = prev.filter(msg => !msg.isInterim);
-              return [
-                ...filtered,
-                {
-                  id: `interim-${Date.now()}`,
-                  role: 'user-transcript' as 'user',
-                  content: transcript,
-                  timestamp: new Date(),
-                  isTranscript: true,
-                  isInterim: true
-                }
-              ];
-            });
-          }
-        },
+
 
         onError: (error: string, meta?: any) => {
           console.error('❌ ElevenLabs SDK error:', error, meta);
@@ -568,8 +566,8 @@ export function ConversationalVoice({
       timestamp: new Date(),
     };
     setMessages(prev => {
-      // Remove any interim transcripts before adding user message
-      const filtered = prev.filter(msg => !msg.isInterim && !msg.isTranscript);
+      // Remove any transcript messages
+      const filtered = prev.filter(msg => !msg.isTranscript);
       return [...filtered, message];
     });
     

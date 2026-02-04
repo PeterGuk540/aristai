@@ -49,21 +49,23 @@ export const speakWithFallback = async (text: string): Promise<void> => {
     await playBackendAudio(text);
   } catch (error) {
     console.warn('Backend synthesis failed, using browser fallback:', error);
-    // Fallback to browser Speech Synthesis
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      
-      utterance.onend = () => resolve();
-      utterance.onerror = (error) => {
-        console.error('Browser synthesis failed:', error);
+    await new Promise<void>((resolve) => {
+      // Fallback to browser Speech Synthesis
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        utterance.onend = () => resolve();
+        utterance.onerror = (event) => {
+          console.error('Browser synthesis failed:', event);
+          resolve();
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } else {
         resolve();
-      };
-      
-      window.speechSynthesis.speak(utterance);
-    } else {
-      resolve();
-    }
+      }
+    });
   }
 };

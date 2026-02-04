@@ -460,7 +460,7 @@ export function ConversationalVoice({
             handleActionExecution(message, onNavigate, addAssistantMessage);
           }
         },
-        onTranscript: ({ transcript, isFinal }: { transcript: string; isFinal: boolean }) => {
+        onTranscript: (transcript: string, isFinal: boolean) => {
           console.log('🎤 Transcript received:', { transcript, isFinal });
           
           // Show live transcript as it comes in

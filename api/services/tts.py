@@ -66,62 +66,21 @@ def _synthesize_elevenlabs(text: str, settings) -> TTSResult:
 
 
 def _synthesize_elevenlabs_agent(text: str, settings) -> TTSResult:
-    """TTS via ElevenLabs Conversational Agent API - actual Agent implementation!"""
-    import httpx
-    import base64
-
-    if not settings.elevenlabs_api_key:
-        raise ValueError("ELEVENLABS_API_KEY required for ElevenLabs Agent provider")
+    """
+    DEPRECATED: ElevenLabs Agent simulate-conversation is NOT for production.
     
-    if not settings.elevenlabs_agent_id:
-        raise ValueError("ELEVENLABS_AGENT_ID required for ElevenLabs Agent provider")
-
-    # Use the actual ElevenLabs Agent API instead of regular TTS
-    agent_url = f"https://api.elevenlabs.io/v1/convai/agents/{settings.elevenlabs_agent_id}/simulate-conversation"
+    For production, use the official SDK with signed URLs:
+    - Backend: GET /api/voice/agent/signed-url  
+    - Frontend: Conversation.startSession({ signedUrl })
     
-    # Create a simple Agent API request (not complex simulation)
-    payload = {
-    "simulation_specification": {
-        "imput": {
-        "text": text
-        }
-    }
-    }
-
-    headers = {
-        "xi-api-key": settings.elevenlabs_api_key,
-        "Content-Type": "application/json",
-    "Accept": "application/json",
-    }
-
-    try:
-        resp = httpx.post(
-            agent_url,
-            headers=headers,
-            json=payload,
-            timeout=30.0,
-        )
-        resp.raise_for_status()
-        
-        # Get audio from Agent response
-        response_data = resp.json()
-        
-        # Check for audio_base64 in response
-        if "audio_base64" in response_data:
-            audio_base64 = response_data["audio_base64"]
-            audio_bytes = base64.b64decode(audio_base64)
-            logger.info(f"✅ Agent API success: {len(audio_bytes)} bytes")
-            return TTSResult(audio_bytes=audio_bytes, content_type="audio/mpeg")
-        else:
-            logger.error(f"No audio in Agent response: {list(response_data.keys())}")
-            raise ValueError("Agent response missing audio_base64")
-            
-    except httpx.HTTPError as e:
-        logger.error(f"ElevenLabs Agent API error: {e}")
-        raise ValueError(f"ElevenLabs Agent API error: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in ElevenLabs Agent: {e}")
-        raise ValueError(f"ElevenLabs Agent error: {e}")
+    This function should never be called in production deployment.
+    """
+    logger.error("❌ PRODUCTION ERROR: Legacy simulate-conversation called")
+    logger.error("❌ Use signed URL + official SDK instead")
+    raise ValueError(
+        "Legacy TTS/simulate-conversation is deprecated for production. "
+        "Use ElevenLabs Agents with signed URLs and official SDK."
+    )
 
 
 def _synthesize_elevenlabs_realtime(text: str, settings) -> TTSResult:

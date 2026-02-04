@@ -51,11 +51,14 @@ async function handleProxy(
 
   let targetUrl = `${BACKEND_URL}/api/${path}${queryString}`;
 
-  // Special handling for voice synthesis - forward to local backend in development
-  if (path.includes('voice/synthesize') && process.env.NODE_ENV !== 'production') {
-    targetUrl = `http://localhost:8000/api/voice/synthesize${queryString}`;
-    console.log('🎯 Voice synthesis request -> forwarding to local backend:', targetUrl);
-  }
+  // Legacy voice synthesis endpoint removed - use ElevenLabs Agents signed URL flow instead
+  // if (path.includes('voice/synthesize') && process.env.NODE_ENV !== 'production') {
+  //   targetUrl = `http://localhost:8000/api/voice/synthesize${queryString}`;
+  //   console.log('🎯 Voice synthesis request -> forwarding to local backend:', targetUrl);
+  // }
+  
+  // Note: /api/voice/synthesize is deprecated for production
+  // Use /api/voice/agent/signed-url + official ElevenLabs SDK instead
 
   try {
     const headers = new Headers(request.headers);

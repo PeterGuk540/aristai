@@ -54,25 +54,12 @@ def require_auth(request: Request) -> bool:
     # TODO: Add proper JWT validation when Cognito is integrated
     return True
 
-@router.post("/synthesize", response_model=None)
-async def voice_synthesize(request: Request):
-    """Standard TTS endpoint for frontend voice components."""
-    try:
-        data = await request.json()
-        text = data.get("text", "")
-        if not text:
-            raise HTTPException(status_code=400, detail="Text is required")
-        
-        result = tts.synthesize(text)
-        
-        return Response(
-            content=result.audio_bytes,
-            media_type=result.content_type,
-            headers={"Cache-Control": "no-cache"}
-        )
-    except Exception as e:
-        logger.exception(f"TTS synthesis failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# Legacy TTS endpoint removed - use ElevenLabs Agents realtime conversation instead
+# @router.post("/synthesize", response_model=None)
+# async def voice_synthesize(request: Request):
+#     """LEGACY: Standard TTS endpoint - DEPRECATED"""
+#     # This endpoint is removed for production deployment
+#     # Use GET /api/voice/agent/signed-url + official SDK instead
 
 
 @router.post("/transcribe", response_model=TranscribeResponse, status_code=status.HTTP_200_OK)
@@ -238,8 +225,9 @@ def execute_plan(
     return ExecuteResponse(results=results, summary=summary, audio_url=None)
 
 
-@router.post("/synthesize")
-async def voice_synthesize(request: Request):
+# Legacy TTS endpoint removed - use ElevenLabs Agents realtime conversation instead
+# @router.post("/synthesize")
+# async def voice_synthesize(request: Request):
     """Standard TTS endpoint for frontend voice components."""
     try:
         logger.info("=== VOICE SYNTHESIS REQUEST ===")

@@ -28,7 +28,48 @@ from api.schemas.voice import (
     StepResult,
     VoiceAuditListResponse,
 )
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+
+from api.core.database import get_db
+from api.core.config import get_settings
+from api.models.voice_audit import VoiceAudit
+from mcp_server.server import TOOL_REGISTRY
+from api.schemas.voice import (
+    TranscribeResponse,
+    PlanRequest,
+    PlanResponse,
+    ExecuteRequest,
+    ExecuteResponse,
+    StepResult,
+    VoiceAuditListResponse,
+    )
 from api.services import asr, tts
+
+
+@router.post("/synthesize", response_model=None)
+async def voice_synthesize(request: Request):
+    """Standard TTS endpoint for frontend voice components."""
+    try:
+        data = await request.json()
+        text = data.get("text", "")
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is required")
+        
+        result = tts.synthesize(text)
+        
+        return Response(
+            content=result.audio_bytes,
+            media_type=result.content_type,
+            headers={"Cache-Control": "no-cache"}
+        )
+    except Exception as e:
+        logger.exception(f"TTS synthesis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/transcribe", response_model=TranscribeResponse, status_code=status.HTTP_200_OK)
 
 logger = logging.getLogger(__name__)
 

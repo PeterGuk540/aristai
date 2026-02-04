@@ -30,7 +30,10 @@ if [ "" = "false" ] || [ "" = "false" ]; then
     if [ "" = "false" ]; then
         echo "🔑 1. Get your ElevenLabs API Key:"
         echo "   - Go to https://elevenlabs.io/app/settings/api-keys"
-        echo "   - Create a new API key"
+        echo "   - Create a new API key with these permissions:"
+        echo "     ✅ elevenlabs agents: read (REQUIRED)"
+        echo "     ✅ text to speech: access (recommended)" 
+        echo "     ✅ speech to text: access (recommended)"
         echo "   - Copy it here:"
         read -p "   Enter your ElevenLabs API Key: " API_KEY
         

@@ -34,8 +34,7 @@ from api.services.elevenlabs_agent import get_signed_url
 
 logger = logging.getLogger(__name__)
 
-# Export for proper imports
-__all__ = ['synthesize', 'voice_synthesize']
+# Legacy exports removed - ElevenLabs Agents integration uses new endpoints
 router = APIRouter()
 
 
@@ -229,31 +228,31 @@ def execute_plan(
 # Legacy TTS endpoint removed - use ElevenLabs Agents realtime conversation instead
 # @router.post("/synthesize")
 # async def voice_synthesize(request: Request):
-    """Standard TTS endpoint for frontend voice components."""
-    try:
-        logger.info("=== VOICE SYNTHESIS REQUEST ===")
-        data = await request.json()
-        text = data.get("text", "")
-        logger.info(f"Text to synthesize: {text}")
-        
-        if not text:
-            logger.warning("Empty text received")
-            raise HTTPException(status_code=400, detail="Text is required")
-        
-        logger.info("Calling TTS service...")
-        result = tts.synthesize(text)
-        logger.info(f"TTS success: {len(result.audio_bytes)} bytes, type: {result.content_type}")
-        
-        return Response(
-            content=result.audio_bytes,
-            media_type=result.content_type,
-            headers={"Cache-Control": "no-cache"}
-        )
-    except Exception as e:
-        logger.error(f"TTS synthesis failed: {type(e).__name__}: {str(e)}")
-        import traceback
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Voice synthesis error: {str(e)}")
+#     """Standard TTS endpoint for frontend voice components."""
+#     try:
+#         logger.info("=== VOICE SYNTHESIS REQUEST ===")
+#         data = await request.json()
+#         text = data.get("text", "")
+#         logger.info(f"Text to synthesize: {text}")
+#         
+#         if not text:
+#             logger.warning("Empty text received")
+#             raise HTTPException(status_code=400, detail="Text is required")
+#         
+#         logger.info("Calling TTS service...")
+#         result = tts.synthesize(text)
+#         logger.info(f"TTS success: {len(result.audio_bytes)} bytes, type: {result.content_type}")
+#         
+#         return Response(
+#             content=result.audio_bytes,
+#             media_type=result.content_type,
+#             headers={"Cache-Control": "no-cache"}
+#         )
+#     except Exception as e:
+#         logger.error(f"TTS synthesis failed: {type(e).__name__}: {str(e)}")
+#         import traceback
+#         logger.error(f"Full traceback: {traceback.format_exc()}")
+#         raise HTTPException(status_code=500, detail=f"Voice synthesis error: {str(e)}")
 
 
 @router.get("/audit", response_model=VoiceAuditListResponse, status_code=status.HTTP_200_OK)

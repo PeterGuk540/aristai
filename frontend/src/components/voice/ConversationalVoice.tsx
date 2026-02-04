@@ -7,7 +7,7 @@ import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sp
 import { useUser } from '@/lib/context';
 import { cn } from '@/lib/utils';
 
-type ConversationState = 
+export type ConversationState = 
   | 'initializing' 
   | 'connecting' 
   | 'connected' 

@@ -100,6 +100,9 @@ export const api = {
       body: JSON.stringify(request),
     });
   },
+  voiceAgentSignedUrl: async (): Promise<{ signed_url: string }> => {
+    return fetchApi('/voice/agent/signed-url', { method: 'GET' });
+  },
 
   // Users
   getUsers: (role?: string) =>

@@ -140,6 +140,8 @@ const handleActionExecution = async (
         },
         body: JSON.stringify({ tool: toolName, arguments: args }),
       });
+      
+      console.log('🔧 MCP API response status:', response.status);
 
       if (!response.ok) {
         console.error('MCP tool execution failed:', response.status);
@@ -355,10 +357,8 @@ export function ConversationalVoice({
     try {
       // Get signed URL from our backend
       console.log('🔑 Getting signed URL from backend...');
-      // For production, use proxy route to avoid mixed-content issues
-      const apiUrl = process.env.NODE_ENV === 'production' 
-        ? '/api/proxy'  // Uses Next.js proxy (same origin)
-        : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+      // Use relative URL for all environments to leverage Next.js API routes
+      const apiUrl = '/api';
       const response = await fetch(`${apiUrl}/voice/agent/signed-url`, {
         method: 'GET',
         headers: {
@@ -366,6 +366,8 @@ export function ConversationalVoice({
           'Content-Type': 'application/json',
         },
       });
+      
+      console.log('🔗 Voice API response status:', response.status);
 
       if (!response.ok) {
         let errorMessage = 'Failed to get signed URL';

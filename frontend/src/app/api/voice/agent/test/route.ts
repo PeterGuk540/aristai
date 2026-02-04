@@ -1,42 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    console.log('🔧 Next.js MCP proxy: Forwarding request to backend');
+    console.log('📡 Next.js API proxy: Forwarding request to backend');
     
-    const body = await request.json();
-    console.log('📨 MCP tool request:', body);
-    
-    // Forward to backend MCP service on EC2
+    // Forward to backend voice service on EC2
     const backendUrl = process.env.BACKEND_URL || 'http://13.52.132.90:8000'; // EC2 backend URL
-    const targetUrl = `${backendUrl}/api/mcp/execute`;
+    const targetUrl = `${backendUrl}/voice/agent/test`;
     
     const response = await fetch(targetUrl, {
-      method: 'POST',
+      method: 'GET',
       headers: {
         'Authorization': request.headers.get('Authorization') || 'Bearer dummy-token',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
     });
     
-    console.log('🔗 MCP backend response status:', response.status);
+    console.log('🔗 Backend response status:', response.status);
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ MCP backend error:', errorText);
+      console.error('❌ Backend error:', errorText);
       return NextResponse.json(
-        { error: `MCP backend error: ${response.status}`, details: errorText },
+        { error: `Backend error: ${response.status}`, details: errorText },
         { status: response.status }
       );
     }
     
     const data = await response.json();
-    console.log('✅ MCP backend response received');
+    console.log('✅ Backend test response received');
     return NextResponse.json(data);
     
   } catch (error) {
-    console.error('❌ MCP proxy error:', error);
+    console.error('❌ Proxy error:', error);
     return NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }

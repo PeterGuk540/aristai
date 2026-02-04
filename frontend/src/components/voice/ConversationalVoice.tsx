@@ -531,6 +531,8 @@ export function ConversationalVoice({
 
     } catch (error: any) {
       console.error('❌ Failed to initialize conversation:', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
       
       let errorMessage = 'Failed to initialize voice conversation';
       let errorCode = 'E_INIT_UNKNOWN';
@@ -548,10 +550,16 @@ export function ConversationalVoice({
         } else if (error.message.includes('Failed to fetch')) {
           errorMessage = 'Network connection failed. Please check your internet connection.';
           errorCode = 'E_INIT_NETWORK';
+        } else if (error.message.includes('WebSocket')) {
+          errorMessage = 'WebSocket connection failed. Please check your network and try again.';
+          errorCode = 'E_INIT_WEBSOCKET';
         } else {
           errorMessage = error.message;
           errorCode = 'E_INIT_CUSTOM';
         }
+      } else if (error.error || error.code) {
+        errorMessage = error.error || error.code || 'Unknown initialization error';
+        errorCode = 'E_INIT_CUSTOM';
       }
       
       setError(`${errorMessage} (${errorCode})`);

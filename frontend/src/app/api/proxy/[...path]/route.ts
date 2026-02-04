@@ -49,12 +49,12 @@ async function handleProxy(
   const url = new URL(request.url);
   const queryString = url.search;
 
-  // Special handling for voice synthesis - forward to our local backend
-  if (path.includes('voice/synthesize')) {
-    const targetUrl = `http://localhost:8000/api/voice/synthesize${queryString}`;
+  let targetUrl = `${BACKEND_URL}/api/${path}${queryString}`;
+
+  // Special handling for voice synthesis - forward to local backend in development
+  if (path.includes('voice/synthesize') && process.env.NODE_ENV !== 'production') {
+    targetUrl = `http://localhost:8000/api/voice/synthesize${queryString}`;
     console.log('🎯 Voice synthesis request -> forwarding to local backend:', targetUrl);
-  } else {
-    const targetUrl = `${BACKEND_URL}/api/${path}${queryString}`;
   }
 
   try {

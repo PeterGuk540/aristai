@@ -32,13 +32,13 @@ async def get_signed_url() -> str:
             status_code=500,
         )
 
-    url = "https://api.elevenlabs.io/v1/convai/conversations/get_signed_url"
+    url = "https://api.elevenlabs.io/v1/convai/conversation/get-signed-url"
     headers = {"xi-api-key": settings.elevenlabs_api_key}
     params = {"agent_id": settings.elevenlabs_agent_id}
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(url, headers=headers, params=params)
+            response = await client.get(url, headers=headers, params=params)
     except httpx.HTTPError as exc:
         logger.exception("Failed to reach ElevenLabs signed URL endpoint")
         raise ElevenLabsAgentError(

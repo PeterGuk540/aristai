@@ -40,7 +40,7 @@ router = APIRouter()
 
 @router.post("/synthesize", response_model=None)
 async def voice_synthesize(request: Request):
-    """Standard TTS endpoint for frontend voice components."""
+    """Deprecated TTS endpoint for fallback-only usage."""
     try:
         data = await request.json()
         text = data.get("text", "")

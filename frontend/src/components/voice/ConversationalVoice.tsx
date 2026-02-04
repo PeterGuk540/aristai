@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -13,6 +12,7 @@ import {
   Volume2,
 } from 'lucide-react';
 
+import { Conversation } from '@elevenlabs/client';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { cn } from '@/lib/utils';
@@ -49,6 +49,17 @@ type AudioQueueItem = {
   blob: Blob;
 };
 
+type ConversationSession = {
+  on?: (event: string, handler: (...args: any[]) => void) => void;
+  off?: (event: string, handler: (...args: any[]) => void) => void;
+  endSession?: () => Promise<void> | void;
+  close?: () => Promise<void> | void;
+  startMicrophone?: () => Promise<void> | void;
+  stopMicrophone?: () => Promise<void> | void;
+  startRecording?: () => Promise<void> | void;
+  stopRecording?: () => Promise<void> | void;
+};
+
 export function ConversationalVoice({
   onNavigate,
   onActiveChange,
@@ -56,7 +67,6 @@ export function ConversationalVoice({
   greeting,
   className,
 }: ConversationalVoiceProps) {
-  const router = useRouter();
   const { currentUser, isInstructor, isAdmin } = useUser();
 
   const [state, setState] = useState<ConversationState>('idle');
@@ -66,9 +76,7 @@ export function ConversationalVoice({
   const [error, setError] = useState('');
   const [showSettings, setShowSettings] = useState(false);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const sessionRef = useRef<ConversationSession | null>(null);
   const audioQueueRef = useRef<AudioQueueItem[]>([]);
   const isPlayingRef = useRef(false);
   const isStoppingRef = useRef(false);
@@ -101,14 +109,8 @@ export function ConversationalVoice({
 
   const cleanup = () => {
     isStoppingRef.current = true;
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    wsRef.current?.close();
-    streamRef.current = null;
-    mediaRecorderRef.current = null;
-    wsRef.current = null;
+    void endSdkSession();
+    sessionRef.current = null;
     audioQueueRef.current = [];
     isPlayingRef.current = false;
   };
@@ -160,28 +162,15 @@ export function ConversationalVoice({
 
     try {
       const { signed_url } = await api.voiceAgentSignedUrl();
-      const ws = new WebSocket(signed_url);
-      wsRef.current = ws;
+      const session = await Conversation.startSession({
+        signedUrl: signed_url,
+        connectionType: 'websocket',
+      });
 
-      ws.onopen = async () => {
-        setState('listening');
-        await startMicrophone();
-      };
-
-      ws.onmessage = (event) => {
-        handleAgentMessage(event.data);
-      };
-
-      ws.onerror = () => {
-        setError('Realtime voice connection failed.');
-        setState('error');
-      };
-
-      ws.onclose = () => {
-        if (!isStoppingRef.current) {
-          setState('paused');
-        }
-      };
+      sessionRef.current = session as ConversationSession;
+      registerSessionHandlers(sessionRef.current);
+      await startSdkMicrophone();
+      setState('listening');
     } catch (err) {
       console.error('Failed to start ElevenLabs session:', err);
       setError('Failed to start realtime voice session.');
@@ -189,73 +178,74 @@ export function ConversationalVoice({
     }
   };
 
-  const startMicrophone = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+  const registerSessionHandlers = (session: ConversationSession | null) => {
+    if (!session?.on) return;
 
-      streamRef.current = stream;
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      mediaRecorderRef.current = recorder;
+    session.on('transcript', (payload: any) => {
+      const transcript = payload?.text ?? payload?.transcript;
+      if (!transcript) return;
+      const role = normalizeRole(payload?.role ?? payload?.speaker);
+      appendMessage(role, transcript);
+    });
 
-      recorder.ondataavailable = async (event) => {
-        if (!event.data.size || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-          return;
-        }
-        const base64 = await blobToBase64(event.data);
-        const payload = {
-          user_audio_chunk: base64,
-        };
-        wsRef.current.send(JSON.stringify(payload));
-      };
+    session.on('message', (payload: any) => {
+      const transcript = payload?.text ?? payload?.transcript;
+      if (!transcript) return;
+      const role = normalizeRole(payload?.role ?? payload?.speaker);
+      appendMessage(role, transcript);
 
-      recorder.start(250);
-    } catch (err) {
-      console.error('Microphone access failed:', err);
-      setError('Microphone access denied.');
+      if (payload?.action?.type === 'navigate' && payload?.action?.target && onNavigate) {
+        onNavigate(payload.action.target);
+      }
+    });
+
+    session.on('audio', (payload: any) => {
+      const blob = payload instanceof Blob ? payload : new Blob([payload]);
+      enqueueAudio(blob);
+    });
+
+    session.on('connection_state', (payload: any) => {
+      const stateValue = `${payload?.state ?? payload}`.toLowerCase();
+      if (stateValue.includes('connecting')) setState('connecting');
+      if (stateValue.includes('listening')) setState('listening');
+      if (stateValue.includes('speaking')) setState('speaking');
+      if (stateValue.includes('closed')) setState('paused');
+    });
+
+    session.on('error', (payload: any) => {
+      console.error('ElevenLabs session error:', payload);
+      setError('Realtime voice session error.');
       setState('error');
-    }
+    });
   };
 
-  const handleAgentMessage = (raw: Blob | ArrayBuffer | string) => {
-    if (typeof raw !== 'string') {
-      const blob = raw instanceof Blob ? raw : new Blob([raw]);
-      enqueueAudio(blob);
+  const startSdkMicrophone = async () => {
+    const session = sessionRef.current;
+    if (!session) return;
+    if (session.startMicrophone) {
+      await session.startMicrophone();
       return;
     }
+    if (session.startRecording) {
+      await session.startRecording();
+      return;
+    }
+    console.warn('ElevenLabs SDK microphone start method not found.');
+  };
 
-    try {
-      const data = JSON.parse(raw);
-      const transcript =
-        data.transcript ||
-        data.text ||
-        data.user_transcript ||
-        data.agent_transcript;
-      if (transcript) {
-        const role = normalizeRole(data.role || data.speaker || data.type);
-        appendMessage(role, transcript);
-      }
+  const endSdkSession = async () => {
+    const session = sessionRef.current;
+    if (!session) return;
+    if (session.stopMicrophone) {
+      await session.stopMicrophone();
+    } else if (session.stopRecording) {
+      await session.stopRecording();
+    }
 
-      const audioBase64 = data.audio || data.audio_base64;
-      if (audioBase64) {
-        const audioBlob = base64ToBlob(audioBase64, data.audio_format || 'audio/mpeg');
-        enqueueAudio(audioBlob);
-      }
-
-      if (data.action?.type === 'navigate' && data.action.target) {
-        if (onNavigate) {
-          onNavigate(data.action.target);
-        } else {
-          router.push(data.action.target);
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to parse agent message', err);
+    if (session.endSession) {
+      await session.endSession();
+    } else if (session.close) {
+      await session.close();
     }
   };
 
@@ -460,27 +450,6 @@ export function ConversationalVoice({
     </div>
   );
 }
-
-const blobToBase64 = (blob: Blob): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result?.toString() || '';
-      const base64 = result.split(',')[1] || '';
-      resolve(base64);
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-
-const base64ToBlob = (base64: string, mimeType: string): Blob => {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return new Blob([bytes], { type: mimeType });
-};
 
 const normalizeRole = (raw?: string): Message['role'] => {
   if (!raw) return 'assistant';

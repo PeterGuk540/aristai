@@ -217,6 +217,27 @@ def execute_plan(
     return ExecuteResponse(results=results, summary=summary, audio_url=None)
 
 
+@router.post("/synthesize")
+async def voice_synthesize(request: Request):
+    """Standard TTS endpoint for frontend voice components."""
+    try:
+        data = await request.json()
+        text = data.get("text", "")
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is required")
+        
+        result = tts.synthesize(text)
+        
+        return Response(
+            content=result.audio_bytes,
+            media_type=result.content_type,
+            headers={"Cache-Control": "no-cache"}
+        )
+    except Exception as e:
+        logger.exception(f"TTS synthesis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/audit", response_model=VoiceAuditListResponse, status_code=status.HTTP_200_OK)
 def get_audit_trail(
     user_id: int = Query(default=1, description="Instructor user ID"),

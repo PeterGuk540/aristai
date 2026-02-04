@@ -460,42 +460,24 @@ export function ConversationalVoice({
             handleActionExecution(message, onNavigate, addAssistantMessage);
           }
         },
-        onTranscript: (transcript: string, isFinal: boolean) => {
-          console.log('🎤 Transcript received:', { transcript, isFinal });
+        onUserSpeech: (speech: string) => {
+          console.log('🎤 User speech received:', speech);
           
           // Show live transcript as it comes in
-          if (isFinal) {
-            // Update the latest user message with the final transcript
-            setMessages(prev => {
-              const filtered = prev.filter(msg => msg.role !== 'user-transcript');
-              return [
-                ...filtered,
-                {
-                  id: Date.now().toString(),
-                  role: 'user-transcript' as 'user',
-                  content: transcript,
-                  timestamp: new Date(),
-                  isTranscript: true
-                }
-              ];
-            });
-          } else {
-            // Show interim transcript
-            setMessages(prev => {
-              const filtered = prev.filter(msg => msg.role !== 'user-transcript');
-              return [
-                ...filtered,
-                {
-                  id: `interim-${Date.now()}`,
-                  role: 'user-transcript' as 'user',
-                  content: transcript,
-                  timestamp: new Date(),
-                  isTranscript: true,
-                  isInterim: true
-                }
-              ];
-            });
-          }
+          setMessages(prev => {
+            // Remove any previous transcript messages
+            const filtered = prev.filter(msg => msg.role !== 'user-transcript');
+            return [
+              ...filtered,
+              {
+                id: Date.now().toString(),
+                role: 'user-transcript' as 'user',
+                content: speech,
+                timestamp: new Date(),
+                isTranscript: true
+              }
+            ];
+          });
         },
         onError: (error: string, meta?: any) => {
           console.error('❌ ElevenLabs SDK error:', error, meta);

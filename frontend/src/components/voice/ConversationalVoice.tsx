@@ -696,23 +696,18 @@ export function ConversationalVoice({
                 messages.map((msg) => (
                   <div key={msg.id} className={cn(
                     "flex gap-2",
-                    (msg.role === 'user' || msg.role === 'user-transcript') ? 'justify-end' : 'justify-start'
+                    msg.role === 'user' ? 'justify-end' : 'justify-start'
                   )}>
                     <div className={cn(
                       "max-w-[80%] px-3 py-2 rounded-lg text-sm",
                       msg.role === 'user' 
                         ? 'bg-primary-600 text-white' 
-                        : msg.role === 'user-transcript'
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 border border-blue-300 dark:border-blue-700'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white',
-                      msg.isInterim && 'opacity-70 italic'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
                     )}>
                       <div className="flex items-start gap-2">
-                        {msg.isTranscript && <span className="text-xs">🎤</span>}
                         <span>{msg.content}</span>
-                        {msg.isInterim && <span className="text-xs animate-pulse">...</span>}
                       </div>
-                      {msg.action && !msg.isTranscript && (
+                      {msg.action && (
                         <div className="mt-1 text-xs opacity-75">
                           {msg.action.type === 'navigate' && `🔗 ${msg.action.target}`}
                           {msg.action.type === 'execute' && '⚡ Executing...'}

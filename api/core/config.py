@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # Voice Assistant
     voice_asr_provider: str = "whisper"       # "stub" | "whisper"
-    voice_tts_provider: str = "stub"       # "stub" | "elevenlabs"
+    voice_tts_provider: str = "elevenlabs"       # "stub" | "elevenlabs"
     elevenlabs_api_key: str = ""
     voice_max_seconds: int = 30
     voice_max_mb: int = 5

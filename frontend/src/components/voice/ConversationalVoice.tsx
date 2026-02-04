@@ -566,9 +566,8 @@ export function ConversationalVoice({
       timestamp: new Date(),
     };
     setMessages(prev => {
-      // Remove any transcript messages
-      const filtered = prev.filter(msg => !msg.isTranscript);
-      return [...filtered, message];
+      // Remove any transcript messages - just add new message
+      return [...prev, message];
     });
     
     // Update context

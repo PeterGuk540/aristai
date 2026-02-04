@@ -126,8 +126,11 @@ export function ConversationalVoice({
     try {
       // Get signed URL from our backend
       console.log('🔑 Getting signed URL from backend...');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
-      const response = await fetch(`${apiUrl}/api/voice/agent/signed-url`, {
+      // For production, use proxy route to avoid mixed-content issues
+      const apiUrl = process.env.NODE_ENV === 'production' 
+        ? '/api/proxy'  // Uses Next.js proxy (same origin)
+        : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+      const response = await fetch(`${apiUrl}/voice/agent/signed-url`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer dummy-token`, // TODO: Replace with real auth

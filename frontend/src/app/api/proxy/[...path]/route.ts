@@ -49,12 +49,12 @@ async function handleProxy(
   const url = new URL(request.url);
   const queryString = url.search;
 
-  // Special handling for voice synthesis - forward to our local backend
-  if (path.includes('voice/synthesize')) {
-    const targetUrl = `http://localhost:8000/api/voice/synthesize${queryString}`;
+  let targetUrl = `${BACKEND_URL}/api/${path}${queryString}`;
+
+  // Special handling for voice synthesis - forward to local backend in development
+  if (path.includes('voice/synthesize') && process.env.NODE_ENV !== 'production') {
+    targetUrl = `http://localhost:8000/api/voice/synthesize${queryString}`;
     console.log('🎯 Voice synthesis request -> forwarding to local backend:', targetUrl);
-  } else {
-    const targetUrl = `${BACKEND_URL}/api/${path}${queryString}`;
   }
 
   try {
@@ -86,9 +86,19 @@ async function handleProxy(
       return new NextResponse(null, { status: 204 });
     }
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
 
-    return NextResponse.json(data, { status: response.status });
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    const buffer = await response.arrayBuffer();
+    const proxiedHeaders = new Headers(response.headers);
+    return new NextResponse(buffer, {
+      status: response.status,
+      headers: proxiedHeaders,
+    });
   } catch (error) {
     console.error('Proxy error:', error);
     return NextResponse.json(

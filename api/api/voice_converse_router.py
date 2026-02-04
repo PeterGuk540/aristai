@@ -22,6 +22,7 @@ from api.models.course import Course
 from api.models.session import Session as SessionModel, SessionStatus
 from mcp_server.server import TOOL_REGISTRY
 from workflows.voice_orchestrator import run_voice_orchestrator, generate_summary
+from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics, parse_json_response
 
 # Import your existing dependencies
 # from .auth import get_current_user
@@ -122,6 +123,54 @@ def detect_action_intent(text: str) -> Optional[str]:
         for pattern in patterns:
             if re.search(pattern, text_lower):
                 return action
+    return None
+
+
+def detect_navigation_intent_llm(
+    text: str,
+    context: Optional[List[str]],
+    current_page: Optional[str],
+) -> Optional[str]:
+    llm, model_name = get_llm_with_tracking()
+    if not llm:
+        return None
+
+    available_routes = {
+        "/courses": "Courses list",
+        "/sessions": "Sessions list",
+        "/forum": "Forum discussions",
+        "/console": "Instructor console",
+        "/reports": "Reports",
+        "/dashboard": "Dashboard home",
+    }
+    routes_description = "\n".join([f"- {route}: {desc}" for route, desc in available_routes.items()])
+
+    prompt = (
+        "You are routing a voice request to a known page in the AristAI app.\n"
+        "Select the best matching route for the instructor request.\n"
+        "If none apply, return null.\n\n"
+        f"Available routes:\n{routes_description}\n\n"
+        f"Current page: {current_page or 'unknown'}\n"
+        f"Conversation context: {context or []}\n"
+        f"Transcript: \"{text}\"\n\n"
+        "Respond with ONLY valid JSON matching:\n"
+        "{\"route\": \"/courses|/sessions|/forum|/console|/reports|/dashboard|null\","
+        " \"confidence\": 0.0-1.0, \"reason\": \"short\"}"
+    )
+
+    response = invoke_llm_with_metrics(llm, prompt, model_name)
+    if not response.success:
+        return None
+
+    parsed = parse_json_response(response.content or "")
+    if not parsed:
+        return None
+
+    route = parsed.get("route")
+    confidence = parsed.get("confidence", 0)
+    if route in available_routes and isinstance(confidence, (int, float)) and confidence >= 0.5:
+        return route
+
     return None
 
 
@@ -260,7 +309,11 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             suggestions=get_page_suggestions(nav_path)
         )
     
-    plan_result = run_voice_orchestrator(transcript)
+    plan_result = run_voice_orchestrator(
+        transcript,
+        context=request.context,
+        current_page=request.current_page,
+    )
     plan = plan_result.get("plan") if plan_result else None
     if plan and plan.get("steps"):
         results, summary = execute_plan_steps(plan.get("steps", []), db)
@@ -269,6 +322,18 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             action=ActionResponse(type='execute', executed=True),
             results=results,
             suggestions=["Anything else I can help with?"],
+        )
+
+    nav_path_llm = detect_navigation_intent_llm(
+        transcript,
+        request.context,
+        request.current_page,
+    )
+    if nav_path_llm:
+        return ConverseResponse(
+            message=generate_conversational_response('navigate', nav_path_llm),
+            action=ActionResponse(type='navigate', target=nav_path_llm),
+            suggestions=get_page_suggestions(nav_path_llm),
         )
 
     # Check for action intent (fallback)
@@ -292,10 +357,17 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         )
     
     # No clear intent - try to be helpful
+    fallback_message = generate_fallback_response(transcript, request.context)
+    if plan_result and plan_result.get("error") == "No LLM API key configured":
+        fallback_message = (
+            f"{fallback_message} "
+            "For broader understanding, configure an OpenAI or Anthropic API key."
+        )
+
     return ConverseResponse(
-        message=generate_fallback_response(transcript, request.context),
+        message=fallback_message,
         action=ActionResponse(type='info'),
-        suggestions=["Show my courses", "Go to forum", "Start copilot", "Create a poll"]
+        suggestions=["Show my courses", "Go to forum", "Start copilot", "Create a poll"],
     )
 
 

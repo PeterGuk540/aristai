@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 class VoiceOrchestratorState(TypedDict):
     """State passed through the voice orchestrator workflow."""
     transcript: str
+    context: Optional[List[str]]
+    current_page: Optional[str]
     plan: Optional[Dict[str, Any]]
     error: Optional[str]
     model_name: str
@@ -58,7 +60,11 @@ def build_plan(state: VoiceOrchestratorState) -> VoiceOrchestratorState:
 
     tool_descriptions = _build_tool_descriptions()
     system = VOICE_PLAN_SYSTEM_PROMPT.format(tool_descriptions=tool_descriptions)
-    user = VOICE_PLAN_USER_PROMPT.format(transcript=state["transcript"])
+    user = VOICE_PLAN_USER_PROMPT.format(
+        transcript=state["transcript"],
+        context=state.get("context") or [],
+        current_page=state.get("current_page") or "unknown",
+    )
     full_prompt = f"{system}\n\n{user}"
 
     response = invoke_llm_with_metrics(llm, full_prompt, model_name)
@@ -110,7 +116,11 @@ def build_voice_orchestrator_graph():
     return workflow.compile()
 
 
-def run_voice_orchestrator(transcript: str) -> Dict[str, Any]:
+def run_voice_orchestrator(
+    transcript: str,
+    context: Optional[List[str]] = None,
+    current_page: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Main entry point: transcript -> action plan dict.
 
@@ -118,6 +128,8 @@ def run_voice_orchestrator(transcript: str) -> Dict[str, Any]:
     """
     initial_state: VoiceOrchestratorState = {
         "transcript": transcript,
+        "context": context or [],
+        "current_page": current_page,
         "plan": None,
         "error": None,
         "model_name": "",

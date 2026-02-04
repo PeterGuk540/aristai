@@ -19,7 +19,7 @@ export type ConversationState =
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'user-transcript';
   content: string;
   timestamp: Date;
   action?: {
@@ -27,6 +27,8 @@ interface Message {
     target?: string;
     executed?: boolean;
   };
+  isTranscript?: boolean;
+  isInterim?: boolean;
 }
 
 interface ConversationalVoiceProps {
@@ -177,12 +179,36 @@ const handleActionExecution = async (
     }
   };
 
-  // Navigation commands - use MCP navigation tools
-  if (lowerMessage.includes('navigate') || lowerMessage.includes('go to') || lowerMessage.includes('take me to')) {
-    const pathMatch = message.match(/(?:to|page|section)\s+(.+?)(?:\.|\s|$)/i);
-    if (pathMatch) {
-      const page = extractPathFromText(pathMatch[1]).replace('/', '');
-      await executeMCPTool('navigate_to_page', { page }, addAssistantMessage);
+  // Enhanced navigation commands - use MCP navigation tools with better pattern matching
+  if (
+    lowerMessage.includes('navigate') || 
+    lowerMessage.includes('go to') || 
+    lowerMessage.includes('take me to') ||
+    lowerMessage.includes('access') ||
+    lowerMessage.includes('open') ||
+    lowerMessage.includes('show me') ||
+    lowerMessage.includes('let me see')
+  ) {
+    // More comprehensive page extraction patterns
+    const pagePatterns = [
+      /(?:to|page|section|me)\s+(.+?)(?:\.|\s|$)/i,
+      /(?:navigate|go|take|access|open|show)\s+(?:to)?\s+(.+?)(?:\.|\s|$)/i,
+      /(?:forum|courses?|sessions?|reports?|console|dashboard|home)/i
+    ];
+    
+    let page = null;
+    for (const pattern of pagePatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        page = match[1]?.toLowerCase().trim() || match[0]?.toLowerCase().trim();
+        break;
+      }
+    }
+    
+    if (page) {
+      // Normalize page names
+      const normalizedPage = extractPathFromText(page).replace('/', '');
+      await executeMCPTool('navigate_to_page', { page: normalizedPage }, addAssistantMessage);
       return;
     }
   }
@@ -219,14 +245,27 @@ const handleActionExecution = async (
     }
   }
 
-  // Help commands
-  if (lowerMessage.includes('help') || lowerMessage.includes('what can i do')) {
+  // Enhanced help and capability commands
+  if (
+    lowerMessage.includes('help') || 
+    lowerMessage.includes('what can i do') ||
+    lowerMessage.includes('what do you do') ||
+    lowerMessage.includes('capabilities') ||
+    lowerMessage.includes('features')
+  ) {
     await executeMCPTool('get_available_pages', {}, addAssistantMessage);
+    return;
   }
   
-  // Page-specific help
-  if (lowerMessage.includes('help for') || lowerMessage.includes('about')) {
-    const pageMatch = message.match(/(?:help for|about)\s+(.+?)(?:\.|\s|$)/i);
+  // Page-specific help and information
+  if (
+    lowerMessage.includes('help for') || 
+    lowerMessage.includes('about') ||
+    lowerMessage.includes('tell me about') ||
+    lowerMessage.includes('what is') ||
+    lowerMessage.includes('explain')
+  ) {
+    const pageMatch = message.match(/(?:help for|about|tell me about|what is|explain)\s+(.+?)(?:\.|\s|$)/i);
     if (pageMatch) {
       const page = extractPathFromText(pageMatch[1]).replace('/', '');
       await executeMCPTool('get_help_for_page', { page }, addAssistantMessage);
@@ -368,9 +407,9 @@ export function ConversationalVoice({
           // Speak greeting
           if (greeting) {
             addAssistantMessage(greeting);
-          } else {
-            addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant. I can help you navigate to any page, create courses, manage sessions, generate reports, and much more. Just tell me what you'd like to do!`);
-          }
+      } else {
+        addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant, an expert in educational platform operations. I can help you navigate instantly to any page, create courses with AI-generated plans, manage live sessions, create polls, generate comprehensive reports, and much more. Just tell me what you'd like to do!`);
+      }
         },
         onDisconnect: (data?: any) => {
           console.log('🔌 Disconnected from AristAI voice service:', data);
@@ -411,12 +450,51 @@ export function ConversationalVoice({
           console.log('💬 Message received:', { source, message });
           
           if (source === 'user') {
+            // Add user message with full transcript
             addUserMessage(message);
           } else if (source === 'ai') {
+            // Add AI response message
             addAssistantMessage(message);
             
             // Auto-execute actions based on AI message content
             handleActionExecution(message, onNavigate, addAssistantMessage);
+          }
+        },
+        onTranscript: ({ transcript, isFinal }: { transcript: string; isFinal: boolean }) => {
+          console.log('🎤 Transcript received:', { transcript, isFinal });
+          
+          // Show live transcript as it comes in
+          if (isFinal) {
+            // Update the latest user message with the final transcript
+            setMessages(prev => {
+              const filtered = prev.filter(msg => msg.role !== 'user-transcript');
+              return [
+                ...filtered,
+                {
+                  id: Date.now().toString(),
+                  role: 'user-transcript' as 'user',
+                  content: transcript,
+                  timestamp: new Date(),
+                  isTranscript: true
+                }
+              ];
+            });
+          } else {
+            // Show interim transcript
+            setMessages(prev => {
+              const filtered = prev.filter(msg => msg.role !== 'user-transcript');
+              return [
+                ...filtered,
+                {
+                  id: `interim-${Date.now()}`,
+                  role: 'user-transcript' as 'user',
+                  content: transcript,
+                  timestamp: new Date(),
+                  isTranscript: true,
+                  isInterim: true
+                }
+              ];
+            });
           }
         },
         onError: (error: string, meta?: any) => {
@@ -484,7 +562,11 @@ export function ConversationalVoice({
       content,
       timestamp: new Date(),
     };
-    setMessages(prev => [...prev, message]);
+    setMessages(prev => {
+      // Remove any interim transcripts
+      const filtered = prev.filter(msg => !msg.isInterim);
+      return [...filtered, message];
+    });
     
     // Update context
     conversationContextRef.current.push(`User: ${content}`);
@@ -612,16 +694,23 @@ export function ConversationalVoice({
                 messages.map((msg) => (
                   <div key={msg.id} className={cn(
                     "flex gap-2",
-                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+                    (msg.role === 'user' || msg.role === 'user-transcript') ? 'justify-end' : 'justify-start'
                   )}>
                     <div className={cn(
                       "max-w-[80%] px-3 py-2 rounded-lg text-sm",
                       msg.role === 'user' 
                         ? 'bg-primary-600 text-white' 
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                        : msg.role === 'user-transcript'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 border border-blue-300 dark:border-blue-700'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white',
+                      msg.isInterim && 'opacity-70 italic'
                     )}>
-                      {msg.content}
-                      {msg.action && (
+                      <div className="flex items-start gap-2">
+                        {msg.isTranscript && <span className="text-xs">🎤</span>}
+                        <span>{msg.content}</span>
+                        {msg.isInterim && <span className="text-xs animate-pulse">...</span>}
+                      </div>
+                      {msg.action && !msg.isTranscript && (
                         <div className="mt-1 text-xs opacity-75">
                           {msg.action.type === 'navigate' && `🔗 ${msg.action.target}`}
                           {msg.action.type === 'execute' && '⚡ Executing...'}

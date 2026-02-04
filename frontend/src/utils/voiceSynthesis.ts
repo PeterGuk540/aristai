@@ -1,4 +1,4 @@
-import { API_BASE } from '../lib/api';
+import { API_BASE, getAuthHeaders } from '../lib/api';
 
 /**
  * Voice synthesis utilities for AristAI voice assistant
@@ -7,10 +7,12 @@ import { API_BASE } from '../lib/api';
 
 export const playBackendAudio = async (text: string): Promise<void> => {
   try {
+    const authHeaders = await getAuthHeaders();
     const response = await fetch(`${API_BASE}/voice/synthesize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
       },
       body: JSON.stringify({ text }),
     });

@@ -34,20 +34,23 @@ const formatApiErrorMessage = (detail: unknown): string => {
   }
 };
 
+export const getAuthHeaders = async (): Promise<HeadersInit> => {
+  // Get ID token for API calls (check Google first, then Microsoft, then Cognito SDK)
+  // Note: API Gateway JWT authorizer requires ID token (has 'aud' claim), not access token
+  const googleToken = getGoogleIdToken();
+  const msToken = getMicrosoftIdToken();
+  const idToken = googleToken || msToken || await getIdToken();
+
+  return idToken ? { Authorization: `Bearer ${idToken}` } : {};
+};
+
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
-  // Get ID token for API calls (check Google first, then Microsoft, then Cognito SDK)
-  // Note: API Gateway JWT authorizer requires ID token (has 'aud' claim), not access token
-  const googleToken = getGoogleIdToken();
-  const msToken = getMicrosoftIdToken();
-  const idToken = googleToken || msToken || await getIdToken();
-  const authHeaders: HeadersInit = idToken
-    ? { Authorization: `Bearer ${idToken}` }
-    : {};
+  const authHeaders = await getAuthHeaders();
 
   const response = await fetch(url, {
     ...options,

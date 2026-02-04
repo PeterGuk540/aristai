@@ -86,9 +86,19 @@ async function handleProxy(
       return new NextResponse(null, { status: 204 });
     }
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
 
-    return NextResponse.json(data, { status: response.status });
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    const buffer = await response.arrayBuffer();
+    const proxiedHeaders = new Headers(response.headers);
+    return new NextResponse(buffer, {
+      status: response.status,
+      headers: proxiedHeaders,
+    });
   } catch (error) {
     console.error('Proxy error:', error);
     return NextResponse.json(

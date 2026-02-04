@@ -57,43 +57,85 @@ interface ConversationalVoiceProps {
 }
 
 // MCP Tool Execution for "I speak, you do" functionality
-const executeMCPTool = async (
-  toolName: string, 
-  args: any,
-  addAssistantMessage: (content: string, action?: Message['action']) => void
-): Promise<boolean> => {
-  try {
-    console.log('🔧 Executing MCP tool:', { toolName, args });
-    
-    const response = await fetch('/api/mcp/execute', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ tool: toolName, arguments: args }),
-    });
-
-    if (!response.ok) {
-      console.error('MCP tool execution failed:', response.status);
-      addAssistantMessage(`❌ Failed to execute ${toolName}. Please try again.`);
-      return false;
-    }
-
-    const result = await response.json();
-    console.log('✅ MCP tool executed successfully:', result);
-    
-    // Provide user-friendly feedback
-    addAssistantMessage(`✅ ${toolName} executed successfully.`);
-    return true;
-    
-  } catch (error) {
-    console.error('MCP execution error:', error);
-    addAssistantMessage(`❌ Error executing ${toolName}: ${error}`);
-    return false;
-  }
+const extractCourseTitle = (message: string): string | null => {
+  const match = message.match(/(?:course|create).+?(?:called|titled|named)?\s+["'"](.+?)["'"]/i);
+  return match ? match[1] : null;
 };
 
-const handleActionExecution = async (message: string, onNavigate?: (path: string) => void) => {
+const extractPollData = (message: string): any => {
+  const questionMatch = message.match(/(?:poll|create).+?(?:question)?\s+["'"](.+?)["'"]/i);
+  if (!questionMatch) return null;
+  
+  const question = questionMatch[1];
+  
+  // Try to extract options
+  const optionsMatch = message.match(/options?[:\s]+(.+?)(?:\.|$)/i);
+  if (optionsMatch) {
+    const optionsText = optionsMatch[1];
+    const options = optionsText.split(/(?:,\s*|\s+and\s+)/).map(opt => opt.trim().replace(/["']/g, ''));
+    if (options.length >= 2) {
+      return { question, options_json: options };
+    }
+  }
+  
+  return { question, options_json: ["Yes", "No", "Maybe"] };
+};
+
+const extractReportData = (message: string): any => {
+  const sessionMatch = message.match(/(?:report|generate).+?(?:session)?\s+["'"]?(.+?)["'"]?/i);
+  if (sessionMatch) {
+    return { session_id_or_title: sessionMatch[1] };
+  }
+  return null;
+};
+
+const extractEnrollmentData = (message: string): any => {
+  const courseMatch = message.match(/(?:enroll).+?(?:course)?\s+["'"](.+?)["'"]/i);
+  const studentMatch = message.match(/(?:enroll).+?(?:students?)\s+(.+?)(?:\.|$)/i);
+  
+  const data: any = {};
+  if (courseMatch) data.course_title = courseMatch[1];
+  if (studentMatch) data.student_identifiers = studentMatch[1].split(/(?:,\s*|\s+and\s+)/);
+  
+  return Object.keys(data).length > 0 ? data : null;
+};
+
+const extractPathFromText = (text: string): string => {
+  const pathMap: { [key: string]: string } = {
+    'courses': '/courses',
+    'course': '/courses', 
+    'sessions': '/sessions',
+    'session': '/sessions',
+    'dashboard': '/dashboard',
+    'home': '/dashboard',
+    'forum': '/forum',
+    'reports': '/reports',
+    'console': '/console',
+    'settings': '/console'
+  };
+  
+  const lowerText = text.toLowerCase().trim();
+  
+  // Direct path matches
+  if (lowerText in pathMap) {
+    return pathMap[lowerText];
+  }
+  
+  // Partial matches
+  for (const [key, path] of Object.entries(pathMap)) {
+    if (lowerText.includes(key)) {
+      return path;
+    }
+  }
+  
+  return '/dashboard'; // fallback
+};
+
+const handleActionExecution = async (
+  message: string, 
+  onNavigate?: (path: string) => void,
+  addAssistantMessage?: (content: string, action?: Message['action']) => void
+) => {
   const lowerMessage = message.toLowerCase();
   
   // Navigation actions - still handle directly for better UX
@@ -105,6 +147,49 @@ const handleActionExecution = async (message: string, onNavigate?: (path: string
     }
     return;
   }
+
+  // MCP Tool Execution for "I speak, you do" functionality
+  const executeMCPTool = async (
+    toolName: string, 
+    args: any,
+    addAssistantMessage?: (content: string, action?: Message['action']) => void
+  ): Promise<boolean> => {
+    try {
+      console.log('🔧 Executing MCP tool:', { toolName, args });
+      
+      const response = await fetch('/api/mcp/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tool: toolName, arguments: args }),
+      });
+
+      if (!response.ok) {
+        console.error('MCP tool execution failed:', response.status);
+        if (addAssistantMessage) {
+          addAssistantMessage(`❌ Failed to execute ${toolName}. Please try again.`);
+        }
+        return false;
+      }
+
+      const result = await response.json();
+      console.log('✅ MCP tool executed successfully:', result);
+      
+      // Provide user-friendly feedback
+      if (addAssistantMessage) {
+        addAssistantMessage(`✅ ${toolName} executed successfully.`);
+      }
+      return true;
+      
+    } catch (error) {
+      console.error('MCP execution error:', error);
+      if (addAssistantMessage) {
+        addAssistantMessage(`❌ Error executing ${toolName}: ${error}`);
+      }
+      return false;
+    }
+  };
 
   // Course creation via MCP
   if (lowerMessage.includes('create course') || lowerMessage.includes('create a course')) {
@@ -392,7 +477,7 @@ export function ConversationalVoice({
             addAssistantMessage(message);
             
             // Auto-execute actions based on AI message content
-            handleActionExecution(message, onNavigate);
+            handleActionExecution(message, onNavigate, addAssistantMessage);
           }
         },
         onError: (error: string, meta?: any) => {

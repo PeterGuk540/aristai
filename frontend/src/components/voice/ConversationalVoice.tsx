@@ -57,7 +57,11 @@ interface ConversationalVoiceProps {
 }
 
 // MCP Tool Execution for "I speak, you do" functionality
-const executeMCPTool = async (toolName: string, args: any): Promise<boolean> => {
+const executeMCPTool = async (
+  toolName: string, 
+  args: any,
+  addAssistantMessage: (content: string, action?: Message['action']) => void
+): Promise<boolean> => {
   try {
     console.log('🔧 Executing MCP tool:', { toolName, args });
     
@@ -106,7 +110,7 @@ const handleActionExecution = async (message: string, onNavigate?: (path: string
   if (lowerMessage.includes('create course') || lowerMessage.includes('create a course')) {
     const courseTitle = extractCourseTitle(message);
     if (courseTitle) {
-      await executeMCPTool('create_course', { title: courseTitle });
+      await executeMCPTool('create_course', { title: courseTitle }, addAssistantMessage);
     }
   }
   
@@ -114,7 +118,7 @@ const handleActionExecution = async (message: string, onNavigate?: (path: string
   if (lowerMessage.includes('create poll') || lowerMessage.includes('create a poll')) {
     const pollData = extractPollData(message);
     if (pollData) {
-      await executeMCPTool('create_poll', pollData);
+      await executeMCPTool('create_poll', pollData, addAssistantMessage);
     }
   }
   
@@ -122,7 +126,7 @@ const handleActionExecution = async (message: string, onNavigate?: (path: string
   if (lowerMessage.includes('generate report') || lowerMessage.includes('create report')) {
     const reportData = extractReportData(message);
     if (reportData) {
-      await executeMCPTool('generate_report', reportData);
+      await executeMCPTool('generate_report', reportData, addAssistantMessage);
     }
   }
   
@@ -130,7 +134,7 @@ const handleActionExecution = async (message: string, onNavigate?: (path: string
   if (lowerMessage.includes('enroll students') || lowerMessage.includes('enroll student')) {
     const enrollmentData = extractEnrollmentData(message);
     if (enrollmentData) {
-      await executeMCPTool('enroll_students', enrollmentData);
+      await executeMCPTool('enroll_students', enrollmentData, addAssistantMessage);
     }
   }
 };

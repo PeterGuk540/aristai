@@ -135,7 +135,36 @@ export function ConversationalVoice({
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to get signed URL: ${response.status} ${response.statusText}`);
+        let errorMessage = 'Failed to get signed URL';
+        let errorCode = 'E_UNKNOWN';
+        
+        switch (response.status) {
+          case 401:
+            errorMessage = 'Authentication failed. Please check your credentials.';
+            errorCode = 'E_AUTH';
+            break;
+          case 403:
+            errorMessage = 'Access denied. You do not have permission to use voice features.';
+            errorCode = 'E_AUTH';
+            break;
+          case 429:
+            errorMessage = 'Too many requests. Please try again later.';
+            errorCode = 'E_RATE_LIMIT';
+            break;
+          case 500:
+            errorMessage = 'Server error. Please try again later.';
+            errorCode = 'E_SERVER';
+            break;
+          case 502:
+            errorMessage = 'Voice service unavailable. Please try again later.';
+            errorCode = 'E_SERVICE';
+            break;
+          default:
+            errorMessage = `Failed to get signed URL: ${response.status} ${response.statusText}`;
+            errorCode = `E_HTTP_${response.status}`;
+        }
+        
+        throw new Error(`${errorMessage} (${errorCode})`);
       }
 
       const { signed_url } = await response.json();
@@ -204,7 +233,26 @@ export function ConversationalVoice({
         },
         onError: (error: string, meta?: any) => {
           console.error('❌ ElevenLabs SDK error:', error, meta);
-          setError(`Connection error: ${error || 'Unknown error'}`);
+          let errorMessage = 'Voice connection error';
+          let errorCode = 'E_11LABS_UNKNOWN';
+          
+          if (typeof error === 'string') {
+            if (error.includes('401') || error.includes('403')) {
+              errorMessage = 'Voice service authentication failed. Please try again.';
+              errorCode = 'E_11LABS_AUTH';
+            } else if (error.includes('429')) {
+              errorMessage = 'Voice service rate limit exceeded. Please wait and try again.';
+              errorCode = 'E_11LABS_429';
+            } else if (error.includes('connection') || error.includes('connect')) {
+              errorMessage = 'Cannot connect to voice service. Please check your internet connection.';
+              errorCode = 'E_11LABS_CONNECTION';
+            } else {
+              errorMessage = `Voice service error: ${error}`;
+              errorCode = 'E_11LABS_ERROR';
+            }
+          }
+          
+          setError(`${errorMessage} (${errorCode})`);
           setState('error');
         },
         onAudio: (audio: any) => {
@@ -215,7 +263,30 @@ export function ConversationalVoice({
 
     } catch (error: any) {
       console.error('❌ Failed to initialize conversation:', error);
-      setError(`Failed to connect: ${error.message}`);
+      
+      let errorMessage = 'Failed to initialize voice conversation';
+      let errorCode = 'E_INIT_UNKNOWN';
+      
+      if (error.message) {
+        if (error.message.includes('E_AUTH')) {
+          errorMessage = 'Authentication required. Please log in and try again.';
+          errorCode = 'E_INIT_AUTH';
+        } else if (error.message.includes('E_CORS') || error.message.includes('CORS')) {
+          errorMessage = 'Network error. Please check your browser settings.';
+          errorCode = 'E_INIT_CORS';
+        } else if (error.message.includes('E_RATE_LIMIT')) {
+          errorMessage = 'Service rate limit. Please wait and try again.';
+          errorCode = 'E_INIT_RATE_LIMIT';
+        } else if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Network connection failed. Please check your internet connection.';
+          errorCode = 'E_INIT_NETWORK';
+        } else {
+          errorMessage = error.message;
+          errorCode = 'E_INIT_CUSTOM';
+        }
+      }
+      
+      setError(`${errorMessage} (${errorCode})`);
       setState('error');
       isInitializingRef.current = false;
     }

@@ -18,7 +18,7 @@ api_router.include_router(polls.router, prefix="/polls", tags=["polls"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(enrollments.router, prefix="/enrollments", tags=["enrollments"])
 api_router.include_router(voice.router, prefix="/voice", tags=["voice"])
-api_router.include_router(voice_converse_router)
+api_router.include_router(voice_converse_router, prefix="/voice-converse", tags=["voice-converse"])
 
 # Debug routes only available when DEBUG=true
 settings = get_settings()

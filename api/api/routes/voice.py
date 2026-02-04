@@ -283,26 +283,39 @@ async def get_agent_signed_url(request: Request):
     The browser will connect directly to ElevenLabs using this URL.
     The API key and agent ID are kept server-side.
     """
+    import time
+    import uuid
+    request_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+    
+    logger.info(f"[{request_id}] GET /api/voice/agent/signed-url - Processing request")
+    
     # Simple authentication check
     require_auth(request)
+    logger.info(f"[{request_id}] Authentication passed")
     
     try:
         signed_url = await get_signed_url()
+        processing_time = time.time() - start_time
+        logger.info(f"[{request_id}] Signed URL generated successfully - processing_time: {processing_time:.2f}s")
         return {"signed_url": signed_url}
     except ValueError as e:
-        logger.error(f"Configuration error: {e}")
+        processing_time = time.time() - start_time
+        logger.error(f"[{request_id}] Configuration error - processing_time: {processing_time:.2f}s - error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
     except httpx.HTTPStatusError as e:
-        logger.error(f"ElevenLabs API error: {e}")
+        processing_time = time.time() - start_time
+        logger.error(f"[{request_id}] ElevenLabs API error - processing_time: {processing_time:.2f}s - status: {e.response.status_code}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Upstream service error: {e.response.text}"
         )
     except Exception as e:
-        logger.error(f"Unexpected error getting signed URL: {e}")
+        processing_time = time.time() - start_time
+        logger.error(f"[{request_id}] Unexpected error - processing_time: {processing_time:.2f}s - error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"

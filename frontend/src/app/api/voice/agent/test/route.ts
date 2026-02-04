@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
     console.log('📡 Next.js API proxy: Forwarding request to backend');
     
     // Forward to backend voice service on EC2
-    const backendUrl = process.env.BACKEND_URL || 'http://13.52.132.90:8000'; // EC2 backend URL
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000'; // EC2 backend URL
     const targetUrl = `${backendUrl}/voice/agent/test`;
     
     const response = await fetch(targetUrl, {

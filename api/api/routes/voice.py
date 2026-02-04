@@ -11,7 +11,7 @@ import hashlib
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Request, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -28,25 +28,10 @@ from api.schemas.voice import (
     StepResult,
     VoiceAuditListResponse,
 )
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
-
-from api.core.database import get_db
-from api.core.config import get_settings
-from api.models.voice_audit import VoiceAudit
-from mcp_server.server import TOOL_REGISTRY
-from api.schemas.voice import (
-    TranscribeResponse,
-    PlanRequest,
-    PlanResponse,
-    ExecuteRequest,
-    ExecuteResponse,
-    StepResult,
-    VoiceAuditListResponse,
-    )
 from api.services import asr, tts
 
+logger = logging.getLogger(__name__)
+router = APIRouter()
 
 @router.post("/synthesize", response_model=None)
 async def voice_synthesize(request: Request):
@@ -67,13 +52,6 @@ async def voice_synthesize(request: Request):
     except Exception as e:
         logger.exception(f"TTS synthesis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/transcribe", response_model=TranscribeResponse, status_code=status.HTTP_200_OK)
-
-logger = logging.getLogger(__name__)
-
-router = APIRouter()
 
 
 @router.post("/transcribe", response_model=TranscribeResponse, status_code=status.HTTP_200_OK)

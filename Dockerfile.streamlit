@@ -2,12 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ARG PIP_INDEX_URL
+ARG PIP_EXTRA_INDEX_URL
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
+ENV PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL}
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
 # Upgrade pip
-RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --upgrade pip
 
 # Install Streamlit UI dependencies (not backend requirements)
 COPY requirements-ui.txt .
-RUN pip install --no-cache-dir -r requirements-ui.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements-ui.txt --prefer-binary
 
 # Copy application code
 COPY . .

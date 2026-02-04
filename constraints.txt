@@ -1,0 +1,11 @@
+# Pinned constraints to avoid pip resolution-too-deep backtracking
+langgraph==0.1.19
+langchain==0.2.17
+langchain-openai==0.2.14
+langchain-anthropic==0.2.4
+langchain-core==0.2.43
+langchain-text-splitters==0.2.4
+langsmith==0.1.147
+mcp==1.26.0
+openai==1.109.1
+anthropic==0.77.1

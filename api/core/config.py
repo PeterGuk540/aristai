@@ -21,8 +21,10 @@ class Settings(BaseSettings):
 
     # Voice Assistant
     voice_asr_provider: str = "whisper"       # "stub" | "whisper"
-    voice_tts_provider: str = "stub"       # "stub" | "elevenlabs"
+    voice_tts_provider: str = "elevenlabs_realtime"       # "stub" | "elevenlabs" | "elevenlabs_realtime"
     elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
+    elevenlabs_model_id: str = "eleven_turbo_v2"
     voice_max_seconds: int = 30
     voice_max_mb: int = 5
     voice_rate_limit_per_min: int = 10

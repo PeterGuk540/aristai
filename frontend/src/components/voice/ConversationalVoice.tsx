@@ -411,9 +411,12 @@ export function ConversationalVoice({
 
       // Start the conversation session using the official SDK
       console.log('🚀 Starting conversation session...');
-      conversationRef.current = await Conversation.startSession({
-        signedUrl: signed_url,
-        connectionType: "websocket",
+      console.log('🔗 Using signed URL:', signed_url.substring(0, 80) + '...');
+      
+      try {
+        conversationRef.current = await Conversation.startSession({
+          signedUrl: signed_url,
+          connectionType: "websocket",
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');
@@ -425,6 +428,7 @@ export function ConversationalVoice({
       } else {
         addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant, an expert in educational platform operations. I can help you navigate instantly to any page, create courses with AI-generated plans, manage live sessions, create polls, generate comprehensive reports, and much more. Just tell me what you'd like to do!`);
       }
+        },
         },
         onDisconnect: (data?: any) => {
           console.log('🔌 Disconnected from AristAI voice service:', data);

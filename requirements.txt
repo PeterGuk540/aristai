@@ -1,7 +1,7 @@
 # Web framework
 fastapi>=0.110,<0.116
 uvicorn[standard]==0.27.0
-python-multipart==0.0.6
+python-multipart==0.0.7
 
 # Database
 sqlalchemy==2.0.25

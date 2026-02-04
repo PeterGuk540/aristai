@@ -2,11 +2,12 @@ import { getIdToken } from './cognito-auth';
 import { getGoogleIdToken } from './google-auth';
 import { getMicrosoftIdToken } from './ms-auth';
 
-// In production (Vercel), use the proxy route to avoid CORS/mixed-content issues
-// In development, call the backend directly
+// In production (Vercel), use the proxy route to avoid CORS/mixed-content issues.
+// In development, call the backend directly.
 const isProduction = process.env.NODE_ENV === 'production';
 const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_BASE = isProduction ? '/api/proxy' : `${DIRECT_API_URL}/api`;
+const useProxy = isProduction;
+const API_BASE = useProxy ? '/api/proxy' : `${DIRECT_API_URL}/api`;
 const DIRECT_API_BASE = `${DIRECT_API_URL}/api`;
 
 class ApiError extends Error {
@@ -72,7 +73,9 @@ async function fetchApi<T>(
 }
 
 // For health check, we need to handle it differently since it's not under /api
-const HEALTH_URL = isProduction ? '/api/proxy/../health' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/health';
+const HEALTH_URL = useProxy
+  ? '/api/proxy/../health'
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/health';
 
 export const api = {
   // Health - note: health endpoint might not work through proxy, but that's ok

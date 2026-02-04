@@ -460,25 +460,7 @@ export function ConversationalVoice({
             handleActionExecution(message, onNavigate, addAssistantMessage);
           }
         },
-        onUserSpeech: (speech: string) => {
-          console.log('🎤 User speech received:', speech);
-          
-          // Show live transcript as it comes in
-          setMessages(prev => {
-            // Remove any previous transcript messages
-            const filtered = prev.filter(msg => msg.role !== 'user-transcript');
-            return [
-              ...filtered,
-              {
-                id: Date.now().toString(),
-                role: 'user-transcript' as 'user',
-                content: speech,
-                timestamp: new Date(),
-                isTranscript: true
-              }
-            ];
-          });
-        },
+
         onError: (error: string, meta?: any) => {
           console.error('❌ ElevenLabs SDK error:', error, meta);
           let errorMessage = 'Voice connection error';

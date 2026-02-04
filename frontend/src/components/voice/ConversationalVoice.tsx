@@ -16,8 +16,8 @@ import {
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
-import { loadElevenLabsSDK, type ElevenLabsConversation } from '@/lib/elevenlabs-sdk';
-import { installInterceptors } from '@/lib/worklet-interceptor';
+import { Conversation } from "@elevenlabs/client";
+
 import { VoiceWaveformMini } from './VoiceWaveformMini';
 
 export type ConversationState = 
@@ -95,10 +95,7 @@ export function ConversationalVoice({
     };
   }, []);
 
-  // Install interceptors once on component mount
-  useEffect(() => {
-    installInterceptors();
-  }, []);
+
 
   // Auto-start connection for instructors
   useEffect(() => {
@@ -144,17 +141,13 @@ export function ConversationalVoice({
       const { signed_url } = await response.json();
       console.log('✅ Got signed URL:', signed_url.substring(0, 50) + '...');
 
-      // Load the ElevenLabs SDK
-      console.log('📦 Loading ElevenLabs SDK...');
-      const Conversation = await loadElevenLabsSDK();
-
-      // Start the conversation session
+      // Start the conversation session using the official SDK
       console.log('🚀 Starting conversation session...');
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
         connectionType: "websocket",
-        onConnect: (data: { conversationId: string }) => {
-          console.log('✅ Connected to ElevenLabs:', data.conversationId);
+        onConnect: ({ conversationId }: { conversationId: string }) => {
+          console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');
           onActiveChange?.(true);
           
@@ -171,7 +164,7 @@ export function ConversationalVoice({
           conversationRef.current = null;
           onActiveChange?.(false);
         },
-        onStatusChange: (status: string) => {
+        onStatusChange: ({ status }: { status: string }) => {
           console.log('📊 Status changed:', status);
           // Map SDK statuses to our state
           switch (status) {
@@ -197,25 +190,26 @@ export function ConversationalVoice({
               console.log('Unknown status:', status);
           }
         },
-        onModeChange: (mode: string) => {
+        onModeChange: ({ mode }: { mode: string }) => {
           console.log('🔄 Mode changed:', mode);
         },
-        onMessage: (message: { source: "user" | "ai"; message: string }) => {
-          console.log('💬 Message received:', message);
+        onMessage: ({ source, message }: { source: "user" | "ai"; message: string }) => {
+          console.log('💬 Message received:', { source, message });
           
-          if (message.source === 'user') {
-            addUserMessage(message.message);
-          } else if (message.source === 'ai') {
-            addAssistantMessage(message.message);
+          if (source === 'user') {
+            addUserMessage(message);
+          } else if (source === 'ai') {
+            addAssistantMessage(message);
           }
         },
-        onError: (error: any) => {
-          console.error('❌ ElevenLabs SDK error:', error);
-          setError(`Connection error: ${error.message || 'Unknown error'}`);
+        onError: (error: string, meta?: any) => {
+          console.error('❌ ElevenLabs SDK error:', error, meta);
+          setError(`Connection error: ${error || 'Unknown error'}`);
           setState('error');
         },
-        onDebug: (debug: any) => {
-          console.log('🐛 Debug:', debug);
+        onAudio: (audio: any) => {
+          // Optional: Handle audio data if needed for debugging
+          console.log('🔊 Audio received:', audio);
         },
       });
 

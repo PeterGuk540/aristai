@@ -52,6 +52,7 @@ def require_auth(request: Request) -> bool:
             detail="Authorization header required",
         )
     # TODO: Add proper JWT validation when Cognito is integrated
+    # TODO: Implement full Cognito JWT verification for production
     return True
 
 # Legacy TTS endpoint removed - use ElevenLabs Agents realtime conversation instead

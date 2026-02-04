@@ -12,6 +12,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Request, Response, status
+import httpx
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -29,12 +30,29 @@ from api.schemas.voice import (
     VoiceAuditListResponse,
 )
 from api.services import asr, tts
+from api.services.elevenlabs_agent import get_signed_url
 
 logger = logging.getLogger(__name__)
 
 # Export for proper imports
 __all__ = ['synthesize', 'voice_synthesize']
 router = APIRouter()
+
+
+def require_auth(request: Request) -> bool:
+    """
+    Simple authentication check.
+    TODO: Validate Cognito JWT properly later.
+    For now, just check for Authorization header presence.
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header required",
+        )
+    # TODO: Add proper JWT validation when Cognito is integrated
+    return True
 
 @router.post("/synthesize", response_model=None)
 async def voice_synthesize(request: Request):
@@ -266,3 +284,37 @@ def get_audit_trail(
         .all()
     )
     return VoiceAuditListResponse(audits=audits, total=total)
+
+
+@router.get("/agent/signed-url", status_code=status.HTTP_200_OK)
+async def get_agent_signed_url(request: Request):
+    """
+    Get a signed WebSocket URL for ElevenLabs Agent conversation.
+    
+    The browser will connect directly to ElevenLabs using this URL.
+    The API key and agent ID are kept server-side.
+    """
+    # Simple authentication check
+    require_auth(request)
+    
+    try:
+        signed_url = await get_signed_url()
+        return {"signed_url": signed_url}
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    except httpx.HTTPStatusError as e:
+        logger.error(f"ElevenLabs API error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Upstream service error: {e.response.text}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error getting signed URL: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )

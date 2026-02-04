@@ -16,16 +16,20 @@ import {
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
+import { loadElevenLabsSDK, type ElevenLabsConversation } from '@/lib/elevenlabs-sdk';
+import { installInterceptors } from '@/lib/worklet-interceptor';
 import { VoiceWaveformMini } from './VoiceWaveformMini';
-import { playBackendAudio } from '@/utils/voiceSynthesis';
 
 export type ConversationState = 
   | 'initializing'
+  | 'connecting' 
+  | 'connected'
   | 'listening' 
   | 'processing' 
   | 'speaking' 
   | 'paused'
-  | 'error';
+  | 'error'
+  | 'disconnected';
 
 interface Message {
   id: string;
@@ -67,27 +71,17 @@ export function ConversationalVoice({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   
   // Settings
-  const [sensitivity, setSensitivity] = useState(0.02); // Voice activity detection threshold
-  const [silenceTimeout, setSilenceTimeout] = useState(1500); // ms of silence before processing
   const [continuousMode, setContinuousMode] = useState(true);
   
   // Refs
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const animationFrameRef = useRef<number | null>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isRecordingRef = useRef(false);
-  const lastSpeechTimeRef = useRef<number>(Date.now());
+  const conversationRef = useRef<any>(null); // ElevenLabs conversation instance
   const conversationContextRef = useRef<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isInitializingRef = useRef(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -101,360 +95,196 @@ export function ConversationalVoice({
     };
   }, []);
 
-  // Auto-start listening for instructors
+  // Install interceptors once on component mount
   useEffect(() => {
-    if (autoStart && isInstructor && currentUser && state === 'initializing') {
-      // Small delay to let the page load
+    installInterceptors();
+  }, []);
+
+  // Auto-start connection for instructors
+  useEffect(() => {
+    if (autoStart && isInstructor && currentUser && state === 'initializing' && !isInitializingRef.current) {
+      isInitializingRef.current = true;
       const timer = setTimeout(() => {
-        startListening();
-        // Speak greeting
-        if (greeting) {
-          speakAndListen(greeting);
-        } else {
-          speakAndListen(`Hello ${currentUser.name.split(' ')[0]}! I'm your voice assistant. How can I help you today?`);
-        }
+        initializeConversation();
       }, 1000);
       return () => clearTimeout(timer);
     }
   }, [autoStart, isInstructor, currentUser, state]);
 
-  const cleanup = () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-    }
-    if (speechSynthesis.speaking) {
-      speechSynthesis.cancel();
+  const cleanup = async () => {
+    if (conversationRef.current) {
+      try {
+        await conversationRef.current.endSession();
+      } catch (error) {
+        console.error('Error ending conversation:', error);
+      }
+      conversationRef.current = null;
     }
   };
 
-  // Voice activity detection
-  const detectVoiceActivity = useCallback(() => {
-    if (!analyserRef.current || !isRecordingRef.current) return;
-    
-    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteFrequencyData(dataArray);
-    
-    const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-    const normalizedLevel = average / 255;
-    setAudioLevel(normalizedLevel);
-    
-    // Voice activity detection
-    if (normalizedLevel > sensitivity) {
-      lastSpeechTimeRef.current = Date.now();
-      
-      // Clear any existing silence timer
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
-    } else if (isRecordingRef.current && state === 'listening') {
-      // Check for silence
-      const silenceDuration = Date.now() - lastSpeechTimeRef.current;
-      
-      if (silenceDuration > silenceTimeout && !silenceTimerRef.current) {
-        // User stopped speaking, process the audio
-        silenceTimerRef.current = setTimeout(() => {
-          if (chunksRef.current.length > 0) {
-            stopAndProcess();
-          }
-        }, 200);
-      }
-    }
-    
-    if (isRecordingRef.current) {
-      animationFrameRef.current = requestAnimationFrame(detectVoiceActivity);
-    }
-  }, [sensitivity, silenceTimeout, state]);
-
-  // Start listening
-  const startListening = async () => {
+  const initializeConversation = async () => {
+    setState('connecting');
     setError('');
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }
+      // Get signed URL from our backend
+      console.log('🔑 Getting signed URL from backend...');
+      const response = await fetch('/api/voice/agent/signed-url', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer dummy-token`, // TODO: Replace with real auth
+          'Content-Type': 'application/json',
+        },
       });
-      streamRef.current = stream;
-      
-      // Set up audio analysis
-      audioContextRef.current = new AudioContext();
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      source.connect(analyserRef.current);
-      
-      // Start MediaRecorder
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      chunksRef.current = [];
-      
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-        }
-      };
-      
-      recorder.start(100); // Collect data every 100ms
-      mediaRecorderRef.current = recorder;
-      isRecordingRef.current = true;
-      lastSpeechTimeRef.current = Date.now();
-      
-      setState('listening');
-      onActiveChange?.(true);
-      
-      // Start voice activity detection
-      detectVoiceActivity();
-      
-    } catch (err: any) {
-      console.error('Failed to start listening:', err);
-      setError('Microphone access denied');
-      setState('error');
-    }
-  };
 
-  // Stop recording and process
-  const stopAndProcess = async () => {
-    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
-    
-    isRecordingRef.current = false;
-    
-    // Stop the recorder
-    mediaRecorderRef.current.stop();
-    
-    // Wait for final data
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-    chunksRef.current = [];
-    
-    // Only process if there's enough audio
-    if (blob.size > 1000) {
-      await processAudio(blob);
-    }
-    
-    // Restart listening if in continuous mode
-    if (continuousMode && state !== 'error') {
-      // Restart the recorder
-      if (mediaRecorderRef.current && streamRef.current) {
-        const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            chunksRef.current.push(e.data);
-          }
-        };
-        recorder.start(100);
-        mediaRecorderRef.current = recorder;
-        isRecordingRef.current = true;
-        lastSpeechTimeRef.current = Date.now();
-        
-        if (state !== 'speaking') {
-          setState('listening');
-        }
-        
-        detectVoiceActivity();
+      if (!response.ok) {
+        throw new Error(`Failed to get signed URL: ${response.status} ${response.statusText}`);
       }
-    }
-  };
 
-  // Process audio through the conversational API
-  const processAudio = async (blob: Blob) => {
-    setState('processing');
-    
-    try {
-      // Transcribe
-      const transcribeResult = await api.transcribeAudio(blob);
-      const userText = transcribeResult.transcript.trim();
-      
-      if (!userText || userText.length < 2) {
-        if (continuousMode) setState('listening');
-        return;
-      }
-      
-      // Add user message
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: userText,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, userMessage]);
-      
-      // Update conversation context
-      conversationContextRef.current.push(`User: ${userText}`);
-      if (conversationContextRef.current.length > 10) {
-        conversationContextRef.current = conversationContextRef.current.slice(-10);
-      }
-      
-      // Get conversational response
-      const response = await api.voiceConverse({
-        transcript: userText,
-        context: conversationContextRef.current,
-        user_id: currentUser?.id,
-        current_page: window.location.pathname,
-      });
-      
-      // Add assistant message
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.message,
-        timestamp: new Date(),
-        action: response.action,
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      // Update context
-      conversationContextRef.current.push(`Assistant: ${response.message}`);
-      
-      // Handle navigation
-      if (response.action?.type === 'navigate' && response.action.target) {
-        const target = response.action.target;
-        // Speak then navigate
-        await speakAndListen(response.message);
-        
-        setTimeout(() => {
-          if (onNavigate) {
-            onNavigate(target);
+      const { signed_url } = await response.json();
+      console.log('✅ Got signed URL:', signed_url.substring(0, 50) + '...');
+
+      // Load the ElevenLabs SDK
+      console.log('📦 Loading ElevenLabs SDK...');
+      const Conversation = await loadElevenLabsSDK();
+
+      // Start the conversation session
+      console.log('🚀 Starting conversation session...');
+      conversationRef.current = await Conversation.startSession({
+        signedUrl: signed_url,
+        connectionType: "websocket",
+        onConnect: (data: { conversationId: string }) => {
+          console.log('✅ Connected to ElevenLabs:', data.conversationId);
+          setState('connected');
+          onActiveChange?.(true);
+          
+          // Speak greeting
+          if (greeting) {
+            addAssistantMessage(greeting);
           } else {
-            router.push(target);
+            addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your voice assistant. How can I help you today?`);
           }
-        }, 500);
-        return;
-      }
-      
-      // Handle execution results
-      if (response.action?.type === 'execute' && response.results) {
-        // Results are already included in the message
-      }
-      
-      // Speak response and continue listening
-      await speakAndListen(response.message);
-      
-    } catch (err: any) {
-      console.error('Processing failed:', err);
-      const errorMsg = "I'm sorry, I had trouble understanding that. Could you try again?";
-      
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: errorMsg,
-        timestamp: new Date(),
-      }]);
-      
-      await speakAndListen(errorMsg);
+        },
+        onDisconnect: (data?: any) => {
+          console.log('🔌 Disconnected from ElevenLabs:', data);
+          setState('disconnected');
+          conversationRef.current = null;
+          onActiveChange?.(false);
+        },
+        onStatusChange: (status: string) => {
+          console.log('📊 Status changed:', status);
+          // Map SDK statuses to our state
+          switch (status) {
+            case 'connecting':
+              setState('connecting');
+              break;
+            case 'connected':
+              setState('connected');
+              break;
+            case 'listening':
+              setState('listening');
+              break;
+            case 'thinking':
+              setState('processing');
+              break;
+            case 'speaking':
+              setState('speaking');
+              break;
+            case 'disconnected':
+              setState('disconnected');
+              break;
+            default:
+              console.log('Unknown status:', status);
+          }
+        },
+        onModeChange: (mode: string) => {
+          console.log('🔄 Mode changed:', mode);
+        },
+        onMessage: (message: { source: "user" | "ai"; message: string }) => {
+          console.log('💬 Message received:', message);
+          
+          if (message.source === 'user') {
+            addUserMessage(message.message);
+          } else if (message.source === 'ai') {
+            addAssistantMessage(message.message);
+          }
+        },
+        onError: (error: any) => {
+          console.error('❌ ElevenLabs SDK error:', error);
+          setError(`Connection error: ${error.message || 'Unknown error'}`);
+          setState('error');
+        },
+        onDebug: (debug: any) => {
+          console.log('🐛 Debug:', debug);
+        },
+      });
+
+    } catch (error: any) {
+      console.error('❌ Failed to initialize conversation:', error);
+      setError(`Failed to connect: ${error.message}`);
+      setState('error');
+      isInitializingRef.current = false;
     }
   };
 
-  // Speak text using backend ElevenLabs Agent and then resume listening
-  const speakAndListen = (text: string): Promise<void> => {
-    return new Promise(async (resolve) => {
-      // Pause recording while speaking
-      isRecordingRef.current = false;
-      setState('speaking');
-      
-      try {
-        // Use our backend ElevenLabs Agent TTS service
-        console.log('🎯 Using ElevenLabs Agent for voice synthesis:', text);
-        await playBackendAudio(text);
-        
-        // Resume listening after audio completes
-        if (continuousMode && streamRef.current) {
-          isRecordingRef.current = true;
-          lastSpeechTimeRef.current = Date.now();
-          setState('listening');
-          detectVoiceActivity();
-        } else {
-          setState('paused');
-        }
-        
-        resolve();
-      } catch (error) {
-        console.error('Backend synthesis failed, using browser fallback:', error);
-        
-        // Fallback to browser Speech Synthesis if backend fails
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.rate = 1.0;
-          utterance.pitch = 1.0;
-          
-          utterance.onend = () => {
-            // Resume listening
-            if (continuousMode && streamRef.current) {
-              isRecordingRef.current = true;
-              lastSpeechTimeRef.current = Date.now();
-              setState('listening');
-              detectVoiceActivity();
-            } else {
-              setState('paused');
-            }
-            resolve();
-          };
-          
-          utterance.onerror = () => {
-            if (continuousMode) {
-              isRecordingRef.current = true;
-              setState('listening');
-              detectVoiceActivity();
-            }
-            resolve();
-          };
-          
-          speechSynthesis.speak(utterance);
-        } else {
-          resolve();
-        }
-      }
-    });
-  };
-
-  // Pause/resume listening
-  const togglePause = () => {
-    if (state === 'listening') {
-      isRecordingRef.current = false;
-      setState('paused');
-      onActiveChange?.(false);
-    } else if (state === 'paused') {
-      isRecordingRef.current = true;
-      lastSpeechTimeRef.current = Date.now();
-      setState('listening');
-      onActiveChange?.(true);
-      detectVoiceActivity();
+  const addUserMessage = (content: string) => {
+    const message: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content,
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, message]);
+    
+    // Update conversation context
+    conversationContextRef.current.push(`User: ${content}`);
+    if (conversationContextRef.current.length > 10) {
+      conversationContextRef.current = conversationContextRef.current.slice(-10);
     }
   };
 
-  // Stop completely
-  const stopListening = () => {
-    cleanup();
-    setState('paused');
-    onActiveChange?.(false);
+  const addAssistantMessage = (content: string, action?: Message['action']) => {
+    const message: Message = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content,
+      timestamp: new Date(),
+      action,
+    };
+    setMessages(prev => [...prev, message]);
+    
+    // Update context
+    conversationContextRef.current.push(`Assistant: ${content}`);
   };
 
-  // Restart
-  const restartListening = () => {
-    cleanup();
-    setTimeout(() => startListening(), 100);
+  // Start/stop conversation
+  const toggleConversation = async () => {
+    if (state === 'disconnected' || state === 'error') {
+      await initializeConversation();
+    } else if (conversationRef.current) {
+      await conversationRef.current.endSession();
+      setState('disconnected');
+    }
+  };
+
+  // Restart conversation
+  const restartConversation = async () => {
+    await cleanup();
+    isInitializingRef.current = false;
+    await initializeConversation();
   };
 
   // Get status text
   const getStatusText = () => {
     switch (state) {
       case 'initializing': return 'Starting...';
+      case 'connecting': return 'Connecting...';
+      case 'connected': return 'Connected';
       case 'listening': return 'Listening...';
       case 'processing': return 'Thinking...';
       case 'speaking': return 'Speaking...';
       case 'paused': return 'Paused';
+      case 'disconnected': return 'Disconnected';
       case 'error': return 'Error';
       default: return '';
     }
@@ -463,10 +293,13 @@ export function ConversationalVoice({
   // Get status color
   const getStatusColor = () => {
     switch (state) {
+      case 'connecting': return 'bg-yellow-500';
+      case 'connected': return 'bg-green-500';
       case 'listening': return 'bg-green-500';
       case 'processing': return 'bg-yellow-500';
       case 'speaking': return 'bg-blue-500';
       case 'paused': return 'bg-gray-500';
+      case 'disconnected': return 'bg-gray-500';
       case 'error': return 'bg-red-500';
       default: return 'bg-gray-400';
     }
@@ -496,9 +329,9 @@ export function ConversationalVoice({
               <div className={cn(
                 'w-3 h-3 rounded-full',
                 getStatusColor(),
-                state === 'listening' && 'animate-pulse'
+                (state === 'listening' || state === 'connected') && 'animate-pulse'
               )} />
-              {state === 'listening' && (
+              {(state === 'listening' || state === 'connected') && (
                 <div className={cn(
                   'absolute inset-0 w-3 h-3 rounded-full animate-ping',
                   getStatusColor(),
@@ -508,12 +341,7 @@ export function ConversationalVoice({
             </div>
             
             {!isMinimized && (
-              <>
-                <span className="font-medium text-sm">{getStatusText()}</span>
-                {state === 'listening' && (
-                  <VoiceWaveformMini level={audioLevel} />
-                )}
-              </>
+              <span className="font-medium text-sm">{getStatusText()}</span>
             )}
           </div>
           
@@ -527,10 +355,10 @@ export function ConversationalVoice({
                   <Settings className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); togglePause(); }}
+                  onClick={(e) => { e.stopPropagation(); toggleConversation(); }}
                   className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
                 >
-                  {state === 'paused' ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                  {(state === 'disconnected' || state === 'error') ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
                 </button>
               </>
             )}
@@ -553,7 +381,7 @@ export function ConversationalVoice({
                 
                 <div className="space-y-3">
                   <label className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Continuous listening</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Continuous conversation</span>
                     <input
                       type="checkbox"
                       checked={continuousMode}
@@ -561,21 +389,6 @@ export function ConversationalVoice({
                       className="rounded border-gray-300"
                     />
                   </label>
-                  
-                  <div>
-                    <label className="text-sm text-gray-600 dark:text-gray-400">
-                      Silence detection ({silenceTimeout}ms)
-                    </label>
-                    <input
-                      type="range"
-                      min="500"
-                      max="3000"
-                      step="100"
-                      value={silenceTimeout}
-                      onChange={(e) => setSilenceTimeout(Number(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
                 </div>
               </div>
             )}
@@ -588,8 +401,9 @@ export function ConversationalVoice({
               {messages.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Start speaking to interact</p>
-                  <p className="text-xs mt-1">Try: "Show me my courses"</p>
+                  <p className="text-sm">
+                    {state === 'connecting' ? 'Connecting to voice assistant...' : 'Tap the microphone to start'}
+                  </p>
                 </div>
               ) : (
                 messages.map((msg) => (
@@ -624,7 +438,7 @@ export function ConversationalVoice({
               <div className="px-4 py-2 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
                 {error}
                 <button
-                  onClick={restartListening}
+                  onClick={restartConversation}
                   className="ml-2 underline"
                 >
                   Retry
@@ -633,60 +447,21 @@ export function ConversationalVoice({
             )}
 
             {/* Quick actions */}
-            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex flex-wrap gap-2">
-                <QuickAction onClick={() => speakAndListen("What would you like to do?")} label="Help" />
-                <QuickAction onClick={() => processTextCommand("Show my courses")} label="Courses" />
-                <QuickAction onClick={() => processTextCommand("Show live sessions")} label="Sessions" />
-                <QuickAction onClick={() => processTextCommand("Open forum")} label="Forum" />
+            {(state === 'connected' || state === 'disconnected') && (
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex flex-wrap gap-2">
+                  <QuickAction onClick={() => addUserMessage("What would you like to do?")} label="Help" />
+                  <QuickAction onClick={() => addUserMessage("Show my courses")} label="Courses" />
+                  <QuickAction onClick={() => addUserMessage("Show live sessions")} label="Sessions" />
+                  <QuickAction onClick={() => addUserMessage("Open forum")} label="Forum" />
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>
     </div>
   );
-
-  // Process a text command directly (for quick actions)
-  async function processTextCommand(text: string) {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: text,
-      timestamp: new Date(),
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
-    setState('processing');
-    
-    try {
-      const response = await api.voiceConverse({
-        transcript: text,
-        context: conversationContextRef.current,
-        user_id: currentUser?.id,
-        current_page: window.location.pathname,
-      });
-      
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.message,
-        timestamp: new Date(),
-        action: response.action,
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      if (response.action?.type === 'navigate' && response.action.target) {
-        await speakAndListen(response.message);
-        setTimeout(() => router.push(response.action!.target!), 500);
-      } else {
-        await speakAndListen(response.message);
-      }
-    } catch (err) {
-      console.error(err);
-      await speakAndListen("Sorry, I couldn't process that request.");
-    }
-  }
 }
 
 // Quick action button component

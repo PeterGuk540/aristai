@@ -230,43 +230,7 @@ export const api = {
   rejectInstructorRequest: (userId: number, adminUserId: number) =>
     fetchApi<any>(`/users/${userId}/reject-instructor?admin_user_id=${adminUserId}`, { method: 'POST' }),
 
-  // Voice Assistant
-  transcribeAudio: async (blob: Blob) => {
-    const url = `${API_BASE}/voice/transcribe`;
-    const googleToken = getGoogleIdToken();
-    const msToken = getMicrosoftIdToken();
-    const idToken = googleToken || msToken || await getIdToken();
-    const formData = new FormData();
-    formData.append('file', blob, 'recording.webm');
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
-      body: formData,
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      const message = formatApiErrorMessage(error?.detail ?? error);
-      throw new ApiError(response.status, message || `HTTP ${response.status}`);
-    }
-    return response.json() as Promise<{ transcript: string; language?: string; duration_seconds?: number }>;
-  },
-
-  voicePlan: (transcript: string) =>
-    fetchApi<{ plan: any; transcript: string }>('/voice/plan', {
-      method: 'POST',
-      body: JSON.stringify({ transcript }),
-    }),
-
-  voiceExecute: (plan: any, confirmed: boolean, userId?: number) =>
-    fetchApi<{ results: any[]; summary: string; audio_url?: string }>(
-      `/voice/execute?user_id=${userId || 1}`,
-      { method: 'POST', body: JSON.stringify({ plan, confirmed }) },
-    ),
-
-  voiceAudit: (userId?: number, skip?: number, limit?: number) =>
-    fetchApi<{ audits: any[]; total: number }>(
-      `/voice/audit?user_id=${userId || 1}&skip=${skip || 0}&limit=${limit || 50}`,
-    ),
+  // Voice - ElevenLabs Agent (no legacy TTS API methods needed)
 
   // CSV Roster Upload
   uploadRosterCsv: async (courseId: number, file: File) => {

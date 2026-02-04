@@ -3,32 +3,29 @@
 import { cn } from '@/lib/utils';
 
 interface VoiceWaveformMiniProps {
-  level: number;
+  isActive?: boolean;
   className?: string;
 }
 
-export function VoiceWaveformMini({ level, className }: VoiceWaveformMiniProps) {
-  const bars = 5;
-  
+export function VoiceWaveformMini({ isActive = false, className }: VoiceWaveformMiniProps) {
   return (
-    <div className={cn('flex items-center gap-0.5 h-4', className)}>
-      {Array.from({ length: bars }).map((_, i) => {
-        // Create a wave pattern based on position and level
-        const centerDistance = Math.abs(i - (bars - 1) / 2) / ((bars - 1) / 2);
-        const baseHeight = 0.3 + (1 - centerDistance) * 0.7;
-        const height = Math.max(0.2, baseHeight * (0.3 + level * 0.7));
-        
-        return (
-          <div
-            key={i}
-            className="w-0.5 bg-white rounded-full transition-all duration-75"
-            style={{
-              height: `${height * 100}%`,
-              opacity: 0.6 + level * 0.4,
-            }}
-          />
-        );
-      })}
+    <div className={cn('flex items-center gap-1', className)}>
+      {[1, 2, 3, 4, 5].map((bar) => (
+        <div
+          key={bar}
+          className={cn(
+            'w-1 bg-primary-400 rounded-full transition-all duration-300',
+            isActive ? 'animate-pulse' : 'opacity-30',
+            isActive && bar === 3 && 'h-4',
+            isActive && bar !== 3 && 'h-2',
+            !isActive && 'h-2'
+          )}
+          style={{
+            height: isActive ? `${Math.random() * 16 + 8}px` : '8px',
+            animationDelay: isActive ? `${bar * 100}ms` : '0ms',
+          }}
+        />
+      ))}
     </div>
   );
 }

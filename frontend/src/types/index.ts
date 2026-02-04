@@ -257,37 +257,7 @@ export interface ReportJSON {
   };
 }
 
-// Voice Assistant types
-export interface VoicePlanStep {
-  tool_name: string;
-  args: Record<string, any>;
-  mode: 'read' | 'write';
-}
-
-export interface VoicePlan {
-  intent: string;
-  steps: VoicePlanStep[];
-  rationale: string;
-  required_confirmations: string[];
-}
-
-export interface VoiceStepResult {
-  tool_name: string;
-  success: boolean;
-  result?: any;
-  error?: string;
-  skipped: boolean;
-  skipped_reason?: string;
-}
-
-export interface VoiceAuditEntry {
-  id: number;
-  user_id: number;
-  transcript_hash: string;
-  plan_json: VoicePlan;
-  tool_calls?: VoiceStepResult[];
-  created_at: string;
-}
+// Legacy voice types removed - using ElevenLabs Agent now
 
 // API Response types
 export interface TaskResponse {

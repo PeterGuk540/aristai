@@ -126,7 +126,8 @@ export function ConversationalVoice({
     try {
       // Get signed URL from our backend
       console.log('🔑 Getting signed URL from backend...');
-      const response = await fetch('/api/voice/agent/signed-url', {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/api/voice/agent/signed-url`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer dummy-token`, // TODO: Replace with real auth

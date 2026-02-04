@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Backend API URL - use local for development, API Gateway for production
-const BACKEND_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://koxlvlxb74.execute-api.us-east-1.amazonaws.com'
-  : 'http://localhost:8000';
+// Backend API URL - API Gateway with Cognito JWT authentication
+// API Gateway in us-east-1 (same region as EC2), using aristai-user-pool for JWT validation
+const BACKEND_URL = 'https://koxlvlxb74.execute-api.us-east-1.amazonaws.com';
 
 export async function GET(
   request: NextRequest,
@@ -50,9 +49,16 @@ async function handleProxy(
   const url = new URL(request.url);
   const queryString = url.search;
 
-  let targetUrl = BACKEND_URL + '/api/' + path + queryString;
+  let targetUrl = `${BACKEND_URL}/api/${path}${queryString}`;
 
-  console.log('Proxying ' + method + ' ' + path + ' -> ' + targetUrl);
+  // Legacy voice synthesis endpoint removed - use ElevenLabs Agents signed URL flow instead
+  // if (path.includes('voice/synthesize') && process.env.NODE_ENV !== 'production') {
+  //   targetUrl = `http://localhost:8000/api/voice/synthesize${queryString}`;
+  //   console.log('🎯 Voice synthesis request -> forwarding to local backend:', targetUrl);
+  // }
+  
+  // Note: /api/voice/synthesize is deprecated for production
+  // Use /api/voice/agent/signed-url + official ElevenLabs SDK instead
 
   try {
     const headers = new Headers(request.headers);

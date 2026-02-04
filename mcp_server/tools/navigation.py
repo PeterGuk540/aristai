@@ -18,7 +18,7 @@ def navigate_to_page(page: str) -> Dict[str, Any]:
         page: The page to navigate to (courses, sessions, forum, reports, console, dashboard)
     
     Returns:
-        Navigation result with path and confirmation
+        Navigation result with path and confirmation - this will automatically navigate the user's browser.
     """
     page_map = {
         'courses': '/courses',
@@ -32,6 +32,43 @@ def navigate_to_page(page: str) -> Dict[str, Any]:
         'dashboard': '/dashboard',
         'home': '/dashboard',
         'settings': '/console'
+    }
+    
+    page_lower = page.lower().strip()
+    
+    # Direct matches
+    if page_lower in page_map:
+        path = page_map[page_lower]
+        return {
+            "success": True,
+            "action": "navigate_and_execute",
+            "path": path,
+            "page": page_lower,
+            "message": f"Navigating to {page_lower} page...",
+            "voice_response": f"I'll take you to the {page_lower} page right now.",
+            "browser_control": True,
+            "executed": True
+        }
+    
+    # Partial matches
+    for key, path in page_map.items():
+        if key in page_lower:
+            return {
+                "success": True,
+                "action": "navigate_and_execute", 
+                "path": path,
+                "page": key,
+                "message": f"Navigating to {key} page...",
+                "voice_response": f"I'll take you to the {key} page right now.",
+                "browser_control": True,
+                "executed": True
+            }
+    
+    return {
+        "success": False,
+        "error": f"Unknown page '{page}'. Available pages: courses, sessions, forum, reports, console, dashboard",
+        "voice_response": f"Sorry, I don't know how to navigate to {page}. Available pages are courses, sessions, forum, reports, console, and dashboard.",
+        "browser_control": False
     }
     
     page_lower = page.lower().strip()

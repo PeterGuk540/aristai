@@ -154,11 +154,26 @@ const handleActionExecution = async (
       const result = await response.json();
       console.log('✅ MCP tool executed successfully:', result);
       
-      // Handle navigation from MCP tool result
-      if (result.action === 'navigate' && result.path && onNavigate) {
-        setTimeout(() => onNavigate(result.path), 1500);
+      // Handle browser control actions (navigation, etc.)
+      if (result.action && result.action.includes('navigate') && result.path && onNavigate) {
+        setTimeout(() => onNavigate(result.path), 1000); // Faster navigation
         if (addAssistantMessage) {
-          addAssistantMessage(result.voice_response || `🔗 Navigating to ${result.page}...`);
+          addAssistantMessage(result.voice_response || `🔗 Taking you to ${result.page}...`, {
+            type: 'navigate',
+            target: result.page,
+            executed: true
+          });
+        }
+        return true;
+      }
+      
+      // Handle other browser control actions
+      if (result.browser_control && result.executed) {
+        if (addAssistantMessage) {
+          addAssistantMessage(result.voice_response || `✅ ${toolName} executed successfully.`, {
+            type: 'execute',
+            executed: true
+          });
         }
         return true;
       }
@@ -450,14 +465,40 @@ export function ConversationalVoice({
           console.log('💬 Message received:', { source, message });
           
           if (source === 'user') {
-            // Add user message with full transcript
-            addUserMessage(message);
+            // Don't duplicate - onTranscription handles user messages
+            console.log('User message from SDK:', message);
           } else if (source === 'ai') {
             // Add AI response message
             addAssistantMessage(message);
             
             // Auto-execute actions based on AI message content
             handleActionExecution(message, onNavigate, addAssistantMessage);
+          }
+        },
+        
+        // Add transcription callback for live speech-to-text display
+        onTranscription: (transcript: string, isFinal: boolean) => {
+          console.log('🎤 Transcription received:', { transcript, isFinal });
+          
+          if (isFinal) {
+            // Add final user transcript as a message
+            addUserMessage(transcript);
+          } else {
+            // Show interim transcript
+            setMessages(prev => {
+              const filtered = prev.filter(msg => !msg.isInterim);
+              return [
+                ...filtered,
+                {
+                  id: `interim-${Date.now()}`,
+                  role: 'user-transcript' as 'user',
+                  content: transcript,
+                  timestamp: new Date(),
+                  isTranscript: true,
+                  isInterim: true
+                }
+              ];
+            });
           }
         },
 
@@ -527,8 +568,8 @@ export function ConversationalVoice({
       timestamp: new Date(),
     };
     setMessages(prev => {
-      // Remove any interim transcripts
-      const filtered = prev.filter(msg => !msg.isInterim);
+      // Remove any interim transcripts before adding user message
+      const filtered = prev.filter(msg => !msg.isInterim && !msg.isTranscript);
       return [...filtered, message];
     });
     

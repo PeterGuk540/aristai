@@ -53,6 +53,7 @@ from mcp_server.tools import (
     reports,
     copilot,
     enrollment,
+    navigation,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -737,6 +738,81 @@ def build_tool_registry():
         handler=enrollment.get_users,
         mode="read",
         category="enrollment",
+    )
+    
+    # ============ NAVIGATION TOOLS ============
+    
+    register_tool(
+        name="navigate_to_page",
+        description="Navigate to a specific page in the AristAI interface. Use this when user asks to go to a page like forum, courses, dashboard, etc.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "string",
+                    "description": "The page to navigate to (courses, sessions, forum, reports, console, dashboard, home, settings)",
+                    "enum": ["courses", "sessions", "forum", "reports", "console", "dashboard", "home", "settings"]
+                },
+            },
+            "required": ["page"],
+        },
+        handler=navigation.navigate_to_page,
+        mode="write",
+        category="navigation",
+    )
+    
+    register_tool(
+        name="get_available_pages",
+        description="Get list of all available pages for navigation.",
+        parameters={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        handler=navigation.get_available_pages,
+        mode="read",
+        category="navigation",
+    )
+    
+    register_tool(
+        name="get_current_context",
+        description="Get current page context and available actions.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "context": {
+                    "type": "object",
+                    "description": "Current context object from the application",
+                    "properties": {
+                        "current_page": {"type": "string", "description": "Current page name"},
+                        "user_role": {"type": "string", "description": "Current user role"}
+                    }
+                },
+            },
+            "required": [],
+        },
+        handler=navigation.get_current_context,
+        mode="read",
+        category="navigation",
+    )
+    
+    register_tool(
+        name="get_help_for_page",
+        description="Get help information for a specific page.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "string",
+                    "description": "The page to get help for (courses, sessions, forum, reports, console, dashboard)",
+                    "enum": ["courses", "sessions", "forum", "reports", "console", "dashboard"]
+                },
+            },
+            "required": ["page"],
+        },
+        handler=navigation.get_help_for_page,
+        mode="read",
+        category="navigation",
     )
 
 

@@ -124,16 +124,6 @@ const handleActionExecution = async (
 ) => {
   const lowerMessage = message.toLowerCase();
   
-  // Navigation actions - still handle directly for better UX
-  if (lowerMessage.includes('navigating to') || lowerMessage.includes('take you to')) {
-    const pathMatch = message.match(/(?:to|page|section)\s+(.+?)(?:\.|\s|$)/i);
-    if (pathMatch && onNavigate) {
-      const path = extractPathFromText(pathMatch[1]);
-      setTimeout(() => onNavigate(path), 1500);
-    }
-    return;
-  }
-
   // MCP Tool Execution for "I speak, you do" functionality
   const executeMCPTool = async (
     toolName: string, 
@@ -162,9 +152,19 @@ const handleActionExecution = async (
       const result = await response.json();
       console.log('✅ MCP tool executed successfully:', result);
       
+      // Handle navigation from MCP tool result
+      if (result.action === 'navigate' && result.path && onNavigate) {
+        setTimeout(() => onNavigate(result.path), 1500);
+        if (addAssistantMessage) {
+          addAssistantMessage(result.voice_response || `🔗 Navigating to ${result.page}...`);
+        }
+        return true;
+      }
+      
       // Provide user-friendly feedback
       if (addAssistantMessage) {
-        addAssistantMessage(`✅ ${toolName} executed successfully.`);
+        const feedback = result.voice_response || `✅ ${toolName} executed successfully.`;
+        addAssistantMessage(feedback);
       }
       return true;
       
@@ -176,6 +176,16 @@ const handleActionExecution = async (
       return false;
     }
   };
+
+  // Navigation commands - use MCP navigation tools
+  if (lowerMessage.includes('navigate') || lowerMessage.includes('go to') || lowerMessage.includes('take me to')) {
+    const pathMatch = message.match(/(?:to|page|section)\s+(.+?)(?:\.|\s|$)/i);
+    if (pathMatch) {
+      const page = extractPathFromText(pathMatch[1]).replace('/', '');
+      await executeMCPTool('navigate_to_page', { page }, addAssistantMessage);
+      return;
+    }
+  }
 
   // Course creation via MCP
   if (lowerMessage.includes('create course') || lowerMessage.includes('create a course')) {
@@ -206,6 +216,21 @@ const handleActionExecution = async (
     const enrollmentData = extractEnrollmentData(message);
     if (enrollmentData) {
       await executeMCPTool('enroll_students', enrollmentData, addAssistantMessage);
+    }
+  }
+
+  // Help commands
+  if (lowerMessage.includes('help') || lowerMessage.includes('what can i do')) {
+    await executeMCPTool('get_available_pages', {}, addAssistantMessage);
+  }
+  
+  // Page-specific help
+  if (lowerMessage.includes('help for') || lowerMessage.includes('about')) {
+    const pageMatch = message.match(/(?:help for|about)\s+(.+?)(?:\.|\s|$)/i);
+    if (pageMatch) {
+      const page = extractPathFromText(pageMatch[1]).replace('/', '');
+      await executeMCPTool('get_help_for_page', { page }, addAssistantMessage);
+      return;
     }
   }
 };
@@ -344,7 +369,7 @@ export function ConversationalVoice({
           if (greeting) {
             addAssistantMessage(greeting);
           } else {
-            addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant. How can I help you today?`);
+            addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant. I can help you navigate to any page, create courses, manage sessions, generate reports, and much more. Just tell me what you'd like to do!`);
           }
         },
         onDisconnect: (data?: any) => {

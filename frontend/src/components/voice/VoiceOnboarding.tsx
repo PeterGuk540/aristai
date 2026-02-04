@@ -29,8 +29,21 @@ export function VoiceOnboarding({ role, userName, onComplete }: VoiceOnboardingP
 
         <div className="space-y-4">
           <div className="text-center py-4">
-            <div className="w-20 h-20 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Mic className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+            <div className="w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+              <img 
+                src="/AristAI_logo.png" 
+                alt="AristAI Logo" 
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  // Fallback to icon if image fails to load
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.parentElement?.classList.add('bg-primary-100', 'dark:bg-primary-900/30', 'rounded-full');
+                  const icon = document.createElement('div');
+                  icon.innerHTML = '🎓';
+                  icon.className = 'text-4xl';
+                  e.currentTarget.parentElement?.appendChild(icon);
+                }}
+              />
             </div>
           </div>
           

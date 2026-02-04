@@ -19,6 +19,7 @@ from mcp_server.tools import (
     copilot,
     reports,
     enrollment,
+    navigation,
 )
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "copilot",
     "reports",
     "enrollment",
+    "navigation",
 ]

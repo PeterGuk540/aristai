@@ -58,7 +58,10 @@ def _synthesize_elevenlabs(text: str, settings) -> TTSResult:
         json={"text": text, "model_id": settings.elevenlabs_model_id},
         timeout=30.0,
     )
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        raise ValueError(
+            f"ElevenLabs Agent API error {resp.status_code}: {resp.text}"
+        )
     return TTSResult(audio_bytes=resp.content, content_type="audio/mpeg")
 
 
@@ -78,18 +81,17 @@ def _synthesize_elevenlabs_agent(text: str, settings) -> TTSResult:
     
     # Create a simple Agent API request (not complex simulation)
     payload = {
-        "text": text,
-        "language": "en",
-        "voice_settings": {
-            "stability": 0.75,
-            "similarity_boost": 0.75,
-            "style": "moderate"
+    "simulation_specification": {
+        "imput": {
+        "text": text
         }
+    }
     }
 
     headers = {
         "xi-api-key": settings.elevenlabs_api_key,
         "Content-Type": "application/json",
+    "Accept": "application/json",
     }
 
     try:

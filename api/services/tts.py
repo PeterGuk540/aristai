@@ -3,7 +3,8 @@ TTS (Text-to-Speech) service abstraction.
 
 Provider selected via VOICE_TTS_PROVIDER env var:
   - "stub": returns empty bytes (for dev/testing)
-  - "elevenlabs": uses ElevenLabs API via httpx
+  - "elevenlabs": uses ElevenLabs REST TTS API via httpx
+  - "elevenlabs_realtime": uses ElevenLabs realtime websocket streaming API
 """
 import logging
 from api.core.config import get_settings
@@ -22,6 +23,8 @@ def synthesize(text: str) -> TTSResult:
     settings = get_settings()
     provider = settings.voice_tts_provider
 
+    if provider == "elevenlabs_realtime":
+        return _synthesize_elevenlabs_realtime(text, settings)
     if provider == "elevenlabs":
         return _synthesize_elevenlabs(text, settings)
     else:
@@ -41,7 +44,7 @@ def _synthesize_elevenlabs(text: str, settings) -> TTSResult:
     if not settings.elevenlabs_api_key:
         raise ValueError("ELEVENLABS_API_KEY required for ElevenLabs TTS provider")
 
-    voice_id = "21m00Tcm4TlvDq8ikWAM"  # Rachel default voice
+    voice_id = settings.elevenlabs_voice_id
 
     resp = httpx.post(
         f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
@@ -49,8 +52,41 @@ def _synthesize_elevenlabs(text: str, settings) -> TTSResult:
             "xi-api-key": settings.elevenlabs_api_key,
             "Content-Type": "application/json",
         },
-        json={"text": text, "model_id": "eleven_monolingual_v1"},
+        json={"text": text, "model_id": settings.elevenlabs_model_id},
         timeout=30.0,
     )
     resp.raise_for_status()
     return TTSResult(audio_bytes=resp.content, content_type="audio/mpeg")
+
+
+def _synthesize_elevenlabs_realtime(text: str, settings) -> TTSResult:
+    """Realtime TTS via ElevenLabs websocket streaming API."""
+    import base64
+    import json
+    from websockets.sync.client import connect
+
+    if not settings.elevenlabs_api_key:
+        raise ValueError("ELEVENLABS_API_KEY required for ElevenLabs TTS provider")
+
+    voice_id = settings.elevenlabs_voice_id
+    model_id = settings.elevenlabs_model_id
+    ws_url = (
+        "wss://api.elevenlabs.io/v1/text-to-speech/"
+        f"{voice_id}/stream-input?model_id={model_id}"
+    )
+
+    audio_chunks = []
+    with connect(ws_url, extra_headers={"xi-api-key": settings.elevenlabs_api_key}) as ws:
+        ws.send(json.dumps({"text": text}))
+        ws.send(json.dumps({"text": "", "flush": True}))
+
+        while True:
+            message = ws.recv()
+            data = json.loads(message)
+            audio_b64 = data.get("audio")
+            if audio_b64:
+                audio_chunks.append(base64.b64decode(audio_b64))
+            if data.get("isFinal") or data.get("event") == "end":
+                break
+
+    return TTSResult(audio_bytes=b"".join(audio_chunks), content_type="audio/mpeg")

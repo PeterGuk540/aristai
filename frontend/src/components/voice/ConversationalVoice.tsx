@@ -1,35 +1,21 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Mic,
-  MicOff,
-  Volume2,
-  X,
-  Loader2,
-  MessageSquare,
-  ChevronUp,
-  ChevronDown,
-  Settings,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { api } from '@/lib/api';
+import { Conversation } from '@11labs/client';
+import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles } from 'lucide-react';
 import { useUser } from '@/lib/context';
-import { Conversation } from "@elevenlabs/client";
+import { cn } from '@/lib/utils';
 
-import { VoiceWaveformMini } from './VoiceWaveformMini';
-
-export type ConversationState = 
-  | 'initializing'
+type ConversationState = 
+  | 'initializing' 
   | 'connecting' 
-  | 'connected'
+  | 'connected' 
   | 'listening' 
   | 'processing' 
   | 'speaking' 
-  | 'paused'
-  | 'error'
-  | 'disconnected';
+  | 'disconnected'
+  | 'error';
 
 interface Message {
   id: string;
@@ -56,7 +42,7 @@ interface ConversationalVoiceProps {
   className?: string;
 }
 
-// MCP Tool Execution for "I speak, you do" functionality
+// Utility functions for extracting data from messages
 const extractCourseTitle = (message: string): string | null => {
   const match = message.match(/(?:course|create).+?(?:called|titled|named)?\s+["'"](.+?)["'"]/i);
   return match ? match[1] : null;
@@ -224,80 +210,6 @@ const handleActionExecution = async (
   }
 };
 
-const extractCourseTitle = (message: string): string | null => {
-  const match = message.match(/(?:course|create).+?(?:called|titled|named)?\s+["'"](.+?)["'"]/i);
-  return match ? match[1] : null;
-};
-
-const extractPollData = (message: string): any => {
-  const questionMatch = message.match(/(?:poll|create).+?(?:question)?\s+["'"](.+?)["'"]/i);
-  if (!questionMatch) return null;
-  
-  const question = questionMatch[1];
-  
-  // Try to extract options
-  const optionsMatch = message.match(/options?[:\s]+(.+?)(?:\.|$)/i);
-  if (optionsMatch) {
-    const optionsText = optionsMatch[1];
-    const options = optionsText.split(/(?:,\s*|\s+and\s+)/).map(opt => opt.trim().replace(/["']/g, ''));
-    if (options.length >= 2) {
-      return { question, options_json: options };
-    }
-  }
-  
-  return { question, options_json: ["Yes", "No", "Maybe"] };
-};
-
-const extractReportData = (message: string): any => {
-  const sessionMatch = message.match(/(?:report|generate).+?(?:session)?\s+["'"]?(.+?)["'"]?/i);
-  if (sessionMatch) {
-    return { session_id_or_title: sessionMatch[1] };
-  }
-  return null;
-};
-
-const extractEnrollmentData = (message: string): any => {
-  const courseMatch = message.match(/(?:enroll).+?(?:course)?\s+["'"](.+?)["'"]/i);
-  const studentMatch = message.match(/(?:enroll).+?(?:students?)\s+(.+?)(?:\.|$)/i);
-  
-  const data: any = {};
-  if (courseMatch) data.course_title = courseMatch[1];
-  if (studentMatch) data.student_identifiers = studentMatch[1].split(/(?:,\s*|\s+and\s+)/);
-  
-  return Object.keys(data).length > 0 ? data : null;
-};
-
-const extractPathFromText = (text: string): string => {
-  const pathMap: { [key: string]: string } = {
-    'courses': '/courses',
-    'course': '/courses', 
-    'sessions': '/sessions',
-    'session': '/sessions',
-    'dashboard': '/dashboard',
-    'home': '/dashboard',
-    'forum': '/forum',
-    'reports': '/reports',
-    'console': '/console',
-    'settings': '/console'
-  };
-  
-  const lowerText = text.toLowerCase().trim();
-  
-  // Direct path matches
-  if (lowerText in pathMap) {
-    return pathMap[lowerText];
-  }
-  
-  // Partial matches
-  for (const [key, path] of Object.entries(pathMap)) {
-    if (lowerText.includes(key)) {
-      return path;
-    }
-  }
-  
-  return '/dashboard'; // fallback
-};
-
 export function ConversationalVoice({
   onNavigate,
   onActiveChange,
@@ -336,8 +248,6 @@ export function ConversationalVoice({
       cleanup();
     };
   }, []);
-
-
 
   // Auto-start connection for instructors
   useEffect(() => {
@@ -390,11 +300,15 @@ export function ConversationalVoice({
             errorCode = 'E_AUTH';
             break;
           case 403:
-            errorMessage = 'Access denied. You do not have permission to use voice features.';
-            errorCode = 'E_AUTH';
+            errorMessage = 'Access denied. Voice features may not be available for your account.';
+            errorCode = 'E_FORBIDDEN';
+            break;
+          case 404:
+            errorMessage = 'Voice service not found. Please contact support.';
+            errorCode = 'E_NOT_FOUND';
             break;
           case 429:
-            errorMessage = 'Too many requests. Please try again later.';
+            errorMessage = 'Too many requests. Please wait and try again.';
             errorCode = 'E_RATE_LIMIT';
             break;
           case 500:
@@ -495,9 +409,6 @@ export function ConversationalVoice({
             } else if (error.includes('connection') || error.includes('connect')) {
               errorMessage = 'Cannot connect to voice service. Please check your internet connection.';
               errorCode = 'E_11LABS_CONNECTION';
-            } else {
-              errorMessage = `Voice service error: ${error}`;
-              errorCode = 'E_11LABS_ERROR';
             }
           }
           
@@ -550,11 +461,8 @@ export function ConversationalVoice({
     };
     setMessages(prev => [...prev, message]);
     
-    // Update conversation context
+    // Update context
     conversationContextRef.current.push(`User: ${content}`);
-    if (conversationContextRef.current.length > 10) {
-      conversationContextRef.current = conversationContextRef.current.slice(-10);
-    }
   };
 
   const addAssistantMessage = (content: string, action?: Message['action']) => {
@@ -588,157 +496,112 @@ export function ConversationalVoice({
     await initializeConversation();
   };
 
-  // Get status text
-  const getStatusText = () => {
-    switch (state) {
-      case 'initializing': return 'Starting...';
-      case 'connecting': return 'Connecting...';
-      case 'connected': return 'Connected';
-      case 'listening': return 'Listening...';
-      case 'processing': return 'Thinking...';
-      case 'speaking': return 'Speaking...';
-      case 'paused': return 'Paused';
-      case 'disconnected': return 'Disconnected';
-      case 'error': return 'Error';
-      default: return '';
-    }
+  // Minimize/Expand controls
+  const toggleMinimize = () => {
+    setIsMinimized(!isMinimized);
   };
 
-  // Get status color
-  const getStatusColor = () => {
-    switch (state) {
-      case 'connecting': return 'bg-yellow-500';
-      case 'connected': return 'bg-green-500';
-      case 'listening': return 'bg-green-500';
-      case 'processing': return 'bg-yellow-500';
-      case 'speaking': return 'bg-blue-500';
-      case 'paused': return 'bg-gray-500';
-      case 'disconnected': return 'bg-gray-500';
-      case 'error': return 'bg-red-500';
-      default: return 'bg-gray-400';
-    }
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded);
   };
 
-  // Don't render for non-instructors
-  if (!isInstructor) return null;
+  // State-based UI helpers
+  const isConnecting = ['initializing', 'connecting'].includes(state);
+  const isReady = ['connected', 'listening', 'processing', 'speaking'].includes(state);
+  const isDisconnected = ['disconnected', 'error'].includes(state);
+  const isActive = state !== 'disconnected' && state !== 'error';
 
   return (
     <div className={cn(
-      'fixed bottom-4 right-4 z-50',
+      "fixed z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 transition-all duration-300",
+      isMinimized ? "w-12 h-12" : isExpanded ? "w-96 h-[600px]" : "w-80 h-[500px]",
+      "right-4 bottom-4",
       className
     )}>
-      {/* Main panel */}
-      <div className={cn(
-        'bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300',
-        isMinimized ? 'w-auto' : isExpanded ? 'w-96' : 'w-80'
-      )}>
-        {/* Header - always visible */}
-        <div 
-          className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white cursor-pointer"
-          onClick={() => !isMinimized && setIsExpanded(!isExpanded)}
-        >
-          <div className="flex items-center gap-3">
-            {/* Status indicator */}
-            <div className="relative">
-              <div className={cn(
-                'w-3 h-3 rounded-full',
-                getStatusColor(),
-                (state === 'listening' || state === 'connected') && 'animate-pulse'
-              )} />
-              {(state === 'listening' || state === 'connected') && (
-                <div className={cn(
-                  'absolute inset-0 w-3 h-3 rounded-full animate-ping',
-                  getStatusColor(),
-                  'opacity-75'
-                )} />
+      {/* Main Interface */}
+      {!isMinimized ? (
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                Voice Assistant
+              </span>
+              {isActive && (
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               )}
             </div>
             
-            {!isMinimized && (
-              <span className="font-medium text-sm">{getStatusText()}</span>
-            )}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleExpand}
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title={isExpanded ? "Collapse" : "Expand"}
+              >
+                {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={toggleMinimize}
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="Minimize"
+              >
+                <div className="w-4 h-1 bg-gray-500 dark:bg-gray-400" />
+              </button>
+            </div>
           </div>
-          
-          <div className="flex items-center gap-1">
-            {!isMinimized && (
-              <>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); }}
-                  className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
-                >
-                  <Settings className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleConversation(); }}
-                  className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
-                >
-                  {(state === 'disconnected' || state === 'error') ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-                </button>
-              </>
-            )}
-            <button
-              onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
-              className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
-            >
-              {isMinimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
+
+          {/* Status Indicator */}
+          <div className="px-3 py-2 text-xs text-center border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-center gap-2">
+              {state === 'initializing' && <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" />}
+              {state === 'connecting' && <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />}
+              {state === 'connected' && <div className="w-2 h-2 bg-green-500 rounded-full" />}
+              {state === 'listening' && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+              {state === 'processing' && <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />}
+              {state === 'speaking' && <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />}
+              {state === 'disconnected' && <div className="w-2 h-2 bg-gray-300 rounded-full" />}
+              {state === 'error' && <div className="w-2 h-2 bg-red-600 rounded-full" />}
+              
+              <span className="text-gray-600 dark:text-gray-400 capitalize">
+                {state === 'initializing' && 'Initializing...'}
+                {state === 'connecting' && 'Connecting...'}
+                {state === 'connected' && 'Ready'}
+                {state === 'listening' && 'Listening...'}
+                {state === 'processing' && 'Thinking...'}
+                {state === 'speaking' && 'Speaking...'}
+                {state === 'disconnected' && 'Disconnected'}
+                {state === 'error' && 'Error'}
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Content - hidden when minimized */}
-        {!isMinimized && (
-          <>
-            {/* Settings panel */}
-            {showSettings && (
-              <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Voice Settings</h4>
-                
-                <div className="space-y-3">
-                  <label className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Continuous conversation</span>
-                    <input
-                      type="checkbox"
-                      checked={continuousMode}
-                      onChange={(e) => setContinuousMode(e.target.checked)}
-                      className="rounded border-gray-300"
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* Messages */}
-            <div className={cn(
-              'overflow-y-auto p-4 space-y-3',
-              isExpanded ? 'max-h-96' : 'max-h-64'
-            )}>
+          {/* Messages */}
+          {isExpanded && (
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
               {messages.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">
-                    {state === 'connecting' ? 'Connecting to voice assistant...' : 'Tap the microphone to start'}
-                  </p>
+                <div className="text-center text-gray-500 dark:text-gray-400 text-sm py-8">
+                  {isReady ? 'Start speaking when you see the listening indicator...' : 'Click start to begin voice conversation'}
                 </div>
               ) : (
                 messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={cn(
-                      'flex',
-                      msg.role === 'user' ? 'justify-end' : 'justify-start'
-                    )}
-                  >
+                  <div key={msg.id} className={cn(
+                    "flex gap-2",
+                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+                  )}>
                     <div className={cn(
-                      'max-w-[85%] rounded-2xl px-4 py-2',
-                      msg.role === 'user'
-                        ? 'bg-primary-600 text-white rounded-br-md'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md'
+                      "max-w-[80%] px-3 py-2 rounded-lg text-sm",
+                      msg.role === 'user' 
+                        ? 'bg-primary-600 text-white' 
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
                     )}>
-                      <p className="text-sm">{msg.content}</p>
-                      {msg.action?.type === 'navigate' && (
-                        <p className="text-xs mt-1 opacity-75">
-                          → Navigating to {msg.action.target}
-                        </p>
+                      {msg.content}
+                      {msg.action && (
+                        <div className="mt-1 text-xs opacity-75">
+                          {msg.action.type === 'navigate' && `🔗 ${msg.action.target}`}
+                          {msg.action.type === 'execute' && '⚡ Executing...'}
+                          {msg.action.type === 'info' && 'ℹ️'}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -746,48 +609,92 @@ export function ConversationalVoice({
               )}
               <div ref={messagesEndRef} />
             </div>
+          )}
 
-            {/* Error display */}
-            {error && (
-              <div className="px-4 py-2 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
-                {error}
+          {/* Error Display */}
+          {error && (
+            <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border-t border-red-200 dark:border-red-800">
+              <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Controls */}
+          <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleConversation}
+                disabled={isConnecting}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  state === 'disconnected' || state === 'error'
+                    ? "bg-primary-600 hover:bg-primary-700 text-white"
+                    : "bg-red-600 hover:bg-red-700 text-white",
+                  isConnecting && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                {state === 'disconnected' || state === 'error' ? (
+                  <>
+                    <Mic className="w-4 h-4" />
+                    Start
+                  </>
+                ) : (
+                  <>
+                    <MicOff className="w-4 h-4" />
+                    Stop
+                  </>
+                )}
+              </button>
+
+              {state === 'error' && (
                 <button
                   onClick={restartConversation}
-                  className="ml-2 underline"
+                  className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
                 >
-                  Retry
+                  Restart
                 </button>
-              </div>
-            )}
+              )}
 
-            {/* Quick actions */}
-            {(state === 'connected' || state === 'disconnected') && (
-              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
-                <div className="flex flex-wrap gap-2">
-                  <QuickAction onClick={() => addUserMessage("What would you like to do?")} label="Help" />
-                  <QuickAction onClick={() => addUserMessage("Show my courses")} label="Courses" />
-                  <QuickAction onClick={() => addUserMessage("Show live sessions")} label="Sessions" />
-                  <QuickAction onClick={() => addUserMessage("Open forum")} label="Forum" />
-                </div>
+              {!isExpanded && (
+                <button
+                  onClick={() => setShowSettings(!showSettings)}
+                  className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                  title="Settings"
+                >
+                  <Settings className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                </button>
+              )}
+            </div>
+
+            {/* Settings Panel (Compact View) */}
+            {showSettings && !isExpanded && (
+              <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={continuousMode}
+                    onChange={(e) => setContinuousMode(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-gray-700 dark:text-gray-300">Continuous listening</span>
+                </label>
               </div>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      ) : (
+        /* Minimized State */
+        <div className="flex items-center justify-center h-full">
+          <button
+            onClick={toggleMinimize}
+            className="flex items-center justify-center w-full h-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-lg"
+          >
+            <MessageSquare className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            {isActive && (
+              <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
-
-// Quick action button component
-function QuickAction({ onClick, label }: { onClick: () => void; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className="px-3 py-1 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-    >
-      {label}
-    </button>
-  );
-}
-
-export default ConversationalVoice;

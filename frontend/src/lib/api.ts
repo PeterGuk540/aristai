@@ -5,7 +5,7 @@ import { getMicrosoftIdToken } from './ms-auth';
 // In production (Vercel), use the proxy route to avoid CORS/mixed-content issues.
 // In development, call the backend directly.
 const isProduction = process.env.NODE_ENV === 'production';
-const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
 const useProxy = isProduction;
 export const API_BASE = useProxy ? '/api/proxy' : `${DIRECT_API_URL}/api`;
 export const DIRECT_API_BASE = `${DIRECT_API_URL}/api`;

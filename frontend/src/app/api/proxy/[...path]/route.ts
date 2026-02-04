@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Backend API URL - use local for development, API Gateway for production
+// Backend API URL - use local for development, EC2 for production
 const BACKEND_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://koxlvlxb74.execute-api.us-east-1.amazonaws.com'
+  ? 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000'
   : 'http://localhost:8000';
 
 export async function GET(

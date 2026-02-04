@@ -12,8 +12,8 @@ import {
   Volume2,
 } from 'lucide-react';
 
-import { Conversation } from '@elevenlabs/client';
 import { api } from '@/lib/api';
+import { loadElevenLabsConversation } from '@/lib/elevenlabs-sdk';
 import { useUser } from '@/lib/context';
 import { cn } from '@/lib/utils';
 
@@ -162,7 +162,8 @@ export function ConversationalVoice({
 
     try {
       const { signed_url } = await api.voiceAgentSignedUrl();
-      const session = await Conversation.startSession({
+      const conversation = await loadElevenLabsConversation();
+      const session = await conversation.startSession({
         signedUrl: signed_url,
         connectionType: 'websocket',
       });

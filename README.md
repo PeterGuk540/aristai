@@ -96,7 +96,8 @@ docker compose exec api alembic upgrade head
 1. Connect your GitHub repo to Vercel
 2. Set **Root Directory** to `frontend`
 3. Add environment variable: `BACKEND_API_URL=http://<your-ec2-ip>:8000`
-4. Deploy
+4. (Optional) Set `NEXT_PUBLIC_ELEVENLABS_SDK_URL` to the official ElevenLabs client CDN URL if you need to override the default.
+5. Deploy
 
 **EC2 Security Group:**
 - Open port 8000 to `0.0.0.0/0` for Vercel access

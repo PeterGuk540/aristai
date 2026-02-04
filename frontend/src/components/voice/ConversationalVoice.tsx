@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { VoiceWaveformMini } from './VoiceWaveformMini';
+import { playBackendAudio } from '@/utils/voiceSynthesis';
 
 export type ConversationState = 
   | 'initializing'
@@ -356,24 +357,19 @@ export function ConversationalVoice({
     }
   };
 
-  // Speak text and then resume listening
+  // Speak text using backend ElevenLabs Agent and then resume listening
   const speakAndListen = (text: string): Promise<void> => {
-    return new Promise((resolve) => {
-      if (!('speechSynthesis' in window)) {
-        resolve();
-        return;
-      }
-      
+    return new Promise(async (resolve) => {
       // Pause recording while speaking
       isRecordingRef.current = false;
       setState('speaking');
       
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      
-      utterance.onend = () => {
-        // Resume listening
+      try {
+        // Use our backend ElevenLabs Agent TTS service
+        console.log('🎯 Using ElevenLabs Agent for voice synthesis:', text);
+        await playBackendAudio(text);
+        
+        // Resume listening after audio completes
         if (continuousMode && streamRef.current) {
           isRecordingRef.current = true;
           lastSpeechTimeRef.current = Date.now();
@@ -382,19 +378,44 @@ export function ConversationalVoice({
         } else {
           setState('paused');
         }
+        
         resolve();
-      };
-      
-      utterance.onerror = () => {
-        if (continuousMode) {
-          isRecordingRef.current = true;
-          setState('listening');
-          detectVoiceActivity();
+      } catch (error) {
+        console.error('Backend synthesis failed, using browser fallback:', error);
+        
+        // Fallback to browser Speech Synthesis if backend fails
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          
+          utterance.onend = () => {
+            // Resume listening
+            if (continuousMode && streamRef.current) {
+              isRecordingRef.current = true;
+              lastSpeechTimeRef.current = Date.now();
+              setState('listening');
+              detectVoiceActivity();
+            } else {
+              setState('paused');
+            }
+            resolve();
+          };
+          
+          utterance.onerror = () => {
+            if (continuousMode) {
+              isRecordingRef.current = true;
+              setState('listening');
+              detectVoiceActivity();
+            }
+            resolve();
+          };
+          
+          speechSynthesis.speak(utterance);
+        } else {
+          resolve();
         }
-        resolve();
-      };
-      
-      speechSynthesis.speak(utterance);
+      }
     });
   };
 

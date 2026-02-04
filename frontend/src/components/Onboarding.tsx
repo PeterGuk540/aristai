@@ -574,7 +574,7 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
           <div className="border-t border-gray-200 dark:border-gray-700 px-8 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
               <p className="text-gray-500 dark:text-gray-500 text-sm">
-                Access this guide anytime from the user menu → View Guide
+                Access this guide anytime from the user menu → View Voice Guide
               </p>
               <Button
                 onClick={handleComplete}

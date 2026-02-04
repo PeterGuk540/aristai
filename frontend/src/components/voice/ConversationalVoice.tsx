@@ -56,6 +56,159 @@ interface ConversationalVoiceProps {
   className?: string;
 }
 
+// MCP Tool Execution for "I speak, you do" functionality
+const executeMCPTool = async (toolName: string, args: any): Promise<boolean> => {
+  try {
+    console.log('🔧 Executing MCP tool:', { toolName, args });
+    
+    const response = await fetch('/api/mcp/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ tool: toolName, arguments: args }),
+    });
+
+    if (!response.ok) {
+      console.error('MCP tool execution failed:', response.status);
+      addAssistantMessage(`❌ Failed to execute ${toolName}. Please try again.`);
+      return false;
+    }
+
+    const result = await response.json();
+    console.log('✅ MCP tool executed successfully:', result);
+    
+    // Provide user-friendly feedback
+    addAssistantMessage(`✅ ${toolName} executed successfully.`);
+    return true;
+    
+  } catch (error) {
+    console.error('MCP execution error:', error);
+    addAssistantMessage(`❌ Error executing ${toolName}: ${error}`);
+    return false;
+  }
+};
+
+const handleActionExecution = async (message: string, onNavigate?: (path: string) => void) => {
+  const lowerMessage = message.toLowerCase();
+  
+  // Navigation actions - still handle directly for better UX
+  if (lowerMessage.includes('navigating to') || lowerMessage.includes('take you to')) {
+    const pathMatch = message.match(/(?:to|page|section)\s+(.+?)(?:\.|\s|$)/i);
+    if (pathMatch && onNavigate) {
+      const path = extractPathFromText(pathMatch[1]);
+      setTimeout(() => onNavigate(path), 1500);
+    }
+    return;
+  }
+
+  // Course creation via MCP
+  if (lowerMessage.includes('create course') || lowerMessage.includes('create a course')) {
+    const courseTitle = extractCourseTitle(message);
+    if (courseTitle) {
+      await executeMCPTool('create_course', { title: courseTitle });
+    }
+  }
+  
+  // Poll creation via MCP  
+  if (lowerMessage.includes('create poll') || lowerMessage.includes('create a poll')) {
+    const pollData = extractPollData(message);
+    if (pollData) {
+      await executeMCPTool('create_poll', pollData);
+    }
+  }
+  
+  // Report generation via MCP
+  if (lowerMessage.includes('generate report') || lowerMessage.includes('create report')) {
+    const reportData = extractReportData(message);
+    if (reportData) {
+      await executeMCPTool('generate_report', reportData);
+    }
+  }
+  
+  // Student enrollment via MCP
+  if (lowerMessage.includes('enroll students') || lowerMessage.includes('enroll student')) {
+    const enrollmentData = extractEnrollmentData(message);
+    if (enrollmentData) {
+      await executeMCPTool('enroll_students', enrollmentData);
+    }
+  }
+};
+
+const extractCourseTitle = (message: string): string | null => {
+  const match = message.match(/(?:course|create).+?(?:called|titled|named)?\s+["'"](.+?)["'"]/i);
+  return match ? match[1] : null;
+};
+
+const extractPollData = (message: string): any => {
+  const questionMatch = message.match(/(?:poll|create).+?(?:question)?\s+["'"](.+?)["'"]/i);
+  if (!questionMatch) return null;
+  
+  const question = questionMatch[1];
+  
+  // Try to extract options
+  const optionsMatch = message.match(/options?[:\s]+(.+?)(?:\.|$)/i);
+  if (optionsMatch) {
+    const optionsText = optionsMatch[1];
+    const options = optionsText.split(/(?:,\s*|\s+and\s+)/).map(opt => opt.trim().replace(/["']/g, ''));
+    if (options.length >= 2) {
+      return { question, options_json: options };
+    }
+  }
+  
+  return { question, options_json: ["Yes", "No", "Maybe"] };
+};
+
+const extractReportData = (message: string): any => {
+  const sessionMatch = message.match(/(?:report|generate).+?(?:session)?\s+["'"]?(.+?)["'"]?/i);
+  if (sessionMatch) {
+    return { session_id_or_title: sessionMatch[1] };
+  }
+  return null;
+};
+
+const extractEnrollmentData = (message: string): any => {
+  const courseMatch = message.match(/(?:enroll).+?(?:course)?\s+["'"](.+?)["'"]/i);
+  const studentMatch = message.match(/(?:enroll).+?(?:students?)\s+(.+?)(?:\.|$)/i);
+  
+  const data: any = {};
+  if (courseMatch) data.course_title = courseMatch[1];
+  if (studentMatch) data.student_identifiers = studentMatch[1].split(/(?:,\s*|\s+and\s+)/);
+  
+  return Object.keys(data).length > 0 ? data : null;
+};
+
+const extractPathFromText = (text: string): string => {
+  const pathMap: { [key: string]: string } = {
+    'courses': '/courses',
+    'course': '/courses', 
+    'sessions': '/sessions',
+    'session': '/sessions',
+    'dashboard': '/dashboard',
+    'home': '/dashboard',
+    'forum': '/forum',
+    'reports': '/reports',
+    'console': '/console',
+    'settings': '/console'
+  };
+  
+  const lowerText = text.toLowerCase().trim();
+  
+  // Direct path matches
+  if (lowerText in pathMap) {
+    return pathMap[lowerText];
+  }
+  
+  // Partial matches
+  for (const [key, path] of Object.entries(pathMap)) {
+    if (lowerText.includes(key)) {
+      return path;
+    }
+  }
+  
+  return '/dashboard'; // fallback
+};
+
 export function ConversationalVoice({
   onNavigate,
   onActiveChange,
@@ -188,11 +341,11 @@ export function ConversationalVoice({
           if (greeting) {
             addAssistantMessage(greeting);
           } else {
-            addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your voice assistant. How can I help you today?`);
+            addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant. How can I help you today?`);
           }
         },
         onDisconnect: (data?: any) => {
-          console.log('🔌 Disconnected from ElevenLabs:', data);
+          console.log('🔌 Disconnected from AristAI voice service:', data);
           setState('disconnected');
           conversationRef.current = null;
           onActiveChange?.(false);
@@ -233,6 +386,9 @@ export function ConversationalVoice({
             addUserMessage(message);
           } else if (source === 'ai') {
             addAssistantMessage(message);
+            
+            // Auto-execute actions based on AI message content
+            handleActionExecution(message, onNavigate);
           }
         },
         onError: (error: string, meta?: any) => {

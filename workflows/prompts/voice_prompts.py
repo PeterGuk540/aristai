@@ -26,6 +26,8 @@ Respond with ONLY valid JSON (no markdown, no code fences) matching this schema:
 }}"""
 
 VOICE_PLAN_USER_PROMPT = """Instructor transcript: "{transcript}"
+Current page: "{current_page}"
+Conversation context (most recent first): {context}
 
 Produce the action plan JSON."""
 

@@ -7,8 +7,8 @@ import { getMicrosoftIdToken } from './ms-auth';
 const isProduction = process.env.NODE_ENV === 'production';
 const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const useProxy = isProduction;
-const API_BASE = useProxy ? '/api/proxy' : `${DIRECT_API_URL}/api`;
-const DIRECT_API_BASE = `${DIRECT_API_URL}/api`;
+export const API_BASE = useProxy ? '/api/proxy' : `${DIRECT_API_URL}/api`;
+export const DIRECT_API_BASE = `${DIRECT_API_URL}/api`;
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {

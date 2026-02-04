@@ -275,6 +275,11 @@ def get_audit_trail(
     return VoiceAuditListResponse(audits=audits, total=total)
 
 
+@router.get("/agent/test")
+async def test_route():
+    """Test route to verify router is working."""
+    return {"message": "Router is working", "status": "ok"}
+
 @router.get("/agent/signed-url", status_code=status.HTTP_200_OK)
 async def get_agent_signed_url(request: Request):
     """

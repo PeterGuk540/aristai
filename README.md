@@ -67,6 +67,7 @@ An AI-powered platform for synchronous classroom discussions with instructor cop
 # 1. Copy environment file and add your API keys
 cp .env.example .env
 # Edit .env to add ANTHROPIC_API_KEY
+# Add ELEVENLABS_API_KEY and ELEVENLABS_AGENT_ID for realtime voice agents
 
 # 2. Start all services
 docker compose up --build

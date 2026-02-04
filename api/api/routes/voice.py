@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from api.core.database import get_db
+from api.core.auth import require_auth
 from api.core.config import get_settings
 from api.models.voice_audit import VoiceAudit
 from mcp_server.server import TOOL_REGISTRY
@@ -29,6 +30,7 @@ from api.schemas.voice import (
     VoiceAuditListResponse,
 )
 from api.services import asr, tts
+from api.services.elevenlabs_agent import get_signed_url, ElevenLabsAgentError
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,16 @@ async def voice_synthesize(request: Request):
     except Exception as e:
         logger.exception(f"TTS synthesis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/agent/signed-url")
+async def voice_agent_signed_url(_: str = Depends(require_auth)):
+    """Return a short-lived ElevenLabs signed URL for realtime agent conversations."""
+    try:
+        signed_url = await get_signed_url()
+        return {"signed_url": signed_url}
+    except ElevenLabsAgentError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.post("/transcribe", response_model=TranscribeResponse, status_code=status.HTTP_200_OK)

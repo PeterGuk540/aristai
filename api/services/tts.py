@@ -66,62 +66,16 @@ def _synthesize_elevenlabs(text: str, settings) -> TTSResult:
 
 
 def _synthesize_elevenlabs_agent(text: str, settings) -> TTSResult:
-    """TTS via ElevenLabs Conversational Agent API - actual Agent implementation!"""
-    import httpx
-    import base64
+    """Legacy agent provider placeholder.
 
-    if not settings.elevenlabs_api_key:
-        raise ValueError("ELEVENLABS_API_KEY required for ElevenLabs Agent provider")
-    
-    if not settings.elevenlabs_agent_id:
-        raise ValueError("ELEVENLABS_AGENT_ID required for ElevenLabs Agent provider")
-
-    # Use the actual ElevenLabs Agent API instead of regular TTS
-    agent_url = f"https://api.elevenlabs.io/v1/convai/agents/{settings.elevenlabs_agent_id}/simulate-conversation"
-    
-    # Create a simple Agent API request (not complex simulation)
-    payload = {
-    "simulation_specification": {
-        "imput": {
-        "text": text
-        }
-    }
-    }
-
-    headers = {
-        "xi-api-key": settings.elevenlabs_api_key,
-        "Content-Type": "application/json",
-    "Accept": "application/json",
-    }
-
-    try:
-        resp = httpx.post(
-            agent_url,
-            headers=headers,
-            json=payload,
-            timeout=30.0,
-        )
-        resp.raise_for_status()
-        
-        # Get audio from Agent response
-        response_data = resp.json()
-        
-        # Check for audio_base64 in response
-        if "audio_base64" in response_data:
-            audio_base64 = response_data["audio_base64"]
-            audio_bytes = base64.b64decode(audio_base64)
-            logger.info(f"✅ Agent API success: {len(audio_bytes)} bytes")
-            return TTSResult(audio_bytes=audio_bytes, content_type="audio/mpeg")
-        else:
-            logger.error(f"No audio in Agent response: {list(response_data.keys())}")
-            raise ValueError("Agent response missing audio_base64")
-            
-    except httpx.HTTPError as e:
-        logger.error(f"ElevenLabs Agent API error: {e}")
-        raise ValueError(f"ElevenLabs Agent API error: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error in ElevenLabs Agent: {e}")
-        raise ValueError(f"ElevenLabs Agent error: {e}")
+    The realtime agent conversation now uses signed WebSocket URLs instead of
+    simulate-conversation. Keep this provider available as a fallback by
+    delegating to realtime TTS.
+    """
+    logger.warning(
+        "VOICE_TTS_PROVIDER=elevenlabs_agent is deprecated; using realtime TTS instead."
+    )
+    return _synthesize_elevenlabs_realtime(text, settings)
 
 
 def _synthesize_elevenlabs_realtime(text: str, settings) -> TTSResult:

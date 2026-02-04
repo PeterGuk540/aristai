@@ -425,10 +425,9 @@ export function ConversationalVoice({
           // Speak greeting
           if (greeting) {
             addAssistantMessage(greeting);
-      } else {
-        addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant, an expert in educational platform operations. I can help you navigate instantly to any page, create courses with AI-generated plans, manage live sessions, create polls, generate comprehensive reports, and much more. Just tell me what you'd like to do!`);
-      }
-        },
+          } else {
+            addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant, an expert in educational platform operations. I can help you navigate instantly to any page, create courses with AI-generated plans, manage live sessions, create polls, generate comprehensive reports, and much more. Just tell me what you'd like to do!`);
+          }
         },
         onDisconnect: (data?: any) => {
           console.log('🔌 Disconnected from AristAI voice service:', data);

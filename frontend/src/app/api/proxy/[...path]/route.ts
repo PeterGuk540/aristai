@@ -50,14 +50,10 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
       method: request.method,
       headers,
       body,
-      redirect: 'manual',
+      redirect: 'follow',  // Follow redirects server-side to avoid redirect loops
     });
 
     const responseHeaders = new Headers(response.headers);
-    const location = rewriteLocationHeader(responseHeaders.get('location'), BACKEND_BASE);
-    if (location) {
-      responseHeaders.set('location', location);
-    }
     responseHeaders.set('x-proxy-target', targetUrl);
 
     return new NextResponse(response.body, {
@@ -76,14 +72,10 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
           method: request.method,
           headers,
           body,
-          redirect: 'manual',
+          redirect: 'follow',
         });
 
         const responseHeaders = new Headers(fallbackResponse.headers);
-        const location = rewriteLocationHeader(responseHeaders.get('location'), fallbackBase);
-        if (location) {
-          responseHeaders.set('location', location);
-        }
         responseHeaders.set('x-proxy-target', fallbackUrl);
         responseHeaders.set('x-proxy-fallback', 'true');
 

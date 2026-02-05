@@ -540,7 +540,7 @@ export function ConversationalVoice({
       let errorMessage = 'Failed to initialize voice conversation';
       let errorCode = 'E_INIT_UNKNOWN';
       
-      if (error.message) {
+      if (error && error.message) {
         if (error.message.includes('E_AUTH')) {
           errorMessage = 'Authentication required. Please log in and try again.';
           errorCode = 'E_INIT_AUTH';

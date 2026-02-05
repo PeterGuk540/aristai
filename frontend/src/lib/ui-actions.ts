@@ -21,11 +21,22 @@ const getAuthToken = async (): Promise<string | null> => {
 
 export const executeUiAction = (action: UiAction, router: ReturnType<typeof useRouter>) => {
   const { type, payload } = action;
+  console.log('🔧 executeUiAction called:', { type, payload });
 
   switch (type) {
     case 'ui.navigate':
       if (payload?.path) {
-        router.push(payload.path);
+        console.log('🧭 Navigating to:', payload.path);
+        try {
+          router.push(payload.path);
+          console.log('✅ router.push called successfully');
+        } catch (navError) {
+          console.error('❌ router.push failed, using window.location:', navError);
+          // Fallback to window.location if router fails
+          window.location.href = payload.path;
+        }
+      } else {
+        console.warn('⚠️ ui.navigate called without path');
       }
       break;
     case 'ui.openTab':

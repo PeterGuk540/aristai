@@ -72,6 +72,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitializingRef = useRef(false);
   const isProcessingTranscriptRef = useRef(false);
+  const userInitiatedDisconnectRef = useRef(false); // Track user-initiated Stop clicks
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -197,11 +198,12 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           conversationRef.current = null;
           onActiveChange?.(false);
 
-          // Auto-reconnect after unexpected disconnection (not user-initiated)
-          if (data?.reason !== 'user_initiated' && autoStart) {
+          // Auto-reconnect ONLY if it was NOT user-initiated (e.g., network drop)
+          // Use our own flag because SDK may not always pass reason correctly
+          if (!userInitiatedDisconnectRef.current && autoStart) {
             console.log('🔄 Attempting auto-reconnect in 2 seconds...');
             setTimeout(() => {
-              if (!conversationRef.current && !isInitializingRef.current) {
+              if (!conversationRef.current && !isInitializingRef.current && !userInitiatedDisconnectRef.current) {
                 console.log('🔄 Auto-reconnecting...');
                 initializeConversation();
               }
@@ -379,17 +381,39 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     }
 
     isProcessingTranscriptRef.current = true;
+    console.log('🎯 Processing transcript:', transcript);
+
     try {
       const currentPage = typeof window !== 'undefined' ? window.location.pathname : undefined;
+      console.log('📍 Current page:', currentPage);
+
       const response = await api.voiceConverse({
         transcript,
         user_id: currentUser?.id,
         current_page: currentPage,
       });
 
-      const uiActions = extractUiActions(response.results, response.action);
-      uiActions.forEach((action) => executeUiAction(action, router));
+      console.log('📦 Backend response:', JSON.stringify(response, null, 2));
 
+      // Extract and execute UI actions IMMEDIATELY
+      const uiActions = extractUiActions(response.results, response.action);
+      console.log('🎬 UI Actions to execute:', uiActions);
+
+      if (uiActions.length > 0) {
+        uiActions.forEach((action, index) => {
+          console.log(`🚀 Executing UI action ${index + 1}:`, action);
+          try {
+            executeUiAction(action, router);
+            console.log(`✅ UI action ${index + 1} executed successfully`);
+          } catch (actionError) {
+            console.error(`❌ UI action ${index + 1} failed:`, actionError);
+          }
+        });
+      } else {
+        console.log('⚠️ No UI actions to execute');
+      }
+
+      // Show message and speak via ElevenLabs
       if (response.message) {
         addAssistantMessage(response.message);
         speakViaElevenLabs(response.message);
@@ -435,8 +459,10 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   // Start/stop conversation
   const toggleConversation = async () => {
     if (state === 'disconnected' || state === 'error') {
+      userInitiatedDisconnectRef.current = false; // Reset flag when starting
       await initializeConversation();
     } else if (conversationRef.current) {
+      userInitiatedDisconnectRef.current = true; // Mark as user-initiated disconnect
       await conversationRef.current.endSession();
       setState('disconnected');
       onActiveChange?.(false);

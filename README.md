@@ -338,6 +338,8 @@ AristAI ships with a first-party MCP server that exposes classroom operations as
 
 **Context tools:** Resolve courses/sessions/users by natural language and set active context with `resolve_course`, `resolve_session`, `resolve_user`, `set_active_course`, and `set_active_session`.
 
+**UI actions:** Browsers subscribe to `/api/ui-actions/stream` (SSE) for `ui.navigate`, `ui.openTab`, `ui.openModal`, and `ui.toast` messages.
+
 **Start the server (stdio for Claude Desktop):**
 ```bash
 python -m mcp_server.server

@@ -63,8 +63,7 @@ server = Server("aristai-mcp-server")
 ACTION_TOOL_NAMES = {"plan_action", "execute_action", "cancel_action"}
 action_store = ActionStore()
 
-# Comprehensive tool registry with all forum operations
-TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {}
+# ============ Tool Registry ============
 
 # ============ Tool Registry ============
 

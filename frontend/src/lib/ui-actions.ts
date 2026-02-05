@@ -1,0 +1,104 @@
+import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { API_BASE } from './api';
+import { getIdToken } from './cognito-auth';
+import { getGoogleIdToken } from './google-auth';
+import { getMicrosoftIdToken } from './ms-auth';
+
+export type UiAction = {
+  type: 'ui.navigate' | 'ui.openTab' | 'ui.openModal' | 'ui.toast' | string;
+  payload: Record<string, any>;
+  correlation_id?: string;
+  created_at?: number;
+};
+
+const getAuthToken = async (): Promise<string | null> => {
+  const googleToken = getGoogleIdToken();
+  const msToken = getMicrosoftIdToken();
+  const idToken = googleToken || msToken || await getIdToken();
+  return idToken || null;
+};
+
+export const executeUiAction = (action: UiAction, router: ReturnType<typeof useRouter>) => {
+  const { type, payload } = action;
+
+  switch (type) {
+    case 'ui.navigate':
+      if (payload?.path) {
+        router.push(payload.path);
+      }
+      break;
+    case 'ui.openTab':
+      if (payload?.url) {
+        window.open(payload.url, payload.target || '_blank', 'noopener,noreferrer');
+      }
+      break;
+    case 'ui.openModal':
+      window.dispatchEvent(new CustomEvent('ui.openModal', { detail: payload }));
+      break;
+    case 'ui.toast':
+      window.dispatchEvent(new CustomEvent('ui.toast', { detail: payload }));
+      if (payload?.message) {
+        console.info('UI Toast:', payload.message);
+      }
+      break;
+    default:
+      console.info('Unhandled UI action', action);
+  }
+};
+
+export const useUiActionStream = (
+  userId: number | undefined,
+  onStatusChange?: (connected: boolean) => void
+) => {
+  const router = useRouter();
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const connect = async () => {
+      if (!userId) {
+        return;
+      }
+      const token = await getAuthToken();
+      if (!token || !isMounted) {
+        return;
+      }
+      const url = `${API_BASE}/ui-actions/stream?user_id=${userId}&token=${encodeURIComponent(token)}`;
+      const source = new EventSource(url);
+      eventSourceRef.current = source;
+
+      source.onopen = () => {
+        onStatusChange?.(true);
+      };
+
+      source.onmessage = (event) => {
+        if (!event.data) return;
+        try {
+          const action = JSON.parse(event.data) as UiAction;
+          if (action.type === 'heartbeat') {
+            return;
+          }
+          executeUiAction(action, router);
+        } catch (error) {
+          console.warn('Failed to parse UI action', error);
+        }
+      };
+
+      source.onerror = () => {
+        onStatusChange?.(false);
+      };
+    };
+
+    connect();
+
+    return () => {
+      isMounted = false;
+      onStatusChange?.(false);
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, [onStatusChange, router, userId]);
+};

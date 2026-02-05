@@ -528,38 +528,25 @@ def execute_plan_steps(steps: List[Dict[str, Any]], db: Session) -> tuple[list[d
         args = step.get("args", {})
         tool_entry = TOOL_REGISTRY.get(tool_name)
         if not tool_entry:
-            results.append({
-                "tool": tool_name,
-                "success": False,
-                "error": f"Unknown tool: {tool_name}",
-            })
+            normalized = normalize_tool_result({"error": f"Unknown tool: {tool_name}"}, tool_name)
+            results.append({"tool": tool_name, "success": False, **normalized})
             continue
 
         error = _validate_tool_args(tool_name, args, tool_entry.get("parameters", {}))
         if error:
-            results.append({
-                "tool": tool_name,
-                "success": False,
-                "error": error,
-            })
+            normalized = normalize_tool_result({"error": error}, tool_name)
+            results.append({"tool": tool_name, "success": False, **normalized})
             continue
 
         try:
-            result = normalize_tool_result(
+            normalized = normalize_tool_result(
                 invoke_tool_handler(tool_entry["handler"], args, db=db),
                 tool_name,
             )
-            results.append({
-                "tool": tool_name,
-                "success": result.get("ok", True),
-                "result": result,
-            })
+            results.append({"tool": tool_name, "success": normalized.get("ok", True), **normalized})
         except Exception as exc:
-            results.append({
-                "tool": tool_name,
-                "success": False,
-                "result": normalize_tool_result({"error": str(exc)}, tool_name),
-            })
+            normalized = normalize_tool_result({"error": str(exc)}, tool_name)
+            results.append({"tool": tool_name, "success": False, **normalized})
 
     summary = generate_summary(results)
     return results, summary

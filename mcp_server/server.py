@@ -104,6 +104,24 @@ def _plan_action_in_thread(tool_name: str, args: Dict[str, Any], user_id: Option
         db.close()
 
 
+def _handler_requires_db(handler: callable) -> bool:
+    try:
+        signature = inspect.signature(handler)
+    except (TypeError, ValueError):
+        return False
+    return "db" in signature.parameters
+
+
+def _invoke_tool_handler_in_thread(handler: callable, arguments: Dict[str, Any]) -> Any:
+    if _handler_requires_db(handler):
+        db = SessionLocal()
+        try:
+            return handler(db=db, **arguments)
+        finally:
+            db.close()
+    return handler(**arguments)
+
+
 def register_tool(
     name: str,
     description: str,

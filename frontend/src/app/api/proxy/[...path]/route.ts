@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_BASE = process.env.BACKEND_URL
-  || process.env.NEXT_PUBLIC_API_URL
-  || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
+const BACKEND_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
 
 const buildTargetUrl = (request: NextRequest, pathSegments: string[]) => {
   const pathname = pathSegments.join('/');

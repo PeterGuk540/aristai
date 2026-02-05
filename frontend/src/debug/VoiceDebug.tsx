@@ -63,7 +63,7 @@ export default function VoiceDebug() {
         <h3 className="font-semibold mb-2">Debug Info:</h3>
         <ul className="list-disc list-inside space-y-1 text-sm">
           <li>ElevenLabs SDK Version: 0.6.0</li>
-          <li>Backend URL: {process.env.NODE_ENV === 'production' ? '/api' : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}</li>
+          <li>Backend URL: /api/proxy</li>
           <li>Environment: {process.env.NODE_ENV}</li>
           <li>Browser: {typeof window !== 'undefined' ? navigator.userAgent : 'N/A'}</li>
           <li>WebSocket Connection: {isConnected ? '✅ Working' : '❌ Issues detected'}</li>

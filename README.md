@@ -30,6 +30,16 @@ An AI-powered platform for synchronous classroom discussions with instructor cop
                          │  AI Workflows   │
                          │  (Claude API)   │
                          └─────────────────┘
+
+┌─────────────────┐      ┌─────────────────┐
+│  MCP Clients    │─────▶│  MCP Server     │
+│  (Claude, etc.) │      │  (mcp_server)   │
+└─────────────────┘      └────────┬────────┘
+                                  │
+                         ┌────────▼────────┐
+                         │  FastAPI        │
+                         │  Backend        │
+                         └─────────────────┘
 ```
 
 ## Tech Stack
@@ -40,6 +50,7 @@ An AI-powered platform for synchronous classroom discussions with instructor cop
 - Redis + Celery (task queue)
 - LangGraph (LLM workflow orchestration)
 - Anthropic Claude API (LLM)
+- Model Context Protocol (MCP) server for tool-based access
 
 **Frontend:**
 - Next.js 14 (App Router)
@@ -132,6 +143,7 @@ aristai/
 ├── workflows/             # LangGraph LLM workflows
 ├── worker/                # Celery worker and tasks
 ├── ui_streamlit/          # Legacy Streamlit UI
+├── mcp_server/            # MCP server (tool registry + voice control)
 ├── alembic/               # Database migrations
 ├── tests/                 # Test suite
 ├── docker-compose.yml     # Docker services
@@ -311,6 +323,43 @@ Produces comprehensive report including:
 - Best-practice answer
 - **Participation metrics**: Who participated, who didn't, participation rate
 - **Answer scoring**: Individual scores (0-100), feedback, class statistics
+
+---
+
+## MCP Server (Tool Registry + Voice Control)
+
+AristAI ships with a first-party MCP server that exposes classroom operations as tools, enabling voice or agent-driven control without modifying the core API.
+
+**Location:** `mcp_server/`
+
+**Start the server (stdio for Claude Desktop):**
+```bash
+python -m mcp_server.server
+```
+
+**Start the server (SSE for web clients):**
+```bash
+python -m mcp_server.server --transport sse --port 8080
+```
+
+**Claude Desktop config (example):**
+```json
+{
+  "mcpServers": {
+    "aristai": {
+      "command": "python",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "/path/to/aristai",
+      "env": {
+        "DATABASE_URL": "postgresql+psycopg2://aristai:aristai_dev@localhost:5433/aristai",
+        "REDIS_URL": "redis://localhost:6379/0"
+      }
+    }
+  }
+}
+```
+
+For a detailed breakdown of the internal tool registry structure (categories, handlers, and request flow), see `mcp_server/TOOL_REGISTRY.md`.
 
 ---
 

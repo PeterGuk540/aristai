@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Conversation } from '@elevenlabs/client';
 import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles } from 'lucide-react';
 import { useUser } from '@/lib/context';
+import { API_BASE, getAuthHeaders } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export type ConversationState = 
@@ -167,6 +168,47 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
         connectionType: "websocket",
+        clientTools: {
+          delegate_to_mcp: async (params: Record<string, any>) => {
+            const transcript =
+              params?.transcript ||
+              params?.text ||
+              params?.message ||
+              params?.input ||
+              '';
+            const currentPage = typeof window !== 'undefined' ? window.location.pathname : undefined;
+            const context = conversationContextRef.current.slice(-10);
+
+            try {
+              const authHeaders = await getAuthHeaders();
+              const response = await fetch(`${API_BASE}/voice/agent/delegate`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...authHeaders,
+                },
+                body: JSON.stringify({
+                  transcript,
+                  current_page: currentPage,
+                  user_id: currentUser?.id,
+                  context,
+                }),
+              });
+
+              if (!response.ok) {
+                const errorPayload = await response.json().catch(() => ({}));
+                const errorMessage = errorPayload?.detail || response.statusText || 'Unable to delegate MCP tool.';
+                return `Error: ${errorMessage}`;
+              }
+
+              const payload = await response.json();
+              return payload?.message || payload?.voice_response || 'Completed.';
+            } catch (error) {
+              console.error('❌ MCP delegation failed:', error);
+              return 'Sorry, I had trouble reaching the MCP service.';
+            }
+          },
+        },
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');

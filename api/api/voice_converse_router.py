@@ -80,6 +80,21 @@ NAVIGATION_PATTERNS = {
 # Action intent patterns - expanded for better voice command coverage
 # Includes sub-page actions like create course, select session, etc.
 ACTION_PATTERNS = {
+    # === CONTEXT/STATUS ACTIONS ===
+    'get_status': [
+        r'\b(what|where)\s+(am\s+I|is\s+this|page)\b',
+        r'\b(current|this)\s+(page|status|state)\b',
+        r'\bwhat\s+can\s+I\s+do\b',
+        r'\bwhat\'?s\s+(happening|going\s+on)\b',
+        r'\bstatus\s+update\b',
+        r'\bgive\s+me\s+(a\s+)?summary\b',
+    ],
+    'get_help': [
+        r'\bhelp(\s+me)?\b',
+        r'\bwhat\s+can\s+you\s+do\b',
+        r'\bwhat\s+are\s+(my|the)\s+options\b',
+        r'\bshow\s+(me\s+)?(the\s+)?commands\b',
+    ],
     # === COURSE ACTIONS ===
     'list_courses': [
         r'\b(list|show|get|what are|display|see)\s+(all\s+)?(my\s+)?courses\b',
@@ -222,6 +237,24 @@ ACTION_PATTERNS = {
         r'\bwhat\s+(are\s+)?(students|people)\s+(saying|discussing|posting)\b',
         r'\brecent\s+posts\b',
         r'\blatest\s+posts\b',
+    ],
+    'get_pinned_posts': [
+        r'\b(show|view|get|what are)\s+(the\s+)?pinned\s+(posts|discussions)?\b',
+        r'\bpinned\s+(posts|content|discussions)\b',
+        r'\bimportant\s+posts\b',
+    ],
+    'summarize_discussion': [
+        r'\bsummarize\s+(the\s+)?(forum|discussion|posts)\b',
+        r'\b(discussion|forum)\s+summary\b',
+        r'\bwhat\s+are\s+(students|people)\s+talking\s+about\b',
+        r'\bkey\s+(points|themes|topics)\b',
+        r'\bmain\s+(discussion|points)\b',
+    ],
+    'get_student_questions': [
+        r'\b(show|what are|any)\s+(student\s+)?questions\b',
+        r'\bquestions\s+from\s+(students|class)\b',
+        r'\bany\s+(confusion|misconceptions)\b',
+        r'\bwhat\s+(do\s+)?students\s+(need|want|ask)\b',
     ],
 }
 
@@ -471,6 +504,46 @@ def generate_conversational_response(
                     return f"There are {len(posts)} posts in the forum. The latest is about: {posts[0].get('content', '')[:50]}..."
             return "No posts yet in this session's forum."
 
+        if intent_value == 'get_pinned_posts':
+            if isinstance(results, dict):
+                count = results.get("count", 0)
+                if count > 0:
+                    return f"There are {count} pinned posts. These are the important discussions highlighted by the instructor."
+                return "No pinned posts yet. You can pin important posts to highlight them."
+            return "No pinned posts found."
+
+        if intent_value == 'summarize_discussion':
+            if isinstance(results, dict):
+                if results.get("summary"):
+                    return results["summary"]
+                if results.get("error"):
+                    return results["error"]
+            return "I couldn't summarize the discussion. Make sure you're in a live session."
+
+        if intent_value == 'get_student_questions':
+            if isinstance(results, dict):
+                count = results.get("count", 0)
+                if count > 0:
+                    questions = results.get("questions", [])
+                    first_q = questions[0].get('content', '')[:80] if questions else ""
+                    return f"Found {count} questions. The most recent: {first_q}..."
+                return "No questions from students yet."
+            return "I couldn't find any questions."
+
+        if intent_value == 'get_status':
+            if isinstance(results, dict):
+                message = results.get("message", "")
+                actions = results.get("available_actions", [])
+                if actions:
+                    return f"{message} You can: {', '.join(actions[:4])}."
+                return message
+            return "I'm not sure what page you're on."
+
+        if intent_value == 'get_help':
+            if isinstance(results, dict) and results.get("message"):
+                return results["message"]
+            return "I can help with navigation, courses, sessions, polls, forum, and reports."
+
     # Default fallback
     return "I can help you navigate pages, manage courses and sessions, create polls, generate reports, and more. What would you like to do?"
 
@@ -623,6 +696,98 @@ def _execute_tool(db: Session, tool_name: str, args: Dict[str, Any]) -> Optional
     return invoke_tool_handler(handler, args, db=db)
 
 
+def _get_page_context(db: Session, current_page: Optional[str]) -> Dict[str, Any]:
+    """Get intelligent context about the current page and available actions."""
+    page = current_page or "/dashboard"
+
+    # Determine page type
+    if "/courses" in page:
+        course_id = _resolve_course_id(db, current_page)
+        if course_id:
+            course = _execute_tool(db, 'get_course', {"course_id": course_id})
+            sessions = _execute_tool(db, 'list_sessions', {"course_id": course_id})
+            return {
+                "page": "course_detail",
+                "course": course,
+                "session_count": len(sessions) if sessions else 0,
+                "message": f"You're viewing {course.get('title', 'a course')} with {len(sessions) if sessions else 0} sessions.",
+                "available_actions": ["Create session", "View sessions", "Manage enrollments", "Go to forum"],
+            }
+        else:
+            courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
+            return {
+                "page": "courses_list",
+                "course_count": len(courses) if courses else 0,
+                "message": f"You're on the courses page. You have {len(courses) if courses else 0} courses.",
+                "available_actions": ["Create course", "Select a course", "View sessions"],
+            }
+
+    elif "/sessions" in page:
+        session_id = _resolve_session_id(db, current_page)
+        if session_id:
+            session = _execute_tool(db, 'get_session', {"session_id": session_id})
+            status = session.get('status', 'unknown') if session else 'unknown'
+            return {
+                "page": "session_detail",
+                "session": session,
+                "status": status,
+                "message": f"You're viewing a session. Status: {status}.",
+                "available_actions": ["Go live", "End session", "Start copilot", "Create poll", "Go to forum"] if status != 'live'
+                                     else ["End session", "Start copilot", "Create poll", "View suggestions"],
+            }
+        return {
+            "page": "sessions_list",
+            "message": "You're on the sessions page. Select a course to view sessions.",
+            "available_actions": ["Select course", "Create session", "Go to courses"],
+        }
+
+    elif "/forum" in page:
+        session_id = _resolve_session_id(db, current_page)
+        if session_id:
+            posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
+            pinned = [p for p in posts if p.get('pinned')] if posts else []
+            return {
+                "page": "forum",
+                "post_count": len(posts) if posts else 0,
+                "pinned_count": len(pinned),
+                "message": f"You're in the forum with {len(posts) if posts else 0} posts and {len(pinned)} pinned.",
+                "available_actions": ["View posts", "Show pinned", "Summarize discussion", "Post case", "Show questions"],
+            }
+        return {
+            "page": "forum",
+            "message": "You're on the forum page. Select a live session to view discussions.",
+            "available_actions": ["Select session", "Go to sessions"],
+        }
+
+    elif "/console" in page:
+        session_id = _resolve_session_id(db, current_page)
+        copilot_status = _execute_tool(db, 'get_copilot_status', {"session_id": session_id}) if session_id else None
+        is_active = copilot_status.get('is_active', False) if copilot_status else False
+        return {
+            "page": "console",
+            "copilot_active": is_active,
+            "message": f"You're in the console. Copilot is {'active' if is_active else 'inactive'}.",
+            "available_actions": ["Stop copilot", "View suggestions", "Create poll"] if is_active
+                                 else ["Start copilot", "Create poll", "Go to forum"],
+        }
+
+    elif "/reports" in page:
+        return {
+            "page": "reports",
+            "message": "You're on the reports page. Select a session to view or generate reports.",
+            "available_actions": ["Generate report", "View analytics", "Go to sessions"],
+        }
+
+    # Default dashboard
+    courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
+    return {
+        "page": "dashboard",
+        "course_count": len(courses) if courses else 0,
+        "message": f"You're on the dashboard. You have {len(courses) if courses else 0} courses.",
+        "available_actions": ["Show courses", "Go to sessions", "Go to forum", "Go to console"],
+    }
+
+
 async def execute_action(
     action: str,
     user_id: Optional[int],
@@ -631,6 +796,22 @@ async def execute_action(
 ) -> Optional[Any]:
     """Execute an MCP tool and return results, including UI actions for frontend."""
     try:
+        # === CONTEXT/STATUS ACTIONS ===
+        if action == 'get_status':
+            return _get_page_context(db, current_page)
+
+        if action == 'get_help':
+            return {
+                "message": "I can help you with: navigating pages, listing courses and sessions, "
+                           "starting copilot, creating polls, viewing forum discussions, pinning posts, "
+                           "generating reports, and managing enrollments. Just ask!",
+                "available_commands": [
+                    "Show my courses", "Go to forum", "Start copilot",
+                    "Create a poll", "Show pinned posts", "Summarize discussion",
+                    "Generate report", "Go live", "End session"
+                ]
+            }
+
         # === COURSE ACTIONS ===
         if action == 'list_courses':
             return _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
@@ -797,13 +978,70 @@ async def execute_action(
             if session_id:
                 posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
                 if posts:
-                    posts_result = {"posts": posts}
+                    posts_result = {"posts": posts, "count": len(posts)}
                     posts_result["ui_actions"] = [{"type": "ui.navigate", "payload": {"path": "/forum"}}]
                     return posts_result
             return {
                 "posts": [],
                 "ui_actions": [{"type": "ui.navigate", "payload": {"path": "/forum"}}],
             }
+
+        if action == 'get_pinned_posts':
+            session_id = _resolve_session_id(db, current_page)
+            if session_id:
+                pinned = _execute_tool(db, 'get_pinned_posts', {"session_id": session_id})
+                return {
+                    "pinned_posts": pinned or [],
+                    "count": len(pinned) if pinned else 0,
+                    "ui_actions": [{"type": "ui.navigate", "payload": {"path": "/forum"}}],
+                }
+            return {"pinned_posts": [], "count": 0}
+
+        if action == 'summarize_discussion':
+            session_id = _resolve_session_id(db, current_page)
+            if session_id:
+                posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
+                if posts and len(posts) > 0:
+                    # Extract key info from posts
+                    total = len(posts)
+                    # Find posts with labels
+                    questions = [p for p in posts if p.get('labels_json') and 'question' in p.get('labels_json', [])]
+                    misconceptions = [p for p in posts if p.get('labels_json') and 'misconception' in p.get('labels_json', [])]
+                    insightful = [p for p in posts if p.get('labels_json') and 'insightful' in p.get('labels_json', [])]
+                    pinned = [p for p in posts if p.get('pinned')]
+
+                    return {
+                        "total_posts": total,
+                        "questions": len(questions),
+                        "misconceptions": len(misconceptions),
+                        "insightful": len(insightful),
+                        "pinned": len(pinned),
+                        "latest_topic": posts[0].get('content', '')[:100] if posts else None,
+                        "summary": f"The discussion has {total} posts. "
+                                   f"{len(questions)} questions, {len(misconceptions)} misconceptions identified, "
+                                   f"and {len(insightful)} insightful contributions.",
+                    }
+                return {"summary": "No posts in this discussion yet.", "total_posts": 0}
+            return {"error": "No active session. Select a live session first."}
+
+        if action == 'get_student_questions':
+            session_id = _resolve_session_id(db, current_page)
+            if session_id:
+                posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
+                if posts:
+                    # Filter for posts labeled as questions or containing question marks
+                    questions = [
+                        p for p in posts
+                        if (p.get('labels_json') and 'question' in p.get('labels_json', []))
+                        or '?' in p.get('content', '')
+                    ]
+                    return {
+                        "questions": questions,
+                        "count": len(questions),
+                        "message": f"Found {len(questions)} questions from students."
+                    }
+                return {"questions": [], "count": 0, "message": "No questions found yet."}
+            return {"error": "No active session. Select a live session first."}
 
         # For actions that need more info, return guidance
         return {"message": f"Action '{action}' recognized but needs more details."}
@@ -859,6 +1097,9 @@ def get_page_suggestions(path: str) -> List[str]:
 def get_action_suggestions(action: str) -> List[str]:
     """Get follow-up suggestions after an action"""
     suggestions = {
+        # Context/status suggestions
+        'get_status': ["Show my courses", "Go to forum", "Start copilot"],
+        'get_help': ["Show my courses", "Go to forum", "Create poll"],
         # Course suggestions
         'list_courses': ["Open a course", "Create new course", "View sessions"],
         'create_course': ["Add syllabus", "Set objectives", "Add students"],
@@ -883,7 +1124,10 @@ def get_action_suggestions(action: str) -> List[str]:
         'manage_enrollments': ["Add by email", "Upload roster", "View enrolled"],
         # Forum suggestions
         'post_case': ["View responses", "Pin post", "Create poll"],
-        'view_posts': ["Pin a post", "Label post", "Post case"],
+        'view_posts': ["Pin a post", "Label post", "Summarize discussion"],
+        'get_pinned_posts': ["View all posts", "Post case", "Create poll"],
+        'summarize_discussion': ["Show questions", "View pinned", "Create poll"],
+        'get_student_questions': ["View posts", "Create poll", "Pin a post"],
     }
     return suggestions.get(action, ["What else can I help with?"])
 

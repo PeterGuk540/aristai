@@ -455,14 +455,32 @@ export const VoiceUIController = () => {
       element = emptyInput || visibleInputs[0] || null;
     }
 
-    // Fill the input
+    // Fill the input - use native setter to trigger React state updates
     if (element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')) {
       const input = element as HTMLInputElement | HTMLTextAreaElement;
-      input.value = value || '';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Get the native value setter to properly trigger React's onChange
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        element.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
+        'value'
+      )?.set;
+
+      if (nativeInputValueSetter) {
+        nativeInputValueSetter.call(input, value || '');
+      } else {
+        input.value = value || '';
+      }
+
+      // Dispatch input event with bubbles to trigger React onChange
+      const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+      input.dispatchEvent(inputEvent);
+
+      // Also dispatch change event for good measure
+      const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+      input.dispatchEvent(changeEvent);
+
       input.focus();
-      console.log('🎤 VoiceUI: Filled input:', element.getAttribute('name') || element.getAttribute('id') || 'unknown', 'with:', value);
+      console.log('🎤 VoiceUI: Filled input:', element.getAttribute('data-voice-id') || element.getAttribute('name') || 'unknown', 'with:', value);
     } else {
       console.warn('🎤 VoiceUI: No input found to fill');
     }

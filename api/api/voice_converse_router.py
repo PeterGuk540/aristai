@@ -220,10 +220,13 @@ ACTION_PATTERNS = {
         r'\b(\w+)\s+(tab|panel|section)\b',
     ],
     # Universal button clicks - works for ANY button
-    # NOTE: Requires explicit "click/press" or "button" to avoid matching domain verbs
+    # Also handles form submission triggers like "submit", "create it", "post it"
     'ui_click_button': [
         r'\b(click|press|hit|tap)\s+(the\s+)?(.+?)\s*(button)?\b',
         r'\b(click|press)\s+(on\s+)?(.+)\b',
+        r'\b(submit|confirm|send|post)\s*(it|this|the\s+form|now)?\s*$',
+        r'\b(create|make)\s+(it|this|the\s+course|the\s+session|the\s+poll)\s*$',
+        r'\byes,?\s*(submit|create|post|do\s+it)\b',
     ],
     # === UNIVERSAL FORM DICTATION ===
     # Detects when user is providing content for ANY input field

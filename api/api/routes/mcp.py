@@ -1,6 +1,7 @@
 """MCP tool execution endpoints for the voice assistant."""
 
 import logging
+import traceback
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -67,8 +68,9 @@ async def execute_tool(request: MCPExecuteRequest, db: Session = Depends(get_db)
     except HTTPException:
         raise
     except Exception as exc:
+        traceback.print_exc()
         logger.exception("MCP tool execution failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to execute MCP tool",
+            detail=str(exc),
         )

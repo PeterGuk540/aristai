@@ -5,12 +5,12 @@ Tools for navigating the AristAI interface and controlling UI elements.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 
-def navigate_to_page(page: str) -> Dict[str, Any]:
+def navigate_to_page(db: Any = None, page: str = "", **kwargs: Any) -> Dict[str, Any]:
     """
     Navigate to a specific page in the AristAI interface.
     
@@ -104,7 +104,7 @@ def navigate_to_page(page: str) -> Dict[str, Any]:
     }
 
 
-def get_available_pages() -> Dict[str, Any]:
+def get_available_pages(db: Any = None, **kwargs: Any) -> Dict[str, Any]:
     """
     Get list of available pages for navigation.
     
@@ -128,7 +128,11 @@ def get_available_pages() -> Dict[str, Any]:
     }
 
 
-def get_current_context(context: Dict[str, Any]) -> Dict[str, Any]:
+def get_current_context(
+    db: Any = None,
+    context: Optional[Dict[str, Any]] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
     """
     Get current page context and available actions.
     
@@ -138,6 +142,7 @@ def get_current_context(context: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Context information and available actions
     """
+    context = context or {}
     current_page = context.get('current_page', 'dashboard')
     user_role = context.get('user_role', 'student')
     
@@ -189,7 +194,7 @@ def get_current_context(context: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def get_help_for_page(page: str) -> Dict[str, Any]:
+def get_help_for_page(db: Any = None, page: str = "", **kwargs: Any) -> Dict[str, Any]:
     """
     Get help information for a specific page.
     

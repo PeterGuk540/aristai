@@ -508,17 +508,19 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     # 2. Check for action intent via regex BEFORE expensive LLM call (fast - instant)
     action = detect_action_intent(transcript)
     if action:
-        results = await execute_action(action, request.user_id, request.current_page, db)
+        result = await execute_action(action, request.user_id, request.current_page, db)
+        # Wrap result in a list if it's not already (ConverseResponse.results expects List)
+        results_list = [result] if result and not isinstance(result, list) else result
         return ConverseResponse(
             message=sanitize_speech(generate_conversational_response(
                 'execute',
                 action,
-                results=results,
+                results=result,  # Pass original for response generation
                 context=request.context,
                 current_page=request.current_page,
             )),
             action=ActionResponse(type='execute', executed=True),
-            results=results,
+            results=results_list,  # Pass list for Pydantic validation
             suggestions=get_action_suggestions(action),
         )
 

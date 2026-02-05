@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, Search, UserPlus, GraduationCap, Clock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
@@ -23,14 +24,42 @@ import {
 
 export default function CoursesPage() {
   const { isInstructor, currentUser, refreshUser } = useUser();
+  const searchParams = useSearchParams();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+
+  // Tab state - default from URL query param
+  const [activeTab, setActiveTab] = useState(searchParams?.get('tab') || 'courses');
 
   // Create course form
   const [title, setTitle] = useState('');
   const [syllabus, setSyllabus] = useState('');
   const [objectives, setObjectives] = useState('');
+
+  // Handle voice-triggered tab selection
+  const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
+    const { tab } = event.detail || {};
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  // Listen for voice tab selection events
+  useEffect(() => {
+    window.addEventListener('voice-select-tab', handleVoiceSelectTab as EventListener);
+    return () => {
+      window.removeEventListener('voice-select-tab', handleVoiceSelectTab as EventListener);
+    };
+  }, [handleVoiceSelectTab]);
+
+  // Update tab when URL changes
+  useEffect(() => {
+    const tabFromUrl = searchParams?.get('tab');
+    if (tabFromUrl) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams]);
 
   // Enrollment
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -285,7 +314,7 @@ export default function CoursesPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="courses">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="courses">Courses</TabsTrigger>
           {isInstructor && <TabsTrigger value="create">Create Course</TabsTrigger>}

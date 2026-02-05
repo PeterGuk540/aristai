@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
@@ -30,15 +31,43 @@ const statusIcons: Record<SessionStatus, any> = {
 
 export default function SessionsPage() {
   const { isInstructor, currentUser } = useUser();
+  const searchParams = useSearchParams();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Tab state - default from URL query param
+  const [activeTab, setActiveTab] = useState(searchParams?.get('tab') || 'sessions');
+
   // Create session form
   const [newSessionTitle, setNewSessionTitle] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Handle voice-triggered tab selection
+  const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
+    const { tab } = event.detail || {};
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  // Listen for voice tab selection events
+  useEffect(() => {
+    window.addEventListener('voice-select-tab', handleVoiceSelectTab as EventListener);
+    return () => {
+      window.removeEventListener('voice-select-tab', handleVoiceSelectTab as EventListener);
+    };
+  }, [handleVoiceSelectTab]);
+
+  // Update tab when URL changes
+  useEffect(() => {
+    const tabFromUrl = searchParams?.get('tab');
+    if (tabFromUrl) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [searchParams]);
 
   const fetchCourses = async () => {
     try {
@@ -242,7 +271,7 @@ export default function SessionsPage() {
       </div>
 
       {selectedCourseId && (
-        <Tabs defaultValue="sessions">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="sessions">View Sessions</TabsTrigger>
             {isInstructor && <TabsTrigger value="create">Create Session</TabsTrigger>}

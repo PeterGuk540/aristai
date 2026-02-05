@@ -21,6 +21,7 @@ import { UserMenu } from './UserMenu';
 import { VoiceOnboarding } from './voice/VoiceOnboarding';
 import { ConversationalVoice } from './voice/ConversationalVoice';
 import { VoiceUiActionBridge } from './voice/VoiceUiActionBridge';
+import { UiActionHandler } from './voice/UiActionHandler';
 import { cn } from '@/lib/utils';
 
 // Navigation items with optional instructor-only flag and enrollment requirement
@@ -264,12 +265,13 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {(isInstructor || isAdmin) && onboardingComplete && (
         <>
           <VoiceUiActionBridge userId={currentUser?.id} onStatusChange={setVoiceConnected} />
-        <ConversationalVoice
-          onNavigate={handleVoiceNavigate}
-          onActiveChange={setVoiceActive}
-          autoStart={true}
-          greeting={`Welcome back, ${currentUser?.name.split(' ')[0]}! How can I help you today?`}
-        />
+          <UiActionHandler />
+          <ConversationalVoice
+            onNavigate={handleVoiceNavigate}
+            onActiveChange={setVoiceActive}
+            autoStart={true}
+            greeting={`Welcome back, ${currentUser?.name.split(' ')[0]}! How can I help you today?`}
+          />
         </>
       )}
     </div>

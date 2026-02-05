@@ -1182,6 +1182,37 @@ def _extract_dropdown_hint(transcript: str) -> str:
     return ""  # Empty means find any dropdown on the page
 
 
+def _extract_button_info(transcript: str) -> Dict[str, str]:
+    """Extract button target from transcript for button clicks."""
+    text_lower = transcript.lower()
+
+    # Direct button mappings
+    button_mappings = {
+        'generate report': 'generate-report',
+        'regenerate report': 'regenerate-report',
+        'refresh': 'refresh',
+        'start copilot': 'start-copilot',
+        'stop copilot': 'stop-copilot',
+        'create poll': 'create-poll',
+        'post case': 'post-case',
+        'go live': 'go-live',
+        'complete session': 'complete-session',
+        'enroll': 'enroll-students',
+        'upload roster': 'upload-roster',
+        'submit': 'submit-post',
+        'create course': 'create-course-with-plans',
+        'create session': 'create-session',
+        'create and generate': 'create-course-with-plans',
+        'generate plans': 'create-course-with-plans',
+    }
+
+    for phrase, target in button_mappings.items():
+        if phrase in text_lower:
+            return {"target": target, "label": phrase.title()}
+
+    return {}
+
+
 def _extract_tab_info(transcript: str) -> Dict[str, str]:
     """Extract tab name from transcript for universal tab switching."""
     text_lower = transcript.lower()
@@ -1441,6 +1472,43 @@ async def execute_action(
                     {"type": "ui.selectDropdown", "payload": selection_info},
                 ],
             }
+
+        # === UNIVERSAL BUTTON CLICK ===
+        # Handles button clicks from form submission confirmations and direct commands
+        if action == 'ui_click_button':
+            # Get button target from conversation context (for confirmations) or extract from transcript
+            conv_context = conversation_manager.get_context(user_id)
+            button_target = None
+            button_label = None
+
+            # Check if we have action_data from confirmation flow
+            if conv_context.pending_action_data and conv_context.pending_action_data.get("voice_id"):
+                button_target = conv_context.pending_action_data.get("voice_id")
+                form_name = conv_context.pending_action_data.get("form_name", "")
+                button_label = form_name.replace("_", " ").title() if form_name else "Submit"
+            else:
+                # Extract from transcript
+                button_info = _extract_button_info(transcript or "")
+                button_target = button_info.get("target")
+                button_label = button_info.get("label", "button")
+
+            if button_target:
+                # Clear confirmation state after clicking
+                conv_context.state = ConversationState.IDLE
+                conv_context.pending_action = None
+                conv_context.pending_action_data = {}
+                conv_context.active_form = None
+                conversation_manager.save_context(user_id, conv_context)
+
+                return {
+                    "action": "click_button",
+                    "message": f"Clicking {button_label}.",
+                    "ui_actions": [
+                        {"type": "ui.clickButton", "payload": {"target": button_target}},
+                        {"type": "ui.toast", "payload": {"message": f"{button_label} clicked", "type": "success"}},
+                    ],
+                }
+            return {"message": "I couldn't determine which button to click."}
 
         # Note: Specific tab handlers (open_enrollment_tab, open_create_tab, open_manage_tab)
         # are now handled by the universal ui_switch_tab action above

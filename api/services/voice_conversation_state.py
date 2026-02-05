@@ -437,6 +437,16 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
     ),
 }
 
+# === FORM TO SUBMIT BUTTON MAPPING ===
+# Maps form names to their submit button voice_ids
+FORM_SUBMIT_BUTTONS: Dict[str, str] = {
+    "create_course": "create-course-with-plans",  # Create course AND generate plans
+    "create_session": "create-session",
+    "create_poll": "create-poll",
+    "create_case": "post-case",
+    "create_post": "submit-post",
+}
+
 
 @dataclass
 class ConversationContext:
@@ -650,28 +660,44 @@ class VoiceConversationManager:
 
         structure = self.get_page_structure(context.current_page)
         if not structure or context.active_form not in structure.forms:
-            context.state = ConversationState.IDLE
-            self.save_context(user_id, context)
-            return {
-                "done": True,
-                "next_prompt": None,
-                "field_to_fill": current_field,
-                "all_values": context.collected_values
-            }
-
-        fields = structure.forms[context.active_form]
-
-        # Check if there are more fields
-        if context.current_field_index >= len(fields):
-            # Form complete
+            form_name = context.active_form
+            submit_button = FORM_SUBMIT_BUTTONS.get(form_name) if form_name else None
             context.state = ConversationState.IDLE
             context.active_form = None
             self.save_context(user_id, context)
             return {
                 "done": True,
+                "next_prompt": None,
+                "field_to_fill": current_field,
+                "all_values": context.collected_values,
+                "submit_button": submit_button,
+                "form_name": form_name,
+            }
+
+        fields = structure.forms[context.active_form]
+        form_name = context.active_form  # Save before potential reset
+
+        # Check if there are more fields
+        if context.current_field_index >= len(fields):
+            # Form complete - get the submit button for this form
+            submit_button = FORM_SUBMIT_BUTTONS.get(form_name)
+
+            # Set up for confirmation (don't reset to IDLE yet)
+            context.state = ConversationState.AWAITING_CONFIRMATION
+            context.pending_action = "ui_click_button"
+            context.pending_action_data = {
+                "voice_id": submit_button,
+                "form_name": form_name,
+            }
+            self.save_context(user_id, context)
+
+            return {
+                "done": True,
                 "next_prompt": "I've filled in all the fields. Would you like me to submit the form?",
                 "field_to_fill": current_field,
-                "all_values": context.collected_values
+                "all_values": context.collected_values,
+                "submit_button": submit_button,
+                "form_name": form_name,
             }
 
         # Get next field

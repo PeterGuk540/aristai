@@ -332,6 +332,16 @@ AristAI ships with a first-party MCP server that exposes classroom operations as
 
 **Location:** `mcp_server/`
 
+**Tool execution notes:** Handlers may be defined with or without a `db` argument; database sessions are created inside worker threads to avoid cross-thread session sharing.
+
+**Action protocol:** Write tools now return a planned action with a preview and `action_id`. Execute via the `execute_action` tool after confirmation.
+
+**Context tools:** Resolve courses/sessions/users by natural language and set active context with `resolve_course`, `resolve_session`, `resolve_user`, `set_active_course`, and `set_active_session`.
+
+**UI actions:** Browsers subscribe to `/api/ui-actions/stream` (SSE) for `ui.navigate`, `ui.openTab`, `ui.openModal`, and `ui.toast` messages.
+
+**Tool response schema:** Tools return `{ ok, type, summary, data, ui_actions?, requires_confirmation?, action_id? }` for consistent machine parsing.
+
 **Start the server (stdio for Claude Desktop):**
 ```bash
 python -m mcp_server.server

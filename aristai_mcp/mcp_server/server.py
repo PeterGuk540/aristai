@@ -21,10 +21,10 @@ Features:
 """
 
 import asyncio
+import inspect
 import logging
 import os
 import sys
-from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 # Add parent directory to path for imports
@@ -39,10 +39,10 @@ from mcp.types import (
     ListToolsResult,
 )
 
-from sqlalchemy.orm import Session as DBSession
-
 from api.core.database import SessionLocal
-from api.core.config import get_settings
+from api.services.action_preview import build_action_preview
+from api.services.action_store import ActionStore
+from api.services.tool_response import normalize_tool_result
 
 # Import all tool modules
 from mcp_server.tools import (
@@ -53,6 +53,7 @@ from mcp_server.tools import (
     reports,
     copilot,
     enrollment,
+    resolve,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -60,24 +61,48 @@ logger = logging.getLogger(__name__)
 
 # Initialize MCP Server
 server = Server("aristai-mcp-server")
-
-
-# ============ Database Context Manager ============
-
-@asynccontextmanager
-async def get_db():
-    """Async context manager for database sessions."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+ACTION_TOOL_NAMES = {"plan_action", "execute_action", "cancel_action"}
+action_store = ActionStore()
 
 
 # ============ Tool Registry ============
 
 # Comprehensive tool registry with all forum operations
 TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {}
+
+
+def _handler_requires_db(handler: callable) -> bool:
+    try:
+        signature = inspect.signature(handler)
+    except (TypeError, ValueError):
+        return False
+    return "db" in signature.parameters
+
+
+def _invoke_tool_handler_in_thread(handler: callable, arguments: Dict[str, Any]) -> Any:
+    if _handler_requires_db(handler):
+        db = SessionLocal()
+        try:
+            return handler(db=db, **arguments)
+        finally:
+            db.close()
+    return handler(**arguments)
+
+
+def _invoke_tool_handler_with_db(
+    handler: callable, arguments: Dict[str, Any], db: Any
+) -> Any:
+    if _handler_requires_db(handler):
+        return handler(db=db, **arguments)
+    return handler(**arguments)
+
+
+def _plan_action_in_thread(tool_name: str, args: Dict[str, Any], user_id: Optional[int]) -> Dict[str, Any]:
+    db = SessionLocal()
+    try:
+        return plan_action(db=db, tool_name=tool_name, args=args, user_id=user_id)
+    finally:
+        db.close()
 
 
 def register_tool(
@@ -97,6 +122,77 @@ def register_tool(
         "mode": mode,  # "read" or "write"
         "category": category,
     }
+
+
+def plan_action(
+    db: Any,
+    tool_name: str,
+    args: Dict[str, Any],
+    user_id: Optional[int] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    tool_info = TOOL_REGISTRY.get(tool_name)
+    if not tool_info:
+        return {"success": False, "error": f"Unknown tool '{tool_name}'"}
+    if tool_info.get("mode") != "write":
+        return {"success": False, "error": f"Tool '{tool_name}' is not a write action"}
+    preview = build_action_preview(tool_name, args, db=db)
+    action = action_store.create_action(
+        user_id=user_id,
+        tool_name=tool_name,
+        args=args,
+        preview=preview,
+    )
+    return {
+        "success": True,
+        "action_id": action.action_id,
+        "requires_confirmation": True,
+        "preview": preview,
+        "message": "Action planned. Please confirm to execute.",
+    }
+
+
+def execute_action(
+    db: Any,
+    action_id: str,
+    user_id: Optional[int] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    action = action_store.get_action(action_id)
+    if not action:
+        return {"success": False, "error": "Action not found or expired"}
+    ownership_error = ActionStore.ensure_owner(action, user_id)
+    if ownership_error:
+        return {"success": False, "error": ownership_error}
+    if action.status != "planned":
+        return {"success": False, "error": f"Action is {action.status} and cannot be executed"}
+    tool_info = TOOL_REGISTRY.get(action.tool_name)
+    if not tool_info:
+        action_store.update_action(action.action_id, status="failed", result={"error": "Unknown tool"})
+        return {"success": False, "error": "Unknown tool"}
+    result = _invoke_tool_handler_with_db(tool_info["handler"], action.args, db=db)
+    action_store.update_action(
+        action.action_id,
+        status="executed",
+        result={"result": result},
+    )
+    return {"success": True, "action_id": action.action_id, "result": result}
+
+
+def cancel_action(
+    db: Any,
+    action_id: str,
+    user_id: Optional[int] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    action = action_store.get_action(action_id)
+    if not action:
+        return {"success": False, "error": "Action not found or expired"}
+    ownership_error = ActionStore.ensure_owner(action, user_id)
+    if ownership_error:
+        return {"success": False, "error": ownership_error}
+    action_store.update_action(action.action_id, status="cancelled")
+    return {"success": True, "action_id": action.action_id, "status": "cancelled"}
 
 
 def build_tool_registry():
@@ -739,6 +835,155 @@ def build_tool_registry():
         category="enrollment",
     )
 
+    # ============ ACTION TOOLS ============
+
+    register_tool(
+        name="plan_action",
+        description="Plan a write action and return a preview plus action_id for confirmation.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "tool_name": {"type": "string"},
+                "args": {"type": "object"},
+                "user_id": {"type": "integer"},
+            },
+            "required": ["tool_name", "args"],
+        },
+        handler=plan_action,
+        mode="write",
+        category="actions",
+    )
+
+    register_tool(
+        name="execute_action",
+        description="Execute a previously planned action by action_id.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "action_id": {"type": "string"},
+                "user_id": {"type": "integer"},
+            },
+            "required": ["action_id"],
+        },
+        handler=execute_action,
+        mode="write",
+        category="actions",
+    )
+
+    register_tool(
+        name="cancel_action",
+        description="Cancel a previously planned action by action_id.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "action_id": {"type": "string"},
+                "user_id": {"type": "integer"},
+            },
+            "required": ["action_id"],
+        },
+        handler=cancel_action,
+        mode="write",
+        category="actions",
+    )
+
+    # ============ RESOLVE/CONTEXT TOOLS ============
+
+    register_tool(
+        name="resolve_course",
+        description="Resolve a course query to candidate course IDs.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Course title or code query"},
+                "limit": {"type": "integer", "description": "Maximum candidates to return"},
+            },
+            "required": ["query"],
+        },
+        handler=resolve.resolve_course,
+        mode="read",
+        category="context",
+    )
+
+    register_tool(
+        name="resolve_session",
+        description="Resolve a session query to candidate session IDs.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_id": {"type": "integer", "description": "Course ID"},
+                "query": {"type": "string", "description": "Session query (latest|today|live|title)"},
+                "limit": {"type": "integer", "description": "Maximum candidates to return"},
+            },
+            "required": ["course_id"],
+        },
+        handler=resolve.resolve_session,
+        mode="read",
+        category="context",
+    )
+
+    register_tool(
+        name="resolve_user",
+        description="Resolve a user by email or name.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "email_or_name": {"type": "string", "description": "Email or name query"},
+                "limit": {"type": "integer", "description": "Maximum candidates to return"},
+            },
+            "required": ["email_or_name"],
+        },
+        handler=resolve.resolve_user,
+        mode="read",
+        category="context",
+    )
+
+    register_tool(
+        name="get_current_context",
+        description="Get active course/session context for the user.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "integer", "description": "User ID for context lookup"},
+            },
+            "required": [],
+        },
+        handler=resolve.get_current_context,
+        mode="read",
+        category="context",
+    )
+
+    register_tool(
+        name="set_active_course",
+        description="Set the active course for the user context.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_id": {"type": "integer", "description": "Course ID"},
+                "user_id": {"type": "integer", "description": "User ID for context"},
+            },
+            "required": ["course_id"],
+        },
+        handler=resolve.set_active_course,
+        mode="write",
+        category="context",
+    )
+
+    register_tool(
+        name="set_active_session",
+        description="Set the active session for the user context.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "integer", "description": "Session ID"},
+                "user_id": {"type": "integer", "description": "User ID for context"},
+            },
+            "required": ["session_id"],
+        },
+        handler=resolve.set_active_session,
+        mode="write",
+        category="context",
+    )
+
 
 # Build the registry on module load
 build_tool_registry()
@@ -774,31 +1019,25 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
     handler = tool_info["handler"]
     
     try:
-        async with get_db() as db:
-            # Call the handler with database session
-            result = await asyncio.to_thread(handler, db, **arguments)
+        if tool_info["mode"] == "write" and name not in ACTION_TOOL_NAMES:
+            result = await asyncio.to_thread(_plan_action_in_thread, name, arguments, None)
+        else:
+            result = await asyncio.to_thread(_invoke_tool_handler_in_thread, handler, arguments)
             
-            # Format result for voice-friendly output
-            if isinstance(result, dict):
-                if "error" in result:
-                    return CallToolResult(
-                        content=[TextContent(type="text", text=f"Error: {result['error']}")],
-                        isError=True,
-                    )
-                
-                # Create a voice-friendly summary
-                import json
-                result_text = json.dumps(result, indent=2, default=str)
-                
-                return CallToolResult(
-                    content=[TextContent(type="text", text=result_text)],
-                    isError=False,
-                )
-            else:
-                return CallToolResult(
-                    content=[TextContent(type="text", text=str(result))],
-                    isError=False,
-                )
+        normalized = normalize_tool_result(result, name)
+        if not normalized.get("ok", True):
+            return CallToolResult(
+                content=[TextContent(type="text", text=f"Error: {normalized.get('summary')}")],
+                isError=True,
+            )
+        
+        import json
+        result_text = json.dumps(normalized, indent=2, default=str)
+        
+        return CallToolResult(
+            content=[TextContent(type="text", text=result_text)],
+            isError=False,
+        )
                 
     except Exception as e:
         logger.exception(f"Tool execution failed: {name}")

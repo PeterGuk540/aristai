@@ -54,6 +54,7 @@ from mcp_server.tools import (
     copilot,
     enrollment,
     resolve,
+    voice,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -983,6 +984,101 @@ def build_tool_registry():
         handler=resolve.set_active_session,
         mode="write",
         category="context",
+    )
+
+    # ============ VOICE MACROS ============
+
+    register_tool(
+        name="voice_open_page",
+        description="Open a page with optional course/session resolution.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "target": {"type": "string", "description": "Target page or entity"},
+                "course_query": {"type": "string"},
+                "session_query": {"type": "string"},
+                "auto_open": {"type": "boolean"},
+            },
+            "required": ["target"],
+        },
+        handler=voice.voice_open_page,
+        mode="read",
+        category="voice",
+    )
+
+    register_tool(
+        name="voice_create_poll",
+        description="Resolve context and plan a poll creation action.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_query": {"type": "string"},
+                "session_query": {"type": "string"},
+                "question": {"type": "string"},
+                "options": {"type": "array"},
+                "auto_open": {"type": "boolean"},
+                "user_id": {"type": "integer"},
+            },
+            "required": ["course_query"],
+        },
+        handler=voice.voice_create_poll,
+        mode="read",
+        category="voice",
+    )
+
+    register_tool(
+        name="voice_generate_report",
+        description="Resolve context and plan a report generation action.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_query": {"type": "string"},
+                "session_query": {"type": "string"},
+                "auto_open": {"type": "boolean"},
+                "user_id": {"type": "integer"},
+            },
+            "required": ["course_query"],
+        },
+        handler=voice.voice_generate_report,
+        mode="read",
+        category="voice",
+    )
+
+    register_tool(
+        name="voice_enroll_students",
+        description="Resolve students and plan a bulk enrollment action.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_query": {"type": "string"},
+                "emails": {"type": "array"},
+                "csv_text": {"type": "string"},
+                "csv_url": {"type": "string"},
+                "role": {"type": "string"},
+                "auto_open": {"type": "boolean"},
+                "user_id": {"type": "integer"},
+            },
+            "required": ["course_query"],
+        },
+        handler=voice.voice_enroll_students,
+        mode="read",
+        category="voice",
+    )
+
+    register_tool(
+        name="bulk_enroll_students",
+        description="Bulk enroll students by user IDs in a course.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_id": {"type": "integer"},
+                "user_ids": {"type": "array"},
+            },
+            "required": ["course_id", "user_ids"],
+        },
+        handler=enrollment.bulk_enroll_students,
+        mode="write",
+        category="enrollment",
     )
 
 

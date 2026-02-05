@@ -342,6 +342,8 @@ AristAI ships with a first-party MCP server that exposes classroom operations as
 
 **Tool response schema:** Tools return `{ ok, type, summary, data, ui_actions?, requires_confirmation?, action_id? }` for consistent machine parsing.
 
+**Voice macros:** Use `voice_open_page`, `voice_create_poll`, `voice_generate_report`, and `voice_enroll_students` to resolve context and return planned actions with confirmations.
+
 **Start the server (stdio for Claude Desktop):**
 ```bash
 python -m mcp_server.server

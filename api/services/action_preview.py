@@ -49,6 +49,13 @@ def build_action_preview(
             "session_id": args.get("session_id"),
             "args": args,
         }
+    if tool_name == "bulk_enroll_students":
+        return {
+            "tool_name": tool_name,
+            "affected": {"enrollments": len(args.get("user_ids", []))},
+            "course_id": args.get("course_id"),
+            "args": args,
+        }
     if tool_name == "navigate_to_page":
         return {
             "tool_name": tool_name,

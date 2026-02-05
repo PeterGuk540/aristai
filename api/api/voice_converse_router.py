@@ -109,6 +109,10 @@ ACTION_PATTERNS = {
     ],
 }
 
+CONFIRMATION_PATTERNS = (
+    r"\b(yes|yeah|yep|confirm|confirmed|approve|approved|proceed|go ahead|do it|sounds good|ok|okay)\b"
+)
+
 
 def detect_navigation_intent(text: str) -> Optional[str]:
     """Detect if user wants to navigate somewhere"""
@@ -127,6 +131,26 @@ def detect_action_intent(text: str) -> Optional[str]:
             if re.search(pattern, text_lower):
                 return action
     return None
+
+
+def is_confirmation(text: str) -> bool:
+    """Return True if transcript is a confirmation to proceed."""
+    return bool(re.search(CONFIRMATION_PATTERNS, text.lower()))
+
+
+def build_confirmation_message(steps: List[Dict[str, Any]]) -> str:
+    """Build a confirmation prompt for write actions."""
+    summaries = []
+    for step in steps:
+        tool_name = step.get("tool_name", "unknown_tool")
+        args = step.get("args", {})
+        if args:
+            arg_preview = ", ".join(f"{key}={value!r}" for key, value in list(args.items())[:3])
+            summaries.append(f"{tool_name} ({arg_preview})")
+        else:
+            summaries.append(tool_name)
+    actions = "; ".join(summaries) if summaries else "the requested action"
+    return f"I can proceed with: {actions}. Would you like me to go ahead?"
 
 
 def detect_navigation_intent_llm(
@@ -320,7 +344,31 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     )
     plan = plan_result.get("plan") if plan_result else None
     if plan and plan.get("steps"):
-        results, summary = execute_plan_steps(plan.get("steps", []), db)
+        steps = plan.get("steps", [])
+        required_confirmations = set(plan.get("required_confirmations") or [])
+        write_steps = [
+            step
+            for step in steps
+            if step.get("mode") == "write" or step.get("tool_name") in required_confirmations
+        ]
+
+        if write_steps and not is_confirmation(transcript):
+            pending_results = [
+                {
+                    "tool": step.get("tool_name"),
+                    "status": "pending_confirmation",
+                    "args": step.get("args", {}),
+                }
+                for step in write_steps
+            ]
+            return ConverseResponse(
+                message=sanitize_speech(build_confirmation_message(write_steps)),
+                action=ActionResponse(type="execute", executed=False),
+                results=pending_results,
+                suggestions=["Yes, proceed", "No, cancel"],
+            )
+
+        results, summary = execute_plan_steps(steps, db)
         return ConverseResponse(
             message=sanitize_speech(summary),
             action=ActionResponse(type='execute', executed=True),

@@ -245,7 +245,7 @@ export const VoiceUIController = () => {
     if (!element || element.tagName !== 'SELECT') {
       console.warn('🎤 VoiceUI: Dropdown not found:', target);
       // Try to find any select on the page with the label
-      const selects = document.querySelectorAll('select');
+      const selects = Array.from(document.querySelectorAll('select'));
       for (const select of selects) {
         const label = select.closest('div')?.querySelector('label')?.textContent?.toLowerCase();
         if (label && target && label.includes(target.toLowerCase())) {
@@ -308,7 +308,7 @@ export const VoiceUIController = () => {
 
     // If not found by target, search by button label
     if (!element && buttonLabel) {
-      const buttons = document.querySelectorAll('button');
+      const buttons = Array.from(document.querySelectorAll('button'));
       const labelLower = buttonLabel.toLowerCase();
       for (const btn of buttons) {
         const btnText = btn.textContent?.toLowerCase() || '';
@@ -371,7 +371,7 @@ export const VoiceUIController = () => {
 
     if (!element && tabName) {
       // Search for tab by text content
-      const tabButtons = document.querySelectorAll('[role="tab"], [data-radix-collection-item], button');
+      const tabButtons = Array.from(document.querySelectorAll('[role="tab"], [data-radix-collection-item], button'));
       const tabNameLower = tabName.toLowerCase();
       for (const tab of tabButtons) {
         const tabText = tab.textContent?.toLowerCase() || '';
@@ -396,7 +396,7 @@ export const VoiceUIController = () => {
     console.log('🎤 VoiceUI: selectListItem', { target, itemName, itemIndex });
 
     const container = findElement(target) || document;
-    const items = container.querySelectorAll('[data-voice-item], [role="listitem"], li, button[data-state]');
+    const items = Array.from(container.querySelectorAll('[data-voice-item], [role="listitem"], li, button[data-state]'));
 
     if (items.length === 0) {
       console.warn('🎤 VoiceUI: No list items found in:', target);

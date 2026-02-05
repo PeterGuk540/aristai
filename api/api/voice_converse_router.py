@@ -522,54 +522,54 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             suggestions=get_action_suggestions(action),
         )
 
-    # 3. Only use LLM orchestrator for complex requests that regex couldn't handle
-    plan_result = run_voice_orchestrator(
-        transcript,
-        context=request.context,
-        current_page=request.current_page,
-    )
-    plan = plan_result.get("plan") if plan_result else None
-    if plan and plan.get("steps"):
-        steps = plan.get("steps", [])
-        required_confirmations = set(plan.get("required_confirmations") or [])
-        write_steps = [
-            step
-            for step in steps
-            if step.get("mode") == "write" or step.get("tool_name") in required_confirmations
-        ]
+    # 3. FAST MODE: Skip slow LLM orchestrator for instant response
+    # The regex patterns above should handle 95%+ of commands
+    # Only use LLM for truly complex multi-step requests (disabled by default for speed)
+    USE_LLM_ORCHESTRATOR = False  # Set to True if you need complex multi-step planning
 
-        if write_steps and not is_confirmation(transcript):
-            pending_results = [
-                {
-                    "tool": step.get("tool_name"),
-                    "status": "pending_confirmation",
-                    "args": step.get("args", {}),
-                }
-                for step in write_steps
+    if USE_LLM_ORCHESTRATOR:
+        plan_result = run_voice_orchestrator(
+            transcript,
+            context=request.context,
+            current_page=request.current_page,
+        )
+        plan = plan_result.get("plan") if plan_result else None
+        if plan and plan.get("steps"):
+            steps = plan.get("steps", [])
+            required_confirmations = set(plan.get("required_confirmations") or [])
+            write_steps = [
+                step
+                for step in steps
+                if step.get("mode") == "write" or step.get("tool_name") in required_confirmations
             ]
+
+            if write_steps and not is_confirmation(transcript):
+                pending_results = [
+                    {
+                        "tool": step.get("tool_name"),
+                        "status": "pending_confirmation",
+                        "args": step.get("args", {}),
+                    }
+                    for step in write_steps
+                ]
+                return ConverseResponse(
+                    message=sanitize_speech(build_confirmation_message(write_steps)),
+                    action=ActionResponse(type="execute", executed=False),
+                    results=pending_results,
+                    suggestions=["Yes, proceed", "No, cancel"],
+                )
+
+            # Execute and use fast template summary (no LLM call)
+            results, summary = execute_plan_steps(steps, db)
             return ConverseResponse(
-                message=sanitize_speech(build_confirmation_message(write_steps)),
-                action=ActionResponse(type="execute", executed=False),
-                results=pending_results,
-                suggestions=["Yes, proceed", "No, cancel"],
+                message=sanitize_speech(summary),
+                action=ActionResponse(type='execute', executed=True),
+                results=results,
+                suggestions=["Anything else I can help with?"],
             )
 
-        # Execute and use fast template summary (no LLM call)
-        results, summary = execute_plan_steps(steps, db)
-        return ConverseResponse(
-            message=sanitize_speech(summary),
-            action=ActionResponse(type='execute', executed=True),
-            results=results,
-            suggestions=["Anything else I can help with?"],
-        )
-
-    # 4. No clear intent - provide helpful fallback (no additional LLM call)
+    # 4. No clear intent - provide helpful fallback instantly (no LLM call)
     fallback_message = generate_fallback_response(transcript, request.context)
-    if plan_result and plan_result.get("error") == "No LLM API key configured":
-        fallback_message = (
-            f"{fallback_message} "
-            "For broader understanding, configure a language model API key."
-        )
 
     return ConverseResponse(
         message=sanitize_speech(fallback_message),

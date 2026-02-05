@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
         'Authorization': request.headers.get('Authorization') || 'Bearer dummy-token',
         'Content-Type': 'application/json',
       },
+      cache: 'no-store', // Prevent any caching
     });
 
     console.log('🔗 Backend response status:', response.status);

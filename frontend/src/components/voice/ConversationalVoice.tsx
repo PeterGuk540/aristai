@@ -174,6 +174,20 @@ export function ConversationalVoice({
       body: JSON.stringify({ text: message }),
     });
     if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      const errorMessage = typeof errorData?.error === 'string' ? errorData.error : '';
+      if (errorMessage.includes('Missing ElevenLabs configuration')) {
+        const hasSpeechSynthesis = typeof window !== 'undefined' && 'speechSynthesis' in window;
+        if (hasSpeechSynthesis) {
+          await new Promise<void>((resolve, reject) => {
+            const utterance = new SpeechSynthesisUtterance(message);
+            utterance.onend = () => resolve();
+            utterance.onerror = () => reject(new Error('Browser TTS failed'));
+            window.speechSynthesis.speak(utterance);
+          });
+          return;
+        }
+      }
       throw new Error(`TTS failed: ${response.status}`);
     }
     const audioBlob = await response.blob();

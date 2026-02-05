@@ -2,7 +2,7 @@
 
 ## 🎯 **Immediate Action Plan**
 
-Follow these exact steps to configure your ElevenLabs Agent with MCP functions:
+Follow these exact steps to configure your ElevenLabs Agent with a single MCP delegate tool:
 
 ---
 
@@ -14,27 +14,25 @@ Follow these exact steps to configure your ElevenLabs Agent with MCP functions:
 
 ---
 
-## **Step 2: Add First Function (Navigation)**
+## **Step 2: Add the Only Function (Delegate to MCP)**
 
 Copy and paste this entire configuration:
 
 ```json
 {
-  "name": "navigate_to_page",
-  "description": "Navigate to a specific page in the AristAI educational platform. Use this when user asks to go to pages like courses, forum, reports, dashboard, console, sessions, etc.",
+  "name": "delegate_to_mcp",
+  "description": "Delegate all user intent understanding and action planning to the MCP backend.",
   "parameters": {
     "type": "object",
     "properties": {
-      "page": {
-        "type": "string",
-        "enum": ["courses", "sessions", "forum", "reports", "console", "dashboard", "home", "settings"],
-        "description": "The target page to navigate to"
-      }
+      "transcript": { "type": "string" },
+      "current_page": { "type": "string" },
+      "user_id": { "type": "integer" }
     },
-    "required": ["page"]
+    "required": ["transcript"]
   },
   "webhook": {
-    "url": "http://ec2-13-219-204-7.compute-1.amazonaws.com:8000/api/mcp/execute",
+    "url": "https://your-api-domain.com/api/voice/agent/delegate",
     "method": "POST",
     "headers": {
       "Authorization": "Bearer dummy-token",
@@ -45,65 +43,6 @@ Copy and paste this entire configuration:
 ```
 
 Click **"Save"** or **"Add"** for this function.
-
----
-
-## **Step 3: Add Second Function (List Courses)**
-
-Click **"Add Function"** again, then add:
-
-```json
-{
-  "name": "list_courses",
-  "description": "List all available courses for the user. Use this when user asks to see their courses, what courses they have, or show my courses.",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "skip": {"type": "integer", "default": 0, "description": "Number of courses to skip for pagination"},
-      "limit": {"type": "integer", "default": 100, "description": "Maximum number of courses to return"}
-    },
-    "required": []
-  },
-  "webhook": {
-    "url": "http://ec2-13-219-204-7.compute-1.amazonaws.com:8000/api/mcp/execute",
-    "method": "POST",
-    "headers": {
-      "Authorization": "Bearer dummy-token",
-      "Content-Type": "application/json"
-    }
-  }
-}
-```
-
-Click **"Save"**.
-
----
-
-## **Step 4: Add Third Function (Help/Available Pages)**
-
-Add this helper function:
-
-```json
-{
-  "name": "get_available_pages",
-  "description": "Get list of all available pages for navigation and provide help. Use this when user asks for help or what they can do.",
-  "parameters": {
-    "type": "object",
-    "properties": {},
-    "required": []
-  },
-  "webhook": {
-    "url": "http://ec2-13-219-204-7.compute-1.amazonaws.com:8000/api/mcp/execute",
-    "method": "POST",
-    "headers": {
-      "Authorization": "Bearer dummy-token",
-      "Content-Type": "application/json"
-    }
-  }
-}
-```
-
-Click **"Save"**.
 
 ---
 
@@ -122,60 +61,15 @@ Click **"Save"**.
 
 ---
 
-## **Step 6: Add More Functions (After Testing Works)**
+## **Step 6: Update the System Instruction**
 
-Once basic functions work, add these:
+Set the agent system instruction to:
 
-### **Create Poll Function:**
-```json
-{
-  "name": "create_poll",
-  "description": "Create a new poll in a session for student engagement",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "session_id": {"type": "integer", "description": "The session ID to create poll in"},
-      "question": {"type": "string", "description": "The poll question"},
-      "options": {
-        "type": "array",
-        "items": {"type": "string"},
-        "description": "List of answer options (minimum 2)"
-      }
-    },
-    "required": ["session_id", "question", "options"]
-  },
-  "webhook": {
-    "url": "http://ec2-13-219-204-7.compute-1.amazonaws.com:8000/api/mcp/execute",
-    "method": "POST",
-    "headers": {
-      "Authorization": "Bearer dummy-token",
-      "Content-Type": "application/json"
-    }
-  }
-}
 ```
-
-### **Start Copilot Function:**
-```json
-{
-  "name": "start_copilot",
-  "description": "Start the AI copilot for a session to monitor discussions and provide suggestions",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "session_id": {"type": "integer", "description": "The session ID to start copilot for"}
-    },
-    "required": ["session_id"]
-  },
-  "webhook": {
-    "url": "http://ec2-13-219-204-7.compute-1.amazonaws.com:8000/api/mcp/execute",
-    "method": "POST",
-    "headers": {
-      "Authorization": "Bearer dummy-token",
-      "Content-Type": "application/json"
-    }
-  }
-}
+You are a real-time voice interface.
+Do not interpret user intent or make decisions.
+Always delegate understanding and actions to the MCP backend.
+Speak only the response provided by MCP.
 ```
 
 ---
@@ -193,7 +87,7 @@ For production deployment:
 ## **🚨 Troubleshooting**
 
 ### **If functions don't trigger:**
-1. Check webhook URL is accessible: `curl http://ec2-13-219-204-7.compute-1.amazonaws.com:8000/api/mcp/execute`
+1. Check webhook URL is accessible: `curl https://your-api-domain.com/api/voice/agent/delegate`
 2. Verify JSON syntax is correct
 3. Check ElevenLabs function calling is enabled
 
@@ -232,9 +126,7 @@ After successful configuration:
 ## **📞 Next Steps After Configuration**
 
 1. Test basic navigation and course listing
-2. Add poll and copilot functions  
-3. Configure production HTTPS and authentication
-4. Add remaining 39 MCP tools as needed
-5. Monitor webhook calls and user feedback
+2. Configure production HTTPS and authentication
+3. Monitor webhook calls and user feedback
 
-**Start with Step 1 now!** This should take about 15-20 minutes to configure the first 3 functions.
+**Start with Step 1 now!** This should take about 10 minutes to configure the single tool and system prompt.

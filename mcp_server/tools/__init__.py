@@ -20,6 +20,7 @@ from mcp_server.tools import (
     reports,
     enrollment,
     navigation,
+    resolve,
 )
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "reports",
     "enrollment",
     "navigation",
+    "resolve",
 ]

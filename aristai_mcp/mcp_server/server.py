@@ -52,6 +52,7 @@ from mcp_server.tools import (
     reports,
     copilot,
     enrollment,
+    resolve,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +63,8 @@ server = Server("aristai-mcp-server")
 ACTION_TOOL_NAMES = {"plan_action", "execute_action", "cancel_action"}
 action_store = ActionStore()
 
+# Comprehensive tool registry with all forum operations
+TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {}
 
 # ============ Tool Registry ============
 
@@ -101,24 +104,6 @@ def _plan_action_in_thread(tool_name: str, args: Dict[str, Any], user_id: Option
         return plan_action(db=db, tool_name=tool_name, args=args, user_id=user_id)
     finally:
         db.close()
-
-
-def _handler_requires_db(handler: callable) -> bool:
-    try:
-        signature = inspect.signature(handler)
-    except (TypeError, ValueError):
-        return False
-    return "db" in signature.parameters
-
-
-def _invoke_tool_handler_in_thread(handler: callable, arguments: Dict[str, Any]) -> Any:
-    if _handler_requires_db(handler):
-        db = SessionLocal()
-        try:
-            return handler(db=db, **arguments)
-        finally:
-            db.close()
-    return handler(**arguments)
 
 
 def register_tool(
@@ -900,6 +885,104 @@ def build_tool_registry():
         handler=cancel_action,
         mode="write",
         category="actions",
+    )
+
+    # ============ RESOLVE/CONTEXT TOOLS ============
+
+    register_tool(
+        name="resolve_course",
+        description="Resolve a course query to candidate course IDs.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Course title or code query"},
+                "limit": {"type": "integer", "description": "Maximum candidates to return"},
+            },
+            "required": ["query"],
+        },
+        handler=resolve.resolve_course,
+        mode="read",
+        category="context",
+    )
+
+    register_tool(
+        name="resolve_session",
+        description="Resolve a session query to candidate session IDs.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_id": {"type": "integer", "description": "Course ID"},
+                "query": {"type": "string", "description": "Session query (latest|today|live|title)"},
+                "limit": {"type": "integer", "description": "Maximum candidates to return"},
+            },
+            "required": ["course_id"],
+        },
+        handler=resolve.resolve_session,
+        mode="read",
+        category="context",
+    )
+
+    register_tool(
+        name="resolve_user",
+        description="Resolve a user by email or name.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "email_or_name": {"type": "string", "description": "Email or name query"},
+                "limit": {"type": "integer", "description": "Maximum candidates to return"},
+            },
+            "required": ["email_or_name"],
+        },
+        handler=resolve.resolve_user,
+        mode="read",
+        category="context",
+    )
+
+    register_tool(
+        name="get_current_context",
+        description="Get active course/session context for the user.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "integer", "description": "User ID for context lookup"},
+            },
+            "required": [],
+        },
+        handler=resolve.get_current_context,
+        mode="read",
+        category="context",
+    )
+
+    register_tool(
+        name="set_active_course",
+        description="Set the active course for the user context.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_id": {"type": "integer", "description": "Course ID"},
+                "user_id": {"type": "integer", "description": "User ID for context"},
+            },
+            "required": ["course_id"],
+        },
+        handler=resolve.set_active_course,
+        mode="write",
+        category="context",
+    )
+
+    register_tool(
+        name="set_active_session",
+        description="Set the active session for the user context.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "integer", "description": "Session ID"},
+                "user_id": {"type": "integer", "description": "User ID for context"},
+            },
+            "required": ["session_id"],
+        },
+        handler=resolve.set_active_session,
+        mode="write",
+        category="context",
     )
 
 

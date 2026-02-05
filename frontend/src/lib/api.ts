@@ -58,8 +58,20 @@ async function fetchApi<T>(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    const message = formatApiErrorMessage(error?.detail ?? error);
+    const contentType = response.headers.get('content-type') || '';
+    let errorDetail: unknown = 'Unknown error';
+
+    if (contentType.includes('application/json')) {
+      errorDetail = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    } else {
+      errorDetail = await response.text().catch(() => 'Unknown error');
+    }
+
+    const message = formatApiErrorMessage(
+      typeof errorDetail === 'object' && errorDetail !== null && 'detail' in errorDetail
+        ? (errorDetail as { detail?: unknown }).detail
+        : errorDetail
+    );
     throw new ApiError(response.status, message || `HTTP ${response.status}`);
   }
 

@@ -95,7 +95,7 @@ export const api = {
     results?: any[];
     suggestions?: string[];
   }> => {
-    return fetchApi('/voice/converse', {
+    return fetchApi('/voice-converse/voice/converse', {
       method: 'POST',
       body: JSON.stringify(request),
     });

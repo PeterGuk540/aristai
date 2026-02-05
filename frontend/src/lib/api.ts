@@ -6,7 +6,7 @@ import { getMicrosoftIdToken } from './ms-auth';
 // In development, call the backend directly.
 const isProduction = process.env.NODE_ENV === 'production';
 const isHttpsContext = typeof window !== 'undefined' && window.location.protocol === 'https:';
-const DEFAULT_BACKEND_URL = 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
+const DEFAULT_BACKEND_URL = 'https://ec2-13-219-204-7.compute-1.amazonaws.com';
 const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL
   || (isProduction || isHttpsContext ? DEFAULT_BACKEND_URL : 'http://localhost:8000');
 const useProxy = isProduction || isHttpsContext;

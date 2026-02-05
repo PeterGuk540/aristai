@@ -42,7 +42,7 @@ interface ConversationalVoiceProps {
   className?: string;
 }
 
-const MCP_DELEGATION_POLICY = `You are the AristAI voice interface. Follow this strict boundary:
+const MCP_DELEGATION_POLICY = `You are the AristAI voice interface. ElevenLabs controls conversation flow; MCP is the sole source of platform truth.
 
 ElevenLabs handles conversation flow only:
 - Manage turn-taking, interruptions, endpointing, and streaming.
@@ -57,6 +57,8 @@ You MUST delegate to MCP via delegate_to_mcp for:
 - Any request mentioning in-product pages/objects (courses, sessions, forum, reports, console, dashboard).
 
 Suggested: If the request is complex or ambiguous, reply with a short acknowledgment and immediately call delegate_to_mcp.
+
+Hard rule for write actions: require confirmation. First acknowledge ("Okay—confirming."), delegate to MCP for an action preview with requires_confirmation: true, then ask the user to confirm before executing.
 
 Never invent platform facts or outcomes. Never claim an action happened unless MCP confirms it.`;
 
@@ -188,7 +190,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         connectionType: "websocket",
         overrides: {
           agent: {
-            prompt: MCP_DELEGATION_POLICY,
+            prompt: { prompt: MCP_DELEGATION_POLICY },
           },
         },
         clientTools: {

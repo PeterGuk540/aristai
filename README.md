@@ -344,6 +344,8 @@ AristAI ships with a first-party MCP server that exposes classroom operations as
 
 **Voice macros:** Use `voice_open_page`, `voice_create_poll`, `voice_generate_report`, and `voice_enroll_students` to resolve context and return planned actions with confirmations.
 
+**Speech filter:** Spoken responses are sanitized via a denylist (env `VOICE_BRAND_DENYLIST`) to avoid vendor mentions and external navigation prompts.
+
 **Start the server (stdio for Claude Desktop):**
 ```bash
 python -m mcp_server.server

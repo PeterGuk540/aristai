@@ -21,6 +21,7 @@ from api.core.database import get_db
 from api.models.course import Course
 from api.models.session import Session as SessionModel, SessionStatus
 from api.api.mcp_executor import invoke_tool_handler
+from api.services.speech_filter import sanitize_speech
 from api.services.tool_response import normalize_tool_result
 from mcp_server.server import TOOL_REGISTRY
 from workflows.voice_orchestrator import run_voice_orchestrator, generate_summary
@@ -298,15 +299,16 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     
     if not transcript:
         return ConverseResponse(
-            message="I didn't catch that. Could you say it again?",
+            message=sanitize_speech("I didn't catch that. Could you say it again?"),
             suggestions=["Show my courses", "Start a session", "Open forum"]
         )
     
     # Check for navigation intent first
     nav_path = detect_navigation_intent(transcript)
     if nav_path:
+        message = sanitize_speech(generate_conversational_response('navigate', nav_path))
         return ConverseResponse(
-            message=generate_conversational_response('navigate', nav_path),
+            message=message,
             action=ActionResponse(type='navigate', target=nav_path),
             suggestions=get_page_suggestions(nav_path)
         )
@@ -320,7 +322,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     if plan and plan.get("steps"):
         results, summary = execute_plan_steps(plan.get("steps", []), db)
         return ConverseResponse(
-            message=summary,
+            message=sanitize_speech(summary),
             action=ActionResponse(type='execute', executed=True),
             results=results,
             suggestions=["Anything else I can help with?"],
@@ -333,7 +335,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     )
     if nav_path_llm:
         return ConverseResponse(
-            message=generate_conversational_response('navigate', nav_path_llm),
+            message=sanitize_speech(generate_conversational_response('navigate', nav_path_llm)),
             action=ActionResponse(type='navigate', target=nav_path_llm),
             suggestions=get_page_suggestions(nav_path_llm),
         )
@@ -346,13 +348,13 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
         
         return ConverseResponse(
-            message=generate_conversational_response(
+            message=sanitize_speech(generate_conversational_response(
                 'execute',
                 action,
                 results=results,
                 context=request.context,
                 current_page=request.current_page,
-            ),
+            )),
             action=ActionResponse(type='execute', executed=True),
             results=results,
             suggestions=get_action_suggestions(action),
@@ -363,11 +365,11 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     if plan_result and plan_result.get("error") == "No LLM API key configured":
         fallback_message = (
             f"{fallback_message} "
-            "For broader understanding, configure an OpenAI or Anthropic API key."
+            "For broader understanding, configure a language model API key."
         )
 
     return ConverseResponse(
-        message=fallback_message,
+        message=sanitize_speech(fallback_message),
         action=ActionResponse(type='info'),
         suggestions=["Show my courses", "Go to forum", "Start copilot", "Create a poll"],
     )

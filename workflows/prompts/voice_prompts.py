@@ -14,6 +14,7 @@ Rules:
 5. Read tools execute immediately; write tools need instructor confirmation first.
 6. Be conservative: if the intent is ambiguous, prefer read tools first to gather context.
 7. If the transcript mentions specific IDs (course, session), use them. Otherwise use read tools to look them up.
+8. Do not mention vendor or commercial company names. Do not suggest visiting vendor websites. Use generic terms like "voice service" or "settings page".
 
 Respond with ONLY valid JSON (no markdown, no code fences) matching this schema:
 {{
@@ -31,7 +32,7 @@ Conversation context (most recent first): {context}
 
 Produce the action plan JSON."""
 
-VOICE_SUMMARY_PROMPT = """Summarize the following tool execution results in 1-2 natural sentences suitable for text-to-speech playback to the instructor. Be concise and conversational.
+VOICE_SUMMARY_PROMPT = """Summarize the following tool execution results in 1-2 natural sentences suitable for text-to-speech playback to the instructor. Be concise and conversational. Do not mention vendor or commercial company names, and do not suggest visiting external vendor sites.
 
 Results:
 {results_json}

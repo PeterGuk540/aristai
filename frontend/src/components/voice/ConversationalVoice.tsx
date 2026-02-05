@@ -73,6 +73,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const isInitializingRef = useRef(false);
   const isProcessingTranscriptRef = useRef(false);
   const userInitiatedDisconnectRef = useRef(false); // Track user-initiated Stop clicks
+  const previousUserIdRef = useRef<number | null>(null); // Track user ID for logout detection
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -107,6 +108,33 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       conversationRef.current = null;
     }
   };
+
+  // Clear voice context when user logs out
+  useEffect(() => {
+    const previousUserId = previousUserIdRef.current;
+    const currentUserId = currentUser?.id ?? null;
+
+    // Detect logout (user was logged in, now isn't)
+    if (previousUserId !== null && currentUserId === null) {
+      // User logged out - clear voice context
+      const clearVoiceContext = async () => {
+        try {
+          await fetch('/api/voice/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: previousUserId }),
+          });
+          console.log('🔒 Voice context cleared on logout');
+        } catch (error) {
+          console.error('Failed to clear voice context:', error);
+        }
+      };
+      clearVoiceContext();
+    }
+
+    // Update the previous user ID ref
+    previousUserIdRef.current = currentUserId;
+  }, [currentUser?.id]);
 
   const initializeConversation = async () => {
     setState('connecting');

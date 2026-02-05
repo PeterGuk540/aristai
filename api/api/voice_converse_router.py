@@ -24,6 +24,11 @@ from api.api.mcp_executor import invoke_tool_handler
 from api.services.speech_filter import sanitize_speech
 from api.services.tool_response import normalize_tool_result
 from api.services.context_store import ContextStore
+from api.services.voice_conversation_state import (
+    VoiceConversationManager,
+    ConversationState,
+    DropdownOption,
+)
 from mcp_server.server import TOOL_REGISTRY
 from workflows.voice_orchestrator import run_voice_orchestrator, generate_summary
 from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics, parse_json_response
@@ -31,12 +36,28 @@ from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics, 
 # Initialize context store for voice memory
 context_store = ContextStore()
 
+# Initialize conversation state manager for conversational flows
+conversation_manager = VoiceConversationManager()
+
 # Import your existing dependencies
 # from .auth import get_current_user
 # from .database import get_db
 # from ..mcp_server.server import mcp_server
 
 router = APIRouter(prefix="/voice", tags=["voice"])
+
+
+class LogoutRequest(BaseModel):
+    user_id: Optional[int] = None
+
+
+@router.post("/logout")
+async def voice_logout(request: LogoutRequest):
+    """Clear voice context on user logout."""
+    if request.user_id:
+        conversation_manager.clear_context(request.user_id)
+        context_store.clear_context(request.user_id)
+    return {"message": "Voice context cleared"}
 
 
 class ConverseRequest(BaseModel):
@@ -736,11 +757,13 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     Conversational voice endpoint that processes natural language
     and returns appropriate responses with actions.
 
-    OPTIMIZED FLOW (fast regex checks before expensive LLM calls):
-    1. Regex navigation check (instant)
-    2. Regex action check (instant)
-    3. LLM orchestrator (only for complex requests)
-    4. Template-based summary (no LLM)
+    CONVERSATIONAL FLOW:
+    1. Check conversation state (awaiting input, confirmation, dropdown selection)
+    2. Process based on state if active
+    3. Regex navigation check (instant)
+    4. Regex action check (instant)
+    5. LLM orchestrator (only for complex requests)
+    6. Template-based summary (no LLM)
     """
     transcript = request.transcript.strip()
 
@@ -749,6 +772,119 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             message=sanitize_speech("I didn't catch that. Could you say it again?"),
             suggestions=["Show my courses", "Start a session", "Open forum"]
         )
+
+    # === CHECK CONVERSATION STATE FIRST ===
+    # Handle ongoing conversational flows (form filling, dropdown selection, confirmation)
+    conv_context = conversation_manager.get_context(request.user_id)
+
+    # --- Handle confirmation state ---
+    if conv_context.state == ConversationState.AWAITING_CONFIRMATION:
+        # Check if user confirmed or denied
+        confirmed = is_confirmation(transcript)
+        denial_words = ['no', 'nope', 'cancel', 'stop', 'never mind', 'nevermind']
+        denied = any(word in transcript.lower() for word in denial_words)
+
+        if confirmed or denied:
+            result = conversation_manager.process_confirmation(request.user_id, confirmed)
+            if result["confirmed"] and result["action"]:
+                # Execute the pending action
+                action_result = await execute_action(
+                    result["action"],
+                    request.user_id,
+                    request.current_page,
+                    db,
+                    transcript
+                )
+                conversation_manager.reset_retry_count(request.user_id)
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[action_result] if action_result else None,
+                    suggestions=get_action_suggestions(result["action"]),
+                )
+            else:
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Show my courses", "Go to forum", "What can I do?"],
+                )
+        # If not clear confirmation/denial, ask again
+        return ConverseResponse(
+            message=sanitize_speech("Please say 'yes' to confirm or 'no' to cancel."),
+            action=ActionResponse(type='info'),
+            suggestions=["Yes, proceed", "No, cancel"],
+        )
+
+    # --- Handle dropdown selection state ---
+    if conv_context.state == ConversationState.AWAITING_DROPDOWN_SELECTION:
+        result = conversation_manager.select_dropdown_option(request.user_id, transcript)
+        if result["success"]:
+            selected = result["selected"]
+            conversation_manager.reset_retry_count(request.user_id)
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.selectDropdownOption", "payload": {
+                            "target": result["voice_id"],
+                            "value": selected.value,
+                            "label": selected.label,
+                        }},
+                        {"type": "ui.toast", "payload": {"message": f"Selected: {selected.label}", "type": "success"}},
+                    ]
+                }],
+                suggestions=["What's next?", "Go to another page", "Help me"],
+            )
+        else:
+            # Couldn't match selection, offer options again
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='info'),
+                suggestions=["Say the number", "Say the name", "Cancel"],
+            )
+
+    # --- Handle form field input state ---
+    if conv_context.state == ConversationState.AWAITING_FIELD_INPUT:
+        current_field = conversation_manager.get_current_field(request.user_id)
+        if current_field:
+            # Check for skip/next keywords
+            skip_words = ['skip', 'next', 'pass', 'later', 'none', 'nothing']
+            if any(word in transcript.lower() for word in skip_words):
+                skip_result = conversation_manager.skip_current_field(request.user_id)
+                return ConverseResponse(
+                    message=sanitize_speech(skip_result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Continue", "Cancel form", "Help"],
+                )
+
+            # Record the user's answer and fill the field
+            result = conversation_manager.record_field_value(request.user_id, transcript)
+            field_to_fill = result["field_to_fill"]
+
+            ui_actions = []
+            if field_to_fill:
+                ui_actions.append({
+                    "type": "ui.fillInput",
+                    "payload": {
+                        "target": field_to_fill.voice_id,
+                        "value": transcript,
+                    }
+                })
+                ui_actions.append({
+                    "type": "ui.toast",
+                    "payload": {"message": f"{field_to_fill.name} filled", "type": "success"}
+                })
+
+            if result["done"]:
+                conversation_manager.reset_retry_count(request.user_id)
+
+            return ConverseResponse(
+                message=sanitize_speech(result["next_prompt"] or "Form complete!"),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions, "all_values": result["all_values"]}],
+                suggestions=["Submit", "Cancel", "Go back"] if result["done"] else ["Skip", "Cancel"],
+            )
 
     # 1. Check for navigation intent first (fast regex - instant)
     nav_path = detect_navigation_intent(transcript)
@@ -1221,17 +1357,49 @@ async def execute_action(
             return {"message": "Please specify what you'd like to fill in."}
 
         # === UNIVERSAL DROPDOWN EXPANSION ===
-        # Works for ANY dropdown on any page
+        # Works for ANY dropdown on any page - fetches options and reads them verbally
         if action == 'ui_expand_dropdown':
             # Extract which dropdown from transcript, or default to finding any dropdown
             dropdown_hint = _extract_dropdown_hint(transcript or "")
-            return {
-                "action": "expand_dropdown",
-                "message": "Opening the dropdown. Say the name or number of your selection.",
-                "ui_actions": [
-                    {"type": "ui.expandDropdown", "payload": {"target": dropdown_hint, "findAny": True}},
-                ],
-            }
+
+            # Fetch options based on dropdown type
+            options: list[DropdownOption] = []
+            if 'course' in dropdown_hint or not dropdown_hint:
+                # Fetch courses
+                courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 10})
+                if courses:
+                    options = [DropdownOption(label=c.get('title', f"Course {c['id']}"), value=str(c['id'])) for c in courses]
+                    dropdown_hint = dropdown_hint or "select-course"
+            elif 'session' in dropdown_hint:
+                # Fetch sessions for active course
+                course_id = _resolve_course_id(db, current_page, user_id)
+                if course_id:
+                    sessions = _execute_tool(db, 'list_sessions', {"course_id": course_id})
+                    if sessions:
+                        options = [DropdownOption(label=s.get('title', f"Session {s['id']}"), value=str(s['id'])) for s in sessions]
+
+            if options:
+                # Start dropdown selection flow with verbal listing
+                prompt = conversation_manager.start_dropdown_selection(
+                    user_id, dropdown_hint, options, current_page or "/dashboard"
+                )
+                return {
+                    "action": "expand_dropdown",
+                    "message": prompt,
+                    "ui_actions": [
+                        {"type": "ui.expandDropdown", "payload": {"target": dropdown_hint, "findAny": True}},
+                    ],
+                    "options": [{"label": o.label, "value": o.value} for o in options],
+                    "conversation_state": "dropdown_selection",
+                }
+            else:
+                return {
+                    "action": "expand_dropdown",
+                    "message": "The dropdown is empty. There are no options available.",
+                    "ui_actions": [
+                        {"type": "ui.expandDropdown", "payload": {"target": dropdown_hint, "findAny": True}},
+                    ],
+                }
 
         # === UNIVERSAL TAB SWITCHING ===
         # The ui_switch_tab action now works universally for any tab name
@@ -1344,14 +1512,18 @@ async def execute_action(
             return _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
 
         if action == 'create_course':
-            # Return UI action to open create course modal/page
+            # Start conversational form-filling flow
+            first_question = conversation_manager.start_form_filling(
+                user_id, "create_course", "/courses"
+            )
             return {
                 "action": "create_course",
                 "ui_actions": [
                     {"type": "ui.navigate", "payload": {"path": "/courses"}},
-                    {"type": "ui.openModal", "payload": {"modal": "createCourse"}},
+                    {"type": "ui.switchTab", "payload": {"tabName": "create", "target": "tab-create"}},
                 ],
-                "message": "Opening course creation. What would you like to name the course?",
+                "message": first_question or "Opening course creation. What would you like to name the course?",
+                "conversation_state": "form_filling",
             }
 
         if action == 'select_course':
@@ -1386,14 +1558,19 @@ async def execute_action(
 
         if action == 'create_session':
             course_id = _resolve_course_id(db, current_page, user_id)
+            # Start conversational form-filling flow
+            first_question = conversation_manager.start_form_filling(
+                user_id, "create_session", "/sessions"
+            )
             return {
                 "action": "create_session",
                 "course_id": course_id,
                 "ui_actions": [
                     {"type": "ui.navigate", "payload": {"path": "/sessions"}},
-                    {"type": "ui.openModal", "payload": {"modal": "createSession", "courseId": course_id}},
+                    {"type": "ui.switchTab", "payload": {"tabName": "create", "target": "tab-create"}},
                 ],
-                "message": "Opening session creation.",
+                "message": first_question or "Opening session creation. What would you like to call this session?",
+                "conversation_state": "form_filling",
             }
 
         if action == 'select_session':
@@ -1437,20 +1614,40 @@ async def execute_action(
 
         if action == 'end_session':
             session_id = _resolve_session_id(db, current_page, user_id)
-            if session_id:
-                result = _execute_tool(db, 'update_session_status', {"session_id": session_id, "status": "completed"})
-                if result and user_id:
-                    context_store.record_action(
-                        user_id,
-                        action_type="end_session",
-                        action_data={"session_id": session_id},
-                        undo_data={"session_id": session_id, "previous_status": "live"},
-                    )
-                    result["ui_actions"] = [
-                        {"type": "ui.toast", "payload": {"message": "Session ended", "type": "info"}},
-                    ]
-                return result
-            return {"error": "No active session found to end."}
+            if not session_id:
+                return {"error": "No active session found to end."}
+
+            # Check if already confirmed (from confirmation flow)
+            conv_context = conversation_manager.get_context(user_id)
+            if conv_context.state != ConversationState.IDLE or not conv_context.pending_action:
+                # Request confirmation first (destructive action)
+                confirmation_prompt = conversation_manager.request_confirmation(
+                    user_id,
+                    "end_session",
+                    {"session_id": session_id, "voice_id": "btn-end-session"},
+                    current_page or "/console"
+                )
+                return {
+                    "action": "end_session",
+                    "message": confirmation_prompt,
+                    "ui_actions": [],
+                    "needs_confirmation": True,
+                    "conversation_state": "awaiting_confirmation",
+                }
+
+            # Execute the action (already confirmed)
+            result = _execute_tool(db, 'update_session_status', {"session_id": session_id, "status": "completed"})
+            if result and user_id:
+                context_store.record_action(
+                    user_id,
+                    action_type="end_session",
+                    action_data={"session_id": session_id},
+                    undo_data={"session_id": session_id, "previous_status": "live"},
+                )
+                result["ui_actions"] = [
+                    {"type": "ui.toast", "payload": {"message": "Session ended", "type": "info"}},
+                ]
+            return result
 
         # === COPILOT ACTIONS ===
         if action == 'get_interventions':
@@ -1481,6 +1678,26 @@ async def execute_action(
             session_id = _resolve_session_id(db, current_page, user_id)
             if not session_id:
                 return None
+
+            # Check if already confirmed (from confirmation flow)
+            conv_context = conversation_manager.get_context(user_id)
+            if conv_context.state != ConversationState.IDLE or not conv_context.pending_action:
+                # Request confirmation first (destructive action)
+                confirmation_prompt = conversation_manager.request_confirmation(
+                    user_id,
+                    "stop_copilot",
+                    {"session_id": session_id, "voice_id": "btn-stop-copilot"},
+                    current_page or "/console"
+                )
+                return {
+                    "action": "stop_copilot",
+                    "message": confirmation_prompt,
+                    "ui_actions": [],
+                    "needs_confirmation": True,
+                    "conversation_state": "awaiting_confirmation",
+                }
+
+            # Execute the action (already confirmed)
             result = _execute_tool(db, 'stop_copilot', {"session_id": session_id})
             if result and user_id:
                 context_store.record_action(
@@ -1498,15 +1715,19 @@ async def execute_action(
         # === POLL ACTIONS ===
         if action == 'create_poll':
             session_id = _resolve_session_id(db, current_page, user_id)
+            # Start conversational form-filling flow for poll
+            first_question = conversation_manager.start_form_filling(
+                user_id, "create_poll", "/console"
+            )
             return {
                 "action": "create_poll",
                 "session_id": session_id,
                 "ui_actions": [
-                    {"type": "ui.openModal", "payload": {"modal": "createPoll", "sessionId": session_id}},
+                    {"type": "ui.switchTab", "payload": {"tabName": "polls", "target": "tab-polls"}},
                     {"type": "ui.toast", "payload": {"message": "Opening poll creator...", "type": "info"}},
                 ],
-                "message": "Opening poll creation. What question would you like to ask?",
-                "needs_input": ["question", "options"],
+                "message": first_question or "Opening poll creation. What question would you like to ask your students?",
+                "conversation_state": "form_filling",
             }
 
         # === REPORT ACTIONS ===
@@ -1636,6 +1857,23 @@ async def execute_action(
 
     except Exception as e:
         print(f"Action execution failed: {e}")
+        # Record error and check if we should retry
+        if user_id:
+            retry_result = conversation_manager.record_error(user_id, str(e))
+            if retry_result["should_retry"]:
+                return {
+                    "error": str(e),
+                    "message": retry_result["message"],
+                    "retry_count": retry_result["retry_count"],
+                    "should_retry": True,
+                }
+            else:
+                return {
+                    "error": str(e),
+                    "message": retry_result["message"],
+                    "retry_count": retry_result["retry_count"],
+                    "should_retry": False,
+                }
         return {"error": str(e)}
 
 

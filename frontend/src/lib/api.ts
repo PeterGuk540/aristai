@@ -2,14 +2,9 @@ import { getIdToken } from './cognito-auth';
 import { getGoogleIdToken } from './google-auth';
 import { getMicrosoftIdToken } from './ms-auth';
 
-// In production (Vercel), use the proxy route to avoid CORS/mixed-content issues.
-// In development, call the backend directly.
-const isProduction = process.env.NODE_ENV === 'production';
-const isHttpsContext = typeof window !== 'undefined' && window.location.protocol === 'https:';
-const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
-const useProxy = isProduction || isHttpsContext;
-export const API_BASE = useProxy ? '/api/proxy' : `${DIRECT_API_URL}/api`;
-export const DIRECT_API_BASE = `${DIRECT_API_URL}/api`;
+// Always use the proxy route so browser requests stay same-origin.
+const API_PROXY_BASE = '/api/proxy';
+export const API_BASE = API_PROXY_BASE;
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -76,10 +71,8 @@ async function fetchApi<T>(
   return response.json();
 }
 
-// For health check, we need to handle it differently since it's not under /api
-const HEALTH_URL = useProxy
-  ? '/api/proxy/../health'
-  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/health';
+// Health check lives outside /api, so use the proxy escape hatch.
+const HEALTH_URL = `${API_PROXY_BASE}/../health`;
 
 export const api = {
   // Health - note: health endpoint might not work through proxy, but that's ok
@@ -235,7 +228,7 @@ export const api = {
 
   // CSV Roster Upload
   uploadRosterCsv: async (courseId: number, file: File) => {
-    const url = `${useProxy ? '/api/proxy' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/api'}/enrollments/course/${courseId}/upload-roster`;
+    const url = `${API_PROXY_BASE}/enrollments/course/${courseId}/upload-roster`;
 
     const googleToken = getGoogleIdToken();
     const msToken = getMicrosoftIdToken();

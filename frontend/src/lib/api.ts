@@ -5,8 +5,9 @@ import { getMicrosoftIdToken } from './ms-auth';
 // In production (Vercel), use the proxy route to avoid CORS/mixed-content issues.
 // In development, call the backend directly.
 const isProduction = process.env.NODE_ENV === 'production';
+const isHttpsContext = typeof window !== 'undefined' && window.location.protocol === 'https:';
 const DIRECT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
-const useProxy = isProduction;
+const useProxy = isProduction || isHttpsContext;
 export const API_BASE = useProxy ? '/api/proxy' : `${DIRECT_API_URL}/api`;
 export const DIRECT_API_BASE = `${DIRECT_API_URL}/api`;
 
@@ -234,7 +235,7 @@ export const api = {
 
   // CSV Roster Upload
   uploadRosterCsv: async (courseId: number, file: File) => {
-    const url = `${isProduction ? '/api/proxy' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/api'}/enrollments/course/${courseId}/upload-roster`;
+    const url = `${useProxy ? '/api/proxy' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/api'}/enrollments/course/${courseId}/upload-roster`;
 
     const googleToken = getGoogleIdToken();
     const msToken = getMicrosoftIdToken();

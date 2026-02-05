@@ -1,89 +1,46 @@
 # ElevenLabs Agent MCP Integration Guide
 
 ## Problem Identified
-Your ElevenLabs Agent (`agent_6401kgkknwfnf7gvmgqb94hbmy4z`) is a generic conversational agent that doesn't have access to your MCP functions (navigation, course management, polling, etc.).
+Your ElevenLabs Agent (`agent_6401kgkknwfnf7gvmgqb94hbmy4z`) is configured with multiple domain-specific tools. That makes it behave like a “brain,” but in this architecture **MCP must be the only brain**. The ElevenLabs agent should only forward transcripts and speak whatever MCP returns.
 
 ## Solution Options
 
-### Option 1: Configure ElevenLabs Agent with MCP Tools (Recommended)
+### Option 1: Single “Delegate to MCP” Tool (Recommended)
 
-1. **Go to ElevenLabs Console**: https://elevenlabs.io/app/agents
-2. **Select your agent**: `agent_6401kgkknwfnf7gvmgqb94hbmy4z`
-3. **Add Custom Functions** in the agent configuration:
-   - Navigate to "Tools" or "Functions" section
-   - Add your MCP tools as custom functions
+**Goal:** Keep ElevenLabs as the real-time voice interface only. MCP handles intent and actions.
 
-#### Required Function Definitions for Key Tools:
+1. **Go to ElevenLabs Console**: https://elevenlabs.io/app/agents  
+2. **Select your agent**: `agent_6401kgkknwfnf7gvmgqb94hbmy4z`  
+3. In the **Tools / Functions** section, delete any existing tools.  
+4. **Add exactly one tool**:
 
-**Navigation Function:**
 ```json
 {
-  "name": "navigate_to_page",
-  "description": "Navigate to a specific page in the AristAI interface",
+  "name": "delegate_to_mcp",
+  "description": "Delegate all user intent understanding and action planning to the MCP backend.",
   "parameters": {
     "type": "object",
     "properties": {
-      "page": {
-        "type": "string",
-        "enum": ["courses", "sessions", "forum", "reports", "console", "dashboard", "home", "settings"],
-        "description": "The page to navigate to"
-      }
+      "transcript": { "type": "string" },
+      "current_page": { "type": "string" },
+      "user_id": { "type": "integer" }
     },
-    "required": ["page"]
+    "required": ["transcript"]
+  },
+  "webhook": {
+    "url": "https://your-api-domain.com/api/voice/agent/delegate",
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer YOUR_JWT_TOKEN",
+      "Content-Type": "application/json"
+    }
   }
 }
 ```
 
-**List Courses Function:**
-```json
-{
-  "name": "list_courses",
-  "description": "List all available courses in the system",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "skip": {"type": "integer", "default": 0},
-      "limit": {"type": "integer", "default": 100}
-    },
-    "required": []
-  }
-}
-```
+### Option 2: Client Tool Calling (SDK)
 
-**Create Poll Function:**
-```json
-{
-  "name": "create_poll",
-  "description": "Create a new poll in a session",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "session_id": {"type": "integer"},
-      "question": {"type": "string"},
-      "options": {
-        "type": "array",
-        "items": {"type": "string"},
-        "description": "List of answer options"
-      }
-    },
-    "required": ["session_id", "question", "options"]
-  }
-}
-```
-
-**Function Endpoint Configuration:**
-For each function, configure:
-- **Webhook URL**: `https://your-api-domain.com/api/mcp/execute`
-- **Headers**: `Authorization: Bearer YOUR_JWT_TOKEN`
-- **Method**: POST
-
-### Option 2: Use Built-in Tool Calling via Backend API
-
-Modify your voice assistant to use the `/api/mcp/execute` endpoint directly from the frontend (already implemented).
-
-### Option 3: Create Custom ElevenLabs Agent with MCP Integration
-
-Create a new agent specifically configured for AristAI with all MCP tools pre-configured.
+If you prefer to keep the tool call on the client, define a single `delegate_to_mcp` client tool that POSTs to `/api/voice/agent/delegate` and returns the MCP response string for the agent to speak.
 
 ## Step-by-Step Fix Process
 
@@ -99,26 +56,24 @@ curl -X POST http://localhost:8000/api/mcp/execute \
   -d '{"tool": "list_courses", "arguments": {}}'
 ```
 
-### 2. Configure ElevenLabs Agent Functions
+### 2. Configure ElevenLabs Agent Tool
 
-1. Go to: https://elevenlabs.io/app/agents/agent_6401kgkknwfnf7gvmgqb94hbmy4z
-2. Click "Edit Agent"
-3. Scroll to "Functions" or "Tools"
-4. Add each MCP function with proper JSON schema
-5. Set webhook URL to: `http://ec2-13-219-204-7.compute-1.amazonaws.com:8000/api/mcp/execute`
-6. Save and test
+1. Go to: https://elevenlabs.io/app/agents/agent_6401kgkknwfnf7gvmgqb94hbmy4z  
+2. Click **"Edit Agent"**  
+3. Scroll to **"Functions"** or **"Tools"**  
+4. Add the single `delegate_to_mcp` tool (above)  
+5. Set webhook URL to: `https://your-api-domain.com/api/voice/agent/delegate`  
+6. Save and test  
 
-### 3. Update Frontend Integration (If Needed)
+### 3. Configure System Instructions (Short)
 
-Your frontend already has the MCP execution logic in `ConversationalVoice.tsx`. Ensure it's calling the right endpoint:
+Set the ElevenLabs agent **system instruction** to:
 
-```typescript
-// This should work if MCP is configured in ElevenLabs
-const response = await fetch('/api/mcp/execute', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ tool: toolName, arguments: args }),
-});
+```
+You are a real-time voice interface.
+Do not interpret user intent or make decisions.
+Always delegate understanding and actions to the MCP backend.
+Speak only the response provided by MCP.
 ```
 
 ### 4. Test End-to-End
@@ -152,16 +107,6 @@ Configure appropriate rate limits in your backend to prevent abuse.
 ## Verification
 
 After configuration, test these commands:
-- ✅ "Show my courses" → Should call `list_courses`
-- ✅ "Go to forum" → Should call `navigate_to_page` with `page: "forum"`
-- ✅ "Create a poll" → Should call `create_poll` (may need additional parameters)
-
-## Alternative: Direct Integration
-
-If ElevenLabs function calling is complex, use your existing frontend pattern:
-1. Voice → ElevenLabs transcription
-2. Frontend parses intent
-3. Frontend calls your MCP API directly
-4. Results back to user
-
-This approach is already implemented in your `ConversationalVoice.tsx` component.
+- ✅ "Show my courses" → `delegate_to_mcp` → MCP runs `list_courses`
+- ✅ "Go to forum" → `delegate_to_mcp` → MCP returns `ui.navigate`
+- ✅ "Create a poll" → `delegate_to_mcp` → MCP plans/executed tool

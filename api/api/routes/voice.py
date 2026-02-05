@@ -10,16 +10,27 @@ Legacy TTS endpoints removed - using ElevenLabs Agent realtime conversation
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 import httpx
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-from api.core.config import get_settings
+from api.api.routes.ui_actions import broker
+from api.api.voice_converse_router import ConverseRequest, voice_converse
+from api.core.database import get_db
 from api.services.elevenlabs_agent import get_signed_url
+from api.services.tool_response import normalize_tool_result
 
 logger = logging.getLogger(__name__)
 
 # Legacy exports removed - ElevenLabs Agents integration uses new endpoints
 router = APIRouter()
+
+class DelegateRequest(BaseModel):
+    transcript: str = Field(..., min_length=1)
+    current_page: Optional[str] = None
+    user_id: Optional[int] = None
+    context: Optional[list[str]] = None
 
 
 def require_auth(request: Request) -> bool:
@@ -133,3 +144,49 @@ async def get_agent_signed_url(request: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
         )
+
+
+@router.post("/agent/delegate", status_code=status.HTTP_200_OK)
+async def delegate_to_mcp(request: Request, db: Session = Depends(get_db)):
+    """
+    Delegate ElevenLabs agent tool calls to the MCP voice orchestrator.
+
+    The ElevenLabs agent should define a single tool (delegate_to_mcp) that
+    forwards transcript/current_page here. We execute MCP logic and return the
+    response for the agent to speak, while streaming any UI actions to clients.
+    """
+    payload = await request.json()
+    parameters = payload.get("parameters") or payload.get("arguments") or payload
+    data = DelegateRequest(**parameters)
+
+    response = await voice_converse(
+        ConverseRequest(
+            transcript=data.transcript,
+            context=data.context,
+            user_id=data.user_id,
+            current_page=data.current_page,
+        ),
+        db=db,
+    )
+
+    ui_actions: list[dict] = []
+    if response.action and response.action.type == "navigate" and response.action.target:
+        ui_actions.append({"type": "ui.navigate", "payload": {"path": response.action.target}})
+
+    if response.results:
+        for item in response.results:
+            if not isinstance(item, dict):
+                continue
+            normalized = normalize_tool_result(item, item.get("tool", "mcp"))
+            ui_actions.extend(normalized.get("ui_actions") or [])
+
+    for action in ui_actions:
+        await broker.publish(data.user_id, action)
+
+    return {
+        "message": response.message,
+        "voice_response": response.message,
+        "ui_actions": ui_actions,
+        "results": response.results,
+        "suggestions": response.suggestions,
+    }

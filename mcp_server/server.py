@@ -854,7 +854,7 @@ def build_tool_registry():
             "required": ["page"],
         },
         handler=navigation.navigate_to_page,
-        mode="write",
+        mode="read",
         category="navigation",
     )
     

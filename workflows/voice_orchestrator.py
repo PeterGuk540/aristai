@@ -151,18 +151,64 @@ def run_voice_orchestrator(
 
 
 def generate_summary(results: List[dict]) -> str:
-    """Generate a TTS-friendly summary of execution results."""
-    llm, model_name = get_llm_with_tracking()
-    if not llm:
-        successes = sum(1 for r in results if r.get("success"))
-        return f"Completed {successes} of {len(results)} actions."
+    """Generate a TTS-friendly summary of execution results.
 
-    prompt = VOICE_SUMMARY_PROMPT.format(
-        results_json=json.dumps(results, indent=2, default=str)
-    )
-    response = invoke_llm_with_metrics(llm, prompt, model_name)
-    if response.success and response.content:
-        return response.content.strip()
+    OPTIMIZED: Uses fast template-based generation instead of LLM.
+    This saves 0.5-1 second per request.
+    """
+    if not results:
+        return "No actions were needed."
 
-    successes = sum(1 for r in results if r.get("success"))
-    return f"Completed {successes} of {len(results)} actions."
+    successes = [r for r in results if r.get("success")]
+    failures = [r for r in results if not r.get("success")]
+
+    # Build a natural response based on results
+    if len(results) == 1:
+        result = results[0]
+        tool = result.get("tool", "action")
+        if result.get("success"):
+            return _get_tool_success_message(tool, result)
+        else:
+            error = result.get("error", "unknown error")
+            return f"Sorry, I couldn't complete that. {error}"
+
+    # Multiple results
+    if failures:
+        return f"Completed {len(successes)} of {len(results)} actions. Some actions encountered issues."
+
+    return f"Done! Successfully completed {len(successes)} actions."
+
+
+def _get_tool_success_message(tool: str, result: dict) -> str:
+    """Get a natural success message for a specific tool."""
+    tool_messages = {
+        "list_courses": "Here are your courses.",
+        "list_sessions": "Here are the sessions.",
+        "get_course": "Here's the course information.",
+        "get_session": "Here's the session details.",
+        "create_course": "I've created the course for you.",
+        "create_session": "The session has been created.",
+        "start_copilot": "Copilot is now active and monitoring the discussion.",
+        "stop_copilot": "Copilot has been stopped.",
+        "create_poll": "The poll has been created.",
+        "generate_report": "The report is being generated.",
+        "get_enrolled_students": "Here are the enrolled students.",
+        "enroll_student": "The student has been enrolled.",
+        "get_copilot_suggestions": "Here are the copilot suggestions.",
+        "pin_post": "The post has been pinned.",
+        "label_post": "Labels have been updated.",
+        "navigate_to_page": "Taking you there now.",
+    }
+
+    # Check for specific data in result
+    data = result.get("result") or result.get("data")
+    if isinstance(data, list):
+        count = len(data)
+        if tool == "list_courses":
+            return f"You have {count} course{'s' if count != 1 else ''}."
+        elif tool == "list_sessions":
+            return f"Found {count} session{'s' if count != 1 else ''}."
+        elif tool == "get_enrolled_students":
+            return f"There are {count} student{'s' if count != 1 else ''} enrolled."
+
+    return tool_messages.get(tool, "Done!")

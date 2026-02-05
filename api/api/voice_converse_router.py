@@ -55,57 +55,94 @@ class ConverseResponse(BaseModel):
     suggestions: Optional[List[str]] = None
 
 
-# Navigation intent patterns
+# Navigation intent patterns - expanded for better coverage
 NAVIGATION_PATTERNS = {
-    r'\b(go to|open|show|navigate to|take me to)\s+(the\s+)?(courses?|course list|my courses)\b': '/courses',
-    r'\b(go to|open|show|navigate to|take me to)\s+(the\s+)?(sessions?|session list)\b': '/sessions',
-    r'\b(go to|open|show|navigate to|take me to)\s+(the\s+)?(forum|discussion|discussions)\b': '/forum',
-    r'\b(go to|open|show|navigate to|take me to)\s+(the\s+)?(console|instructor console)\b': '/console',
-    r'\b(go to|open|show|navigate to|take me to)\s+(the\s+)?(reports?|report page)\b': '/reports',
-    r'\b(go to|open|show|navigate to|take me to)\s+(the\s+)?(dashboard|home)\b': '/dashboard',
+    # Courses
+    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(courses?|course list|my courses)\b': '/courses',
+    r'\bcourses?\s*page\b': '/courses',
+    # Sessions
+    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(sessions?|session list|class)\b': '/sessions',
+    r'\bsessions?\s*page\b': '/sessions',
+    # Forum
+    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(forum|discussion|discussions|posts)\b': '/forum',
+    r'\bforum\s*page\b': '/forum',
+    # Console
+    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(console|instructor console|control panel)\b': '/console',
+    r'\bconsole\s*page\b': '/console',
+    # Reports
+    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(reports?|report page|analytics)\b': '/reports',
+    r'\breports?\s*page\b': '/reports',
+    # Dashboard
+    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(dashboard|home|main)\b': '/dashboard',
+    r'\bdashboard\s*page\b': '/dashboard',
 }
 
-# Action intent patterns (regex fallback)
+# Action intent patterns - expanded for better voice command coverage
 ACTION_PATTERNS = {
     'list_courses': [
-        r'\b(list|show|get|what are)\s+(all\s+)?(my\s+)?courses\b',
+        r'\b(list|show|get|what are|display|see)\s+(all\s+)?(my\s+)?courses\b',
         r'\bmy courses\b',
         r'\bcourse list\b',
+        r'\bwhat courses\b',
+        r'\bhow many courses\b',
     ],
     'list_sessions': [
-        r'\b(list|show|get|what are)\s+(the\s+)?(live\s+)?sessions\b',
+        r'\b(list|show|get|what are|display|see)\s+(the\s+)?(live\s+)?sessions\b',
         r'\blive sessions\b',
         r'\bactive sessions\b',
+        r'\bcurrent sessions?\b',
+        r'\bwhat sessions\b',
     ],
     'start_copilot': [
         r'\bstart\s+(the\s+)?copilot\b',
         r'\bactivate\s+(the\s+)?copilot\b',
         r'\bturn on\s+(the\s+)?copilot\b',
+        r'\benable\s+(the\s+)?copilot\b',
+        r'\blaunch\s+(the\s+)?copilot\b',
+        r'\bcopilot\s+on\b',
+        r'\bbegin\s+(the\s+)?copilot\b',
     ],
     'stop_copilot': [
         r'\bstop\s+(the\s+)?copilot\b',
         r'\bdeactivate\s+(the\s+)?copilot\b',
         r'\bturn off\s+(the\s+)?copilot\b',
+        r'\bdisable\s+(the\s+)?copilot\b',
+        r'\bcopilot\s+off\b',
+        r'\bend\s+(the\s+)?copilot\b',
+        r'\bpause\s+(the\s+)?copilot\b',
     ],
     'create_poll': [
         r'\bcreate\s+(a\s+)?poll\b',
         r'\bmake\s+(a\s+)?poll\b',
         r'\bstart\s+(a\s+)?poll\b',
+        r'\bnew\s+poll\b',
+        r'\badd\s+(a\s+)?poll\b',
+        r'\blaunch\s+(a\s+)?poll\b',
     ],
     'generate_report': [
-        r'\bgenerate\s+(a\s+)?report\b',
-        r'\bcreate\s+(a\s+)?report\b',
-        r'\bmake\s+(a\s+)?report\b',
+        r'\bgenerate\s+(a\s+)?(session\s+)?report\b',
+        r'\bcreate\s+(a\s+)?(session\s+)?report\b',
+        r'\bmake\s+(a\s+)?(session\s+)?report\b',
+        r'\bbuild\s+(a\s+)?report\b',
+        r'\bget\s+(the\s+)?report\b',
+        r'\bshow\s+(the\s+)?report\b',
+        r'\breport\s+(please|now)\b',
     ],
     'get_interventions': [
-        r'\b(show|get|what are)\s+(the\s+)?(copilot\s+)?suggestions\b',
+        r'\b(show|get|what are|display)\s+(the\s+)?(copilot\s+)?suggestions\b',
         r'\binterventions\b',
         r'\bconfusion points\b',
+        r'\bcopilot\s+(suggestions|insights|recommendations)\b',
+        r'\bwhat does\s+(the\s+)?copilot\s+(suggest|recommend|say)\b',
+        r'\bany\s+suggestions\b',
     ],
     'list_enrollments': [
-        r'\b(list|show|who are)\s+(the\s+)?(enrolled\s+)?students\b',
+        r'\b(list|show|who are|display|get)\s+(the\s+)?(enrolled\s+)?students\b',
         r'\benrollment\s+(list|status)\b',
         r'\bhow many students\b',
+        r'\bstudent\s+(list|count|roster)\b',
+        r'\bwho\s+is\s+enrolled\b',
+        r'\bclass\s+roster\b',
     ],
 }
 
@@ -318,16 +355,22 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     """
     Conversational voice endpoint that processes natural language
     and returns appropriate responses with actions.
+
+    OPTIMIZED FLOW (fast regex checks before expensive LLM calls):
+    1. Regex navigation check (instant)
+    2. Regex action check (instant)
+    3. LLM orchestrator (only for complex requests)
+    4. Template-based summary (no LLM)
     """
     transcript = request.transcript.strip()
-    
+
     if not transcript:
         return ConverseResponse(
             message=sanitize_speech("I didn't catch that. Could you say it again?"),
             suggestions=["Show my courses", "Start a session", "Open forum"]
         )
-    
-    # Check for navigation intent first
+
+    # 1. Check for navigation intent first (fast regex - instant)
     nav_path = detect_navigation_intent(transcript)
     if nav_path:
         message = sanitize_speech(generate_conversational_response('navigate', nav_path))
@@ -336,7 +379,25 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             action=ActionResponse(type='navigate', target=nav_path),
             suggestions=get_page_suggestions(nav_path)
         )
-    
+
+    # 2. Check for action intent via regex BEFORE expensive LLM call (fast - instant)
+    action = detect_action_intent(transcript)
+    if action:
+        results = await execute_action(action, request.user_id, request.current_page, db)
+        return ConverseResponse(
+            message=sanitize_speech(generate_conversational_response(
+                'execute',
+                action,
+                results=results,
+                context=request.context,
+                current_page=request.current_page,
+            )),
+            action=ActionResponse(type='execute', executed=True),
+            results=results,
+            suggestions=get_action_suggestions(action),
+        )
+
+    # 3. Only use LLM orchestrator for complex requests that regex couldn't handle
     plan_result = run_voice_orchestrator(
         transcript,
         context=request.context,
@@ -368,6 +429,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 suggestions=["Yes, proceed", "No, cancel"],
             )
 
+        # Execute and use fast template summary (no LLM call)
         results, summary = execute_plan_steps(steps, db)
         return ConverseResponse(
             message=sanitize_speech(summary),
@@ -376,39 +438,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             suggestions=["Anything else I can help with?"],
         )
 
-    nav_path_llm = detect_navigation_intent_llm(
-        transcript,
-        request.context,
-        request.current_page,
-    )
-    if nav_path_llm:
-        return ConverseResponse(
-            message=sanitize_speech(generate_conversational_response('navigate', nav_path_llm)),
-            action=ActionResponse(type='navigate', target=nav_path_llm),
-            suggestions=get_page_suggestions(nav_path_llm),
-        )
-
-    # Check for action intent (fallback)
-    action = detect_action_intent(transcript)
-    if action:
-        # Execute the action and get results
-        results = await execute_action(action, request.user_id, request.current_page, db)
-
-        
-        return ConverseResponse(
-            message=sanitize_speech(generate_conversational_response(
-                'execute',
-                action,
-                results=results,
-                context=request.context,
-                current_page=request.current_page,
-            )),
-            action=ActionResponse(type='execute', executed=True),
-            results=results,
-            suggestions=get_action_suggestions(action),
-        )
-    
-    # No clear intent - try to be helpful
+    # 4. No clear intent - provide helpful fallback (no additional LLM call)
     fallback_message = generate_fallback_response(transcript, request.context)
     if plan_result and plan_result.get("error") == "No LLM API key configured":
         fallback_message = (

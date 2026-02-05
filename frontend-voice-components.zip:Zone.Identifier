@@ -1,0 +1,4 @@
+[ZoneTransfer]
+ZoneId=3
+ReferrerUrl=https://claude.ai/chat/5f0f28a2-7340-4a6f-8c95-baef3c50bac7
+HostUrl=https://claude.ai/api/organizations/fd8ed3c3-6e9e-4cf0-8bc2-53410e058810/conversations/5f0f28a2-7340-4a6f-8c95-baef3c50bac7/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Ffrontend-voice-components.zip

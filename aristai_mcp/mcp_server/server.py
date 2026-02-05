@@ -64,6 +64,7 @@ server = Server("aristai-mcp-server")
 ACTION_TOOL_NAMES = {"plan_action", "execute_action", "cancel_action"}
 action_store = ActionStore()
 
+# ============ Tool Registry ============
 
 # ============ Tool Registry ============
 

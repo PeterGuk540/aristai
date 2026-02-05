@@ -413,10 +413,9 @@ export function ConversationalVoice({
       console.log('🚀 Starting conversation session...');
       console.log('🔗 Using signed URL:', signed_url.substring(0, 80) + '...');
       
-      try {
-        conversationRef.current = await Conversation.startSession({
-          signedUrl: signed_url,
-          connectionType: "websocket",
+      conversationRef.current = await Conversation.startSession({
+        signedUrl: signed_url,
+        connectionType: "websocket",
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');
@@ -531,7 +530,6 @@ export function ConversationalVoice({
           console.log('🔊 Audio received:', audio);
         },
       });
-
     } catch (error: any) {
       console.error('❌ Failed to initialize conversation:', error);
       console.error('❌ Error type:', typeof error);

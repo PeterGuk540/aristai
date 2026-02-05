@@ -35,11 +35,21 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
   const headers = new Headers(request.headers);
   headers.delete('host');
 
+  // Read body as text for methods that have a body (fixes Node.js 18+ duplex requirement)
+  let body: string | undefined;
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    try {
+      body = await request.text();
+    } catch {
+      body = undefined;
+    }
+  }
+
   try {
     const response = await fetch(targetUrl, {
       method: request.method,
       headers,
-      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+      body,
       redirect: 'manual',
     });
 
@@ -65,7 +75,7 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
         const fallbackResponse = await fetch(fallbackUrl, {
           method: request.method,
           headers,
-          body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+          body,
           redirect: 'manual',
         });
 

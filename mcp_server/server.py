@@ -42,6 +42,7 @@ from mcp.types import (
 from api.core.database import SessionLocal
 from api.services.action_preview import build_action_preview
 from api.services.action_store import ActionStore
+from api.services.tool_response import normalize_tool_result
 
 # Import all tool modules
 from mcp_server.tools import (
@@ -1099,27 +1100,19 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
         else:
             result = await asyncio.to_thread(_invoke_tool_handler_in_thread, handler, arguments)
             
-        # Format result for voice-friendly output
-        if isinstance(result, dict):
-            if "error" in result:
-                return CallToolResult(
-                    content=[TextContent(type="text", text=f"Error: {result['error']}")],
-                    isError=True,
-                )
-            
-            # Create a voice-friendly summary
-            import json
-            result_text = json.dumps(result, indent=2, default=str)
-            
+        normalized = normalize_tool_result(result, name)
+        if not normalized.get("ok", True):
             return CallToolResult(
-                content=[TextContent(type="text", text=result_text)],
-                isError=False,
+                content=[TextContent(type="text", text=f"Error: {normalized.get('summary')}")],
+                isError=True,
             )
-        else:
-            return CallToolResult(
-                content=[TextContent(type="text", text=str(result))],
-                isError=False,
-            )
+        
+        import json
+        result_text = json.dumps(normalized, indent=2, default=str)
+        return CallToolResult(
+            content=[TextContent(type="text", text=result_text)],
+            isError=False,
+        )
                 
     except Exception as e:
         logger.exception(f"Tool execution failed: {name}")

@@ -340,6 +340,8 @@ AristAI ships with a first-party MCP server that exposes classroom operations as
 
 **UI actions:** Browsers subscribe to `/api/ui-actions/stream` (SSE) for `ui.navigate`, `ui.openTab`, `ui.openModal`, and `ui.toast` messages.
 
+**Tool response schema:** Tools return `{ ok, type, summary, data, ui_actions?, requires_confirmation?, action_id? }` for consistent machine parsing.
+
 **Start the server (stdio for Claude Desktop):**
 ```bash
 python -m mcp_server.server

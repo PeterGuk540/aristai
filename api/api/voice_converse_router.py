@@ -21,6 +21,7 @@ from api.core.database import get_db
 from api.models.course import Course
 from api.models.session import Session as SessionModel, SessionStatus
 from api.api.mcp_executor import invoke_tool_handler
+from api.services.tool_response import normalize_tool_result
 from mcp_server.server import TOOL_REGISTRY
 from workflows.voice_orchestrator import run_voice_orchestrator, generate_summary
 from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics, parse_json_response
@@ -494,17 +495,20 @@ def execute_plan_steps(steps: List[Dict[str, Any]], db: Session) -> tuple[list[d
             continue
 
         try:
-            result = invoke_tool_handler(tool_entry["handler"], args, db=db)
+            result = normalize_tool_result(
+                invoke_tool_handler(tool_entry["handler"], args, db=db),
+                tool_name,
+            )
             results.append({
                 "tool": tool_name,
-                "success": True,
+                "success": result.get("ok", True),
                 "result": result,
             })
         except Exception as exc:
             results.append({
                 "tool": tool_name,
                 "success": False,
-                "error": str(exc),
+                "result": normalize_tool_result({"error": str(exc)}, tool_name),
             })
 
     summary = generate_summary(results)

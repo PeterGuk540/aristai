@@ -12,6 +12,7 @@ from api.api.mcp_executor import invoke_tool_handler
 from api.core.database import get_db
 from api.services.action_preview import build_action_preview
 from api.services.action_store import ActionStore
+from api.services.tool_response import normalize_tool_result
 from mcp_server.server import TOOL_REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ async def execute_tool(request: MCPExecuteRequest, db: Session = Depends(get_db)
                 args=args,
                 preview=preview,
             )
-            return {
+            planned = {
                 "tool": request.tool,
                 "success": True,
                 "action_id": action.action_id,
@@ -83,10 +84,9 @@ async def execute_tool(request: MCPExecuteRequest, db: Session = Depends(get_db)
                 "preview": preview,
                 "message": "Action planned. Please confirm to execute.",
             }
+            return {"tool": request.tool, **normalize_tool_result(planned, request.tool)}
         result = invoke_tool_handler(tool_info["handler"], args, db=db)
-        if isinstance(result, dict):
-            return {"tool": request.tool, **result}
-        return {"tool": request.tool, "result": result}
+        return {"tool": request.tool, **normalize_tool_result(result, request.tool)}
     except HTTPException:
         raise
     except Exception as exc:

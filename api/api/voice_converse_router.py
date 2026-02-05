@@ -103,9 +103,102 @@ NAVIGATION_PATTERNS = {
 }
 
 # Action intent patterns - expanded for better voice command coverage
-# UNIVERSAL APPROACH: These patterns work across ALL pages and ALL elements
+# IMPORTANT: Specific domain actions MUST come BEFORE generic UI actions
+# because detect_action_intent returns the first match
 ACTION_PATTERNS = {
-    # === UNIVERSAL UI ELEMENT INTERACTIONS ===
+    # === SPECIFIC DOMAIN ACTIONS (check these FIRST) ===
+    # Course actions
+    'create_course': [
+        r'\bcreate\s+(a\s+)?(new\s+)?course\b',
+        r'\bmake\s+(a\s+)?(new\s+)?course\b',
+        r'\badd\s+(a\s+)?(new\s+)?course\b',
+        r'\bnew\s+course\b',
+        r'\bset\s*up\s+(a\s+)?course\b',
+        r'\bstart\s+(a\s+)?new\s+course\b',
+    ],
+    'list_courses': [
+        r'\b(list|show|get|what are|display|see)\s+(all\s+)?(my\s+)?courses\b',
+        r'\bmy courses\b',
+        r'\bcourse list\b',
+        r'\bwhat courses\b',
+        r'\bhow many courses\b',
+    ],
+    # Session actions
+    'create_session': [
+        r'\bcreate\s+(a\s+)?(new\s+)?session\b',
+        r'\bmake\s+(a\s+)?(new\s+)?session\b',
+        r'\badd\s+(a\s+)?(new\s+)?session\b',
+        r'\bnew\s+session\b',
+        r'\bschedule\s+(a\s+)?session\b',
+        r'\bset\s*up\s+(a\s+)?session\b',
+    ],
+    'go_live': [
+        r'\bgo\s+live\b',
+        r'\bstart\s+(the\s+)?(live\s+)?session\b',
+        r'\bbegin\s+(the\s+)?session\b',
+        r'\blaunch\s+(the\s+)?session\b',
+        r'\bmake\s+(the\s+)?session\s+live\b',
+        r'\bactivate\s+(the\s+)?session\b',
+    ],
+    'end_session': [
+        r'\bend\s+(the\s+)?(live\s+)?session\b',
+        r'\bstop\s+(the\s+)?session\b',
+        r'\bclose\s+(the\s+)?session\b',
+        r'\bfinish\s+(the\s+)?session\b',
+        r'\bterminate\s+(the\s+)?session\b',
+    ],
+    # Copilot actions
+    'start_copilot': [
+        r'\bstart\s+(the\s+)?copilot\b',
+        r'\bactivate\s+(the\s+)?copilot\b',
+        r'\bturn on\s+(the\s+)?copilot\b',
+        r'\benable\s+(the\s+)?copilot\b',
+        r'\blaunch\s+(the\s+)?copilot\b',
+        r'\bcopilot\s+on\b',
+        r'\bbegin\s+(the\s+)?copilot\b',
+    ],
+    'stop_copilot': [
+        r'\bstop\s+(the\s+)?copilot\b',
+        r'\bdeactivate\s+(the\s+)?copilot\b',
+        r'\bturn off\s+(the\s+)?copilot\b',
+        r'\bdisable\s+(the\s+)?copilot\b',
+        r'\bcopilot\s+off\b',
+        r'\bend\s+(the\s+)?copilot\b',
+        r'\bpause\s+(the\s+)?copilot\b',
+    ],
+    # Poll actions
+    'create_poll': [
+        r'\bcreate\s+(a\s+)?poll\b',
+        r'\bmake\s+(a\s+)?poll\b',
+        r'\bstart\s+(a\s+)?poll\b',
+        r'\bnew\s+poll\b',
+        r'\badd\s+(a\s+)?poll\b',
+        r'\blaunch\s+(a\s+)?poll\b',
+        r'\bquick\s+poll\b',
+        r'\bask\s+(the\s+)?(class|students)\s+(a\s+)?question\b',
+    ],
+    # Forum actions
+    'post_case': [
+        r'\bpost\s+(a\s+)?case(\s+study)?\b',
+        r'\bcreate\s+(a\s+)?case(\s+study)?\b',
+        r'\badd\s+(a\s+)?case(\s+study)?\b',
+        r'\bnew\s+case(\s+study)?\b',
+        r'\bshare\s+(a\s+)?case\b',
+    ],
+    # Report actions
+    'generate_report': [
+        r'\bgenerate\s+(a\s+)?(session\s+)?report\b',
+        r'\bcreate\s+(a\s+)?(session\s+)?report\b',
+        r'\bmake\s+(a\s+)?(session\s+)?report\b',
+        r'\bbuild\s+(a\s+)?report\b',
+        r'\bget\s+(the\s+)?report\b',
+        r'\bshow\s+(the\s+)?report\b',
+        r'\breport\s+(please|now)\b',
+        r'\bsession\s+summary\b',
+        r'\bclass\s+report\b',
+    ],
+
+    # === UNIVERSAL UI ELEMENT INTERACTIONS (check these AFTER specific actions) ===
     # Universal dropdown selection - works for ANY dropdown
     'ui_select_dropdown': [
         r'\b(select|choose|pick|switch\s+to)\s+(the\s+)?(\w+)\s+(.+)',
@@ -114,13 +207,14 @@ ACTION_PATTERNS = {
     ],
     # Universal tab switching - works for ANY tab name
     'ui_switch_tab': [
-        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(\w+)\s*(tab|panel|section)?\b',
+        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(\w+)\s*(tab|panel|section)\b',
         r'\b(\w+)\s+(tab|panel|section)\b',
     ],
     # Universal button clicks - works for ANY button
+    # NOTE: Requires explicit "click/press" or "button" to avoid matching domain verbs
     'ui_click_button': [
         r'\b(click|press|hit|tap)\s+(the\s+)?(.+?)\s*(button)?\b',
-        r'\b(generate|refresh|start|stop|create|post|submit|upload|save|cancel|confirm|delete|remove|add)\b',
+        r'\b(click|press)\s+(on\s+)?(.+)\b',
     ],
     # Universal dropdown expansion - "expand dropdown", "show options", "open the list"
     'ui_expand_dropdown': [
@@ -180,22 +274,7 @@ ACTION_PATTERNS = {
         r'\bstart\s+(fresh|over|again)\b',
         r'\bforget\s+(everything|all|my\s+selections)\b',
     ],
-    # === COURSE ACTIONS ===
-    'list_courses': [
-        r'\b(list|show|get|what are|display|see)\s+(all\s+)?(my\s+)?courses\b',
-        r'\bmy courses\b',
-        r'\bcourse list\b',
-        r'\bwhat courses\b',
-        r'\bhow many courses\b',
-    ],
-    'create_course': [
-        r'\bcreate\s+(a\s+)?(new\s+)?course\b',
-        r'\bmake\s+(a\s+)?(new\s+)?course\b',
-        r'\badd\s+(a\s+)?(new\s+)?course\b',
-        r'\bnew\s+course\b',
-        r'\bset\s*up\s+(a\s+)?course\b',
-        r'\bstart\s+(a\s+)?new\s+course\b',
-    ],
+    # === ADDITIONAL COURSE ACTIONS ===
     'select_course': [
         r'\b(select|choose|pick|open)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+course\b',
         r'\b(select|choose|pick|open)\s+course\s+(\d+|one|two|three)\b',
@@ -214,53 +293,12 @@ ACTION_PATTERNS = {
         r'\bcurrent sessions?\b',
         r'\bwhat sessions\b',
     ],
-    'create_session': [
-        r'\bcreate\s+(a\s+)?(new\s+)?session\b',
-        r'\bmake\s+(a\s+)?(new\s+)?session\b',
-        r'\badd\s+(a\s+)?(new\s+)?session\b',
-        r'\bnew\s+session\b',
-        r'\bschedule\s+(a\s+)?session\b',
-        r'\bset\s*up\s+(a\s+)?session\b',
-    ],
     'select_session': [
         r'\b(select|choose|pick|open)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+session\b',
         r'\b(select|choose|pick|open)\s+session\s+(\d+|one|two|three)\b',
         r'\bgo\s+(to|into)\s+(the\s+)?(first|second|third|last)\s+session\b',
     ],
-    'go_live': [
-        r'\bgo\s+live\b',
-        r'\bstart\s+(the\s+)?(live\s+)?session\b',
-        r'\bbegin\s+(the\s+)?session\b',
-        r'\blaunch\s+(the\s+)?session\b',
-        r'\bmake\s+(the\s+)?session\s+live\b',
-        r'\bactivate\s+(the\s+)?session\b',
-    ],
-    'end_session': [
-        r'\bend\s+(the\s+)?(live\s+)?session\b',
-        r'\bstop\s+(the\s+)?session\b',
-        r'\bclose\s+(the\s+)?session\b',
-        r'\bfinish\s+(the\s+)?session\b',
-        r'\bterminate\s+(the\s+)?session\b',
-    ],
     # === COPILOT ACTIONS ===
-    'start_copilot': [
-        r'\bstart\s+(the\s+)?copilot\b',
-        r'\bactivate\s+(the\s+)?copilot\b',
-        r'\bturn on\s+(the\s+)?copilot\b',
-        r'\benable\s+(the\s+)?copilot\b',
-        r'\blaunch\s+(the\s+)?copilot\b',
-        r'\bcopilot\s+on\b',
-        r'\bbegin\s+(the\s+)?copilot\b',
-    ],
-    'stop_copilot': [
-        r'\bstop\s+(the\s+)?copilot\b',
-        r'\bdeactivate\s+(the\s+)?copilot\b',
-        r'\bturn off\s+(the\s+)?copilot\b',
-        r'\bdisable\s+(the\s+)?copilot\b',
-        r'\bcopilot\s+off\b',
-        r'\bend\s+(the\s+)?copilot\b',
-        r'\bpause\s+(the\s+)?copilot\b',
-    ],
     'get_interventions': [
         r'\b(show|get|what are|display)\s+(the\s+)?(copilot\s+)?suggestions\b',
         r'\binterventions\b',
@@ -268,29 +306,6 @@ ACTION_PATTERNS = {
         r'\bcopilot\s+(suggestions|insights|recommendations)\b',
         r'\bwhat does\s+(the\s+)?copilot\s+(suggest|recommend|say)\b',
         r'\bany\s+suggestions\b',
-    ],
-    # === POLL ACTIONS ===
-    'create_poll': [
-        r'\bcreate\s+(a\s+)?poll\b',
-        r'\bmake\s+(a\s+)?poll\b',
-        r'\bstart\s+(a\s+)?poll\b',
-        r'\bnew\s+poll\b',
-        r'\badd\s+(a\s+)?poll\b',
-        r'\blaunch\s+(a\s+)?poll\b',
-        r'\bquick\s+poll\b',
-        r'\bask\s+(the\s+)?(class|students)\s+(a\s+)?question\b',
-    ],
-    # === REPORT ACTIONS ===
-    'generate_report': [
-        r'\bgenerate\s+(a\s+)?(session\s+)?report\b',
-        r'\bcreate\s+(a\s+)?(session\s+)?report\b',
-        r'\bmake\s+(a\s+)?(session\s+)?report\b',
-        r'\bbuild\s+(a\s+)?report\b',
-        r'\bget\s+(the\s+)?report\b',
-        r'\bshow\s+(the\s+)?report\b',
-        r'\breport\s+(please|now)\b',
-        r'\bsession\s+summary\b',
-        r'\bclass\s+report\b',
     ],
     # === ENROLLMENT ACTIONS ===
     'list_enrollments': [
@@ -309,13 +324,6 @@ ACTION_PATTERNS = {
         r'\benrollment\s+management\b',
     ],
     # === FORUM ACTIONS ===
-    'post_case': [
-        r'\bpost\s+(a\s+)?case(\s+study)?\b',
-        r'\bcreate\s+(a\s+)?case(\s+study)?\b',
-        r'\badd\s+(a\s+)?case(\s+study)?\b',
-        r'\bnew\s+case(\s+study)?\b',
-        r'\bshare\s+(a\s+)?case\b',
-    ],
     'view_posts': [
         r'\b(show|view|see|display)\s+(the\s+)?(forum\s+)?posts\b',
         r'\b(show|view|see)\s+(the\s+)?discussions?\b',

@@ -1,19 +1,18 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles } from 'lucide-react';
+import { Conversation } from '@elevenlabs/client';
+import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles } from 'lucide-react';
 import { useUser } from '@/lib/context';
 import { cn } from '@/lib/utils';
-import { executeUiAction, type UiAction } from '@/lib/ui-actions';
 
-export type ConversationState =
-  | 'initializing'
-  | 'connecting'
-  | 'connected'
-  | 'listening'
-  | 'processing'
-  | 'speaking'
+export type ConversationState = 
+  | 'initializing' 
+  | 'connecting' 
+  | 'connected' 
+  | 'listening' 
+  | 'processing' 
+  | 'speaking' 
   | 'disconnected'
   | 'error';
 
@@ -42,19 +41,15 @@ interface ConversationalVoiceProps {
   className?: string;
 }
 
-const RECORD_DURATION_MS = 8000;
-
-export function ConversationalVoice({
-  onNavigate,
-  onActiveChange,
-  autoStart = true,
-  greeting,
-  className,
-}: ConversationalVoiceProps) {
-  const router = useRouter();
-  const pathname = usePathname();
+export function ConversationalVoice(props: ConversationalVoiceProps) {
+  const {
+    onActiveChange,
+    autoStart = true,
+    greeting,
+    className,
+  } = props;
   const { currentUser, isInstructor } = useUser();
-
+  
   // Core state
   const [state, setState] = useState<ConversationState>('initializing');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -62,19 +57,15 @@ export function ConversationalVoice({
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-
+  
   // Settings
   const [continuousMode, setContinuousMode] = useState(true);
-
+  
   // Refs
+  const conversationRef = useRef<any>(null); // ElevenLabs conversation instance
   const conversationContextRef = useRef<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitializingRef = useRef(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recordTimeoutRef = useRef<number | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const sessionActiveRef = useRef(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -93,47 +84,234 @@ export function ConversationalVoice({
     if (autoStart && isInstructor && currentUser && state === 'initializing' && !isInitializingRef.current) {
       isInitializingRef.current = true;
       const timer = setTimeout(() => {
-        initializeVoiceSession();
+        initializeConversation();
       }, 1000);
       return () => clearTimeout(timer);
     }
   }, [autoStart, isInstructor, currentUser, state]);
 
   const cleanup = async () => {
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
-    if (recordTimeoutRef.current) {
-      window.clearTimeout(recordTimeoutRef.current);
-      recordTimeoutRef.current = null;
-    }
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
+    if (conversationRef.current) {
+      try {
+        await conversationRef.current.endSession();
+      } catch (error) {
+        console.error('Error ending conversation:', error);
+      }
+      conversationRef.current = null;
     }
   };
 
-  const initializeVoiceSession = async () => {
+  const initializeConversation = async () => {
     setState('connecting');
     setError('');
-
+    
     try {
-      sessionActiveRef.current = true;
-      setState('connected');
-      onActiveChange?.(true);
-      const greetingText = greeting
-        || `Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant. Tell me what you'd like to do.`;
-      await speakAndResume(greetingText, false);
-      if (continuousMode) {
-        await startListening();
+      // Get signed URL from our backend
+      console.log('🔑 Getting signed URL from backend...');
+      // Use relative URL for all environments to leverage Next.js API routes
+      const apiUrl = '/api';
+      const response = await fetch(`${apiUrl}/voice/agent/signed-url`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer dummy-token`, // TODO: Replace with real auth
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      console.log('🔗 Voice API response status:', response.status);
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to get signed URL';
+        let errorCode = 'E_UNKNOWN';
+        
+        switch (response.status) {
+          case 401:
+            errorMessage = 'Authentication failed. Please check your credentials.';
+            errorCode = 'E_AUTH';
+            break;
+          case 403:
+            errorMessage = 'Access denied. Voice features may not be available for your account.';
+            errorCode = 'E_FORBIDDEN';
+            break;
+          case 404:
+            errorMessage = 'Voice service not found. Please contact support.';
+            errorCode = 'E_NOT_FOUND';
+            break;
+          case 429:
+            errorMessage = 'Too many requests. Please wait and try again.';
+            errorCode = 'E_RATE_LIMIT';
+            break;
+          case 500:
+            errorMessage = 'Server error. Please try again later.';
+            errorCode = 'E_SERVER';
+            break;
+          case 502:
+            errorMessage = 'Voice service unavailable. Please try again later.';
+            errorCode = 'E_SERVICE';
+            break;
+          default:
+            errorMessage = `Failed to get signed URL: ${response.status} ${response.statusText}`;
+            errorCode = `E_HTTP_${response.status}`;
+        }
+        
+        throw new Error(`${errorMessage} (${errorCode})`);
       }
+
+      const { signed_url } = await response.json();
+      console.log('✅ Got signed URL:', signed_url.substring(0, 50) + '...');
+
+      // Start the conversation session using the official SDK
+      console.log('🚀 Starting conversation session...');
+      console.log('🔗 Using signed URL:', signed_url.substring(0, 80) + '...');
+      
+      conversationRef.current = await Conversation.startSession({
+        signedUrl: signed_url,
+        connectionType: "websocket",
+        onConnect: ({ conversationId }: { conversationId: string }) => {
+          console.log('✅ Connected to ElevenLabs:', conversationId);
+          setState('connected');
+          onActiveChange?.(true);
+          
+          // Speak greeting
+          if (greeting) {
+            addAssistantMessage(greeting);
+          } else {
+            addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant, an expert in educational platform operations. I can help you navigate instantly to any page, create courses with AI-generated plans, manage live sessions, create polls, generate comprehensive reports, and much more. Just tell me what you'd like to do!`);
+          }
+        },
+        onDisconnect: (data?: any) => {
+          console.log('🔌 Disconnected from AristAI voice service:', data);
+          setState('disconnected');
+          conversationRef.current = null;
+          onActiveChange?.(false);
+        },
+        onStatusChange: ({ status }: { status: string }) => {
+          console.log('📊 Status changed:', status);
+          
+          // Emit status event for debugging
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('voice-status', {
+              detail: `[${new Date().toISOString()}] Status: ${status}`
+            }));
+          }
+          
+          // Map SDK statuses to our state
+          switch (status) {
+            case 'connecting':
+              setState('connecting');
+              break;
+            case 'connected':
+              setState('connected');
+              break;
+            case 'listening':
+              setState('listening');
+              break;
+            case 'thinking':
+              setState('processing');
+              break;
+            case 'speaking':
+              setState('speaking');
+              break;
+            case 'disconnected':
+              setState('disconnected');
+              break;
+            default:
+              console.log('Unknown status:', status);
+          }
+        },
+        onModeChange: ({ mode }: { mode: string }) => {
+          console.log('🔄 Mode changed:', mode);
+        },
+        onMessage: ({ source, message }: { source: "user" | "ai"; message: string }) => {
+          console.log('💬 Message received:', { source, message });
+          
+          // Emit events for debugging
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('voice-message', {
+              detail: `[${new Date().toISOString()}] ${source}: ${message}`
+            }));
+          }
+          
+          if (source === 'user') {
+            // Add user message (this should be the transcribed speech)
+            addUserMessage(message);
+            console.log('🎤 User speech transcribed:', message);
+            
+            // Emit transcription event
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('voice-transcription', {
+                detail: `[${new Date().toISOString()}] Transcription: ${message}`
+              }));
+            }
+          } else if (source === 'ai') {
+            // Add AI response message
+            addAssistantMessage(message);
+            console.log('🤖 AI response:', message);
+          }
+        },
+        
+
+
+        onError: (error: string, meta?: any) => {
+          console.error('❌ ElevenLabs SDK error:', error, meta);
+          let errorMessage = 'Voice connection error';
+          let errorCode = 'E_11LABS_UNKNOWN';
+          
+          if (typeof error === 'string') {
+            if (error.includes('401') || error.includes('403')) {
+              errorMessage = 'Voice service authentication failed. Please try again.';
+              errorCode = 'E_11LABS_AUTH';
+            } else if (error.includes('429')) {
+              errorMessage = 'Voice service rate limit exceeded. Please wait and try again.';
+              errorCode = 'E_11LABS_429';
+            } else if (error.includes('connection') || error.includes('connect')) {
+              errorMessage = 'Cannot connect to voice service. Please check your internet connection.';
+              errorCode = 'E_11LABS_CONNECTION';
+            }
+          }
+          
+          setError(`${errorMessage} (${errorCode})`);
+          setState('error');
+        },
+        onAudio: (audio: any) => {
+          // Optional: Handle audio data if needed for debugging
+          console.log('🔊 Audio received:', audio);
+        },
+      });
     } catch (error: any) {
-      console.error('❌ Failed to initialize voice session:', error);
-      setError('Failed to initialize voice session.');
+      console.error('❌ Failed to initialize conversation:', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      
+      let errorMessage = 'Failed to initialize voice conversation';
+      let errorCode = 'E_INIT_UNKNOWN';
+      
+      if (error && error.message) {
+        if (error.message.includes('E_AUTH')) {
+          errorMessage = 'Authentication required. Please log in and try again.';
+          errorCode = 'E_INIT_AUTH';
+        } else if (error.message.includes('E_CORS') || error.message.includes('CORS')) {
+          errorMessage = 'Network error. Please check your browser settings.';
+          errorCode = 'E_INIT_CORS';
+        } else if (error.message.includes('E_RATE_LIMIT')) {
+          errorMessage = 'Service rate limit. Please wait and try again.';
+          errorCode = 'E_INIT_RATE_LIMIT';
+        } else if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Network connection failed. Please check your internet connection.';
+          errorCode = 'E_INIT_NETWORK';
+        } else if (error.message.includes('WebSocket')) {
+          errorMessage = 'WebSocket connection failed. Please check your network and try again.';
+          errorCode = 'E_INIT_WEBSOCKET';
+        } else {
+          errorMessage = error.message;
+          errorCode = 'E_INIT_CUSTOM';
+        }
+      } else if (error.error || error.code) {
+        errorMessage = error.error || error.code || 'Unknown initialization error';
+        errorCode = 'E_INIT_CUSTOM';
+      }
+      
+      setError(`${errorMessage} (${errorCode})`);
       setState('error');
       isInitializingRef.current = false;
     }
@@ -146,7 +324,12 @@ export function ConversationalVoice({
       content,
       timestamp: new Date(),
     };
-    setMessages(prev => [...prev, message]);
+    setMessages(prev => {
+      // Remove any transcript messages - just add new message
+      return [...prev, message];
+    });
+    
+    // Update context
     conversationContextRef.current.push(`User: ${content}`);
   };
 
@@ -159,196 +342,18 @@ export function ConversationalVoice({
       action,
     };
     setMessages(prev => [...prev, message]);
+    
+    // Update context
     conversationContextRef.current.push(`Assistant: ${content}`);
-  };
-
-  const executeUIActions = (actions: UiAction[]) => {
-    actions.forEach((action) => executeUiAction(action, router));
-  };
-
-  const playTTS = async (message: string) => {
-    setState('speaking');
-    const response = await fetch('/api/voice/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: message }),
-    });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      const errorMessage = typeof errorData?.error === 'string' ? errorData.error : '';
-      if (errorMessage.includes('Missing ElevenLabs configuration')) {
-        const hasSpeechSynthesis = typeof window !== 'undefined' && 'speechSynthesis' in window;
-        if (hasSpeechSynthesis) {
-          await new Promise<void>((resolve, reject) => {
-            const utterance = new SpeechSynthesisUtterance(message);
-            utterance.onend = () => resolve();
-            utterance.onerror = () => reject(new Error('Browser TTS failed'));
-            window.speechSynthesis.speak(utterance);
-          });
-          return;
-        }
-      }
-      throw new Error(`TTS failed: ${response.status}`);
-    }
-    const audioBlob = await response.blob();
-    const audioUrl = URL.createObjectURL(audioBlob);
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-    audioRef.current = new Audio(audioUrl);
-    await new Promise<void>((resolve, reject) => {
-      if (!audioRef.current) {
-        resolve();
-        return;
-      }
-      audioRef.current.onended = () => resolve();
-      audioRef.current.onerror = () => reject(new Error('Audio playback failed'));
-      audioRef.current.play().catch(reject);
-    });
-    URL.revokeObjectURL(audioUrl);
-  };
-
-  const speakAndResume = async (message: string, resumeListening = true) => {
-    addAssistantMessage(message);
-    await playTTS(message);
-    if (resumeListening && continuousMode && sessionActiveRef.current) {
-      await startListening();
-    } else {
-      setState('connected');
-    }
-  };
-
-  const transcribeAudio = async (audioBlob: Blob): Promise<string> => {
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'voice.webm');
-    const response = await fetch('/api/voice/asr', {
-      method: 'POST',
-      body: formData,
-    });
-    if (!response.ok) {
-      throw new Error(`ASR failed: ${response.status}`);
-    }
-    const data = await response.json();
-    return data.transcript || '';
-  };
-
-  const handleTranscript = async (transcript: string) => {
-    if (!transcript) {
-      setState('connected');
-      if (continuousMode && sessionActiveRef.current) {
-        await startListening();
-      }
-      return;
-    }
-
-    addUserMessage(transcript);
-    setState('processing');
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('voice-transcription', {
-        detail: `[${new Date().toISOString()}] Transcription: ${transcript}`
-      }));
-    }
-
-    const response = await fetch('/api/voice-converse/voice/converse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        transcript,
-        user_id: currentUser?.id,
-        current_page: pathname ?? undefined,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`MCP request failed: ${response.status}`);
-    }
-
-    const { message, action, results } = await response.json();
-
-    if (results?.[0]?.ui_actions) {
-      executeUIActions(results[0].ui_actions);
-    }
-
-    await speakAndResume(message, true);
-
-    if (action?.type === 'navigate' && action?.target && onNavigate) {
-      onNavigate(action.target);
-    }
-  };
-
-  const startListening = async () => {
-    if (!sessionActiveRef.current) {
-      return;
-    }
-    if (mediaRecorderRef.current?.state === 'recording') {
-      return;
-    }
-    setState('listening');
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaStreamRef.current = stream;
-    const recorder = new MediaRecorder(stream);
-    const chunks: BlobPart[] = [];
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        chunks.push(event.data);
-      }
-    };
-    recorder.onstop = async () => {
-      const audioBlob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-      mediaRecorderRef.current = null;
-      if (recordTimeoutRef.current) {
-        window.clearTimeout(recordTimeoutRef.current);
-        recordTimeoutRef.current = null;
-      }
-      if (!sessionActiveRef.current) {
-        return;
-      }
-      try {
-        const transcript = await transcribeAudio(audioBlob);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('voice-message', {
-            detail: `[${new Date().toISOString()}] user: ${transcript}`
-          }));
-        }
-        await handleTranscript(transcript);
-      } catch (error) {
-        console.error('❌ Voice processing error:', error);
-        setError('Voice processing failed. Please try again.');
-        setState('error');
-      }
-    };
-    mediaRecorderRef.current = recorder;
-    recorder.start();
-    recordTimeoutRef.current = window.setTimeout(() => {
-      if (recorder.state === 'recording') {
-        recorder.stop();
-      }
-    }, RECORD_DURATION_MS);
-  };
-
-  const stopListening = () => {
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-    if (recordTimeoutRef.current) {
-      window.clearTimeout(recordTimeoutRef.current);
-      recordTimeoutRef.current = null;
-    }
   };
 
   // Start/stop conversation
   const toggleConversation = async () => {
     if (state === 'disconnected' || state === 'error') {
-      await initializeVoiceSession();
-    } else {
-      sessionActiveRef.current = false;
-      stopListening();
-      await cleanup();
+      await initializeConversation();
+    } else if (conversationRef.current) {
+      await conversationRef.current.endSession();
       setState('disconnected');
-      onActiveChange?.(false);
     }
   };
 
@@ -356,7 +361,7 @@ export function ConversationalVoice({
   const restartConversation = async () => {
     await cleanup();
     isInitializingRef.current = false;
-    await initializeVoiceSession();
+    await initializeConversation();
   };
 
   // Minimize/Expand controls
@@ -371,6 +376,7 @@ export function ConversationalVoice({
   // State-based UI helpers
   const isConnecting = ['initializing', 'connecting'].includes(state);
   const isReady = ['connected', 'listening', 'processing', 'speaking'].includes(state);
+  const isDisconnected = ['disconnected', 'error'].includes(state);
   const isActive = state !== 'disconnected' && state !== 'error';
 
   return (
@@ -394,7 +400,7 @@ export function ConversationalVoice({
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               )}
             </div>
-
+            
             <div className="flex items-center gap-1">
               <button
                 onClick={toggleExpand}
@@ -424,7 +430,7 @@ export function ConversationalVoice({
               {state === 'speaking' && <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />}
               {state === 'disconnected' && <div className="w-2 h-2 bg-gray-300 rounded-full" />}
               {state === 'error' && <div className="w-2 h-2 bg-red-600 rounded-full" />}
-
+              
               <span className="text-gray-600 dark:text-gray-400 capitalize">
                 {state === 'initializing' && 'Initializing...'}
                 {state === 'connecting' && 'Connecting...'}
@@ -453,8 +459,8 @@ export function ConversationalVoice({
                   )}>
                     <div className={cn(
                       "max-w-[80%] px-3 py-2 rounded-lg text-sm",
-                      msg.role === 'user'
-                        ? 'bg-primary-600 text-white'
+                      msg.role === 'user' 
+                        ? 'bg-primary-600 text-white' 
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
                     )}>
                       <div className="flex items-start gap-2">

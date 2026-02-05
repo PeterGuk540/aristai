@@ -399,7 +399,7 @@ export const VoiceUIController = () => {
       for (const label of labels) {
         const labelText = label.textContent?.toLowerCase() || '';
         // Match if label contains target or target contains any word from label
-        if (labelText.includes(targetLower) || targetLower.split(' ').some(word => labelText.includes(word))) {
+        if (labelText.includes(targetLower) || targetLower.split(' ').some((word: string) => labelText.includes(word))) {
           const forId = label.getAttribute('for');
           if (forId) {
             element = document.getElementById(forId) as HTMLElement;

@@ -46,14 +46,6 @@ interface ConversationalVoiceProps {
 
 const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
 
-const MCP_DELEGATION_POLICY = `You are the AristAI voice renderer. You are NOT the product brain.
-
-Rules:
-- For normal user speech, only give ultra-brief filler acknowledgements (e.g., "好的，我来处理。", "明白，稍等一下。").
-- Never explain platform concepts, make decisions, or provide factual answers.
-- When a user message begins with "${MCP_RESPONSE_PREFIX}", you must respond by repeating the text after the prefix verbatim (no additions).
-- Do not call tools or infer actions. MCP is the only brain.`;
-
 export function ConversationalVoice(props: ConversationalVoiceProps) {
   const {
     onActiveChange,
@@ -186,11 +178,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
         connectionType: "websocket",
-        overrides: {
-          agent: {
-            prompt: { prompt: MCP_DELEGATION_POLICY },
-          },
-        },
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');

@@ -2,11 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
 
+const API_PROXY_BASE = '/api/proxy';
+
 const buildTargetUrl = (request: NextRequest, pathSegments: string[], baseUrl: string) => {
   const pathname = pathSegments.join('/');
   const url = new URL(request.url);
   const search = url.search ? url.search : '';
   return `${baseUrl}/api/${pathname}${search}`;
+};
+
+const rewriteLocationHeader = (location: string | null, baseUrl: string) => {
+  if (!location) return location;
+
+  if (location.startsWith('/api/')) {
+    return `${API_PROXY_BASE}${location.slice('/api'.length)}`;
+  }
+
+  const normalizedBase = baseUrl.replace(/\/$/, '');
+  if (location.startsWith(normalizedBase)) {
+    const relative = location.slice(normalizedBase.length);
+    if (relative.startsWith('/api/')) {
+      return `${API_PROXY_BASE}${relative.slice('/api'.length)}`;
+    }
+    return `${API_PROXY_BASE}${relative}`;
+  }
+
+  return location;
 };
 
 const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
@@ -23,6 +44,10 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
     });
 
     const responseHeaders = new Headers(response.headers);
+    const location = rewriteLocationHeader(responseHeaders.get('location'), BACKEND_BASE);
+    if (location) {
+      responseHeaders.set('location', location);
+    }
     responseHeaders.set('x-proxy-target', targetUrl);
 
     return new NextResponse(response.body, {
@@ -45,6 +70,10 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
         });
 
         const responseHeaders = new Headers(fallbackResponse.headers);
+        const location = rewriteLocationHeader(responseHeaders.get('location'), fallbackBase);
+        if (location) {
+          responseHeaders.set('location', location);
+        }
         responseHeaders.set('x-proxy-target', fallbackUrl);
         responseHeaders.set('x-proxy-fallback', 'true');
 

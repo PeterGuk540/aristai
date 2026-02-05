@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, type FormEvent } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Conversation } from '@elevenlabs/client';
 import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles } from 'lucide-react';
@@ -121,8 +121,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const initializeConversation = async () => {
     setState('connecting');
     setError('');
-    setMcpOnlyMode(false);
-    
+
     try {
       // Get signed URL from our backend
       console.log('🔑 Getting signed URL from backend...');
@@ -409,17 +408,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     }
   };
 
-  const handleMcpOnlySubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = textInput.trim();
-    if (!trimmed) {
-      return;
-    }
-    setTextInput('');
-    addUserMessage(trimmed);
-    await handleTranscript(trimmed);
-  };
-
   const addUserMessage = (content: string) => {
     const message: Message = {
       id: Date.now().toString(),
@@ -457,11 +445,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     } else if (conversationRef.current) {
       await conversationRef.current.endSession();
       setState('disconnected');
-      setMcpOnlyMode(false);
-      onActiveChange?.(false);
-    } else if (mcpOnlyMode) {
-      setState('disconnected');
-      setMcpOnlyMode(false);
       onActiveChange?.(false);
     }
   };

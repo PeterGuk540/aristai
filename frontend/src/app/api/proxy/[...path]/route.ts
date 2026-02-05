@@ -1,106 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Backend API URL - use local for development, EC2 for production
-const BACKEND_URL = process.env.NODE_ENV === 'production' 
-  ? 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000'
-  : 'http://localhost:8000';
+const BACKEND_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  return handleProxy(request, params, 'GET');
-}
-
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  return handleProxy(request, params, 'POST');
-}
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  return handleProxy(request, params, 'PUT');
-}
-
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  return handleProxy(request, params, 'PATCH');
-}
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  return handleProxy(request, params, 'DELETE');
-}
-
-async function handleProxy(
-  request: NextRequest,
-  paramsPromise: Promise<{ path: string[] }>,
-  method: string
-) {
-  const params = await paramsPromise;
-  const path = params.path.join('/');
+const buildTargetUrl = (request: NextRequest, pathSegments: string[]) => {
+  const pathname = pathSegments.join('/');
   const url = new URL(request.url);
-  const queryString = url.search;
+  const search = url.search ? url.search : '';
+  return `${BACKEND_BASE}/api/${pathname}${search}`;
+};
 
-  let targetUrl = BACKEND_URL + '/api/' + path + queryString;
+const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
+  const targetUrl = buildTargetUrl(request, pathSegments);
+  const headers = new Headers(request.headers);
+  headers.delete('host');
 
-  console.log('Proxying ' + method + ' ' + path + ' -> ' + targetUrl);
+  const response = await fetch(targetUrl, {
+    method: request.method,
+    headers,
+    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+    redirect: 'manual',
+  });
 
-  try {
-    const headers = new Headers(request.headers);
-    headers.delete('host');
-    headers.delete('content-length');
+  const responseHeaders = new Headers(response.headers);
+  responseHeaders.set('x-proxy-target', targetUrl);
 
-    const fetchOptions: RequestInit = {
-      method,
-      headers,
-    };
+  return new NextResponse(response.body, {
+    status: response.status,
+    headers: responseHeaders,
+  });
+};
 
-    // Include body for POST, PUT, PATCH requests
-    if (['POST', 'PUT', 'PATCH'].includes(method)) {
-      try {
-        const body = await request.arrayBuffer();
-        if (body.byteLength > 0) {
-          fetchOptions.body = body;
-        }
-      } catch {
-        // No body
-      }
-    }
+export async function GET(request: NextRequest, context: { params: { path: string[] } }) {
+  return forwardRequest(request, context.params.path);
+}
 
-    const response = await fetch(targetUrl, fetchOptions);
+export async function POST(request: NextRequest, context: { params: { path: string[] } }) {
+  return forwardRequest(request, context.params.path);
+}
 
-    // Handle 204 No Content
-    if (response.status === 204) {
-      return new NextResponse(null, { status: 204 });
-    }
+export async function PUT(request: NextRequest, context: { params: { path: string[] } }) {
+  return forwardRequest(request, context.params.path);
+}
 
-    const contentType = response.headers.get('content-type') || '';
+export async function PATCH(request: NextRequest, context: { params: { path: string[] } }) {
+  return forwardRequest(request, context.params.path);
+}
 
-    if (contentType.includes('application/json')) {
-      const data = await response.json();
-      return NextResponse.json(data, { status: response.status });
-    }
-
-    const buffer = await response.arrayBuffer();
-    const proxiedHeaders = new Headers(response.headers);
-    return new NextResponse(buffer, {
-      status: response.status,
-      headers: proxiedHeaders,
-    });
-  } catch (error) {
-    console.error('Proxy error:', error);
-    return NextResponse.json(
-      { detail: 'Backend API unavailable' },
-      { status: 502 }
-    );
-  }
+export async function DELETE(request: NextRequest, context: { params: { path: string[] } }) {
+  return forwardRequest(request, context.params.path);
 }

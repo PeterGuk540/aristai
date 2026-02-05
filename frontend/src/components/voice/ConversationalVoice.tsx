@@ -154,33 +154,55 @@ const handleActionExecution = async (
       const result = await response.json();
       console.log('✅ MCP tool executed successfully:', result);
       
+      const payload = result?.data ?? result;
+      const uiActions = result?.ui_actions ?? payload?.ui_actions;
+      const actionType = payload?.action ?? result?.action;
+      const actionPath = payload?.path ?? result?.path;
+      const actionPage = payload?.page ?? result?.page;
+      const isExecuted = payload?.executed ?? result?.executed;
+
       // Handle browser control actions (navigation, etc.)
-      if (result.action && result.action.includes('navigate') && result.path && onNavigate) {
-        setTimeout(() => onNavigate(result.path), 1000); // Faster navigation
+      if (actionType && actionType.includes('navigate') && actionPath && onNavigate) {
+        setTimeout(() => onNavigate(actionPath), 1000); // Faster navigation
         if (addAssistantMessage) {
-          addAssistantMessage(result.voice_response || `🔗 Taking you to ${result.page}...`, {
+          addAssistantMessage(payload?.voice_response || `🔗 Taking you to ${actionPage || 'that page'}...`, {
             type: 'navigate',
-            target: result.page,
+            target: actionPage,
             executed: true
           });
         }
         return true;
       }
-      
+
       // Handle other browser control actions
-      if (result.browser_control && result.executed) {
+      if (payload?.browser_control && isExecuted) {
         if (addAssistantMessage) {
-          addAssistantMessage(result.voice_response || `✅ ${toolName} executed successfully.`, {
+          addAssistantMessage(payload?.voice_response || `✅ ${toolName} executed successfully.`, {
             type: 'execute',
             executed: true
           });
         }
         return true;
       }
+
+      if (Array.isArray(uiActions) && uiActions.length > 0) {
+        const navigateAction = uiActions.find((action) => action?.type === 'ui.navigate');
+        if (navigateAction?.payload?.path && onNavigate) {
+          setTimeout(() => onNavigate(navigateAction.payload.path), 500);
+          if (addAssistantMessage) {
+            addAssistantMessage(payload?.voice_response || `🔗 Taking you to ${navigateAction.payload.path}...`, {
+              type: 'navigate',
+              target: navigateAction.payload.path,
+              executed: true
+            });
+          }
+          return true;
+        }
+      }
       
       // Provide user-friendly feedback
       if (addAssistantMessage) {
-        const feedback = result.voice_response || `✅ ${toolName} executed successfully.`;
+        const feedback = payload?.voice_response || result?.summary || `✅ ${toolName} executed successfully.`;
         addAssistantMessage(feedback);
       }
       return true;

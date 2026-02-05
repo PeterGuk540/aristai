@@ -178,13 +178,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
         connectionType: "websocket",
-        // Audio stability settings
-        audioSettings: {
-          outputAudioFormat: 'pcm_16000',  // Consistent audio format
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');
@@ -304,17 +297,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           setState('error');
         },
         onAudio: (audio: any) => {
-          // Monitor audio for stability
-          if (audio && audio.byteLength) {
-            // Check for audio data - helps detect if audio is flowing
-            const audioLevel = audio.byteLength > 0 ? 'active' : 'silent';
-            console.log('🔊 Audio:', audioLevel, 'bytes:', audio.byteLength);
-          }
-        },
-        onVolumeUpdate: (volume: number) => {
-          // Monitor volume levels for debugging audio issues
-          if (volume < 0.1) {
-            console.log('🔇 Volume very low:', volume);
+          // Monitor audio for stability - only log occasionally to reduce noise
+          if (audio && audio.byteLength && Math.random() < 0.05) {
+            console.log('🔊 Audio flowing, bytes:', audio.byteLength);
           }
         },
       });

@@ -20,6 +20,8 @@ from mcp_server.tools import (
     reports,
     enrollment,
     navigation,
+    resolve,
+    voice,
 )
 
 __all__ = [
@@ -31,4 +33,6 @@ __all__ = [
     "reports",
     "enrollment",
     "navigation",
+    "resolve",
+    "voice",
 ]

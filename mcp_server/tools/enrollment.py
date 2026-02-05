@@ -116,6 +116,48 @@ def enroll_student(db: Session, user_id: int, course_id: int) -> Dict[str, Any]:
         return {"error": f"Failed to enroll student: {str(e)}"}
 
 
+def bulk_enroll_students(db: Session, course_id: int, user_ids: list[int]) -> Dict[str, Any]:
+    """
+    Bulk enroll students in a course.
+    """
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        return {"error": f"Course {course_id} not found"}
+
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    valid_user_ids = {u.id for u in users}
+    invalid_ids = [user_id for user_id in user_ids if user_id not in valid_user_ids]
+    if invalid_ids:
+        return {"error": f"Invalid user IDs: {invalid_ids}"}
+
+    existing = db.query(Enrollment.user_id).filter(Enrollment.course_id == course_id).all()
+    enrolled_ids = {row.user_id for row in existing}
+
+    newly_enrolled = []
+    already_enrolled = []
+    for user_id in user_ids:
+        if user_id in enrolled_ids:
+            already_enrolled.append(user_id)
+            continue
+        enrollment = Enrollment(user_id=user_id, course_id=course_id)
+        db.add(enrollment)
+        newly_enrolled.append(user_id)
+
+    try:
+        db.commit()
+        return {
+            "message": f"Enrolled {len(newly_enrolled)} students in '{course.title}'.",
+            "course_id": course_id,
+            "course_title": course.title,
+            "newly_enrolled_user_ids": newly_enrolled,
+            "already_enrolled_user_ids": already_enrolled,
+        }
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Failed bulk enroll: {e}")
+        return {"error": f"Failed to bulk enroll students: {str(e)}"}
+
+
 def get_users(db: Session, role: Optional[str] = None) -> Dict[str, Any]:
     """
     Get list of users, optionally filtered by role.

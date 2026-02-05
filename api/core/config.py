@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     voice_max_seconds: int = 30
     voice_max_mb: int = 5
     voice_rate_limit_per_min: int = 10
+    voice_brand_denylist: str = "ElevenLabs,OpenAI,Google,Amazon,Microsoft,Anthropic"
+    voice_brand_allowlist: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Conversation } from '@elevenlabs/client';
 import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles } from 'lucide-react';
 import { useUser } from '@/lib/context';
+import { API_BASE, getAuthHeaders } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export type ConversationState = 
@@ -40,6 +41,26 @@ interface ConversationalVoiceProps {
   /** Class name */
   className?: string;
 }
+
+const MCP_DELEGATION_POLICY = `You are the AristAI voice interface. ElevenLabs controls conversation flow; MCP is the sole source of platform truth.
+
+ElevenLabs handles conversation flow only:
+- Manage turn-taking, interruptions, endpointing, and streaming.
+- Give ultra-brief acknowledgements like "Got it." or "Okay." (no facts, no decisions).
+- Ask for missing parameters (e.g., "Which session?" "Which post?").
+- Repeat the user's intent for confirmation, especially for write actions.
+
+You MUST delegate to MCP via delegate_to_mcp for:
+- Any platform data/state (courses, sessions, forum posts, polls, reports, copilot status).
+- Any UI/navigation or database side effects (navigate, post, reply, pin/unpin, label, vote, start/stop copilot, generate report).
+- Any questions about capabilities, pages, or what the platform can do.
+- Any request mentioning in-product pages/objects (courses, sessions, forum, reports, console, dashboard).
+
+Suggested: If the request is complex or ambiguous, reply with a short acknowledgment and immediately call delegate_to_mcp.
+
+Hard rule for write actions: require confirmation. First acknowledge ("Okay—confirming."), delegate to MCP for an action preview with requires_confirmation: true, then ask the user to confirm before executing.
+
+Never invent platform facts or outcomes. Never claim an action happened unless MCP confirms it.`;
 
 export function ConversationalVoice(props: ConversationalVoiceProps) {
   const {
@@ -167,6 +188,52 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
         connectionType: "websocket",
+        overrides: {
+          agent: {
+            prompt: { prompt: MCP_DELEGATION_POLICY },
+          },
+        },
+        clientTools: {
+          delegate_to_mcp: async (params: Record<string, any>) => {
+            const transcript =
+              params?.transcript ||
+              params?.text ||
+              params?.message ||
+              params?.input ||
+              '';
+            const currentPage = typeof window !== 'undefined' ? window.location.pathname : undefined;
+            const context = conversationContextRef.current.slice(-10);
+
+            try {
+              const authHeaders = await getAuthHeaders();
+              const response = await fetch(`${API_BASE}/voice/agent/delegate`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...authHeaders,
+                },
+                body: JSON.stringify({
+                  transcript,
+                  current_page: currentPage,
+                  user_id: currentUser?.id,
+                  context,
+                }),
+              });
+
+              if (!response.ok) {
+                const errorPayload = await response.json().catch(() => ({}));
+                const errorMessage = errorPayload?.detail || response.statusText || 'Unable to delegate MCP tool.';
+                return `Error: ${errorMessage}`;
+              }
+
+              const payload = await response.json();
+              return payload?.message || payload?.voice_response || 'Completed.';
+            } catch (error) {
+              console.error('❌ MCP delegation failed:', error);
+              return 'Sorry, I had trouble reaching the MCP service.';
+            }
+          },
+        },
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');

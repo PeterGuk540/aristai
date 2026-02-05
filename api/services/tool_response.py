@@ -35,7 +35,12 @@ def normalize_tool_result(result: Any, tool_name: str) -> Dict[str, Any]:
         else:
             response["summary"] = f"{tool_name} completed."
         response["data"] = result
-        ui_actions = _build_ui_actions(result)
+        ui_actions = list(result.get("ui_actions") or [])
+        derived_actions = _build_ui_actions(result)
+        if derived_actions:
+            for action in derived_actions:
+                if action not in ui_actions:
+                    ui_actions.append(action)
         if ui_actions:
             response["ui_actions"] = ui_actions
         return response

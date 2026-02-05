@@ -27,3 +27,12 @@ def test_fallback_on_remaining_banned_terms():
         allowlist=[],
     )
     assert result in {DEFAULT_FALLBACK, "open the documentation"}
+
+
+def test_rewrite_11lab_mentions():
+    result = sanitize_speech_text(
+        "Open 11lab dashboard",
+        denylist=["11lab"],
+        allowlist=[],
+    )
+    assert result == "open the settings page"

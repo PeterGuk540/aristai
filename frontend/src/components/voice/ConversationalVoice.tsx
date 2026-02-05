@@ -584,42 +584,55 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             </div>
           </div>
 
-          {/* Messages */}
-          {isExpanded && (
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {messages.length === 0 ? (
-                <div className="text-center text-gray-500 dark:text-gray-400 text-sm py-8">
-                  {isReady ? 'Start speaking when you see the listening indicator...' : 'Click start to begin voice conversation'}
-                </div>
-              ) : (
-                messages.map((msg) => (
-                  <div key={msg.id} className={cn(
-                    "flex gap-2",
-                    msg.role === 'user' ? 'justify-end' : 'justify-start'
-                  )}>
-                    <div className={cn(
-                      "max-w-[80%] px-3 py-2 rounded-lg text-sm",
-                      msg.role === 'user' 
-                        ? 'bg-primary-600 text-white' 
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                    )}>
-                      <div className="flex items-start gap-2">
-                        <span>{msg.content}</span>
-                      </div>
-                      {msg.action && (
-                        <div className="mt-1 text-xs opacity-75">
-                          {msg.action.type === 'navigate' && `🔗 ${msg.action.target}`}
-                          {msg.action.type === 'execute' && '⚡ Executing...'}
-                          {msg.action.type === 'info' && 'ℹ️'}
-                        </div>
-                      )}
+          {/* Messages - Always visible, scrollable */}
+          <div className={cn(
+            "flex-1 overflow-y-auto p-3 space-y-2",
+            isExpanded ? "max-h-[400px]" : "max-h-[280px]"
+          )}>
+            {messages.length === 0 ? (
+              <div className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
+                {isReady ? 'Listening... Speak now.' : 'Click Start to begin'}
+              </div>
+            ) : (
+              messages.map((msg) => (
+                <div key={msg.id} className={cn(
+                  "flex gap-2",
+                  msg.role === 'user' ? 'justify-end' : 'justify-start'
+                )}>
+                  {/* Role indicator */}
+                  {msg.role === 'assistant' && (
+                    <div className="w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center flex-shrink-0">
+                      <Sparkles className="w-3 h-3 text-primary-600 dark:text-primary-400" />
                     </div>
+                  )}
+                  <div className={cn(
+                    "max-w-[75%] px-3 py-2 rounded-lg text-sm",
+                    msg.role === 'user'
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                  )}>
+                    <div className="flex items-start gap-2">
+                      <span>{msg.content}</span>
+                    </div>
+                    {msg.action && (
+                      <div className="mt-1 text-xs opacity-75">
+                        {msg.action.type === 'navigate' && `🔗 ${msg.action.target}`}
+                        {msg.action.type === 'execute' && '⚡ Executed'}
+                        {msg.action.type === 'info' && 'ℹ️'}
+                      </div>
+                    )}
                   </div>
-                ))
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
+                  {/* User indicator */}
+                  {msg.role === 'user' && (
+                    <div className="w-6 h-6 rounded-full bg-primary-600 flex items-center justify-center flex-shrink-0">
+                      <Mic className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+            <div ref={messagesEndRef} />
+          </div>
 
           {/* Error Display */}
           {error && (

@@ -8,17 +8,23 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from api.api.mcp_executor import invoke_tool_handler
 from api.core.database import get_db
+from api.services.action_preview import build_action_preview
+from api.services.action_store import ActionStore
 from mcp_server.server import TOOL_REGISTRY
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+action_store = ActionStore()
+ACTION_TOOL_NAMES = {"plan_action", "execute_action", "cancel_action"}
 
 
 class MCPExecuteRequest(BaseModel):
     tool: str = Field(..., min_length=1)
     arguments: Dict[str, Any] = Field(default_factory=dict)
+    user_id: Optional[int] = None
 
 
 def _validate_tool_args(tool_name: str, args: Dict[str, Any], schema: Dict[str, Any]) -> Optional[str]:
@@ -61,7 +67,23 @@ async def execute_tool(request: MCPExecuteRequest, db: Session = Depends(get_db)
 
     try:
         logger.info("Executing MCP tool '%s'", request.tool)
-        result = tool_info["handler"](db, **args)
+        if tool_info.get("mode") == "write" and request.tool not in ACTION_TOOL_NAMES:
+            preview = build_action_preview(request.tool, args, db=db)
+            action = action_store.create_action(
+                user_id=request.user_id,
+                tool_name=request.tool,
+                args=args,
+                preview=preview,
+            )
+            return {
+                "tool": request.tool,
+                "success": True,
+                "action_id": action.action_id,
+                "requires_confirmation": True,
+                "preview": preview,
+                "message": "Action planned. Please confirm to execute.",
+            }
+        result = invoke_tool_handler(tool_info["handler"], args, db=db)
         if isinstance(result, dict):
             return {"tool": request.tool, **result}
         return {"tool": request.tool, "result": result}

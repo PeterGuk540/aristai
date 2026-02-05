@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from api.core.database import get_db
 from api.models.course import Course
 from api.models.session import Session as SessionModel, SessionStatus
+from api.api.mcp_executor import invoke_tool_handler
 from mcp_server.server import TOOL_REGISTRY
 from workflows.voice_orchestrator import run_voice_orchestrator, generate_summary
 from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics, parse_json_response
@@ -411,7 +412,7 @@ def _execute_tool(db: Session, tool_name: str, args: Dict[str, Any]) -> Optional
     if not tool_info:
         return None
     handler = tool_info["handler"]
-    return handler(db, **args)
+    return invoke_tool_handler(handler, args, db=db)
 
 
 async def execute_action(
@@ -493,7 +494,7 @@ def execute_plan_steps(steps: List[Dict[str, Any]], db: Session) -> tuple[list[d
             continue
 
         try:
-            result = tool_entry["handler"](db, **args)
+            result = invoke_tool_handler(tool_entry["handler"], args, db=db)
             results.append({
                 "tool": tool_name,
                 "success": True,

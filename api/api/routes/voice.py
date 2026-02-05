@@ -184,6 +184,7 @@ async def delegate_to_mcp(request: Request, db: Session = Depends(get_db)):
         await broker.publish(data.user_id, action)
 
     return {
+        "result": response.message,
         "message": response.message,
         "voice_response": response.message,
         "ui_actions": ui_actions,

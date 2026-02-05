@@ -20,8 +20,8 @@ app.add_middleware(
         "http://localhost:3000",  # Local Next.js development
         "https://localhost:3000",
         "https://*.vercel.app",  # Vercel preview deployments
-        # Add your production Vercel domain here, e.g.:
-        # "https://aristai.vercel.app",
+        "https://forum.aristai.io",  # Production custom domain
+        "http://forum.aristai.io",  # HTTP fallback (redirects to HTTPS)
     ],
     allow_credentials=True,
     allow_methods=["*"],

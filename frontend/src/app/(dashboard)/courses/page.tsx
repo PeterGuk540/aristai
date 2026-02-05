@@ -459,6 +459,7 @@ export default function CoursesPage() {
                   placeholder="e.g., Introduction to Machine Learning"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
+                  data-voice-id="course-title"
                 />
 
                 <Textarea
@@ -467,6 +468,7 @@ export default function CoursesPage() {
                   rows={8}
                   value={syllabus}
                   onChange={(e) => setSyllabus(e.target.value)}
+                  data-voice-id="syllabus"
                 />
 
                 <Textarea
@@ -475,6 +477,7 @@ export default function CoursesPage() {
                   rows={5}
                   value={objectives}
                   onChange={(e) => setObjectives(e.target.value)}
+                  data-voice-id="learning-objectives"
                 />
 
                 <div className="flex gap-3">

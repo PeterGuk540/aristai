@@ -651,6 +651,7 @@ export default function ConsolePage() {
                   placeholder="What do you think about...?"
                   value={pollQuestion}
                   onChange={(e) => setPollQuestion(e.target.value)}
+                  data-voice-id="poll-question"
                 />
 
                 <div>
@@ -663,6 +664,7 @@ export default function ConsolePage() {
                         placeholder={`Option ${index + 1}`}
                         value={option}
                         onChange={(e) => updatePollOption(index, e.target.value)}
+                        data-voice-id={`poll-option-${index + 1}`}
                       />
                       {pollOptions.length > 2 && (
                         <Button
@@ -767,6 +769,7 @@ export default function ConsolePage() {
                 rows={6}
                 value={casePrompt}
                 onChange={(e) => setCasePrompt(e.target.value)}
+                data-voice-id="case-prompt"
               />
 
               <Button

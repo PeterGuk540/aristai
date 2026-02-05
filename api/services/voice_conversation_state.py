@@ -106,7 +106,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
             "create_course": [
                 FormField(
                     name="Course Title",
-                    voice_id="input-title",
+                    voice_id="course-title",
                     field_type="input",
                     required=True,
                     prompt="What would you like to name this course?",
@@ -114,7 +114,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                 ),
                 FormField(
                     name="Syllabus",
-                    voice_id="textarea-syllabus",
+                    voice_id="syllabus",
                     field_type="textarea",
                     required=False,
                     prompt="Would you like to add a syllabus? You can describe the course content and schedule.",
@@ -122,7 +122,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                 ),
                 FormField(
                     name="Learning Objectives",
-                    voice_id="textarea-objectives",
+                    voice_id="learning-objectives",
                     field_type="textarea",
                     required=False,
                     prompt="What are the learning objectives for this course?",
@@ -151,19 +151,19 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
         buttons=[
             ActionButton(
                 name="Create Course",
-                voice_id="btn-create-course",
+                voice_id="create-course",
                 description="Create the new course",
                 destructive=False
             ),
             ActionButton(
                 name="Join Course",
-                voice_id="btn-join-course",
+                voice_id="join-course",
                 description="Join the course with the access code",
                 destructive=False
             ),
             ActionButton(
                 name="Enroll Student",
-                voice_id="btn-enroll",
+                voice_id="enroll-student",
                 description="Enroll the selected student",
                 destructive=False
             ),
@@ -216,9 +216,22 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
         buttons=[
             ActionButton(
                 name="Create Session",
-                voice_id="btn-create-session",
+                voice_id="create-session",
                 description="Create the new session",
                 destructive=False
+            ),
+            ActionButton(
+                name="Go Live",
+                voice_id="go-live",
+                description="Start the live session",
+                destructive=False
+            ),
+            ActionButton(
+                name="Complete Session",
+                voice_id="complete-session",
+                description="Mark the session as complete",
+                destructive=True,
+                confirmation_prompt="Are you sure you want to end this session?"
             ),
         ],
     ),
@@ -283,35 +296,35 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
             "create_poll": [
                 FormField(
                     name="Question",
-                    voice_id="input-poll-question",
+                    voice_id="poll-question",
                     field_type="input",
                     required=True,
                     prompt="What question would you like to ask in the poll?",
                 ),
                 FormField(
                     name="Option 1",
-                    voice_id="input-poll-option-1",
+                    voice_id="poll-option-1",
                     field_type="input",
                     required=True,
                     prompt="What is the first answer option?",
                 ),
                 FormField(
                     name="Option 2",
-                    voice_id="input-poll-option-2",
+                    voice_id="poll-option-2",
                     field_type="input",
                     required=True,
                     prompt="What is the second answer option?",
                 ),
                 FormField(
                     name="Option 3",
-                    voice_id="input-poll-option-3",
+                    voice_id="poll-option-3",
                     field_type="input",
                     required=False,
                     prompt="Would you like to add a third option?",
                 ),
                 FormField(
                     name="Option 4",
-                    voice_id="input-poll-option-4",
+                    voice_id="poll-option-4",
                     field_type="input",
                     required=False,
                     prompt="Would you like to add a fourth option?",
@@ -320,7 +333,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
             "post_case": [
                 FormField(
                     name="Case Prompt",
-                    voice_id="textarea-case-prompt",
+                    voice_id="case-prompt",
                     field_type="textarea",
                     required=True,
                     prompt="What case scenario would you like to present to students?",
@@ -344,33 +357,33 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
         buttons=[
             ActionButton(
                 name="Start Copilot",
-                voice_id="btn-start-copilot",
+                voice_id="start-copilot",
                 description="Start the AI teaching assistant",
                 destructive=False
             ),
             ActionButton(
                 name="Stop Copilot",
-                voice_id="btn-stop-copilot",
+                voice_id="stop-copilot",
                 description="Stop the AI teaching assistant",
                 destructive=True,
                 confirmation_prompt="Are you sure you want to stop the copilot? This will end the AI assistance for this session."
             ),
             ActionButton(
                 name="Create Poll",
-                voice_id="btn-create-poll",
+                voice_id="create-poll",
                 description="Launch the poll for students",
                 destructive=False
             ),
             ActionButton(
                 name="End Poll",
-                voice_id="btn-end-poll",
+                voice_id="end-poll",
                 description="Close the current poll",
                 destructive=True,
                 confirmation_prompt="Are you sure you want to end this poll? Students will no longer be able to respond."
             ),
             ActionButton(
                 name="Post Case",
-                voice_id="btn-post-case",
+                voice_id="post-case",
                 description="Post the case study for students",
                 destructive=False
             ),

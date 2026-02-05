@@ -7,9 +7,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('📨 MCP tool request:', body);
     
-    // Forward to backend MCP service on EC2
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ec2-13-219-204-7.compute-1.amazonaws.com:8000'; // EC2 backend URL
-    const targetUrl = `${backendUrl}/api/mcp/execute`;
+    // Forward through the local proxy to avoid exposing backend ports to the browser.
+    const targetUrl = new URL('/api/proxy/mcp/execute', request.url).toString();
     
     const response = await fetch(targetUrl, {
       method: 'POST',

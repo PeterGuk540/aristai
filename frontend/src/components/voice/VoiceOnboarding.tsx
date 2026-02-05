@@ -31,7 +31,7 @@ export function VoiceOnboarding({ role, userName, onComplete }: VoiceOnboardingP
           <div className="text-center py-4">
             <div className="w-20 h-20 mx-auto mb-4 flex items-center justify-center">
               <img 
-                src="/aristai-logo.png" 
+                src="/AristAI_logo.png" 
                 alt="AristAI Logo" 
                 className="w-full h-full object-contain"
                 onError={(e) => {

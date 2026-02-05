@@ -21,6 +21,7 @@ from workflows.llm_utils import (
     LLMMetrics,
 )
 from workflows.prompts.voice_prompts import (
+    MCP_VOICE_PHASES,
     VOICE_PLAN_SYSTEM_PROMPT,
     VOICE_PLAN_USER_PROMPT,
     VOICE_SUMMARY_PROMPT,
@@ -59,7 +60,10 @@ def build_plan(state: VoiceOrchestratorState) -> VoiceOrchestratorState:
         return state
 
     tool_descriptions = _build_tool_descriptions()
-    system = VOICE_PLAN_SYSTEM_PROMPT.format(tool_descriptions=tool_descriptions)
+    system = VOICE_PLAN_SYSTEM_PROMPT.format(
+        tool_descriptions=tool_descriptions,
+        mcp_voice_phases=MCP_VOICE_PHASES,
+    )
     user = VOICE_PLAN_USER_PROMPT.format(
         transcript=state["transcript"],
         context=state.get("context") or [],

@@ -71,6 +71,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [mcpOnlyMode, setMcpOnlyMode] = useState(false);
+  const [textInput, setTextInput] = useState('');
   
   // Settings
   const [continuousMode, setContinuousMode] = useState(true);
@@ -169,7 +171,13 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             errorCode = `E_HTTP_${response.status}`;
         }
         
-        throw new Error(`${errorMessage} (${errorCode})`);
+        console.warn(`⚠️ Signed URL unavailable, falling back to MCP-only mode: ${errorMessage} (${errorCode})`);
+        setMcpOnlyMode(true);
+        setState('connected');
+        onActiveChange?.(true);
+        setError('Voice session unavailable. Running in MCP-only mode.');
+        isInitializingRef.current = false;
+        return;
       }
 
       const { signed_url } = await response.json();
@@ -190,6 +198,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');
+          setMcpOnlyMode(false);
           onActiveChange?.(true);
           isInitializingRef.current = false;
           
@@ -332,8 +341,11 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         errorCode = 'E_INIT_CUSTOM';
       }
       
-      setError(`${errorMessage} (${errorCode})`);
-      setState('error');
+      console.warn(`⚠️ Initialization failed, falling back to MCP-only mode: ${errorMessage} (${errorCode})`);
+      setMcpOnlyMode(true);
+      setError('Voice session unavailable. Running in MCP-only mode.');
+      setState('connected');
+      onActiveChange?.(true);
       isInitializingRef.current = false;
     }
   };
@@ -559,6 +571,29 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
               )}
               <div ref={messagesEndRef} />
             </div>
+          )}
+
+          {/* MCP-only Input */}
+          {isExpanded && mcpOnlyMode && (
+            <form onSubmit={handleMcpOnlySubmit} className="px-3 pb-3">
+              <div className="flex items-center gap-2">
+                <input
+                  value={textInput}
+                  onChange={(event) => setTextInput(event.target.value)}
+                  placeholder="MCP-only mode: type your request..."
+                  className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium"
+                >
+                  Send
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Voice session unavailable. MCP-only mode is active for UI actions and responses.
+              </p>
+            </form>
           )}
 
           {/* Error Display */}

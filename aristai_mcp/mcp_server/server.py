@@ -21,6 +21,7 @@ Features:
 """
 
 import asyncio
+import inspect
 import logging
 import os
 import sys
@@ -38,8 +39,6 @@ from mcp.types import (
     CallToolResult,
     ListToolsResult,
 )
-
-from sqlalchemy.orm import Session as DBSession
 
 from api.core.database import SessionLocal
 from api.core.config import get_settings
@@ -78,6 +77,24 @@ async def get_db():
 
 # Comprehensive tool registry with all forum operations
 TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {}
+
+
+def _handler_requires_db(handler: callable) -> bool:
+    try:
+        signature = inspect.signature(handler)
+    except (TypeError, ValueError):
+        return False
+    return "db" in signature.parameters
+
+
+def _invoke_tool_handler_in_thread(handler: callable, arguments: Dict[str, Any]) -> Any:
+    if _handler_requires_db(handler):
+        db = SessionLocal()
+        try:
+            return handler(db=db, **arguments)
+        finally:
+            db.close()
+    return handler(**arguments)
 
 
 def register_tool(
@@ -774,31 +791,29 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> CallToolResult:
     handler = tool_info["handler"]
     
     try:
-        async with get_db() as db:
-            # Call the handler with database session
-            result = await asyncio.to_thread(handler, db, **arguments)
+        result = await asyncio.to_thread(_invoke_tool_handler_in_thread, handler, arguments)
             
-            # Format result for voice-friendly output
-            if isinstance(result, dict):
-                if "error" in result:
-                    return CallToolResult(
-                        content=[TextContent(type="text", text=f"Error: {result['error']}")],
-                        isError=True,
-                    )
-                
-                # Create a voice-friendly summary
-                import json
-                result_text = json.dumps(result, indent=2, default=str)
-                
+        # Format result for voice-friendly output
+        if isinstance(result, dict):
+            if "error" in result:
                 return CallToolResult(
-                    content=[TextContent(type="text", text=result_text)],
-                    isError=False,
+                    content=[TextContent(type="text", text=f"Error: {result['error']}")],
+                    isError=True,
                 )
-            else:
-                return CallToolResult(
-                    content=[TextContent(type="text", text=str(result))],
-                    isError=False,
-                )
+            
+            # Create a voice-friendly summary
+            import json
+            result_text = json.dumps(result, indent=2, default=str)
+            
+            return CallToolResult(
+                content=[TextContent(type="text", text=result_text)],
+                isError=False,
+            )
+        else:
+            return CallToolResult(
+                content=[TextContent(type="text", text=str(result))],
+                isError=False,
+            )
                 
     except Exception as e:
         logger.exception(f"Tool execution failed: {name}")

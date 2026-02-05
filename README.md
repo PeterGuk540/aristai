@@ -332,6 +332,8 @@ AristAI ships with a first-party MCP server that exposes classroom operations as
 
 **Location:** `mcp_server/`
 
+**Tool execution notes:** Handlers may be defined with or without a `db` argument; database sessions are created inside worker threads to avoid cross-thread session sharing.
+
 **Start the server (stdio for Claude Desktop):**
 ```bash
 python -m mcp_server.server

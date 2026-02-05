@@ -203,7 +203,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             setTimeout(() => {
               if (!conversationRef.current && !isInitializingRef.current) {
                 console.log('🔄 Auto-reconnecting...');
-                startConversation();
+                initializeConversation();
               }
             }, 2000);
           }

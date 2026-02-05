@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from api.api.mcp_executor import invoke_tool_handler
 from api.core.database import get_db
 from mcp_server.server import TOOL_REGISTRY
 
@@ -61,7 +62,7 @@ async def execute_tool(request: MCPExecuteRequest, db: Session = Depends(get_db)
 
     try:
         logger.info("Executing MCP tool '%s'", request.tool)
-        result = tool_info["handler"](db, **args)
+        result = invoke_tool_handler(tool_info["handler"], args, db=db)
         if isinstance(result, dict):
             return {"tool": request.tool, **result}
         return {"tool": request.tool, "result": result}

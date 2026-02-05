@@ -602,6 +602,22 @@ class VoiceConversationManager:
 
         return fields[context.current_field_index]
 
+    @staticmethod
+    def _sanitize_transcription(value: str) -> str:
+        """Remove trailing punctuation from transcribed text.
+
+        ElevenLabs often adds periods at the end of transcriptions,
+        which can cause issues with course titles and other form fields.
+        """
+        if not value:
+            return value
+        # Strip whitespace first
+        value = value.strip()
+        # Remove trailing punctuation (period, comma, exclamation, question mark)
+        while value and value[-1] in '.!?,;:':
+            value = value[:-1].strip()
+        return value
+
     def record_field_value(
         self,
         user_id: Optional[int],
@@ -623,8 +639,11 @@ class VoiceConversationManager:
         if not current_field:
             return {"done": True, "next_prompt": None, "field_to_fill": None, "all_values": {}}
 
+        # Sanitize the value - remove trailing punctuation from transcription
+        clean_value = self._sanitize_transcription(value)
+
         # Record the value
-        context.collected_values[current_field.voice_id] = value
+        context.collected_values[current_field.voice_id] = clean_value
 
         # Move to next field
         context.current_field_index += 1

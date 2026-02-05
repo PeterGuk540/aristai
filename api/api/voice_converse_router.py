@@ -199,9 +199,18 @@ ACTION_PATTERNS = {
     ],
 
     # === UNIVERSAL UI ELEMENT INTERACTIONS (check these AFTER specific actions) ===
-    # Universal dropdown selection - works for ANY dropdown
+    # Universal dropdown expansion - MUST come BEFORE ui_select_dropdown
+    # Matches "select another course", "change course", "show options", "expand dropdown"
+    'ui_expand_dropdown': [
+        r'\b(select|choose|pick)\s+(another|a\s+different|other)\s+(course|session)\b',
+        r'\b(change|switch)\s+(the\s+)?(course|session)\b',
+        r'\bwhat\s+(courses?|sessions?)\s+(are\s+)?(available|there)\b',
+        r'\b(expand|open|show)\s+(the\s+)?(\w+\s+)?(dropdown|menu|list|options|select)\b',
+        r'\b(show|see|view|what\s+are)\s+(the\s+)?(available\s+)?(\w+\s+)?(options|choices|items)\b',
+        r'\blet\s+me\s+(see|choose|pick)\b',
+    ],
+    # Universal dropdown selection - direct selection like "select the first course"
     'ui_select_dropdown': [
-        r'\b(select|choose|pick|switch\s+to)\s+(the\s+)?(\w+)\s+(.+)',
         r'\b(select|choose|pick)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+(\w+)\b',
         r'\buse\s+(the\s+)?(\w+)\s+(.+)',
     ],
@@ -215,12 +224,6 @@ ACTION_PATTERNS = {
     'ui_click_button': [
         r'\b(click|press|hit|tap)\s+(the\s+)?(.+?)\s*(button)?\b',
         r'\b(click|press)\s+(on\s+)?(.+)\b',
-    ],
-    # Universal dropdown expansion - "expand dropdown", "show options", "open the list"
-    'ui_expand_dropdown': [
-        r'\b(expand|open|show)\s+(the\s+)?(\w+\s+)?(dropdown|menu|list|options|select)\b',
-        r'\b(show|see|view|what\s+are)\s+(the\s+)?(available\s+)?(\w+\s+)?(options|choices|items)\b',
-        r'\blet\s+me\s+(see|choose|pick)\b',
     ],
     # === UNIVERSAL FORM DICTATION ===
     # Detects when user is providing content for ANY input field
@@ -872,11 +875,13 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
             ui_actions = []
             if field_to_fill:
+                # Use sanitized value from all_values (trailing punctuation removed)
+                sanitized_value = result["all_values"].get(field_to_fill.voice_id, transcript)
                 ui_actions.append({
                     "type": "ui.fillInput",
                     "payload": {
                         "target": field_to_fill.voice_id,
-                        "value": transcript,
+                        "value": sanitized_value,
                     }
                 })
                 ui_actions.append({

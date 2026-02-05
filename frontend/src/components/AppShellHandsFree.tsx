@@ -20,6 +20,7 @@ import { useUser } from '@/lib/context';
 import { UserMenu } from './UserMenu';
 import { VoiceOnboarding } from './voice/VoiceOnboarding';
 import { ConversationalVoice } from './voice/ConversationalVoice';
+import { VoiceUiActionBridge } from './voice/VoiceUiActionBridge';
 import { cn } from '@/lib/utils';
 
 // Navigation items with optional instructor-only flag and enrollment requirement
@@ -47,6 +48,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
+  const [voiceConnected, setVoiceConnected] = useState(false);
 
   // Determine the effective role for onboarding
   const effectiveRole = isAdmin ? 'admin' : isInstructor ? 'instructor' : 'student';
@@ -201,9 +203,9 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
               <div className={cn(
                 'w-2 h-2 rounded-full',
-                voiceActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                voiceConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
               )} />
-              <span>Voice {voiceActive ? 'Active' : 'Ready'}</span>
+              <span>Voice {voiceConnected ? 'Connected' : 'Ready'}</span>
             </div>
           </div>
         )}
@@ -260,12 +262,15 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
       {/* Conversational Voice Assistant - always on for instructors after onboarding */}
       {(isInstructor || isAdmin) && onboardingComplete && (
+        <>
+          <VoiceUiActionBridge userId={currentUser?.id} onStatusChange={setVoiceConnected} />
         <ConversationalVoice
           onNavigate={handleVoiceNavigate}
           onActiveChange={setVoiceActive}
           autoStart={true}
           greeting={`Welcome back, ${currentUser?.name.split(' ')[0]}! How can I help you today?`}
         />
+        </>
       )}
     </div>
   );

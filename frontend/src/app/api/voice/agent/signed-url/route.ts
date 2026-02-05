@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+const BACKEND_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
+
 export async function GET(request: NextRequest) {
   try {
-    console.log('📡 Next.js API proxy: Forwarding request to backend');
-    
-    // Forward through the local proxy to avoid exposing backend ports to the browser.
-    const targetUrl = new URL('/api/proxy/voice/agent/signed-url', request.url).toString();
-    
+    console.log('📡 Voice signed-url: Calling backend directly');
+
+    // Call backend directly instead of going through another API route
+    const targetUrl = `${BACKEND_BASE}/api/voice/agent/signed-url`;
+
     const response = await fetch(targetUrl, {
       method: 'GET',
       headers: {
@@ -16,9 +18,9 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json',
       },
     });
-    
+
     console.log('🔗 Backend response status:', response.status);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Backend error:', errorText);
@@ -27,11 +29,11 @@ export async function GET(request: NextRequest) {
         { status: response.status }
       );
     }
-    
+
     const data = await response.json();
     console.log('✅ Backend response received');
     return NextResponse.json(data);
-    
+
   } catch (error) {
     console.error('❌ Proxy error:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);

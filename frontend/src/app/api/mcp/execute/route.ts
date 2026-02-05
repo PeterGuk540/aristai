@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
+const BACKEND_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
+
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔧 Next.js MCP proxy: Forwarding request to backend');
-    
+    console.log('🔧 MCP execute: Calling backend directly');
+
     const body = await request.json();
     console.log('📨 MCP tool request:', body);
-    
-    // Forward through the local proxy to avoid exposing backend ports to the browser.
-    const targetUrl = new URL('/api/proxy/mcp/execute', request.url).toString();
-    
+
+    // Call backend directly instead of going through another API route
+    const targetUrl = `${BACKEND_BASE}/api/mcp/execute`;
+
     const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
@@ -18,9 +22,9 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify(body),
     });
-    
+
     console.log('🔗 MCP backend response status:', response.status);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ MCP backend error:', errorText);
@@ -29,11 +33,11 @@ export async function POST(request: NextRequest) {
         { status: response.status }
       );
     }
-    
+
     const data = await response.json();
     console.log('✅ MCP backend response received');
     return NextResponse.json(data);
-    
+
   } catch (error) {
     console.error('❌ MCP proxy error:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);

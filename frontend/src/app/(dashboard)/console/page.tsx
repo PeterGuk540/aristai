@@ -486,6 +486,7 @@ export default function ConsolePage() {
           label="Select Course"
           value={selectedCourseId?.toString() || ''}
           onChange={(e) => setSelectedCourseId(Number(e.target.value))}
+          data-voice-id="select-course"
         >
           <option value="">Select a course...</option>
           {courses.map((course) => (
@@ -500,6 +501,7 @@ export default function ConsolePage() {
           value={selectedSessionId?.toString() || ''}
           onChange={(e) => setSelectedSessionId(Number(e.target.value))}
           disabled={!selectedCourseId}
+          data-voice-id="select-session"
         >
           <option value="">Select a session...</option>
           {sessions.map((session) => (
@@ -573,7 +575,7 @@ export default function ConsolePage() {
 
                   <div className="space-y-2">
                     {!copilotActive ? (
-                      <Button onClick={handleStartCopilot} className="w-full">
+                      <Button onClick={handleStartCopilot} className="w-full" data-voice-id="start-copilot">
                         <Play className="h-4 w-4 mr-2" />
                         Start Copilot
                       </Button>
@@ -582,6 +584,7 @@ export default function ConsolePage() {
                         onClick={handleStopCopilot}
                         variant="secondary"
                         className="w-full"
+                        data-voice-id="stop-copilot"
                       >
                         <Square className="h-4 w-4 mr-2" />
                         Stop Copilot
@@ -592,6 +595,7 @@ export default function ConsolePage() {
                       onClick={fetchInterventions}
                       variant="outline"
                       className="w-full"
+                      data-voice-id="refresh-interventions"
                     >
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Refresh Interventions
@@ -682,6 +686,7 @@ export default function ConsolePage() {
                   onClick={handleCreatePoll}
                   disabled={creatingPoll || !pollQuestion.trim()}
                   className="w-full"
+                  data-voice-id="create-poll"
                 >
                   <BarChart3 className="h-4 w-4 mr-2" />
                   Create Poll
@@ -767,6 +772,7 @@ export default function ConsolePage() {
               <Button
                 onClick={handlePostCase}
                 disabled={postingCase || !casePrompt.trim()}
+                data-voice-id="post-case"
               >
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Post Case

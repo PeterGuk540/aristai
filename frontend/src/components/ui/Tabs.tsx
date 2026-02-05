@@ -68,9 +68,10 @@ export interface TabsTriggerProps {
   children: ReactNode;
   className?: string;
   disabled?: boolean;
+  'data-voice-id'?: string;
 }
 
-export function TabsTrigger({ value, children, className, disabled }: TabsTriggerProps) {
+export function TabsTrigger({ value, children, className, disabled, 'data-voice-id': voiceId }: TabsTriggerProps) {
   const context = useContext(TabsContext);
   if (!context) throw new Error('TabsTrigger must be used within Tabs');
 
@@ -81,6 +82,7 @@ export function TabsTrigger({ value, children, className, disabled }: TabsTrigge
     <button
       onClick={() => !disabled && setActiveTab(value)}
       disabled={disabled}
+      data-voice-id={voiceId || `tab-${value}`}
       className={cn(
         'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
         isActive

@@ -260,6 +260,7 @@ export default function SessionsPage() {
           label="Select Course"
           value={selectedCourseId?.toString() || ''}
           onChange={(e) => setSelectedCourseId(Number(e.target.value))}
+          data-voice-id="select-course"
         >
           <option value="">Select a course...</option>
           {courses.map((course) => (
@@ -393,6 +394,7 @@ export default function SessionsPage() {
                   <Button
                     onClick={handleCreateSession}
                     disabled={creating || !newSessionTitle.trim()}
+                    data-voice-id="create-session"
                   >
                     Create Session
                   </Button>
@@ -449,6 +451,7 @@ export default function SessionsPage() {
                           <Button
                             size="sm"
                             onClick={() => handleStatusChange(selectedSession.id, 'live')}
+                            data-voice-id="go-live"
                           >
                             <Play className="h-4 w-4 mr-2" />
                             Go Live
@@ -459,6 +462,7 @@ export default function SessionsPage() {
                             variant="secondary"
                             size="sm"
                             onClick={() => handleStatusChange(selectedSession.id, 'completed')}
+                            data-voice-id="complete-session"
                           >
                             <CheckCircle className="h-4 w-4 mr-2" />
                             Complete

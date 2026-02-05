@@ -482,6 +482,7 @@ export default function CoursesPage() {
                     onClick={() => handleCreateCourse(false)}
                     disabled={creating || !title.trim()}
                     variant="outline"
+                    data-voice-id="create-course"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Create Course
@@ -489,6 +490,7 @@ export default function CoursesPage() {
                   <Button
                     onClick={() => handleCreateCourse(true)}
                     disabled={creating || !title.trim()}
+                    data-voice-id="create-course-with-plans"
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
                     Create & Generate Plans
@@ -517,6 +519,7 @@ export default function CoursesPage() {
                     setSelectedStudentIds(new Set());
                     setStudentSearchQuery('');
                   }}
+                  data-voice-id="select-course"
                 >
                   <option value="">Select a course...</option>
                   {courses.map((course) => (

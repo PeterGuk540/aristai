@@ -19,6 +19,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useUser } from '@/lib/context';
 import { UserMenu } from './UserMenu';
 import { Onboarding, useOnboarding } from './Onboarding';
+import { ToastProvider } from './ui/Toast';
 import { cn } from '@/lib/utils';
 
 // Navigation items with optional instructor-only flag and enrollment requirement
@@ -103,6 +104,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
@@ -208,5 +210,6 @@ export function AppShell({ children }: AppShellProps) {
         />
       )}
     </div>
+    </ToastProvider>
   );
 }

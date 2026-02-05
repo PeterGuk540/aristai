@@ -5,3 +5,5 @@ export { Select } from './Select';
 export { Input } from './Input';
 export { Textarea } from './Textarea';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './Tabs';
+export { ToastProvider, useToast } from './Toast';
+export type { ToastType } from './Toast';

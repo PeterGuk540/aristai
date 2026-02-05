@@ -42,8 +42,35 @@ export const executeUiAction = (action: UiAction, router: ReturnType<typeof useR
         console.info('UI Toast:', payload.message);
       }
       break;
+    // New UI element interaction actions - handled by VoiceUIController
+    case 'ui.selectDropdown':
+      console.log('🎤 Dispatching selectDropdown:', payload);
+      window.dispatchEvent(new CustomEvent('ui.selectDropdown', { detail: payload }));
+      break;
+    case 'ui.clickButton':
+      console.log('🎤 Dispatching clickButton:', payload);
+      window.dispatchEvent(new CustomEvent('ui.clickButton', { detail: payload }));
+      break;
+    case 'ui.switchTab':
+      console.log('🎤 Dispatching switchTab:', payload);
+      window.dispatchEvent(new CustomEvent('ui.switchTab', { detail: payload }));
+      break;
+    case 'ui.fillInput':
+      console.log('🎤 Dispatching fillInput:', payload);
+      window.dispatchEvent(new CustomEvent('ui.fillInput', { detail: payload }));
+      break;
+    case 'ui.selectListItem':
+      console.log('🎤 Dispatching selectListItem:', payload);
+      window.dispatchEvent(new CustomEvent('ui.selectListItem', { detail: payload }));
+      break;
     default:
-      console.info('Unhandled UI action', action);
+      // For any unknown action types, try dispatching as a custom event
+      if (type.startsWith('ui.')) {
+        console.log('🎤 Dispatching custom UI action:', type, payload);
+        window.dispatchEvent(new CustomEvent(type, { detail: payload }));
+      } else {
+        console.info('Unhandled UI action', action);
+      }
   }
 };
 

@@ -23,9 +23,13 @@ from api.models.session import Session as SessionModel, SessionStatus
 from api.api.mcp_executor import invoke_tool_handler
 from api.services.speech_filter import sanitize_speech
 from api.services.tool_response import normalize_tool_result
+from api.services.context_store import ContextStore
 from mcp_server.server import TOOL_REGISTRY
 from workflows.voice_orchestrator import run_voice_orchestrator, generate_summary
 from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics, parse_json_response
+
+# Initialize context store for voice memory
+context_store = ContextStore()
 
 # Import your existing dependencies
 # from .auth import get_current_user
@@ -80,6 +84,28 @@ NAVIGATION_PATTERNS = {
 # Action intent patterns - expanded for better voice command coverage
 # Includes sub-page actions like create course, select session, etc.
 ACTION_PATTERNS = {
+    # === UI ELEMENT INTERACTIONS ===
+    # Dropdown selection - "select course Machine Learning", "choose the first session"
+    'ui_select_course': [
+        r'\b(select|choose|pick|switch\s+to)\s+(the\s+)?(course|class)\s+(.+)',
+        r'\b(select|choose|pick)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+(course|class)\b',
+        r'\buse\s+(the\s+)?(course|class)\s+(.+)',
+    ],
+    'ui_select_session': [
+        r'\b(select|choose|pick|switch\s+to)\s+(the\s+)?(session)\s+(.+)',
+        r'\b(select|choose|pick)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+session\b',
+        r'\buse\s+(the\s+)?session\s+(.+)',
+    ],
+    # Tab switching - "go to summary tab", "show participation", "open scoring"
+    'ui_switch_tab': [
+        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(summary|participation|scoring|enrollment|create|manage|sessions|courses|discussion|cases|copilot|polls|requests|roster|my.performance|best.practice)\s*(tab)?\b',
+        r'\b(summary|participation|scoring|enrollment|create|manage|sessions|courses|discussion|cases|copilot|polls)\s+tab\b',
+    ],
+    # Button clicks - "click generate report", "press start copilot"
+    'ui_click_button': [
+        r'\b(click|press|hit|tap)\s+(the\s+)?(generate\s+report|refresh|start\s+copilot|stop\s+copilot|create\s+poll|post\s+case|go\s+live|complete|enroll|upload|submit)\s*(button)?\b',
+        r'\b(generate|refresh|start|stop|create|post|submit|upload)\s+(the\s+)?(report|copilot|poll|case|roster)\b',
+    ],
     # === CONTEXT/STATUS ACTIONS ===
     'get_status': [
         r'\b(what|where)\s+(am\s+I|is\s+this|page)\b',
@@ -94,6 +120,27 @@ ACTION_PATTERNS = {
         r'\bwhat\s+can\s+you\s+do\b',
         r'\bwhat\s+are\s+(my|the)\s+options\b',
         r'\bshow\s+(me\s+)?(the\s+)?commands\b',
+    ],
+    # === UNDO/CONTEXT ACTIONS ===
+    'undo_action': [
+        r'\bundo\b',
+        r'\bundo\s+(that|this|the\s+last|last\s+action)\b',
+        r'\brevert\b',
+        r'\bgo\s+back\b',
+        r'\bcancel\s+(that|this|the\s+last)\b',
+        r'\bnever\s*mind\b',
+        r'\btake\s+(that|it)\s+back\b',
+    ],
+    'get_context': [
+        r'\bwhat\s+(course|session)\s+(am\s+I|is)\s+(on|in|using|selected)\b',
+        r'\bwhich\s+(course|session)\s+(is\s+)?(active|selected|current)\b',
+        r'\bmy\s+(current|active)\s+(course|session)\b',
+        r'\bwhat\'?s\s+my\s+context\b',
+    ],
+    'clear_context': [
+        r'\b(clear|reset)\s+(my\s+)?(context|selection|choices)\b',
+        r'\bstart\s+(fresh|over|again)\b',
+        r'\bforget\s+(everything|all|my\s+selections)\b',
     ],
     # === COURSE ACTIONS ===
     'list_courses': [
@@ -282,6 +329,78 @@ def detect_action_intent(text: str) -> Optional[str]:
     return None
 
 
+def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
+    """Extract the target value from a UI interaction command."""
+    text_lower = text.lower().strip()
+    result = {"action": action}
+
+    if action == 'ui_select_course':
+        # Extract course name or ordinal
+        # Try to find the course name after "course"
+        match = re.search(r'(course|class)\s+(.+?)(?:\s+please|\s+now|\s*$)', text_lower)
+        if match:
+            result["target"] = "select-course"
+            result["optionName"] = match.group(2).strip()
+        # Check for ordinal patterns
+        ordinal_match = re.search(r'(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+(course|class)', text_lower)
+        if ordinal_match:
+            result["target"] = "select-course"
+            result["optionName"] = ordinal_match.group(1)
+
+    elif action == 'ui_select_session':
+        # Extract session name or ordinal
+        match = re.search(r'session\s+(.+?)(?:\s+please|\s+now|\s*$)', text_lower)
+        if match:
+            result["target"] = "select-session"
+            result["optionName"] = match.group(1).strip()
+        # Check for ordinal patterns
+        ordinal_match = re.search(r'(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+session', text_lower)
+        if ordinal_match:
+            result["target"] = "select-session"
+            result["optionName"] = ordinal_match.group(1)
+
+    elif action == 'ui_switch_tab':
+        # Extract tab name
+        tab_keywords = [
+            'summary', 'participation', 'scoring', 'enrollment', 'create',
+            'manage', 'sessions', 'courses', 'discussion', 'cases',
+            'copilot', 'polls', 'requests', 'roster', 'my-performance', 'best-practice'
+        ]
+        for keyword in tab_keywords:
+            if keyword in text_lower or keyword.replace('-', ' ') in text_lower:
+                result["tabName"] = keyword.replace('-', '')
+                result["target"] = f"tab-{keyword}"
+                break
+
+    elif action == 'ui_click_button':
+        # Extract button target
+        button_mappings = {
+            'generate report': 'generate-report',
+            'regenerate report': 'regenerate-report',
+            'refresh': 'refresh',
+            'refresh report': 'refresh-report',
+            'start copilot': 'start-copilot',
+            'stop copilot': 'stop-copilot',
+            'create poll': 'create-poll',
+            'post case': 'post-case',
+            'go live': 'go-live',
+            'complete': 'complete-session',
+            'complete session': 'complete-session',
+            'enroll': 'enroll-students',
+            'upload roster': 'upload-roster',
+            'submit': 'submit-post',
+            'create course': 'create-course',
+            'create session': 'create-session',
+        }
+        for phrase, target in button_mappings.items():
+            if phrase in text_lower:
+                result["target"] = target
+                result["buttonLabel"] = phrase
+                break
+
+    return result
+
+
 def is_confirmation(text: str) -> bool:
     """Return True if transcript is a confirmation to proceed."""
     return bool(re.search(CONFIRMATION_PATTERNS, text.lower()))
@@ -406,6 +525,31 @@ def generate_conversational_response(
                 return results["message"]
             if results.get("error"):
                 return f"Sorry, there was an issue: {results['error']}"
+
+        # === UI INTERACTION RESPONSES ===
+        if intent_value == 'ui_select_course':
+            if isinstance(results, dict):
+                available = results.get("available_options", [])
+                if available and len(available) > 0:
+                    return f"Selecting the course. You have {len(available)} courses available."
+            return "Selecting the course for you."
+
+        if intent_value == 'ui_select_session':
+            return "Selecting the session for you."
+
+        if intent_value == 'ui_switch_tab':
+            if isinstance(results, dict):
+                tab_name = results.get("ui_actions", [{}])[0].get("payload", {}).get("tabName", "")
+                if tab_name:
+                    return f"Switching to the {tab_name} tab."
+            return "Switching tabs."
+
+        if intent_value == 'ui_click_button':
+            if isinstance(results, dict):
+                button_label = results.get("ui_actions", [{}])[0].get("payload", {}).get("buttonLabel", "")
+                if button_label:
+                    return f"Clicking {button_label}."
+            return "Clicking the button."
 
         # === COURSE RESPONSES ===
         if intent_value == 'list_courses':
@@ -544,6 +688,27 @@ def generate_conversational_response(
                 return results["message"]
             return "I can help with navigation, courses, sessions, polls, forum, and reports."
 
+        # === UNDO/CONTEXT RESPONSES ===
+        if intent_value == 'undo_action':
+            if isinstance(results, dict):
+                if results.get("error"):
+                    return results["error"]
+                if results.get("message"):
+                    return results["message"]
+            return "I've undone the last action."
+
+        if intent_value == 'get_context':
+            if isinstance(results, dict):
+                if results.get("message"):
+                    return results["message"]
+                course = results.get("course_name", "none")
+                session = results.get("session_name", "none")
+                return f"Your active course is {course} and session is {session}."
+            return "You don't have any active context."
+
+        if intent_value == 'clear_context':
+            return "Context cleared! Starting fresh."
+
     # Default fallback
     return "I can help you navigate pages, manage courses and sessions, create polls, generate reports, and more. What would you like to do?"
 
@@ -581,7 +746,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     # 2. Check for action intent via regex BEFORE expensive LLM call (fast - instant)
     action = detect_action_intent(transcript)
     if action:
-        result = await execute_action(action, request.user_id, request.current_page, db)
+        result = await execute_action(action, request.user_id, request.current_page, db, transcript)
         # Wrap result in a list if it's not already (ConverseResponse.results expects List)
         results_list = [result] if result and not isinstance(result, list) else result
         return ConverseResponse(
@@ -664,18 +829,55 @@ def _parse_ids_from_path(current_page: Optional[str]) -> Tuple[Optional[int], Op
     return course_id, session_id
 
 
-def _resolve_course_id(db: Session, current_page: Optional[str]) -> Optional[int]:
+def _resolve_course_id(db: Session, current_page: Optional[str], user_id: Optional[int] = None) -> Optional[int]:
+    """Resolve course ID from URL, context memory, or database.
+
+    Priority:
+    1. Course ID in URL path
+    2. Active course from user context memory
+    3. Most recently created course (fallback)
+    """
     course_id, _ = _parse_ids_from_path(current_page)
     if course_id:
+        # Update context with this course
+        if user_id:
+            context_store.update_context(user_id, active_course_id=course_id)
         return course_id
+
+    # Check context memory for active course
+    if user_id:
+        active_course_id = context_store.get_active_course_id(user_id)
+        if active_course_id:
+            return active_course_id
+
+    # Fallback to most recent course
     course = db.query(Course).order_by(Course.created_at.desc()).first()
     return course.id if course else None
 
 
-def _resolve_session_id(db: Session, current_page: Optional[str]) -> Optional[int]:
+def _resolve_session_id(db: Session, current_page: Optional[str], user_id: Optional[int] = None) -> Optional[int]:
+    """Resolve session ID from URL, context memory, or database.
+
+    Priority:
+    1. Session ID in URL path
+    2. Active session from user context memory
+    3. Any live session
+    4. Most recently created session (fallback)
+    """
     _, session_id = _parse_ids_from_path(current_page)
     if session_id:
+        # Update context with this session
+        if user_id:
+            context_store.update_context(user_id, active_session_id=session_id)
         return session_id
+
+    # Check context memory for active session
+    if user_id:
+        active_session_id = context_store.get_active_session_id(user_id)
+        if active_session_id:
+            return active_session_id
+
+    # Try to find a live session
     session = (
         db.query(SessionModel)
         .filter(SessionModel.status == SessionStatus.live)
@@ -684,6 +886,8 @@ def _resolve_session_id(db: Session, current_page: Optional[str]) -> Optional[in
     )
     if session:
         return session.id
+
+    # Fallback to most recent session
     session = db.query(SessionModel).order_by(SessionModel.created_at.desc()).first()
     return session.id if session else None
 
@@ -793,9 +997,150 @@ async def execute_action(
     user_id: Optional[int],
     current_page: Optional[str],
     db: Session,
+    transcript: Optional[str] = None,
 ) -> Optional[Any]:
     """Execute an MCP tool and return results, including UI actions for frontend."""
     try:
+        # === UI ELEMENT INTERACTIONS ===
+        if action.startswith('ui_'):
+            # Extract target details from transcript
+            target_info = extract_ui_target(transcript or "", action)
+
+            if action == 'ui_select_course':
+                # Get available courses for context
+                courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
+                option_name = target_info.get("optionName", "first")
+
+                return {
+                    "action": "ui_select",
+                    "message": f"Selecting course: {option_name}",
+                    "ui_actions": [
+                        {
+                            "type": "ui.selectDropdown",
+                            "payload": {
+                                "target": "select-course",
+                                "optionName": option_name,
+                            }
+                        }
+                    ],
+                    "available_options": [c.get("title") for c in courses] if courses else [],
+                }
+
+            elif action == 'ui_select_session':
+                option_name = target_info.get("optionName", "first")
+
+                return {
+                    "action": "ui_select",
+                    "message": f"Selecting session: {option_name}",
+                    "ui_actions": [
+                        {
+                            "type": "ui.selectDropdown",
+                            "payload": {
+                                "target": "select-session",
+                                "optionName": option_name,
+                            }
+                        }
+                    ],
+                }
+
+            elif action == 'ui_switch_tab':
+                tab_name = target_info.get("tabName", "")
+                tab_target = target_info.get("target", "")
+
+                return {
+                    "action": "ui_switch_tab",
+                    "message": f"Switching to {tab_name} tab",
+                    "ui_actions": [
+                        {
+                            "type": "ui.switchTab",
+                            "payload": {
+                                "target": tab_target,
+                                "tabName": tab_name,
+                            }
+                        }
+                    ],
+                }
+
+            elif action == 'ui_click_button':
+                button_target = target_info.get("target", "")
+                button_label = target_info.get("buttonLabel", "")
+
+                return {
+                    "action": "ui_click",
+                    "message": f"Clicking {button_label or button_target}",
+                    "ui_actions": [
+                        {
+                            "type": "ui.clickButton",
+                            "payload": {
+                                "target": button_target,
+                                "buttonLabel": button_label,
+                            }
+                        }
+                    ],
+                }
+
+        # === UNDO/CONTEXT ACTIONS ===
+        if action == 'undo_action':
+            if not user_id:
+                return {"error": "Cannot undo without user context."}
+
+            last_action = context_store.get_last_undoable_action(user_id)
+            if not last_action:
+                return {
+                    "message": "Nothing to undo. Your recent actions don't have undo data.",
+                    "ui_actions": [{"type": "ui.toast", "payload": {"message": "Nothing to undo", "type": "info"}}],
+                }
+
+            action_type = last_action.get("action_type", "unknown")
+            undo_data = last_action.get("undo_data", {})
+
+            # Mark as undone
+            context_store.mark_action_undone(user_id, last_action.get("timestamp", 0))
+
+            return {
+                "message": f"Undone: {action_type}. The action has been reversed.",
+                "undone_action": action_type,
+                "undo_data": undo_data,
+                "ui_actions": [
+                    {"type": "ui.toast", "payload": {"message": f"Undone: {action_type}", "type": "success"}},
+                ],
+            }
+
+        if action == 'get_context':
+            if not user_id:
+                return {"message": "No user context available."}
+
+            context = context_store.get_context(user_id)
+            summary = context_store.get_context_summary(user_id)
+
+            # Get names for the IDs
+            course_name = None
+            session_name = None
+
+            if context.get("active_course_id"):
+                course = _execute_tool(db, 'get_course', {"course_id": context["active_course_id"]})
+                course_name = course.get("title") if course else None
+
+            if context.get("active_session_id"):
+                session = _execute_tool(db, 'get_session', {"session_id": context["active_session_id"]})
+                session_name = session.get("title") if session else None
+
+            return {
+                "message": f"Your current context: {summary}",
+                "context": context,
+                "course_name": course_name,
+                "session_name": session_name,
+                "ui_actions": [{"type": "ui.toast", "payload": {"message": summary, "type": "info"}}],
+            }
+
+        if action == 'clear_context':
+            if user_id:
+                context_store.clear_context(user_id)
+            return {
+                "message": "Context cleared. Starting fresh!",
+                "ui_actions": [{"type": "ui.toast", "payload": {"message": "Context cleared", "type": "success"}}],
+            }
+
         # === CONTEXT/STATUS ACTIONS ===
         if action == 'get_status':
             return _get_page_context(db, current_page)
@@ -831,30 +1176,34 @@ async def execute_action(
             courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 10})
             if courses and len(courses) > 0:
                 first_course = courses[0]
+                # Update context memory with selected course
+                if user_id:
+                    context_store.update_context(user_id, active_course_id=first_course['id'])
                 return {
                     "action": "select_course",
                     "course": first_course,
                     "ui_actions": [
                         {"type": "ui.navigate", "payload": {"path": f"/courses/{first_course['id']}"}},
+                        {"type": "ui.toast", "payload": {"message": f"Selected: {first_course.get('title', 'course')}", "type": "success"}},
                     ],
                 }
             return {"error": "No courses found to select."}
 
         if action == 'view_course_details':
-            course_id = _resolve_course_id(db, current_page)
+            course_id = _resolve_course_id(db, current_page, user_id)
             if course_id:
                 return _execute_tool(db, 'get_course', {"course_id": course_id})
             return {"error": "No course selected. Please navigate to a course first."}
 
         # === SESSION ACTIONS ===
         if action == 'list_sessions':
-            course_id = _resolve_course_id(db, current_page)
+            course_id = _resolve_course_id(db, current_page, user_id)
             if not course_id:
                 return []
             return _execute_tool(db, 'list_sessions', {"course_id": course_id})
 
         if action == 'create_session':
-            course_id = _resolve_course_id(db, current_page)
+            course_id = _resolve_course_id(db, current_page, user_id)
             return {
                 "action": "create_session",
                 "course_id": course_id,
@@ -866,64 +1215,113 @@ async def execute_action(
             }
 
         if action == 'select_session':
-            course_id = _resolve_course_id(db, current_page)
+            course_id = _resolve_course_id(db, current_page, user_id)
             if course_id:
                 sessions = _execute_tool(db, 'list_sessions', {"course_id": course_id})
                 if sessions and len(sessions) > 0:
                     first_session = sessions[0]
+                    # Update context memory with selected session
+                    if user_id:
+                        context_store.update_context(user_id, active_session_id=first_session['id'])
                     return {
                         "action": "select_session",
                         "session": first_session,
                         "ui_actions": [
                             {"type": "ui.navigate", "payload": {"path": f"/sessions/{first_session['id']}"}},
+                            {"type": "ui.toast", "payload": {"message": f"Selected: {first_session.get('title', 'session')}", "type": "success"}},
                         ],
                     }
             return {"error": "No sessions found to select."}
 
         if action == 'go_live':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if session_id:
                 result = _execute_tool(db, 'update_session_status', {"session_id": session_id, "status": "live"})
                 if result:
+                    # Record action for undo
+                    if user_id:
+                        context_store.record_action(
+                            user_id,
+                            action_type="go_live",
+                            action_data={"session_id": session_id},
+                            undo_data={"session_id": session_id, "previous_status": "draft"},
+                        )
                     result["ui_actions"] = [
                         {"type": "ui.navigate", "payload": {"path": f"/console?session={session_id}"}},
+                        {"type": "ui.toast", "payload": {"message": "Session is now LIVE!", "type": "success"}},
                     ]
                 return result
             return {"error": "No session found to go live."}
 
         if action == 'end_session':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if session_id:
-                return _execute_tool(db, 'update_session_status', {"session_id": session_id, "status": "completed"})
+                result = _execute_tool(db, 'update_session_status', {"session_id": session_id, "status": "completed"})
+                if result and user_id:
+                    context_store.record_action(
+                        user_id,
+                        action_type="end_session",
+                        action_data={"session_id": session_id},
+                        undo_data={"session_id": session_id, "previous_status": "live"},
+                    )
+                    result["ui_actions"] = [
+                        {"type": "ui.toast", "payload": {"message": "Session ended", "type": "info"}},
+                    ]
+                return result
             return {"error": "No active session found to end."}
 
         # === COPILOT ACTIONS ===
         if action == 'get_interventions':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if not session_id:
                 return []
             return _execute_tool(db, 'get_copilot_suggestions', {"session_id": session_id})
 
         if action == 'start_copilot':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if not session_id:
                 return None
-            return _execute_tool(db, 'start_copilot', {"session_id": session_id})
+            result = _execute_tool(db, 'start_copilot', {"session_id": session_id})
+            if result and user_id:
+                context_store.record_action(
+                    user_id,
+                    action_type="start_copilot",
+                    action_data={"session_id": session_id},
+                    undo_data={"session_id": session_id},
+                )
+            if result:
+                result["ui_actions"] = [
+                    {"type": "ui.toast", "payload": {"message": "Copilot is now active!", "type": "success"}},
+                ]
+            return result
 
         if action == 'stop_copilot':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if not session_id:
                 return None
-            return _execute_tool(db, 'stop_copilot', {"session_id": session_id})
+            result = _execute_tool(db, 'stop_copilot', {"session_id": session_id})
+            if result and user_id:
+                context_store.record_action(
+                    user_id,
+                    action_type="stop_copilot",
+                    action_data={"session_id": session_id},
+                    undo_data={"session_id": session_id},
+                )
+            if result:
+                result["ui_actions"] = [
+                    {"type": "ui.toast", "payload": {"message": "Copilot stopped", "type": "info"}},
+                ]
+            return result
 
         # === POLL ACTIONS ===
         if action == 'create_poll':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             return {
                 "action": "create_poll",
                 "session_id": session_id,
                 "ui_actions": [
                     {"type": "ui.openModal", "payload": {"modal": "createPoll", "sessionId": session_id}},
+                    {"type": "ui.toast", "payload": {"message": "Opening poll creator...", "type": "info"}},
                 ],
                 "message": "Opening poll creation. What question would you like to ask?",
                 "needs_input": ["question", "options"],
@@ -931,25 +1329,33 @@ async def execute_action(
 
         # === REPORT ACTIONS ===
         if action == 'generate_report':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if not session_id:
                 return None
             result = _execute_tool(db, 'generate_report', {"session_id": session_id})
+            if result and user_id:
+                context_store.record_action(
+                    user_id,
+                    action_type="generate_report",
+                    action_data={"session_id": session_id},
+                    undo_data=None,  # Reports can't be undone
+                )
             if result:
                 result["ui_actions"] = [
                     {"type": "ui.navigate", "payload": {"path": "/reports"}},
+                    {"type": "ui.toast", "payload": {"message": "Generating report...", "type": "info"}},
                 ]
             return result
 
         # === ENROLLMENT ACTIONS ===
         if action == 'list_enrollments':
-            course_id = _resolve_course_id(db, current_page)
+            course_id = _resolve_course_id(db, current_page, user_id)
             if not course_id:
                 return []
             return _execute_tool(db, 'get_enrolled_students', {"course_id": course_id})
 
         if action == 'manage_enrollments':
-            course_id = _resolve_course_id(db, current_page)
+            course_id = _resolve_course_id(db, current_page, user_id)
             return {
                 "action": "manage_enrollments",
                 "course_id": course_id,
@@ -962,7 +1368,7 @@ async def execute_action(
 
         # === FORUM ACTIONS ===
         if action == 'post_case':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             return {
                 "action": "post_case",
                 "session_id": session_id,
@@ -974,7 +1380,7 @@ async def execute_action(
             }
 
         if action == 'view_posts':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if session_id:
                 posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
                 if posts:
@@ -987,7 +1393,7 @@ async def execute_action(
             }
 
         if action == 'get_pinned_posts':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if session_id:
                 pinned = _execute_tool(db, 'get_pinned_posts', {"session_id": session_id})
                 return {
@@ -998,7 +1404,7 @@ async def execute_action(
             return {"pinned_posts": [], "count": 0}
 
         if action == 'summarize_discussion':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if session_id:
                 posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
                 if posts and len(posts) > 0:
@@ -1025,7 +1431,7 @@ async def execute_action(
             return {"error": "No active session. Select a live session first."}
 
         if action == 'get_student_questions':
-            session_id = _resolve_session_id(db, current_page)
+            session_id = _resolve_session_id(db, current_page, user_id)
             if session_id:
                 posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
                 if posts:
@@ -1097,6 +1503,15 @@ def get_page_suggestions(path: str) -> List[str]:
 def get_action_suggestions(action: str) -> List[str]:
     """Get follow-up suggestions after an action"""
     suggestions = {
+        # UI interaction suggestions
+        'ui_select_course': ["Select a session", "Go to enrollment tab", "Generate report"],
+        'ui_select_session': ["Go live", "Start copilot", "View forum"],
+        'ui_switch_tab': ["What's on this page?", "Go back", "Help me"],
+        'ui_click_button': ["What happened?", "What's next?", "Go to another page"],
+        # Undo/context suggestions
+        'undo_action': ["What's my context?", "Show my courses", "Continue where I was"],
+        'get_context': ["Clear context", "Change course", "Change session"],
+        'clear_context': ["Show my courses", "Go to sessions", "Help me"],
         # Context/status suggestions
         'get_status': ["Show my courses", "Go to forum", "Start copilot"],
         'get_help': ["Show my courses", "Go to forum", "Create poll"],

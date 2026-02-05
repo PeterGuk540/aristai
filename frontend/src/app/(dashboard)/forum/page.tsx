@@ -429,7 +429,7 @@ export default function ForumPage() {
           <h1 className="text-2xl font-bold text-gray-900">Discussion Forum</h1>
           <p className="text-gray-600">Participate in live session discussions</p>
         </div>
-        <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId}>
+        <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId} data-voice-id="refresh">
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -441,6 +441,7 @@ export default function ForumPage() {
           label="Select Course"
           value={selectedCourseId?.toString() || ''}
           onChange={(e) => setSelectedCourseId(Number(e.target.value))}
+          data-voice-id="select-course"
         >
           <option value="">Select a course...</option>
           {courses.map((course) => (
@@ -455,6 +456,7 @@ export default function ForumPage() {
           value={selectedSessionId?.toString() || ''}
           onChange={(e) => setSelectedSessionId(Number(e.target.value))}
           disabled={!selectedCourseId}
+          data-voice-id="select-session"
         >
           <option value="">Select a session...</option>
           {sessions.map((session) => (
@@ -533,6 +535,7 @@ export default function ForumPage() {
                       <Button
                         onClick={handleCreatePost}
                         disabled={submitting || !newPostContent.trim()}
+                        data-voice-id="submit-post"
                       >
                         <Send className="h-4 w-4 mr-2" />
                         Post

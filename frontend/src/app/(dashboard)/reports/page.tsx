@@ -806,6 +806,7 @@ export default function ReportsPage() {
           label="Select Course"
           value={selectedCourseId?.toString() || ''}
           onChange={(e) => setSelectedCourseId(Number(e.target.value))}
+          data-voice-id="select-course"
         >
           <option value="">Select a course...</option>
           {courses.map((course) => (
@@ -820,6 +821,7 @@ export default function ReportsPage() {
           value={selectedSessionId?.toString() || ''}
           onChange={(e) => setSelectedSessionId(Number(e.target.value))}
           disabled={!selectedCourseId}
+          data-voice-id="select-session"
         >
           <option value="">Select a session...</option>
           {sessions.map((session) => (
@@ -845,7 +847,7 @@ export default function ReportsPage() {
             <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
             <p className="text-gray-500 mb-4">No report found for this session.</p>
             {isInstructor && (
-              <Button onClick={handleGenerateReport} disabled={generating}>
+              <Button onClick={handleGenerateReport} disabled={generating} data-voice-id="generate-report">
                 <Sparkles className="h-4 w-4 mr-2" />
                 {generating ? 'Generating...' : 'Generate Report'}
               </Button>
@@ -867,12 +869,12 @@ export default function ReportsPage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={fetchReport} variant="outline" size="sm">
+                  <Button onClick={fetchReport} variant="outline" size="sm" data-voice-id="refresh-report">
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Refresh
                   </Button>
                   {isInstructor && (
-                    <Button onClick={handleGenerateReport} size="sm" disabled={generating}>
+                    <Button onClick={handleGenerateReport} size="sm" disabled={generating} data-voice-id="regenerate-report">
                       <Sparkles className="h-4 w-4 mr-2" />
                       Regenerate
                     </Button>

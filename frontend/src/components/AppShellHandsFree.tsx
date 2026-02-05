@@ -22,6 +22,8 @@ import { VoiceOnboarding } from './voice/VoiceOnboarding';
 import { ConversationalVoice } from './voice/ConversationalVoice';
 import { VoiceUiActionBridge } from './voice/VoiceUiActionBridge';
 import { UiActionHandler } from './voice/UiActionHandler';
+import { VoiceUIController } from './voice/VoiceUIController';
+import { ToastProvider } from './ui/Toast';
 import { cn } from '@/lib/utils';
 
 // Navigation items with optional instructor-only flag and enrollment requirement
@@ -143,6 +145,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
   }
 
   return (
+    <ToastProvider>
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
@@ -266,6 +269,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         <>
           <VoiceUiActionBridge userId={currentUser?.id} onStatusChange={setVoiceConnected} />
           <UiActionHandler />
+          <VoiceUIController />
           <ConversationalVoice
             onNavigate={handleVoiceNavigate}
             onActiveChange={setVoiceActive}
@@ -275,6 +279,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         </>
       )}
     </div>
+    </ToastProvider>
   );
 }
 

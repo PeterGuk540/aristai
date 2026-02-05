@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { Conversation } from '@elevenlabs/client';
 import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles } from 'lucide-react';
 import { useUser } from '@/lib/context';
-import { API_BASE, getAuthHeaders } from '@/lib/api';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { executeUiAction, UiAction } from '@/lib/ui-actions';
 
 export type ConversationState = 
   | 'initializing' 
@@ -42,25 +44,15 @@ interface ConversationalVoiceProps {
   className?: string;
 }
 
-const MCP_DELEGATION_POLICY = `You are the AristAI voice interface. ElevenLabs controls conversation flow; MCP is the sole source of platform truth.
+const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
 
-ElevenLabs handles conversation flow only:
-- Manage turn-taking, interruptions, endpointing, and streaming.
-- Give ultra-brief acknowledgements like "Got it." or "Okay." (no facts, no decisions).
-- Ask for missing parameters (e.g., "Which session?" "Which post?").
-- Repeat the user's intent for confirmation, especially for write actions.
+const MCP_DELEGATION_POLICY = `You are the AristAI voice renderer. You are NOT the product brain.
 
-You MUST delegate to MCP via delegate_to_mcp for:
-- Any platform data/state (courses, sessions, forum posts, polls, reports, copilot status).
-- Any UI/navigation or database side effects (navigate, post, reply, pin/unpin, label, vote, start/stop copilot, generate report).
-- Any questions about capabilities, pages, or what the platform can do.
-- Any request mentioning in-product pages/objects (courses, sessions, forum, reports, console, dashboard).
-
-Suggested: If the request is complex or ambiguous, reply with a short acknowledgment and immediately call delegate_to_mcp.
-
-Hard rule for write actions: require confirmation. First acknowledge ("Okay—confirming."), delegate to MCP for an action preview with requires_confirmation: true, then ask the user to confirm before executing.
-
-Never invent platform facts or outcomes. Never claim an action happened unless MCP confirms it.`;
+Rules:
+- For normal user speech, only give ultra-brief filler acknowledgements (e.g., "好的，我来处理。", "明白，稍等一下。").
+- Never explain platform concepts, make decisions, or provide factual answers.
+- When a user message begins with "${MCP_RESPONSE_PREFIX}", you must respond by repeating the text after the prefix verbatim (no additions).
+- Do not call tools or infer actions. MCP is the only brain.`;
 
 export function ConversationalVoice(props: ConversationalVoiceProps) {
   const {
@@ -70,6 +62,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     className,
   } = props;
   const { currentUser, isInstructor } = useUser();
+  const router = useRouter();
   
   // Core state
   const [state, setState] = useState<ConversationState>('initializing');
@@ -78,6 +71,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [mcpOnlyMode, setMcpOnlyMode] = useState(false);
+  const [textInput, setTextInput] = useState('');
   
   // Settings
   const [continuousMode, setContinuousMode] = useState(true);
@@ -87,6 +82,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const conversationContextRef = useRef<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitializingRef = useRef(false);
+  const isProcessingTranscriptRef = useRef(false);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -125,6 +121,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const initializeConversation = async () => {
     setState('connecting');
     setError('');
+    setMcpOnlyMode(false);
     
     try {
       // Get signed URL from our backend
@@ -175,7 +172,13 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             errorCode = `E_HTTP_${response.status}`;
         }
         
-        throw new Error(`${errorMessage} (${errorCode})`);
+        console.warn(`⚠️ Signed URL unavailable, falling back to MCP-only mode: ${errorMessage} (${errorCode})`);
+        setMcpOnlyMode(true);
+        setState('connected');
+        onActiveChange?.(true);
+        setError('Voice session unavailable. Running in MCP-only mode.');
+        isInitializingRef.current = false;
+        return;
       }
 
       const { signed_url } = await response.json();
@@ -193,51 +196,12 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             prompt: { prompt: MCP_DELEGATION_POLICY },
           },
         },
-        clientTools: {
-          delegate_to_mcp: async (params: Record<string, any>) => {
-            const transcript =
-              params?.transcript ||
-              params?.text ||
-              params?.message ||
-              params?.input ||
-              '';
-            const currentPage = typeof window !== 'undefined' ? window.location.pathname : undefined;
-            const context = conversationContextRef.current.slice(-10);
-
-            try {
-              const authHeaders = await getAuthHeaders();
-              const response = await fetch(`${API_BASE}/voice/agent/delegate`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...authHeaders,
-                },
-                body: JSON.stringify({
-                  transcript,
-                  current_page: currentPage,
-                  user_id: currentUser?.id,
-                  context,
-                }),
-              });
-
-              if (!response.ok) {
-                const errorPayload = await response.json().catch(() => ({}));
-                const errorMessage = errorPayload?.detail || response.statusText || 'Unable to delegate MCP tool.';
-                return `Error: ${errorMessage}`;
-              }
-
-              const payload = await response.json();
-              return payload?.message || payload?.voice_response || 'Completed.';
-            } catch (error) {
-              console.error('❌ MCP delegation failed:', error);
-              return 'Sorry, I had trouble reaching the MCP service.';
-            }
-          },
-        },
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');
+          setMcpOnlyMode(false);
           onActiveChange?.(true);
+          isInitializingRef.current = false;
           
           // Speak greeting
           if (greeting) {
@@ -310,10 +274,10 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
                 detail: `[${new Date().toISOString()}] Transcription: ${message}`
               }));
             }
+            handleTranscript(message);
           } else if (source === 'ai') {
-            // Add AI response message
-            addAssistantMessage(message);
-            console.log('🤖 AI response:', message);
+            // ElevenLabs agent responses are not used as final product output.
+            console.log('🤖 Ignoring ElevenLabs agent response:', message);
           }
         },
         
@@ -378,10 +342,82 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         errorCode = 'E_INIT_CUSTOM';
       }
       
-      setError(`${errorMessage} (${errorCode})`);
-      setState('error');
+      console.warn(`⚠️ Initialization failed, falling back to MCP-only mode: ${errorMessage} (${errorCode})`);
+      setMcpOnlyMode(true);
+      setError('Voice session unavailable. Running in MCP-only mode.');
+      setState('connected');
+      onActiveChange?.(true);
       isInitializingRef.current = false;
     }
+  };
+
+  const extractUiActions = (results: any[] | undefined, action?: { type?: string; target?: string }): UiAction[] => {
+    const uiActionsFromResults = (results ?? []).flatMap((result) => {
+      if (!result) return [];
+      const direct = result.ui_actions ?? result.result?.ui_actions;
+      if (Array.isArray(direct)) {
+        return direct;
+      }
+      return [];
+    });
+
+    const actionFromResponse: UiAction[] = [];
+    if (action?.type === 'navigate' && action?.target) {
+      actionFromResponse.push({ type: 'ui.navigate', payload: { path: action.target } });
+    }
+
+    return [...uiActionsFromResults, ...actionFromResponse];
+  };
+
+  const speakViaElevenLabs = (text: string) => {
+    if (!text || !conversationRef.current) {
+      return;
+    }
+    try {
+      conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
+    } catch (error) {
+      console.error('❌ Failed to send MCP message to ElevenLabs:', error);
+    }
+  };
+
+  const handleTranscript = async (transcript: string) => {
+    if (!transcript || isProcessingTranscriptRef.current) {
+      return;
+    }
+
+    isProcessingTranscriptRef.current = true;
+    try {
+      const currentPage = typeof window !== 'undefined' ? window.location.pathname : undefined;
+      const response = await api.voiceConverse({
+        transcript,
+        user_id: currentUser?.id,
+        current_page: currentPage,
+      });
+
+      const uiActions = extractUiActions(response.results, response.action);
+      uiActions.forEach((action) => executeUiAction(action, router));
+
+      if (response.message) {
+        addAssistantMessage(response.message);
+        speakViaElevenLabs(response.message);
+      }
+    } catch (error) {
+      console.error('❌ MCP voice converse failed:', error);
+      setError('Unable to reach MCP service. Please try again.');
+    } finally {
+      isProcessingTranscriptRef.current = false;
+    }
+  };
+
+  const handleMcpOnlySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = textInput.trim();
+    if (!trimmed) {
+      return;
+    }
+    setTextInput('');
+    addUserMessage(trimmed);
+    await handleTranscript(trimmed);
   };
 
   const addUserMessage = (content: string) => {
@@ -421,6 +457,12 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     } else if (conversationRef.current) {
       await conversationRef.current.endSession();
       setState('disconnected');
+      setMcpOnlyMode(false);
+      onActiveChange?.(false);
+    } else if (mcpOnlyMode) {
+      setState('disconnected');
+      setMcpOnlyMode(false);
+      onActiveChange?.(false);
     }
   };
 
@@ -546,6 +588,29 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
               )}
               <div ref={messagesEndRef} />
             </div>
+          )}
+
+          {/* MCP-only Input */}
+          {isExpanded && mcpOnlyMode && (
+            <form onSubmit={handleMcpOnlySubmit} className="px-3 pb-3">
+              <div className="flex items-center gap-2">
+                <input
+                  value={textInput}
+                  onChange={(event) => setTextInput(event.target.value)}
+                  placeholder="MCP-only mode: type your request..."
+                  className="flex-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-2 rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium"
+                >
+                  Send
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Voice session unavailable. MCP-only mode is active for UI actions and responses.
+              </p>
+            </form>
           )}
 
           {/* Error Display */}

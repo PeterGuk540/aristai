@@ -178,6 +178,13 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
         connectionType: "websocket",
+        // Audio stability settings
+        audioSettings: {
+          outputAudioFormat: 'pcm_16000',  // Consistent audio format
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');
@@ -196,6 +203,17 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           setState('disconnected');
           conversationRef.current = null;
           onActiveChange?.(false);
+
+          // Auto-reconnect after unexpected disconnection (not user-initiated)
+          if (data?.reason !== 'user_initiated' && autoStart) {
+            console.log('🔄 Attempting auto-reconnect in 2 seconds...');
+            setTimeout(() => {
+              if (!conversationRef.current && !isInitializingRef.current) {
+                console.log('🔄 Auto-reconnecting...');
+                startConversation();
+              }
+            }, 2000);
+          }
         },
         onStatusChange: ({ status }: { status: string }) => {
           console.log('📊 Status changed:', status);
@@ -286,8 +304,18 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           setState('error');
         },
         onAudio: (audio: any) => {
-          // Optional: Handle audio data if needed for debugging
-          console.log('🔊 Audio received:', audio);
+          // Monitor audio for stability
+          if (audio && audio.byteLength) {
+            // Check for audio data - helps detect if audio is flowing
+            const audioLevel = audio.byteLength > 0 ? 'active' : 'silent';
+            console.log('🔊 Audio:', audioLevel, 'bytes:', audio.byteLength);
+          }
+        },
+        onVolumeUpdate: (volume: number) => {
+          // Monitor volume levels for debugging audio issues
+          if (volume < 0.1) {
+            console.log('🔇 Volume very low:', volume);
+          }
         },
       });
     } catch (error: any) {

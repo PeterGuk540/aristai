@@ -235,39 +235,74 @@ export const VoiceUIController = () => {
   }, []);
 
   /**
-   * Handle dropdown selection
+   * UNIVERSAL dropdown selection - works for ANY dropdown on any page
+   * Finds by: data-voice-id, label text, name, or first visible dropdown
    */
   const handleSelectDropdown = useCallback((event: CustomEvent) => {
-    const { target, value, optionName } = event.detail || {};
-    console.log('🎤 VoiceUI: selectDropdown', { target, value, optionName });
+    const { target, value, optionName, optionIndex } = event.detail || {};
+    console.log('🎤 VoiceUI: selectDropdown', { target, value, optionName, optionIndex });
 
-    const element = findElement(target);
-    if (!element || element.tagName !== 'SELECT') {
-      console.warn('🎤 VoiceUI: Dropdown not found:', target);
-      // Try to find any select on the page with the label
-      const selects = Array.from(document.querySelectorAll('select'));
-      for (const select of selects) {
-        const label = select.closest('div')?.querySelector('label')?.textContent?.toLowerCase();
-        if (label && target && label.includes(target.toLowerCase())) {
-          handleSelectOnElement(select as HTMLSelectElement, value, optionName);
-          return;
+    let element: HTMLElement | null = null;
+
+    // Try to find by target first
+    if (target) {
+      element = findElement(target);
+
+      // Try to find by label if not found
+      if (!element || element.tagName !== 'SELECT') {
+        const targetLower = target.toLowerCase().replace(/-/g, ' ');
+        const selects = Array.from(document.querySelectorAll('select'));
+        for (const select of selects) {
+          const label = select.closest('div')?.querySelector('label')?.textContent?.toLowerCase() || '';
+          const ariaLabel = select.getAttribute('aria-label')?.toLowerCase() || '';
+          const name = select.getAttribute('name')?.toLowerCase() || '';
+          if (label.includes(targetLower) || ariaLabel.includes(targetLower) ||
+              name.includes(targetLower) || targetLower.includes(label.split(' ')[0])) {
+            element = select as HTMLElement;
+            break;
+          }
         }
       }
-      return;
     }
 
-    handleSelectOnElement(element as HTMLSelectElement, value, optionName);
+    // UNIVERSAL: If no target or not found, use the first visible select
+    if (!element || element.tagName !== 'SELECT') {
+      const selects = Array.from(document.querySelectorAll('select')).filter(sel => {
+        const rect = sel.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (selects.length > 0) {
+        element = selects[0] as HTMLElement;
+      }
+    }
+
+    if (element && element.tagName === 'SELECT') {
+      handleSelectOnElement(element as HTMLSelectElement, value, optionName, optionIndex);
+    } else {
+      console.warn('🎤 VoiceUI: No dropdown found');
+    }
   }, [findElement]);
 
-  const handleSelectOnElement = useCallback((select: HTMLSelectElement, value?: string, optionName?: string) => {
+  const handleSelectOnElement = useCallback((select: HTMLSelectElement, value?: string, optionName?: string, optionIndex?: number) => {
     const options = getDropdownOptions(select);
 
     // If a specific value is provided, use it directly
-    if (value !== undefined) {
+    if (value !== undefined && value !== null) {
       select.value = String(value);
       select.dispatchEvent(new Event('change', { bubbles: true }));
       console.log('🎤 VoiceUI: Selected by value:', value);
       return;
+    }
+
+    // If an option index is provided (0-based, or -1 for last)
+    if (optionIndex !== undefined && optionIndex !== null) {
+      const actualIndex = optionIndex === -1 ? options.length - 1 : optionIndex;
+      if (actualIndex >= 0 && actualIndex < options.length) {
+        select.value = options[actualIndex].value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        console.log('🎤 VoiceUI: Selected by index:', actualIndex, options[actualIndex].text);
+        return;
+      }
     }
 
     // If an option name is provided, find best match
@@ -333,58 +368,208 @@ export const VoiceUIController = () => {
   }, [findElement]);
 
   /**
-   * Handle input fill
+   * UNIVERSAL input fill - works for ANY input field on any page
+   * Finds inputs by: data-voice-id, label text, placeholder, aria-label, or active focus
    */
   const handleFillInput = useCallback((event: CustomEvent) => {
     const { target, value } = event.detail || {};
     console.log('🎤 VoiceUI: fillInput', { target, value });
 
-    const element = findElement(target);
+    let element: HTMLElement | null = null;
+
+    // Special case: "focused-input" means fill the currently focused element or first visible input
+    if (target === 'focused-input') {
+      const focused = document.activeElement;
+      if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA')) {
+        element = focused as HTMLElement;
+      }
+    }
+
+    // Try to find by voice-id first
+    if (!element && target && target !== 'focused-input') {
+      element = findElement(target);
+    }
+
+    // Try to find by label text (universal approach)
+    if (!element && target && target !== 'focused-input') {
+      const targetLower = target.toLowerCase().replace(/-/g, ' ');
+
+      // Search for input by associated label
+      const labels = Array.from(document.querySelectorAll('label'));
+      for (const label of labels) {
+        const labelText = label.textContent?.toLowerCase() || '';
+        // Match if label contains target or target contains any word from label
+        if (labelText.includes(targetLower) || targetLower.split(' ').some(word => labelText.includes(word))) {
+          const forId = label.getAttribute('for');
+          if (forId) {
+            element = document.getElementById(forId) as HTMLElement;
+          } else {
+            // Label might wrap the input
+            element = label.querySelector('input, textarea') as HTMLElement;
+          }
+          if (element) break;
+        }
+      }
+
+      // Search by placeholder or aria-label
+      if (!element) {
+        const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]), textarea'));
+        for (const input of inputs) {
+          const placeholder = input.getAttribute('placeholder')?.toLowerCase() || '';
+          const ariaLabel = input.getAttribute('aria-label')?.toLowerCase() || '';
+          const name = input.getAttribute('name')?.toLowerCase() || '';
+          const id = input.getAttribute('id')?.toLowerCase() || '';
+          if (placeholder.includes(targetLower) || ariaLabel.includes(targetLower) ||
+              name.includes(targetLower) || id.includes(targetLower) ||
+              targetLower.includes(placeholder) || targetLower.includes(name)) {
+            element = input as HTMLElement;
+            break;
+          }
+        }
+      }
+    }
+
+    // UNIVERSAL FALLBACK: Find the first visible, empty or focusable input
+    if (!element) {
+      const visibleInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea')).filter(el => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+      }) as HTMLInputElement[];
+
+      // Prefer empty inputs, then inputs in forms
+      const emptyInput = visibleInputs.find(inp => !inp.value);
+      element = emptyInput || visibleInputs[0] || null;
+    }
+
+    // Fill the input
     if (element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')) {
       const input = element as HTMLInputElement | HTMLTextAreaElement;
       input.value = value || '';
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
       input.focus();
-      console.log('🎤 VoiceUI: Filled input:', target);
+      console.log('🎤 VoiceUI: Filled input:', element.getAttribute('name') || element.getAttribute('id') || 'unknown', 'with:', value);
     } else {
-      console.warn('🎤 VoiceUI: Input not found:', target);
+      console.warn('🎤 VoiceUI: No input found to fill');
     }
   }, [findElement]);
 
   /**
-   * Handle tab switch
+   * UNIVERSAL dropdown expansion - works for ANY dropdown on any page
+   * Finds dropdowns by: data-voice-id, label, or just finds any visible dropdown
+   */
+  const handleExpandDropdown = useCallback((event: CustomEvent) => {
+    const { target, findAny } = event.detail || {};
+    console.log('🎤 VoiceUI: expandDropdown', { target, findAny });
+
+    let element: HTMLElement | null = null;
+
+    // Try to find by target first
+    if (target) {
+      element = findElement(target);
+
+      // Try to find by label if not found
+      if (!element || element.tagName !== 'SELECT') {
+        const targetLower = target.toLowerCase().replace(/-/g, ' ');
+        const selects = Array.from(document.querySelectorAll('select'));
+        for (const select of selects) {
+          // Check label
+          const label = select.closest('div')?.querySelector('label')?.textContent?.toLowerCase() || '';
+          const ariaLabel = select.getAttribute('aria-label')?.toLowerCase() || '';
+          const name = select.getAttribute('name')?.toLowerCase() || '';
+          if (label.includes(targetLower) || ariaLabel.includes(targetLower) ||
+              name.includes(targetLower) || targetLower.includes(label.split(' ')[0])) {
+            element = select as HTMLElement;
+            break;
+          }
+        }
+      }
+    }
+
+    // UNIVERSAL: If not found or findAny is true, get the first visible select on the page
+    if (!element || element.tagName !== 'SELECT') {
+      const selects = Array.from(document.querySelectorAll('select')).filter(sel => {
+        const rect = sel.getBoundingClientRect();
+        const style = window.getComputedStyle(sel);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden';
+      });
+      if (selects.length > 0) {
+        element = selects[0] as HTMLElement;
+      }
+    }
+
+    if (element && element.tagName === 'SELECT') {
+      const select = element as HTMLSelectElement;
+      // Focus and open the dropdown
+      select.focus();
+      select.click();
+      select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+      // List available options for voice feedback
+      const options = Array.from(select.options).filter(opt => opt.value);
+      console.log('🎤 VoiceUI: Expanded dropdown with options:', options.map((o, i) => `${i + 1}. ${o.text}`));
+
+      // Dispatch event with available options (for voice assistant to announce)
+      window.dispatchEvent(new CustomEvent('voice-dropdown-options', {
+        detail: { options: options.map(o => o.text) }
+      }));
+    } else {
+      console.warn('🎤 VoiceUI: No dropdown found on page');
+    }
+  }, [findElement]);
+
+  /**
+   * UNIVERSAL tab switch - works for ANY tab on any page
+   * Finds tabs by: data-voice-id, text content, role="tab", or button text
    */
   const handleSwitchTab = useCallback((event: CustomEvent) => {
     const { target, tabName } = event.detail || {};
     console.log('🎤 VoiceUI: switchTab', { target, tabName });
 
-    // First try the existing voice-select-tab event (already supported by pages)
-    if (tabName) {
-      window.dispatchEvent(new CustomEvent('voice-select-tab', {
-        detail: { tab: tabName.toLowerCase().replace(/\s+/g, '') }
-      }));
-    }
+    const searchName = tabName || target || '';
+    const searchNameLower = searchName.toLowerCase().replace(/-/g, ' ').replace(/tab|panel|section/g, '').trim();
 
-    // Also try to find and click the tab directly
+    // First try the voice-select-tab custom event (supported by many pages)
+    window.dispatchEvent(new CustomEvent('voice-select-tab', {
+      detail: { tab: searchNameLower.replace(/\s+/g, '') }
+    }));
+
+    // Try to find by data-voice-id first
     let element = findElement(target);
 
-    if (!element && tabName) {
-      // Search for tab by text content
-      const tabButtons = Array.from(document.querySelectorAll('[role="tab"], [data-radix-collection-item], button'));
-      const tabNameLower = tabName.toLowerCase();
-      for (const tab of tabButtons) {
-        const tabText = tab.textContent?.toLowerCase() || '';
-        if (tabText.includes(tabNameLower) || tabNameLower.includes(tabText)) {
-          element = tab as HTMLElement;
-          break;
+    // UNIVERSAL: Search for tab by text content across multiple selector patterns
+    if (!element) {
+      const tabSelectors = [
+        '[role="tab"]',
+        '[data-voice-id^="tab-"]',
+        '[data-radix-collection-item]',
+        '.tab-button',
+        'button[class*="tab"]',
+        'button',  // fallback to any button
+      ];
+
+      for (const selector of tabSelectors) {
+        const tabs = Array.from(document.querySelectorAll(selector));
+        for (const tab of tabs) {
+          const tabText = tab.textContent?.toLowerCase().trim() || '';
+          const voiceId = tab.getAttribute('data-voice-id')?.toLowerCase() || '';
+          // Match if tab text contains search term or vice versa
+          if (tabText.includes(searchNameLower) || searchNameLower.includes(tabText) ||
+              voiceId.includes(searchNameLower) || tabText === searchNameLower) {
+            element = tab as HTMLElement;
+            break;
+          }
         }
+        if (element) break;
       }
     }
 
     if (element) {
       element.click();
-      console.log('🎤 VoiceUI: Switched tab:', target || tabName);
+      console.log('🎤 VoiceUI: Switched to tab:', searchName);
+    } else {
+      console.warn('🎤 VoiceUI: Tab not found:', searchName);
     }
   }, [findElement]);
 
@@ -471,6 +656,7 @@ export const VoiceUIController = () => {
   useEffect(() => {
     const handlers = {
       'ui.selectDropdown': handleSelectDropdown,
+      'ui.expandDropdown': handleExpandDropdown,
       'ui.clickButton': handleClickButton,
       'ui.fillInput': handleFillInput,
       'ui.switchTab': handleSwitchTab,
@@ -494,6 +680,7 @@ export const VoiceUIController = () => {
   }, [
     pathname,
     handleSelectDropdown,
+    handleExpandDropdown,
     handleClickButton,
     handleFillInput,
     handleSwitchTab,

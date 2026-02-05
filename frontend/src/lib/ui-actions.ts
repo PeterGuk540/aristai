@@ -47,6 +47,10 @@ export const executeUiAction = (action: UiAction, router: ReturnType<typeof useR
       console.log('🎤 Dispatching selectDropdown:', payload);
       window.dispatchEvent(new CustomEvent('ui.selectDropdown', { detail: payload }));
       break;
+    case 'ui.expandDropdown':
+      console.log('🎤 Dispatching expandDropdown:', payload);
+      window.dispatchEvent(new CustomEvent('ui.expandDropdown', { detail: payload }));
+      break;
     case 'ui.clickButton':
       console.log('🎤 Dispatching clickButton:', payload);
       window.dispatchEvent(new CustomEvent('ui.clickButton', { detail: payload }));

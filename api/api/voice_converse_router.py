@@ -82,29 +82,46 @@ NAVIGATION_PATTERNS = {
 }
 
 # Action intent patterns - expanded for better voice command coverage
-# Includes sub-page actions like create course, select session, etc.
+# UNIVERSAL APPROACH: These patterns work across ALL pages and ALL elements
 ACTION_PATTERNS = {
-    # === UI ELEMENT INTERACTIONS ===
-    # Dropdown selection - "select course Machine Learning", "choose the first session"
-    'ui_select_course': [
-        r'\b(select|choose|pick|switch\s+to)\s+(the\s+)?(course|class)\s+(.+)',
-        r'\b(select|choose|pick)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+(course|class)\b',
-        r'\buse\s+(the\s+)?(course|class)\s+(.+)',
+    # === UNIVERSAL UI ELEMENT INTERACTIONS ===
+    # Universal dropdown selection - works for ANY dropdown
+    'ui_select_dropdown': [
+        r'\b(select|choose|pick|switch\s+to)\s+(the\s+)?(\w+)\s+(.+)',
+        r'\b(select|choose|pick)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+(\w+)\b',
+        r'\buse\s+(the\s+)?(\w+)\s+(.+)',
     ],
-    'ui_select_session': [
-        r'\b(select|choose|pick|switch\s+to)\s+(the\s+)?(session)\s+(.+)',
-        r'\b(select|choose|pick)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+session\b',
-        r'\buse\s+(the\s+)?session\s+(.+)',
-    ],
-    # Tab switching - "go to summary tab", "show participation", "open scoring"
+    # Universal tab switching - works for ANY tab name
     'ui_switch_tab': [
-        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(summary|participation|scoring|enrollment|create|manage|sessions|courses|discussion|cases|copilot|polls|requests|roster|my.performance|best.practice)\s*(tab)?\b',
-        r'\b(summary|participation|scoring|enrollment|create|manage|sessions|courses|discussion|cases|copilot|polls)\s+tab\b',
+        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(\w+)\s*(tab|panel|section)?\b',
+        r'\b(\w+)\s+(tab|panel|section)\b',
     ],
-    # Button clicks - "click generate report", "press start copilot"
+    # Universal button clicks - works for ANY button
     'ui_click_button': [
-        r'\b(click|press|hit|tap)\s+(the\s+)?(generate\s+report|refresh|start\s+copilot|stop\s+copilot|create\s+poll|post\s+case|go\s+live|complete|enroll|upload|submit)\s*(button)?\b',
-        r'\b(generate|refresh|start|stop|create|post|submit|upload)\s+(the\s+)?(report|copilot|poll|case|roster)\b',
+        r'\b(click|press|hit|tap)\s+(the\s+)?(.+?)\s*(button)?\b',
+        r'\b(generate|refresh|start|stop|create|post|submit|upload|save|cancel|confirm|delete|remove|add)\b',
+    ],
+    # Universal dropdown expansion - "expand dropdown", "show options", "open the list"
+    'ui_expand_dropdown': [
+        r'\b(expand|open|show)\s+(the\s+)?(\w+\s+)?(dropdown|menu|list|options|select)\b',
+        r'\b(show|see|view|what\s+are)\s+(the\s+)?(available\s+)?(\w+\s+)?(options|choices|items)\b',
+        r'\blet\s+me\s+(see|choose|pick)\b',
+    ],
+    # === UNIVERSAL FORM DICTATION ===
+    # Detects when user is providing content for ANY input field
+    'ui_dictate_input': [
+        # "the title is Introduction to AI"
+        r'\b(the\s+)?(\w+)\s+(is|should\s+be|will\s+be)\s+(.+)',
+        # "set title to Introduction to AI"
+        r'\b(set|make|change)\s+(the\s+)?(\w+)\s+(to|as)\s+(.+)',
+        # "title: Introduction to AI"
+        r'^(\w+):\s*(.+)$',
+        # "for title, use Introduction to AI"
+        r'\bfor\s+(the\s+)?(\w+),?\s+(use|put|enter|type|write)\s+(.+)',
+        # "type Introduction to AI"
+        r'\b(type|enter|write|put|input)\s+(.+)',
+        # "fill in Introduction to AI"
+        r'\b(fill\s+in|fill)\s+(.+)',
     ],
     # === CONTEXT/STATUS ACTIONS ===
     'get_status': [
@@ -737,9 +754,16 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     nav_path = detect_navigation_intent(transcript)
     if nav_path:
         message = sanitize_speech(generate_conversational_response('navigate', nav_path))
+        # Include ui_actions for navigation so frontend executes the navigation
         return ConverseResponse(
             message=message,
             action=ActionResponse(type='navigate', target=nav_path),
+            results=[{
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": nav_path}},
+                    {"type": "ui.toast", "payload": {"message": f"Navigating to {nav_path}", "type": "info"}},
+                ]
+            }],
             suggestions=get_page_suggestions(nav_path)
         )
 
@@ -892,6 +916,181 @@ def _resolve_session_id(db: Session, current_page: Optional[str], user_id: Optio
     return session.id if session else None
 
 
+def _extract_dictated_content(transcript: str, action: str) -> Optional[str]:
+    """Extract dictated content from transcript for form filling."""
+    text = transcript.strip()
+
+    # Remove common prefixes that indicate dictation
+    prefixes_to_remove = [
+        r'^(?:the\s+)?(?:course\s+)?(?:title\s+)?(?:is\s+)?(?:called\s+)?',
+        r'^(?:the\s+)?(?:session\s+)?(?:title\s+)?(?:is\s+)?(?:called\s+)?',
+        r'^(?:name|title|call)\s+(?:it|the\s+\w+)\s+',
+        r'^(?:it\'?s?\s+called\s+)',
+        r'^(?:the\s+)?(?:poll\s+)?question\s+(?:is|should\s+be)\s+',
+        r'^(?:ask|poll)\s+(?:them|students|the\s+class)\s+',
+        r'^(?:post\s+(?:this|the\s+following):\s*)',
+        r'^(?:the\s+)?(?:post|message|content)\s+(?:is|should\s+be)\s+',
+    ]
+
+    for prefix in prefixes_to_remove:
+        match = re.match(prefix, text, re.IGNORECASE)
+        if match:
+            text = text[match.end():].strip()
+            break
+
+    # Remove quotes if present
+    if text.startswith('"') and text.endswith('"'):
+        text = text[1:-1]
+    elif text.startswith("'") and text.endswith("'"):
+        text = text[1:-1]
+
+    # Return None if the result is too short or looks like a command
+    if len(text) < 2:
+        return None
+
+    # Check if this looks like an actual dictation (not a command)
+    command_indicators = ['go to', 'navigate', 'open', 'show', 'create', 'start', 'stop', 'help']
+    text_lower = text.lower()
+    for indicator in command_indicators:
+        if text_lower.startswith(indicator):
+            return None
+
+    return text
+
+
+def _extract_universal_dictation(transcript: str) -> Optional[Dict[str, str]]:
+    """
+    UNIVERSAL dictation extraction - works for ANY input field.
+    Extracts field name and value from natural speech patterns.
+    """
+    text = transcript.strip()
+    text_lower = text.lower()
+
+    # Pattern: "the [field] is [value]" or "[field] is [value]"
+    match = re.match(r'^(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:is|should\s+be|will\s+be)\s+(.+)$', text, re.IGNORECASE)
+    if match:
+        field = match.group(1).strip().lower().replace(' ', '-')
+        value = match.group(2).strip()
+        return {"field": field, "value": value}
+
+    # Pattern: "set [field] to [value]"
+    match = re.match(r'^(?:set|make|change)\s+(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:to|as)\s+(.+)$', text, re.IGNORECASE)
+    if match:
+        field = match.group(1).strip().lower().replace(' ', '-')
+        value = match.group(2).strip()
+        return {"field": field, "value": value}
+
+    # Pattern: "[field]: [value]"
+    match = re.match(r'^(\w+(?:\s+\w+)?):\s*(.+)$', text)
+    if match:
+        field = match.group(1).strip().lower().replace(' ', '-')
+        value = match.group(2).strip()
+        return {"field": field, "value": value}
+
+    # Pattern: "for [field], use [value]"
+    match = re.match(r'^for\s+(?:the\s+)?(\w+(?:\s+\w+)?),?\s+(?:use|put|enter|type|write)\s+(.+)$', text, re.IGNORECASE)
+    if match:
+        field = match.group(1).strip().lower().replace(' ', '-')
+        value = match.group(2).strip()
+        return {"field": field, "value": value}
+
+    # Pattern: "type/enter/write [value]" - fill focused/first input
+    match = re.match(r'^(?:type|enter|write|put|input|fill(?:\s+in)?)\s+(.+)$', text, re.IGNORECASE)
+    if match:
+        value = match.group(1).strip()
+        return {"field": "focused-input", "value": value}
+
+    # If nothing matched but it looks like content (not a command), treat as dictation for focused input
+    command_starters = ['go', 'navigate', 'open', 'show', 'create', 'start', 'stop', 'help', 'select', 'choose', 'click', 'switch']
+    first_word = text_lower.split()[0] if text_lower.split() else ""
+    if first_word not in command_starters and len(text) > 3:
+        return {"field": "focused-input", "value": text}
+
+    return None
+
+
+def _extract_dropdown_hint(transcript: str) -> str:
+    """Extract which dropdown the user is referring to, or return empty for any dropdown."""
+    text_lower = transcript.lower()
+
+    # Look for specific dropdown mentions
+    dropdown_keywords = {
+        'course': 'select-course',
+        'session': 'select-session',
+        'student': 'select-student',
+        'instructor': 'select-instructor',
+        'status': 'select-status',
+        'type': 'select-type',
+    }
+
+    for keyword, target in dropdown_keywords.items():
+        if keyword in text_lower:
+            return target
+
+    return ""  # Empty means find any dropdown on the page
+
+
+def _extract_tab_info(transcript: str) -> Dict[str, str]:
+    """Extract tab name from transcript for universal tab switching."""
+    text_lower = transcript.lower()
+
+    # Remove common prefixes
+    for prefix in ['go to', 'open', 'show', 'switch to', 'view', 'the']:
+        text_lower = re.sub(rf'^{prefix}\s+', '', text_lower)
+
+    # Remove tab/panel/section suffix
+    text_lower = re.sub(r'\s*(tab|panel|section)\s*$', '', text_lower)
+
+    # Clean up and extract the tab name
+    tab_name = text_lower.strip()
+
+    # Normalize common variations
+    tab_aliases = {
+        'ai copilot': 'copilot',
+        'ai assistant': 'copilot',
+        'poll': 'polls',
+        'case': 'cases',
+        'request': 'requests',
+        'post case': 'cases',
+        'student roster': 'roster',
+        'class roster': 'roster',
+        'enroll': 'enrollment',
+        'enrollments': 'enrollment',
+        'my performance': 'my-performance',
+        'best practice': 'best-practice',
+        'best practices': 'best-practice',
+    }
+
+    return {"tabName": tab_aliases.get(tab_name, tab_name)}
+
+
+def _extract_dropdown_selection(transcript: str) -> Dict[str, Any]:
+    """Extract dropdown selection info from transcript."""
+    text_lower = transcript.lower()
+
+    # Extract ordinal or name
+    ordinals = {
+        'first': 0, 'second': 1, 'third': 2, 'fourth': 3, 'fifth': 4,
+        'last': -1, '1st': 0, '2nd': 1, '3rd': 2, '4th': 3, '5th': 4,
+        'one': 0, 'two': 1, 'three': 2, 'four': 3, 'five': 4,
+    }
+
+    for ordinal, index in ordinals.items():
+        if ordinal in text_lower:
+            return {"optionIndex": index, "optionName": ordinal}
+
+    # Extract the selection name - remove command words
+    for prefix in ['select', 'choose', 'pick', 'use', 'switch to', 'the']:
+        text_lower = re.sub(rf'^{prefix}\s+', '', text_lower)
+
+    # Remove type words
+    for suffix in ['course', 'session', 'option', 'item']:
+        text_lower = re.sub(rf'\s+{suffix}\s*$', '', text_lower)
+
+    option_name = text_lower.strip()
+    return {"optionName": option_name} if option_name else {}
+
+
 def _execute_tool(db: Session, tool_name: str, args: Dict[str, Any]) -> Optional[Any]:
     tool_info = TOOL_REGISTRY.get(tool_name)
     if not tool_info:
@@ -1001,83 +1200,66 @@ async def execute_action(
 ) -> Optional[Any]:
     """Execute an MCP tool and return results, including UI actions for frontend."""
     try:
-        # === UI ELEMENT INTERACTIONS ===
-        if action.startswith('ui_'):
-            # Extract target details from transcript
-            target_info = extract_ui_target(transcript or "", action)
+        # === UNIVERSAL UI ELEMENT INTERACTIONS ===
+        # All UI actions now use universal handlers that work across all pages
 
-            if action == 'ui_select_course':
-                # Get available courses for context
-                courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
-                option_name = target_info.get("optionName", "first")
-
+        # === UNIVERSAL FORM DICTATION ===
+        # Works for ANY input field - title, syllabus, objectives, poll question, post content, etc.
+        if action == 'ui_dictate_input':
+            extracted = _extract_universal_dictation(transcript or "")
+            if extracted:
+                field_name = extracted.get("field", "input")
+                value = extracted.get("value", "")
                 return {
-                    "action": "ui_select",
-                    "message": f"Selecting course: {option_name}",
+                    "action": "fill_input",
+                    "message": f"Setting {field_name} to: {value[:50]}{'...' if len(value) > 50 else ''}",
                     "ui_actions": [
-                        {
-                            "type": "ui.selectDropdown",
-                            "payload": {
-                                "target": "select-course",
-                                "optionName": option_name,
-                            }
-                        }
-                    ],
-                    "available_options": [c.get("title") for c in courses] if courses else [],
-                }
-
-            elif action == 'ui_select_session':
-                option_name = target_info.get("optionName", "first")
-
-                return {
-                    "action": "ui_select",
-                    "message": f"Selecting session: {option_name}",
-                    "ui_actions": [
-                        {
-                            "type": "ui.selectDropdown",
-                            "payload": {
-                                "target": "select-session",
-                                "optionName": option_name,
-                            }
-                        }
+                        {"type": "ui.fillInput", "payload": {"target": field_name, "value": value}},
+                        {"type": "ui.toast", "payload": {"message": f"{field_name.title()} set", "type": "success"}},
                     ],
                 }
+            return {"message": "Please specify what you'd like to fill in."}
 
-            elif action == 'ui_switch_tab':
-                tab_name = target_info.get("tabName", "")
-                tab_target = target_info.get("target", "")
+        # === UNIVERSAL DROPDOWN EXPANSION ===
+        # Works for ANY dropdown on any page
+        if action == 'ui_expand_dropdown':
+            # Extract which dropdown from transcript, or default to finding any dropdown
+            dropdown_hint = _extract_dropdown_hint(transcript or "")
+            return {
+                "action": "expand_dropdown",
+                "message": "Opening the dropdown. Say the name or number of your selection.",
+                "ui_actions": [
+                    {"type": "ui.expandDropdown", "payload": {"target": dropdown_hint, "findAny": True}},
+                ],
+            }
 
-                return {
-                    "action": "ui_switch_tab",
-                    "message": f"Switching to {tab_name} tab",
-                    "ui_actions": [
-                        {
-                            "type": "ui.switchTab",
-                            "payload": {
-                                "target": tab_target,
-                                "tabName": tab_name,
-                            }
-                        }
-                    ],
-                }
+        # === UNIVERSAL TAB SWITCHING ===
+        # The ui_switch_tab action now works universally for any tab name
+        if action == 'ui_switch_tab':
+            tab_info = _extract_tab_info(transcript or "")
+            tab_name = tab_info.get("tabName", "")
+            return {
+                "action": "switch_tab",
+                "message": f"Switching to {tab_name} tab.",
+                "ui_actions": [
+                    {"type": "ui.switchTab", "payload": {"tabName": tab_name, "target": f"tab-{tab_name}"}},
+                    {"type": "ui.toast", "payload": {"message": f"Switched to {tab_name}", "type": "info"}},
+                ],
+            }
 
-            elif action == 'ui_click_button':
-                button_target = target_info.get("target", "")
-                button_label = target_info.get("buttonLabel", "")
+        # === UNIVERSAL DROPDOWN SELECTION ===
+        if action == 'ui_select_dropdown':
+            selection_info = _extract_dropdown_selection(transcript or "")
+            return {
+                "action": "select_dropdown",
+                "message": f"Selecting {selection_info.get('optionName', 'option')}",
+                "ui_actions": [
+                    {"type": "ui.selectDropdown", "payload": selection_info},
+                ],
+            }
 
-                return {
-                    "action": "ui_click",
-                    "message": f"Clicking {button_label or button_target}",
-                    "ui_actions": [
-                        {
-                            "type": "ui.clickButton",
-                            "payload": {
-                                "target": button_target,
-                                "buttonLabel": button_label,
-                            }
-                        }
-                    ],
-                }
+        # Note: Specific tab handlers (open_enrollment_tab, open_create_tab, open_manage_tab)
+        # are now handled by the universal ui_switch_tab action above
 
         # === UNDO/CONTEXT ACTIONS ===
         if action == 'undo_action':

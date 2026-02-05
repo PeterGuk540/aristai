@@ -14,20 +14,32 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
   const headers = new Headers(request.headers);
   headers.delete('host');
 
-  const response = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-    redirect: 'manual',
-  });
+  try {
+    const response = await fetch(targetUrl, {
+      method: request.method,
+      headers,
+      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+      redirect: 'manual',
+    });
 
-  const responseHeaders = new Headers(response.headers);
-  responseHeaders.set('x-proxy-target', targetUrl);
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.set('x-proxy-target', targetUrl);
 
-  return new NextResponse(response.body, {
-    status: response.status,
-    headers: responseHeaders,
-  });
+    return new NextResponse(response.body, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      {
+        detail: 'Proxy request failed',
+        error: message,
+        target: targetUrl,
+      },
+      { status: 502 }
+    );
+  }
 };
 
 export async function GET(request: NextRequest, context: { params: { path: string[] } }) {

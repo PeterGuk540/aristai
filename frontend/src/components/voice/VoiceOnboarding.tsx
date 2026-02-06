@@ -54,7 +54,8 @@ const voiceCommandCategories = [
     commands: [
       { phrase: '"Select first course"', description: 'Select the first item in a dropdown' },
       { phrase: '"Choose [course name]"', description: 'Select a specific course by name' },
-      { phrase: '"Skip"', description: 'Skip the current form field' },
+      { phrase: '"Yes" / "No"', description: 'Respond to yes/no questions (add options, confirm, etc.)' },
+      { phrase: '"That\'s enough"', description: 'Finish adding options (polls, etc.)' },
       { phrase: '"Cancel"', description: 'Cancel the current operation' },
       { phrase: '"Submit"', description: 'Submit the current form' },
     ],

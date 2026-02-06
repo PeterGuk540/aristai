@@ -237,19 +237,19 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             </button>
           </div>
 
-          {/* Client Logo (EPGUPP) - centered, larger */}
-          <div className="flex-1 flex justify-center">
+          {/* Client Logo (EPGUPP) - centered, fills header height */}
+          <div className="flex-1 flex justify-center items-center py-1">
             {/* Light mode logo (black on white) */}
             <img
               src="/EPGUPP_logo_light.png"
               alt="Postgrado Universidad Politécnica"
-              className="h-12 max-h-12 object-contain dark:hidden"
+              className="h-14 object-contain dark:hidden"
             />
             {/* Dark mode logo (white on dark) */}
             <img
               src="/EPGUPP_logo_white.png"
               alt="Postgrado Universidad Politécnica"
-              className="h-12 max-h-12 object-contain hidden dark:block"
+              className="h-14 object-contain hidden dark:block"
             />
           </div>
 

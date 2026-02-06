@@ -678,7 +678,7 @@ export default function ConsolePage() {
                     </div>
                   ))}
                   {pollOptions.length < 6 && (
-                    <Button variant="outline" size="sm" onClick={addPollOption}>
+                    <Button variant="outline" size="sm" onClick={addPollOption} data-voice-id="add-poll-option">
                       Add Option
                     </Button>
                   )}

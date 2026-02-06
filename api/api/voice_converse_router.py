@@ -234,9 +234,10 @@ ACTION_PATTERNS = {
         r'\b(.+?)\s+(tab|panel|section)\b',
         # Without suffix - for known tab names (must list explicitly to avoid false matches)
         # Note: "ai copilot" and "ai assistant" added for voice recognition of "AI Copilot" tab
-        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls|requests|roster)\b',
+        # Note: Both "poll" and "polls" supported for voice recognition
+        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls?|requests|roster)\b',
         # Simple "switch to X" for common tabs
-        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|ai\s+copilot|copilot|polls)$',
+        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|ai\s+copilot|copilot|polls?)$',
     ],
     # Universal button clicks - works for ANY button
     # Also handles form submission triggers like "submit", "create it", "post it"
@@ -458,7 +459,7 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'ai copilot', 'ai assistant',  # Multi-word copilot variations
             'summary', 'participation', 'scoring', 'enrollment', 'create',
             'manage', 'sessions', 'courses', 'discussion', 'cases',
-            'copilot', 'polls', 'requests', 'roster', 'my-performance', 'best-practice'
+            'copilot', 'polls', 'poll', 'requests', 'roster', 'my-performance', 'best-practice'
         ]
         for keyword in tab_keywords:
             keyword_normalized = keyword.replace('-', ' ')
@@ -468,6 +469,8 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
                     tab_value = 'cases'
                 elif keyword in ['ai copilot', 'ai assistant']:
                     tab_value = 'copilot'
+                elif keyword == 'poll':
+                    tab_value = 'polls'
                 else:
                     tab_value = keyword.replace('-', '')
                 result["tabName"] = tab_value
@@ -724,7 +727,7 @@ def generate_conversational_response(
 
         # === POLL RESPONSES ===
         if intent_value == 'create_poll':
-            return "Opening poll creation. What question would you like to ask your students?"
+            return "Great! What question would you like to ask in the poll?"
 
         # === REPORT RESPONSES ===
         if intent_value == 'generate_report':
@@ -1231,6 +1234,217 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 message=sanitize_speech("Should I post this? Say yes to post or no to cancel."),
                 action=ActionResponse(type='info'),
                 suggestions=["Yes, post it", "No, cancel"],
+            )
+
+    # --- Handle poll offer response state ---
+    if conv_context.state == ConversationState.AWAITING_POLL_OFFER_RESPONSE:
+        # Check if user accepted or declined
+        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please', 'go ahead', "i'd like to", "i would like", "let's do it", "create one"]
+        decline_words = ['no', 'nope', 'not now', 'hold on', 'wait', 'no thanks', 'later', 'nevermind', 'never mind']
+
+        transcript_lower = transcript.lower()
+        accepted = any(word in transcript_lower for word in accept_words)
+        declined = any(word in transcript_lower for word in decline_words)
+
+        if accepted and not declined:
+            result = conversation_manager.handle_poll_offer_response(request.user_id, True)
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='info'),
+                suggestions=["Cancel"],
+            )
+        elif declined:
+            result = conversation_manager.handle_poll_offer_response(request.user_id, False)
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='info'),
+                suggestions=["Switch to copilot", "Switch to roster", "Go to courses"],
+            )
+        else:
+            # Unclear response - ask again
+            return ConverseResponse(
+                message=sanitize_speech("Would you like to create a poll? Say yes or no."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, create a poll", "No thanks"],
+            )
+
+    # --- Handle poll question state ---
+    if conv_context.state == ConversationState.AWAITING_POLL_QUESTION:
+        transcript_lower = transcript.lower().strip()
+
+        # Check for navigation/escape intent first
+        nav_path = detect_navigation_intent(transcript)
+        if nav_path:
+            conversation_manager.reset_poll_offer(request.user_id)
+            message = sanitize_speech(f"Cancelling poll creation. {generate_conversational_response('navigate', nav_path)}")
+            return ConverseResponse(
+                message=message,
+                action=ActionResponse(type='navigate', target=nav_path),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": nav_path}},
+                    ]
+                }],
+                suggestions=get_page_suggestions(nav_path)
+            )
+
+        # Check for cancel keywords
+        cancel_words = ['cancel', 'stop', 'abort', 'quit', 'nevermind', 'never mind']
+        if any(word in transcript_lower for word in cancel_words):
+            conversation_manager.reset_poll_offer(request.user_id)
+            return ConverseResponse(
+                message=sanitize_speech("Poll creation cancelled. What else can I help you with?"),
+                action=ActionResponse(type='info'),
+                suggestions=["Switch to copilot", "Switch to roster"],
+            )
+
+        # This is the poll question
+        result = conversation_manager.set_poll_question(request.user_id, transcript)
+        ui_actions = []
+        for action_item in result.get("ui_actions", []):
+            ui_actions.append({
+                "type": f"ui.{action_item['action']}",
+                "payload": {"target": action_item["voiceId"], "value": action_item.get("value", "")}
+            })
+
+        return ConverseResponse(
+            message=sanitize_speech(result["message"]),
+            action=ActionResponse(type='execute', executed=True),
+            results=[{"ui_actions": ui_actions}],
+            suggestions=["Cancel"],
+        )
+
+    # --- Handle poll option state ---
+    if conv_context.state == ConversationState.AWAITING_POLL_OPTION:
+        transcript_lower = transcript.lower().strip()
+
+        # Check for navigation/escape intent first
+        nav_path = detect_navigation_intent(transcript)
+        if nav_path:
+            conversation_manager.reset_poll_offer(request.user_id)
+            message = sanitize_speech(f"Cancelling poll creation. {generate_conversational_response('navigate', nav_path)}")
+            return ConverseResponse(
+                message=message,
+                action=ActionResponse(type='navigate', target=nav_path),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": nav_path}},
+                    ]
+                }],
+                suggestions=get_page_suggestions(nav_path)
+            )
+
+        # Check for cancel keywords
+        cancel_words = ['cancel', 'stop', 'abort', 'quit', 'nevermind', 'never mind']
+        if any(word in transcript_lower for word in cancel_words):
+            conversation_manager.reset_poll_offer(request.user_id)
+            return ConverseResponse(
+                message=sanitize_speech("Poll creation cancelled. What else can I help you with?"),
+                action=ActionResponse(type='info'),
+                suggestions=["Switch to copilot", "Switch to roster"],
+            )
+
+        # This is a poll option
+        result = conversation_manager.add_poll_option(request.user_id, transcript)
+        ui_actions = []
+        for action_item in result.get("ui_actions", []):
+            ui_actions.append({
+                "type": f"ui.{action_item['action']}",
+                "payload": {"target": action_item["voiceId"], "value": action_item.get("value", "")}
+            })
+
+        suggestions = ["Cancel"]
+        if result.get("ask_for_more"):
+            suggestions = ["Yes, add more", "No, that's enough", "Cancel"]
+
+        return ConverseResponse(
+            message=sanitize_speech(result["message"]),
+            action=ActionResponse(type='execute', executed=True),
+            results=[{"ui_actions": ui_actions}],
+            suggestions=suggestions,
+        )
+
+    # --- Handle poll more options response state ---
+    if conv_context.state == ConversationState.AWAITING_POLL_MORE_OPTIONS:
+        transcript_lower = transcript.lower()
+
+        # Check for yes/no response
+        yes_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'another', 'more', 'add more', 'one more']
+        no_words = ['no', 'nope', 'enough', "that's it", 'that is it', "that's enough", 'that is enough', 'done', "i'm done", 'finished', 'no more']
+
+        wants_more = any(word in transcript_lower for word in yes_words)
+        is_done = any(word in transcript_lower for word in no_words)
+
+        if wants_more and not is_done:
+            result = conversation_manager.handle_more_options_response(request.user_id, True)
+            ui_actions = []
+            for action_item in result.get("ui_actions", []):
+                ui_actions.append({
+                    "type": f"ui.{action_item['action']}",
+                    "payload": {"target": action_item["voiceId"]}
+                })
+
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions}],
+                suggestions=["Cancel"],
+            )
+        elif is_done:
+            result = conversation_manager.handle_more_options_response(request.user_id, False)
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, create it", "No, cancel"],
+            )
+        else:
+            # Unclear response - ask again
+            return ConverseResponse(
+                message=sanitize_speech("Would you like to add another option? Say yes or no."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, add more", "No, that's enough"],
+            )
+
+    # --- Handle poll confirmation state ---
+    if conv_context.state == ConversationState.AWAITING_POLL_CONFIRM:
+        transcript_lower = transcript.lower()
+
+        # Check for confirmation or denial
+        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'create it', 'submit', 'go ahead', 'do it', 'post it']
+        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind']
+
+        confirmed = any(word in transcript_lower for word in confirm_words)
+        denied = any(word in transcript_lower for word in deny_words)
+
+        if confirmed and not denied:
+            result = conversation_manager.handle_poll_confirm(request.user_id, True)
+            ui_actions = []
+            for action_item in result.get("ui_actions", []):
+                ui_actions.append({
+                    "type": f"ui.{action_item['action']}",
+                    "payload": {"target": action_item["voiceId"]}
+                })
+            ui_actions.append({"type": "ui.toast", "payload": {"message": "Poll created!", "type": "success"}})
+
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions}],
+                suggestions=["Create another poll", "Switch to copilot", "View roster"],
+            )
+        elif denied:
+            conversation_manager.reset_poll_offer(request.user_id)
+            return ConverseResponse(
+                message=sanitize_speech("Okay, poll creation cancelled. What else can I help you with?"),
+                action=ActionResponse(type='info'),
+                suggestions=["Create a new poll", "Switch to copilot", "View roster"],
+            )
+        else:
+            # Unclear response - ask again
+            return ConverseResponse(
+                message=sanitize_speech("Should I create this poll? Say yes to create or no to cancel."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, create it", "No, cancel"],
             )
 
     # 1. Check for navigation intent first (fast regex - instant)
@@ -1839,6 +2053,23 @@ async def execute_action(
                             "post_offer": True,
                         }
 
+            # Special handling for console polls tab - offer to help create poll
+            if current_page and '/console' in current_page and tab_name == 'polls':
+                # Check if user hasn't already declined the offer
+                conv_context = conversation_manager.get_context(user_id)
+                if not conv_context.poll_offer_declined:
+                    # Offer to help create poll after switching to polls tab
+                    offer_prompt = conversation_manager.offer_poll_creation(user_id)
+                    if offer_prompt:
+                        return {
+                            "action": "switch_tab_with_poll_offer",
+                            "message": f"Switching to polls. {offer_prompt}",
+                            "ui_actions": [
+                                {"type": "ui.switchTab", "payload": {"tabName": tab_name, "target": f"tab-{tab_name}"}},
+                            ],
+                            "poll_offer": True,
+                        }
+
             return {
                 "action": "switch_tab",
                 "message": f"Switching to {tab_name} tab.",
@@ -2187,10 +2418,15 @@ async def execute_action(
         # === POLL ACTIONS ===
         if action == 'create_poll':
             session_id = _resolve_session_id(db, current_page, user_id)
-            # Start conversational form-filling flow for poll
-            first_question = conversation_manager.start_form_filling(
-                user_id, "create_poll", "/console"
-            )
+            # Start conversational poll creation flow
+            # First, offer to create a poll (or go directly to asking for question)
+            conv_context = conversation_manager.get_context(user_id)
+            conv_context.state = ConversationState.AWAITING_POLL_QUESTION
+            conv_context.poll_question = ""
+            conv_context.poll_options = []
+            conv_context.poll_current_option_index = 1
+            conversation_manager.save_context(user_id, conv_context)
+
             return {
                 "action": "create_poll",
                 "session_id": session_id,
@@ -2198,8 +2434,8 @@ async def execute_action(
                     {"type": "ui.switchTab", "payload": {"tabName": "polls", "target": "tab-polls"}},
                     {"type": "ui.toast", "payload": {"message": "Opening poll creator...", "type": "info"}},
                 ],
-                "message": first_question or "Opening poll creation. What question would you like to ask your students?",
-                "conversation_state": "form_filling",
+                "message": "Great! What question would you like to ask in the poll?",
+                "conversation_state": "poll_creation",
             }
 
         # === REPORT ACTIONS ===

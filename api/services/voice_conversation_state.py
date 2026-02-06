@@ -33,6 +33,12 @@ class ConversationState(str, Enum):
     AWAITING_POST_OFFER_RESPONSE = "awaiting_post_offer_response"  # Asked "Would you like to post?"
     AWAITING_POST_DICTATION = "awaiting_post_dictation"  # User is dictating post content
     AWAITING_POST_SUBMIT_CONFIRMATION = "awaiting_post_submit_confirmation"  # Asked "Should I post it?"
+    # Poll creation states
+    AWAITING_POLL_OFFER_RESPONSE = "awaiting_poll_offer_response"  # Asked "Would you like to create a poll?"
+    AWAITING_POLL_QUESTION = "awaiting_poll_question"  # Waiting for poll question
+    AWAITING_POLL_OPTION = "awaiting_poll_option"  # Waiting for a poll option
+    AWAITING_POLL_MORE_OPTIONS = "awaiting_poll_more_options"  # Asked "Do you need more options?"
+    AWAITING_POLL_CONFIRM = "awaiting_poll_confirm"  # Asked "Should I create the poll?"
 
 
 @dataclass
@@ -485,6 +491,12 @@ class ConversationContext:
     # Forum posting state
     post_dictation_content: str = ""  # Accumulated content during dictation
     post_offer_declined: bool = False  # Track if user declined the post offer
+
+    # Poll creation state
+    poll_question: str = ""  # The poll question
+    poll_options: List[str] = field(default_factory=list)  # Poll options
+    poll_current_option_index: int = 1  # Current option being filled (1-based)
+    poll_offer_declined: bool = False  # Track if user declined the poll offer
 
     # Timestamps
     last_interaction: float = 0.0
@@ -1110,6 +1122,11 @@ class VoiceConversationManager:
                 ConversationState.AWAITING_POST_OFFER_RESPONSE: "Waiting for post offer response",
                 ConversationState.AWAITING_POST_DICTATION: "Dictating forum post",
                 ConversationState.AWAITING_POST_SUBMIT_CONFIRMATION: "Confirming post submission",
+                ConversationState.AWAITING_POLL_OFFER_RESPONSE: "Waiting for poll offer response",
+                ConversationState.AWAITING_POLL_QUESTION: "Waiting for poll question",
+                ConversationState.AWAITING_POLL_OPTION: "Waiting for poll option",
+                ConversationState.AWAITING_POLL_MORE_OPTIONS: "Asked about more poll options",
+                ConversationState.AWAITING_POLL_CONFIRM: "Confirming poll creation",
             }
             parts.append(f"State: {state_descriptions.get(context.state, context.state.value)}")
 
@@ -1282,3 +1299,267 @@ class VoiceConversationManager:
         """Get the current accumulated post content."""
         context = self.get_context(user_id)
         return context.post_dictation_content
+
+    # === Poll Creation Flow ===
+
+    def offer_poll_creation(self, user_id: Optional[int]) -> Optional[str]:
+        """Offer to help user create a poll. Returns prompt or None if already declined."""
+        context = self.get_context(user_id)
+
+        # Don't offer if user already declined this session
+        if context.poll_offer_declined:
+            return None
+
+        context.state = ConversationState.AWAITING_POLL_OFFER_RESPONSE
+        self.save_context(user_id, context)
+
+        return "Would you like to create a poll?"
+
+    def handle_poll_offer_response(self, user_id: Optional[int], accepted: bool) -> Dict[str, Any]:
+        """Handle user's response to the poll offer.
+
+        Returns:
+            {
+                "accepted": bool,
+                "message": str,
+                "start_poll_creation": bool
+            }
+        """
+        context = self.get_context(user_id)
+
+        if accepted:
+            # User wants to create poll - ask for the question
+            context.state = ConversationState.AWAITING_POLL_QUESTION
+            context.poll_question = ""
+            context.poll_options = []
+            context.poll_current_option_index = 1
+            self.save_context(user_id, context)
+            return {
+                "accepted": True,
+                "message": "Great! What question would you like to ask in the poll?",
+                "start_poll_creation": True
+            }
+        else:
+            # User declined - mark as declined so we don't ask again
+            context.state = ConversationState.IDLE
+            context.poll_offer_declined = True
+            self.save_context(user_id, context)
+            return {
+                "accepted": False,
+                "message": "No problem. Let me know if you need anything else.",
+                "start_poll_creation": False
+            }
+
+    def set_poll_question(self, user_id: Optional[int], question: str) -> Dict[str, Any]:
+        """Set the poll question and ask for the first option.
+
+        Returns:
+            {
+                "question": str,
+                "message": str,
+                "ui_actions": List[Dict]  # Actions to perform on UI
+            }
+        """
+        context = self.get_context(user_id)
+
+        # Clean the question
+        clean_question = self._sanitize_transcription(question)
+        context.poll_question = clean_question
+        context.state = ConversationState.AWAITING_POLL_OPTION
+        context.poll_current_option_index = 1
+        self.save_context(user_id, context)
+
+        return {
+            "question": clean_question,
+            "message": "Got it. What is the first answer option?",
+            "ui_actions": [
+                {
+                    "action": "fillInput",
+                    "voiceId": "poll-question",
+                    "value": clean_question
+                }
+            ]
+        }
+
+    def add_poll_option(self, user_id: Optional[int], option: str) -> Dict[str, Any]:
+        """Add a poll option and ask for the next one or if done.
+
+        Returns:
+            {
+                "option": str,
+                "option_index": int,
+                "message": str,
+                "ui_actions": List[Dict],
+                "ask_for_more": bool  # True if we need to ask about more options
+            }
+        """
+        context = self.get_context(user_id)
+
+        # Clean the option
+        clean_option = self._sanitize_transcription(option)
+        context.poll_options.append(clean_option)
+
+        current_index = context.poll_current_option_index
+        voice_id = f"poll-option-{current_index}"
+
+        # Move to next option
+        context.poll_current_option_index += 1
+        next_index = context.poll_current_option_index
+
+        # We need at least 2 options before asking "do you want more?"
+        if len(context.poll_options) < 2:
+            self.save_context(user_id, context)
+            return {
+                "option": clean_option,
+                "option_index": current_index,
+                "message": f"Got it. What is option {next_index}?",
+                "ui_actions": [
+                    {
+                        "action": "fillInput",
+                        "voiceId": voice_id,
+                        "value": clean_option
+                    }
+                ],
+                "ask_for_more": False
+            }
+        else:
+            # We have 2+ options, ask if they want more
+            context.state = ConversationState.AWAITING_POLL_MORE_OPTIONS
+            self.save_context(user_id, context)
+            return {
+                "option": clean_option,
+                "option_index": current_index,
+                "message": f"Got it. Would you like to add another option?",
+                "ui_actions": [
+                    {
+                        "action": "fillInput",
+                        "voiceId": voice_id,
+                        "value": clean_option
+                    }
+                ],
+                "ask_for_more": True
+            }
+
+    def handle_more_options_response(self, user_id: Optional[int], wants_more: bool) -> Dict[str, Any]:
+        """Handle user's response to "do you want more options?"
+
+        Returns:
+            {
+                "wants_more": bool,
+                "message": str,
+                "ui_actions": List[Dict],  # Click "Add Option" if wants_more
+                "ready_to_confirm": bool
+            }
+        """
+        context = self.get_context(user_id)
+        next_index = context.poll_current_option_index
+
+        if wants_more:
+            # User wants more options - click "Add Option" and wait for input
+            context.state = ConversationState.AWAITING_POLL_OPTION
+            self.save_context(user_id, context)
+            return {
+                "wants_more": True,
+                "message": f"What is option {next_index}?",
+                "ui_actions": [
+                    {
+                        "action": "clickButton",
+                        "voiceId": "add-poll-option"  # The "Add Option" button
+                    }
+                ],
+                "ready_to_confirm": False
+            }
+        else:
+            # User is done - ask for confirmation
+            context.state = ConversationState.AWAITING_POLL_CONFIRM
+            self.save_context(user_id, context)
+
+            # Build a summary
+            num_options = len(context.poll_options)
+            return {
+                "wants_more": False,
+                "message": f"You have a poll with {num_options} options. Should I create it now?",
+                "ui_actions": [],
+                "ready_to_confirm": True
+            }
+
+    def handle_poll_confirm(self, user_id: Optional[int], confirmed: bool) -> Dict[str, Any]:
+        """Handle user's confirmation to create the poll.
+
+        Returns:
+            {
+                "confirmed": bool,
+                "message": str,
+                "ui_actions": List[Dict],
+                "poll_data": Dict  # The poll question and options
+            }
+        """
+        context = self.get_context(user_id)
+
+        poll_data = {
+            "question": context.poll_question,
+            "options": context.poll_options.copy()
+        }
+
+        if confirmed:
+            # Create the poll
+            message = "Creating your poll now!"
+            ui_actions = [
+                {
+                    "action": "clickButton",
+                    "voiceId": "create-poll"
+                }
+            ]
+        else:
+            message = "Okay, I've cancelled the poll creation."
+            ui_actions = []
+
+        # Reset poll state
+        context.state = ConversationState.IDLE
+        context.poll_question = ""
+        context.poll_options = []
+        context.poll_current_option_index = 1
+        self.save_context(user_id, context)
+
+        return {
+            "confirmed": confirmed,
+            "message": message,
+            "ui_actions": ui_actions,
+            "poll_data": poll_data
+        }
+
+    def reset_poll_offer(self, user_id: Optional[int]) -> None:
+        """Reset the poll offer declined flag (e.g., when leaving console page)."""
+        context = self.get_context(user_id)
+        context.poll_offer_declined = False
+        context.poll_question = ""
+        context.poll_options = []
+        context.poll_current_option_index = 1
+        if context.state in [
+            ConversationState.AWAITING_POLL_OFFER_RESPONSE,
+            ConversationState.AWAITING_POLL_QUESTION,
+            ConversationState.AWAITING_POLL_OPTION,
+            ConversationState.AWAITING_POLL_MORE_OPTIONS,
+            ConversationState.AWAITING_POLL_CONFIRM
+        ]:
+            context.state = ConversationState.IDLE
+        self.save_context(user_id, context)
+
+    def is_in_poll_creation(self, user_id: Optional[int]) -> bool:
+        """Check if user is currently creating a poll."""
+        context = self.get_context(user_id)
+        return context.state in [
+            ConversationState.AWAITING_POLL_QUESTION,
+            ConversationState.AWAITING_POLL_OPTION,
+            ConversationState.AWAITING_POLL_MORE_OPTIONS,
+            ConversationState.AWAITING_POLL_CONFIRM
+        ]
+
+    def get_poll_creation_data(self, user_id: Optional[int]) -> Dict[str, Any]:
+        """Get the current poll creation data."""
+        context = self.get_context(user_id)
+        return {
+            "question": context.poll_question,
+            "options": context.poll_options.copy(),
+            "current_option_index": context.poll_current_option_index
+        }

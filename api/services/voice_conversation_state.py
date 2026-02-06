@@ -541,6 +541,16 @@ class VoiceConversationManager:
         """Clear conversation context (e.g., on logout)."""
         self._client.delete(self._key(user_id))
 
+    def cancel_form(self, user_id: Optional[int]) -> None:
+        """Cancel form-filling state and reset to IDLE."""
+        context = self.get_context(user_id)
+        context.state = ConversationState.IDLE
+        context.form_context = None
+        context.pending_action = None
+        context.pending_action_data = None
+        context.retry_count = 0
+        self.save_context(user_id, context)
+
     # === Page Structure ===
 
     def get_page_structure(self, path: str) -> Optional[PageStructure]:

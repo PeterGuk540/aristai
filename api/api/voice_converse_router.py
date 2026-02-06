@@ -926,6 +926,57 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     if conv_context.state == ConversationState.AWAITING_FIELD_INPUT:
         current_field = conversation_manager.get_current_field(request.user_id)
         if current_field:
+            # FIRST: Check if user wants to navigate away or switch tabs (escape from form)
+            # Check for navigation intent
+            nav_path = detect_navigation_intent(transcript)
+            if nav_path:
+                # User wants to navigate - cancel form and navigate
+                conversation_manager.cancel_form(request.user_id)
+                message = sanitize_speech(f"Cancelling form. {generate_conversational_response('navigate', nav_path)}")
+                return ConverseResponse(
+                    message=message,
+                    action=ActionResponse(type='navigate', target=nav_path),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.navigate", "payload": {"path": nav_path}},
+                        ]
+                    }],
+                    suggestions=get_page_suggestions(nav_path)
+                )
+
+            # Check for tab switching intent (e.g., "go to manage status tab")
+            tab_patterns = [
+                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(manage\s*status|management)\s*(tab)?\b', 'manage'),
+                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(create|creation)\s*(tab)?\b', 'create'),
+                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(view|sessions?|list)\s*(tab)?\b', 'sessions'),
+                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(enrollment|enroll)\s*(tab)?\b', 'enrollment'),
+            ]
+            for pattern, tab_name in tab_patterns:
+                if re.search(pattern, transcript.lower()):
+                    # User wants to switch tabs - cancel form and switch
+                    conversation_manager.cancel_form(request.user_id)
+                    return ConverseResponse(
+                        message=sanitize_speech(f"Cancelling form. Switching to {tab_name} tab."),
+                        action=ActionResponse(type='execute', executed=True),
+                        results=[{
+                            "ui_actions": [
+                                {"type": "ui.switchTab", "payload": {"tabName": tab_name}},
+                                {"type": "ui.toast", "payload": {"message": f"Switched to {tab_name}", "type": "info"}},
+                            ]
+                        }],
+                        suggestions=["Go live", "View sessions", "Create session"],
+                    )
+
+            # Check for cancel/exit keywords
+            cancel_words = ['cancel', 'stop', 'exit', 'quit', 'abort', 'nevermind', 'never mind']
+            if any(word in transcript.lower() for word in cancel_words):
+                conversation_manager.cancel_form(request.user_id)
+                return ConverseResponse(
+                    message=sanitize_speech("Form cancelled. What would you like to do?"),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Create course", "Create session", "Go to forum"],
+                )
+
             # Check for skip/next keywords
             skip_words = ['skip', 'next', 'pass', 'later', 'none', 'nothing']
             if any(word in transcript.lower() for word in skip_words):

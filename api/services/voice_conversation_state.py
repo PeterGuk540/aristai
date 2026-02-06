@@ -10,6 +10,7 @@ This module enables the voice controller to:
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -809,20 +810,71 @@ class VoiceConversationManager:
 
         options = context.dropdown_options
         selected = None
+        selection_str = str(selection).lower().strip()
 
-        # Try to match by index
-        if isinstance(selection, int) or (isinstance(selection, str) and selection.isdigit()):
-            idx = int(selection) - 1
-            if 0 <= idx < len(options):
-                selected = options[idx]
+        # Remove common filler words from selection
+        filler_words = ['the', 'a', 'an', 'please', 'select', 'choose', 'pick', 'use', 'course', 'session', 'option', 'number', 'one', 'called']
+        selection_clean = selection_str
+        for word in filler_words:
+            selection_clean = re.sub(rf'\b{word}\b', '', selection_clean)
+        selection_clean = ' '.join(selection_clean.split())  # Clean up whitespace
 
-        # Try to match by label
-        if not selected and isinstance(selection, str):
-            selection_lower = selection.lower()
+        # Ordinal mapping
+        ordinals = {
+            'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5,
+            'last': len(options), '1st': 1, '2nd': 2, '3rd': 3, '4th': 4, '5th': 5,
+        }
+
+        # Try to match by ordinal (first, second, etc.)
+        for ordinal, idx in ordinals.items():
+            if ordinal in selection_str:
+                if 0 < idx <= len(options):
+                    selected = options[idx - 1]
+                    break
+
+        # Try to match by numeric index (1, 2, 3...)
+        if not selected:
+            numbers = re.findall(r'\b(\d+)\b', selection_str)
+            if numbers:
+                idx = int(numbers[0]) - 1
+                if 0 <= idx < len(options):
+                    selected = options[idx]
+
+        # Try to match by exact label
+        if not selected:
             for opt in options:
-                if selection_lower in opt.label.lower():
+                if selection_clean == opt.label.lower():
                     selected = opt
                     break
+
+        # Try to match by partial label (selection in label OR label in selection)
+        if not selected:
+            for opt in options:
+                opt_lower = opt.label.lower()
+                if selection_clean in opt_lower or opt_lower in selection_clean:
+                    selected = opt
+                    break
+
+        # Try to match by ID in value
+        if not selected:
+            for opt in options:
+                if selection_clean == opt.value or selection_clean in opt.value:
+                    selected = opt
+                    break
+
+        # Try to match by any significant word overlap
+        if not selected:
+            selection_words = set(selection_clean.split())
+            best_match = None
+            best_score = 0
+            for opt in options:
+                opt_words = set(opt.label.lower().split())
+                overlap = len(selection_words & opt_words)
+                if overlap > best_score:
+                    best_score = overlap
+                    best_match = opt
+            if best_score > 0:
+                selected = best_match
 
         if not selected:
             # Offer options again

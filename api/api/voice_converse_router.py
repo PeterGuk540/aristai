@@ -868,10 +868,10 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 action=ActionResponse(type='execute', executed=True),
                 results=[{
                     "ui_actions": [
-                        {"type": "ui.selectDropdownOption", "payload": {
+                        {"type": "ui.selectDropdown", "payload": {
                             "target": result["voice_id"],
                             "value": selected.value,
-                            "label": selected.label,
+                            "optionName": selected.label,
                         }},
                         {"type": "ui.toast", "payload": {"message": f"Selected: {selected.label}", "type": "success"}},
                     ]

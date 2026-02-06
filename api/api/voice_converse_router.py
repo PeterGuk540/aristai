@@ -1114,17 +1114,33 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
         # Check for "I'm done" / "finished" patterns
         done_patterns = [
-            r'\b(i\'?m\s+done|i\s+am\s+done)\b',
-            r'\b(that\'?s\s+it|that\s+is\s+it)\b',
-            r'\b(finished|i\'?m\s+finished|i\s+am\s+finished)\b',
-            r'\b(it\'?s\s+over|it\s+is\s+over)\b',
-            r'\b(end|done|complete|finish)\s*(it|now|dictation|post)?\s*$',
-            r'^done\.?$',
-            r'^finished\.?$',
+            (r'\b(i\'?m\s+done|i\s+am\s+done)\b', 'done'),
+            (r'\b(that\'?s\s+it|that\s+is\s+it)\b', 'that'),
+            (r'\b(finished|i\'?m\s+finished|i\s+am\s+finished)\b', 'finished'),
+            (r'\b(it\'?s\s+over|it\s+is\s+over)\b', 'over'),
+            (r'\b(end|done|complete|finish)\s*(it|now|dictation|post)?\s*$', 'end'),
+            (r'^done\.?$', 'done'),
+            (r'^finished\.?$', 'finished'),
         ]
-        is_done = any(re.search(pattern, transcript_lower) for pattern in done_patterns)
 
-        if is_done:
+        # Check if any done pattern matches
+        done_match = None
+        content_before_done = None
+        for pattern, _ in done_patterns:
+            match = re.search(pattern, transcript_lower)
+            if match:
+                done_match = match
+                # Extract content BEFORE the done keyword (user might say "This is my post. Finished.")
+                content_before_done = transcript[:match.start()].strip()
+                # Clean up trailing punctuation from the content
+                content_before_done = re.sub(r'[.,;:!?\s]+$', '', content_before_done)
+                break
+
+        if done_match:
+            # If there's content before the "done" keyword, save it first!
+            if content_before_done:
+                conversation_manager.append_post_content(request.user_id, content_before_done)
+
             result = conversation_manager.finish_post_dictation(request.user_id)
             if result["has_content"]:
                 # Fill the textarea with the accumulated content before asking for confirmation
@@ -1186,18 +1202,21 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 suggestions=["View posts", "Switch to case studies", "Select another session"],
             )
         elif denied:
-            result = conversation_manager.handle_post_submit_response(request.user_id, False)
-            # Clear the textarea
+            # Don't fully reset - ask if they want to try again
+            conversation_manager.handle_post_submit_response(request.user_id, False)
+            # Set state back to offer response so they can say yes/no to try again
+            offer_prompt = conversation_manager.offer_forum_post(request.user_id)
+            # Clear the textarea and ask if they want to try again
             return ConverseResponse(
-                message=sanitize_speech(result["message"]),
+                message=sanitize_speech("Okay, I've cleared the post. Would you like to try again?"),
                 action=ActionResponse(type='execute', executed=True),
                 results=[{
                     "ui_actions": [
                         {"type": "ui.clearInput", "payload": {"target": "textarea-post-content"}},
-                        {"type": "ui.toast", "payload": {"message": "Post cancelled", "type": "info"}},
+                        {"type": "ui.toast", "payload": {"message": "Post cleared", "type": "info"}},
                     ]
                 }],
-                suggestions=["Try again", "Switch to case studies", "Go to courses"],
+                suggestions=["Yes, let me try again", "No thanks"],
             )
         else:
             # Unclear response - ask again

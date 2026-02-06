@@ -170,7 +170,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
           <Link href="/courses" className="flex items-center gap-2">
-            <GraduationCap className="h-8 w-8 text-primary-600 dark:text-primary-400" />
+            <img
+              src="/AristAI_logo.png"
+              alt="AristAI"
+              className="h-8 w-8 object-contain"
+            />
             <span className="text-xl font-bold text-gray-900 dark:text-white">AristAI</span>
           </Link>
           <button
@@ -222,33 +226,35 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top navigation */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 sm:px-6">
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            <Menu className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-          </button>
+        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 sm:px-6">
+          {/* Mobile menu button - left side */}
+          <div className="flex-shrink-0">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Menu className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+            </button>
+          </div>
 
-          {/* Client Logo (EPGUPP) - switches based on dark/light mode */}
-          <div className="flex items-center">
+          {/* Client Logo (EPGUPP) - centered, larger */}
+          <div className="flex-1 flex justify-center">
             {/* Light mode logo (black on white) */}
             <img
               src="/EPGUPP_logo_light.png"
               alt="Postgrado Universidad Politécnica"
-              className="h-10 object-contain dark:hidden"
+              className="h-12 max-h-12 object-contain dark:hidden"
             />
             {/* Dark mode logo (white on dark) */}
             <img
               src="/EPGUPP_logo_white.png"
               alt="Postgrado Universidad Politécnica"
-              className="h-10 object-contain hidden dark:block"
+              className="h-12 max-h-12 object-contain hidden dark:block"
             />
           </div>
 
-          {/* Right side actions */}
-          <div className="flex items-center gap-2">
+          {/* Right side actions - flex-shrink-0 to keep right-aligned */}
+          <div className="flex-shrink-0 flex items-center gap-2">
             {/* Dark mode toggle */}
             <button
               onClick={toggleDarkMode}

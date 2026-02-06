@@ -1,6 +1,7 @@
 'use client';
 
-import { X, CheckCircle, Zap, Mic } from 'lucide-react';
+import { useState } from 'react';
+import { X, Mic, Volume2, Navigation, Settings, MessageSquare, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceOnboardingProps {
@@ -9,92 +10,165 @@ interface VoiceOnboardingProps {
   onComplete: () => void;
 }
 
+const voiceCommandCategories = [
+  {
+    id: 'navigation',
+    label: 'Navigation',
+    icon: Navigation,
+    commands: [
+      { phrase: '"Go to courses"', description: 'Navigate to the Courses page' },
+      { phrase: '"Go to sessions"', description: 'Navigate to the Sessions page' },
+      { phrase: '"Go to forum"', description: 'Navigate to the Forum page' },
+      { phrase: '"Go to console"', description: 'Navigate to the Console page' },
+      { phrase: '"Go to reports"', description: 'Navigate to the Reports page' },
+    ],
+  },
+  {
+    id: 'tabs',
+    label: 'Tab Switching',
+    icon: Settings,
+    commands: [
+      { phrase: '"Go to AI Copilot"', description: 'Switch to the AI Copilot tab' },
+      { phrase: '"Switch to polls"', description: 'Switch to the Polls tab' },
+      { phrase: '"Open discussion tab"', description: 'Switch to the Discussion tab' },
+      { phrase: '"Go to case studies"', description: 'Switch to the Case Studies tab' },
+      { phrase: '"View roster"', description: 'Switch to the Roster tab' },
+    ],
+  },
+  {
+    id: 'actions',
+    label: 'Actions',
+    icon: MessageSquare,
+    commands: [
+      { phrase: '"Create a course"', description: 'Start creating a new course' },
+      { phrase: '"Create a poll"', description: 'Start creating a new poll' },
+      { phrase: '"Start copilot"', description: 'Activate the AI Copilot' },
+      { phrase: '"Stop copilot"', description: 'Deactivate the AI Copilot' },
+      { phrase: '"Post to discussion"', description: 'Start dictating a forum post' },
+    ],
+  },
+  {
+    id: 'forms',
+    label: 'Form Filling',
+    icon: FileText,
+    commands: [
+      { phrase: '"Select first course"', description: 'Select the first item in a dropdown' },
+      { phrase: '"Choose [course name]"', description: 'Select a specific course by name' },
+      { phrase: '"Skip"', description: 'Skip the current form field' },
+      { phrase: '"Cancel"', description: 'Cancel the current operation' },
+      { phrase: '"Submit"', description: 'Submit the current form' },
+    ],
+  },
+];
+
 export function VoiceOnboarding({ role, userName, onComplete }: VoiceOnboardingProps) {
-  const isStudent = role === 'student';
+  const [activeCategory, setActiveCategory] = useState('navigation');
+  const activeCommands = voiceCommandCategories.find(c => c.id === activeCategory);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+              <Mic className="h-6 w-6 text-primary-600 dark:text-primary-400" />
+            </div>
+            <div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Welcome to AristAI!
+                Voice Controller Guide
               </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Control AristAI hands-free with voice commands
+              </p>
+            </div>
+          </div>
           <button
             onClick={onComplete}
-            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             <X className="h-5 w-5 text-gray-500" />
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div className="text-center py-4">
-            <div className="w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-              <img 
-                src="/AristAI_logo.png" 
-                alt="AristAI Logo" 
-                className="w-full h-full object-contain"
-                onError={(e) => {
-                  // Fallback to icon if image fails to load
-                  e.currentTarget.style.display = 'none';
-                  e.currentTarget.parentElement?.classList.add('bg-primary-100', 'dark:bg-primary-900/30', 'rounded-full');
-                  const icon = document.createElement('div');
-                  icon.innerHTML = '🎓';
-                  icon.className = 'text-4xl';
-                  e.currentTarget.parentElement?.appendChild(icon);
-                }}
-              />
+        {/* Voice Controller Info */}
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800">
+          <div className="flex items-start gap-3">
+            <Volume2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium text-blue-900 dark:text-blue-100">
+                The voice controller is located at the bottom-right corner
+              </p>
+              <p className="text-blue-700 dark:text-blue-300 mt-1">
+                Click the AristAI icon to expand it. The controller listens continuously and responds to your commands instantly.
+              </p>
             </div>
-          </div>
-          
-          <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-green-900 dark:text-green-100">
-                  AristAI Voice Assistant Enabled
-                </h3>
-                <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                  Your voice assistant is now ready! You can interact with it using natural voice commands.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <h4 className="font-medium text-gray-900 dark:text-white">What you can do:</h4>
-            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-              {isStudent ? (
-                <>
-                  <li>• Ask questions about your courses and materials</li>
-                  <li>• Get help with assignments and learning</li>
-                  <li>• Navigate to different sections</li>
-                  <li>• Access course schedules and sessions</li>
-                </>
-              ) : (
-                <>
-                  <li>• Navigate to any section using voice commands</li>
-                  <li>• Create courses, polls, and reports by voice</li>
-                  <li>• Enroll students and manage classes</li>
-                  <li>• Control the entire application hands-free</li>
-                </>
-              )}
-            </ul>
-          </div>
-
-          <div className="text-center py-2">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              💡 Tip: Click the Help icon in the top-right menu anytime to review these instructions
-            </p>
           </div>
         </div>
 
-        <div className="mt-6 flex justify-end">
+        {/* Category Tabs */}
+        <div className="flex border-b border-gray-200 dark:border-gray-700 px-4 overflow-x-auto">
+          {voiceCommandCategories.map((category) => {
+            const Icon = category.icon;
+            return (
+              <button
+                key={category.id}
+                onClick={() => setActiveCategory(category.id)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                  activeCategory === category.id
+                    ? 'border-primary-600 text-primary-600 dark:border-primary-400 dark:text-primary-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{category.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Commands List */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeCommands && (
+            <div className="space-y-3">
+              {activeCommands.commands.map((cmd, index) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                >
+                  <code className="flex-shrink-0 px-3 py-1 bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 rounded-md text-sm font-mono">
+                    {cmd.phrase}
+                  </code>
+                  <span className="text-sm text-gray-600 dark:text-gray-400 pt-1">
+                    {cmd.description}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Tips Section */}
+        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="font-medium text-gray-900 dark:text-white mb-2">Tips:</p>
+            <ul className="space-y-1">
+              <li>• Speak naturally - the assistant understands conversational language</li>
+              <li>• Wait for the assistant to finish speaking before giving the next command</li>
+              <li>• Say "cancel" or "stop" to abort any ongoing operation</li>
+              <li>• Access this guide anytime from the user menu → "View Voice Guide"</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
           <button
             onClick={onComplete}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+            className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
           >
-            Get Started
+            Got It!
           </button>
         </div>
       </div>

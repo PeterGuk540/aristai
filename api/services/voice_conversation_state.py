@@ -29,6 +29,10 @@ class ConversationState(str, Enum):
     AWAITING_CONFIRMATION = "awaiting_confirmation"  # Waiting for yes/no on destructive action
     PROCESSING = "processing"  # Backend is processing
     ERROR_RETRY = "error_retry"  # Retrying after error
+    # Forum posting states
+    AWAITING_POST_OFFER_RESPONSE = "awaiting_post_offer_response"  # Asked "Would you like to post?"
+    AWAITING_POST_DICTATION = "awaiting_post_dictation"  # User is dictating post content
+    AWAITING_POST_SUBMIT_CONFIRMATION = "awaiting_post_submit_confirmation"  # Asked "Should I post it?"
 
 
 @dataclass
@@ -477,6 +481,10 @@ class ConversationContext:
     active_course_name: Optional[str] = None
     active_session_id: Optional[int] = None
     active_session_name: Optional[str] = None
+
+    # Forum posting state
+    post_dictation_content: str = ""  # Accumulated content during dictation
+    post_offer_declined: bool = False  # Track if user declined the post offer
 
     # Timestamps
     last_interaction: float = 0.0
@@ -1099,7 +1107,178 @@ class VoiceConversationManager:
                 ConversationState.AWAITING_CONFIRMATION: "Waiting for confirmation",
                 ConversationState.PROCESSING: "Processing",
                 ConversationState.ERROR_RETRY: "Retrying after error",
+                ConversationState.AWAITING_POST_OFFER_RESPONSE: "Waiting for post offer response",
+                ConversationState.AWAITING_POST_DICTATION: "Dictating forum post",
+                ConversationState.AWAITING_POST_SUBMIT_CONFIRMATION: "Confirming post submission",
             }
             parts.append(f"State: {state_descriptions.get(context.state, context.state.value)}")
 
         return " | ".join(parts) if parts else "No active context"
+
+    # === Forum Posting Flow ===
+
+    def offer_forum_post(self, user_id: Optional[int]) -> Optional[str]:
+        """Offer to help user post to discussion. Returns prompt or None if already declined."""
+        context = self.get_context(user_id)
+
+        # Don't offer if user already declined this session
+        if context.post_offer_declined:
+            return None
+
+        context.state = ConversationState.AWAITING_POST_OFFER_RESPONSE
+        self.save_context(user_id, context)
+
+        return "Would you like to post something to the discussion?"
+
+    def handle_post_offer_response(self, user_id: Optional[int], accepted: bool) -> Dict[str, Any]:
+        """Handle user's response to the post offer.
+
+        Returns:
+            {
+                "accepted": bool,
+                "message": str,
+                "start_dictation": bool
+            }
+        """
+        context = self.get_context(user_id)
+
+        if accepted:
+            # User wants to post - start dictation mode
+            context.state = ConversationState.AWAITING_POST_DICTATION
+            context.post_dictation_content = ""
+            self.save_context(user_id, context)
+            return {
+                "accepted": True,
+                "message": "Go ahead, I'm listening. Tell me what you'd like to post. Say 'I'm done' or 'finished' when you're ready.",
+                "start_dictation": True
+            }
+        else:
+            # User declined - mark as declined so we don't ask again
+            context.state = ConversationState.IDLE
+            context.post_offer_declined = True
+            self.save_context(user_id, context)
+            return {
+                "accepted": False,
+                "message": "No problem. Let me know if you need anything else.",
+                "start_dictation": False
+            }
+
+    def append_post_content(self, user_id: Optional[int], content: str) -> Dict[str, Any]:
+        """Append dictated content to the post.
+
+        Returns:
+            {
+                "content": str,  # Full accumulated content
+                "message": str   # Acknowledgment
+            }
+        """
+        context = self.get_context(user_id)
+
+        # Clean trailing punctuation from transcription
+        clean_content = self._sanitize_transcription(content)
+
+        # Append with proper spacing
+        if context.post_dictation_content:
+            context.post_dictation_content += " " + clean_content
+        else:
+            context.post_dictation_content = clean_content
+
+        self.save_context(user_id, context)
+
+        return {
+            "content": context.post_dictation_content,
+            "message": "Got it. Continue, or say 'I'm done' when finished."
+        }
+
+    def finish_post_dictation(self, user_id: Optional[int]) -> Dict[str, Any]:
+        """User indicated they're done dictating. Ask for confirmation.
+
+        Returns:
+            {
+                "content": str,   # The full post content
+                "message": str,   # Confirmation prompt
+                "has_content": bool
+            }
+        """
+        context = self.get_context(user_id)
+        content = context.post_dictation_content.strip()
+
+        if not content:
+            # No content was dictated
+            context.state = ConversationState.IDLE
+            self.save_context(user_id, context)
+            return {
+                "content": "",
+                "message": "It seems like you didn't dictate anything. Would you like to try again?",
+                "has_content": False
+            }
+
+        # Move to confirmation state
+        context.state = ConversationState.AWAITING_POST_SUBMIT_CONFIRMATION
+        self.save_context(user_id, context)
+
+        # Truncate for speech if too long
+        preview = content[:100] + "..." if len(content) > 100 else content
+
+        return {
+            "content": content,
+            "message": f"Your post says: '{preview}'. Should I post it now?",
+            "has_content": True
+        }
+
+    def handle_post_submit_response(self, user_id: Optional[int], confirmed: bool) -> Dict[str, Any]:
+        """Handle user's response to post submission confirmation.
+
+        Returns:
+            {
+                "confirmed": bool,
+                "content": str,      # Post content (for submitting)
+                "message": str,
+                "clear_form": bool   # True if we should clear the textarea
+            }
+        """
+        context = self.get_context(user_id)
+        content = context.post_dictation_content
+
+        # Reset state
+        context.state = ConversationState.IDLE
+        context.post_dictation_content = ""
+        self.save_context(user_id, context)
+
+        if confirmed:
+            return {
+                "confirmed": True,
+                "content": content,
+                "message": "Posting now!",
+                "clear_form": False
+            }
+        else:
+            return {
+                "confirmed": False,
+                "content": "",
+                "message": "Okay, I've cancelled the post. The form has been cleared.",
+                "clear_form": True
+            }
+
+    def reset_post_offer(self, user_id: Optional[int]) -> None:
+        """Reset the post offer declined flag (e.g., when leaving forum page)."""
+        context = self.get_context(user_id)
+        context.post_offer_declined = False
+        context.post_dictation_content = ""
+        if context.state in [
+            ConversationState.AWAITING_POST_OFFER_RESPONSE,
+            ConversationState.AWAITING_POST_DICTATION,
+            ConversationState.AWAITING_POST_SUBMIT_CONFIRMATION
+        ]:
+            context.state = ConversationState.IDLE
+        self.save_context(user_id, context)
+
+    def is_in_post_dictation(self, user_id: Optional[int]) -> bool:
+        """Check if user is currently dictating a post."""
+        context = self.get_context(user_id)
+        return context.state == ConversationState.AWAITING_POST_DICTATION
+
+    def get_post_dictation_content(self, user_id: Optional[int]) -> str:
+        """Get the current accumulated post content."""
+        context = self.get_context(user_id)
+        return context.post_dictation_content

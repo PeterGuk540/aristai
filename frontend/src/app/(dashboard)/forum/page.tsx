@@ -530,6 +530,7 @@ export default function ForumPage() {
                       rows={3}
                       value={newPostContent}
                       onChange={(e) => setNewPostContent(e.target.value)}
+                      data-voice-id="textarea-post-content"
                     />
                     <div className="flex justify-end mt-3">
                       <Button

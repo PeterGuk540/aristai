@@ -125,6 +125,7 @@ const ORDINAL_MAP: Record<string, number> = {
  * - ui.selectDropdown: Selects an option from a dropdown
  * - ui.clickButton: Clicks a button
  * - ui.fillInput: Fills an input field
+ * - ui.clearInput: Clears an input field
  * - ui.switchTab: Switches to a tab
  * - ui.selectListItem: Selects an item from a list
  */
@@ -499,6 +500,60 @@ export const VoiceUIController = () => {
   }, [findElement]);
 
   /**
+   * UNIVERSAL input clearing - clears an input/textarea by voice-id
+   */
+  const handleClearInput = useCallback((event: CustomEvent) => {
+    const { target } = event.detail || {};
+    console.log('🎤 VoiceUI: clearInput', { target });
+
+    let element: HTMLElement | null = null;
+
+    // Find by voice-id
+    if (target) {
+      element = findElement(target);
+    }
+
+    // Clear the input using React-compatible approach
+    if (element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')) {
+      const input = element as HTMLInputElement | HTMLTextAreaElement;
+
+      // Focus first
+      input.focus();
+
+      // Get the native value setter
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        element.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
+        'value'
+      )?.set;
+
+      if (nativeInputValueSetter) {
+        nativeInputValueSetter.call(input, '');
+      } else {
+        input.value = '';
+      }
+
+      // Update React's tracker
+      const tracker = (input as any)._valueTracker;
+      if (tracker) {
+        tracker.setValue('something'); // Set to something different so React sees a change
+      }
+
+      // Dispatch events
+      const inputEvent = new Event('input', { bubbles: true });
+      input.dispatchEvent(inputEvent);
+      const changeEvent = new Event('change', { bubbles: true });
+      input.dispatchEvent(changeEvent);
+
+      // Blur to unfocus
+      input.blur();
+
+      console.log('🎤 VoiceUI: Cleared input:', target);
+    } else {
+      console.warn('🎤 VoiceUI: No input found to clear:', target);
+    }
+  }, [findElement]);
+
+  /**
    * UNIVERSAL dropdown expansion - works for ANY dropdown on any page
    * Finds dropdowns by: data-voice-id, label, or just finds any visible dropdown
    */
@@ -710,6 +765,7 @@ export const VoiceUIController = () => {
       'ui.expandDropdown': handleExpandDropdown,
       'ui.clickButton': handleClickButton,
       'ui.fillInput': handleFillInput,
+      'ui.clearInput': handleClearInput,
       'ui.switchTab': handleSwitchTab,
       'ui.selectListItem': handleSelectListItem,
       'ui.getAvailableElements': handleGetAvailableElements,
@@ -734,6 +790,7 @@ export const VoiceUIController = () => {
     handleExpandDropdown,
     handleClickButton,
     handleFillInput,
+    handleClearInput,
     handleSwitchTab,
     handleSelectListItem,
     handleGetAvailableElements,

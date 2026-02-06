@@ -1027,6 +1027,168 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 suggestions=["Submit", "Cancel", "Go back"] if result["done"] else ["Skip", "Cancel"],
             )
 
+    # --- Handle forum post offer response state ---
+    if conv_context.state == ConversationState.AWAITING_POST_OFFER_RESPONSE:
+        # Check if user accepted or declined
+        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please', 'go ahead', "i'd like to", "i would like"]
+        decline_words = ['no', 'nope', 'not now', 'hold on', 'wait', 'no thanks', 'later', 'nevermind', 'never mind']
+
+        transcript_lower = transcript.lower()
+        accepted = any(word in transcript_lower for word in accept_words)
+        declined = any(word in transcript_lower for word in decline_words)
+
+        if accepted and not declined:
+            result = conversation_manager.handle_post_offer_response(request.user_id, True)
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='info'),
+                suggestions=["I'm done", "Cancel"],
+            )
+        elif declined:
+            result = conversation_manager.handle_post_offer_response(request.user_id, False)
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='info'),
+                suggestions=["Switch to case studies", "Select another session", "Go to courses"],
+            )
+        else:
+            # Unclear response - ask again
+            return ConverseResponse(
+                message=sanitize_speech("Would you like to post something to the discussion? Say yes or no."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, I'd like to post", "No thanks"],
+            )
+
+    # --- Handle forum post dictation state ---
+    if conv_context.state == ConversationState.AWAITING_POST_DICTATION:
+        transcript_lower = transcript.lower().strip()
+
+        # Check for navigation/escape intent first
+        nav_path = detect_navigation_intent(transcript)
+        if nav_path:
+            conversation_manager.reset_post_offer(request.user_id)
+            message = sanitize_speech(f"Cancelling post. {generate_conversational_response('navigate', nav_path)}")
+            return ConverseResponse(
+                message=message,
+                action=ActionResponse(type='navigate', target=nav_path),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": nav_path}},
+                    ]
+                }],
+                suggestions=get_page_suggestions(nav_path)
+            )
+
+        # Check for cancel keywords
+        cancel_words = ['cancel', 'stop', 'abort', 'quit', 'nevermind', 'never mind']
+        if any(word in transcript_lower for word in cancel_words):
+            conversation_manager.reset_post_offer(request.user_id)
+            return ConverseResponse(
+                message=sanitize_speech("Post cancelled. What else can I help you with?"),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.clearInput", "payload": {"target": "textarea-post-content"}},
+                    ]
+                }],
+                suggestions=["Switch to case studies", "Select another session"],
+            )
+
+        # Check for "I'm done" / "finished" patterns
+        done_patterns = [
+            r'\b(i\'?m\s+done|i\s+am\s+done)\b',
+            r'\b(that\'?s\s+it|that\s+is\s+it)\b',
+            r'\b(finished|i\'?m\s+finished|i\s+am\s+finished)\b',
+            r'\b(it\'?s\s+over|it\s+is\s+over)\b',
+            r'\b(end|done|complete|finish)\s*(it|now|dictation|post)?\s*$',
+            r'^done\.?$',
+            r'^finished\.?$',
+        ]
+        is_done = any(re.search(pattern, transcript_lower) for pattern in done_patterns)
+
+        if is_done:
+            result = conversation_manager.finish_post_dictation(request.user_id)
+            if result["has_content"]:
+                # Fill the textarea with the accumulated content before asking for confirmation
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.fillInput", "payload": {"target": "textarea-post-content", "value": result["content"]}},
+                        ]
+                    }],
+                    suggestions=["Yes, post it", "No, cancel"],
+                )
+            else:
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Yes, let me try again", "No, cancel"],
+                )
+
+        # Otherwise, this is dictation content - append it
+        result = conversation_manager.append_post_content(request.user_id, transcript)
+
+        # Update the textarea with current accumulated content
+        return ConverseResponse(
+            message=sanitize_speech(result["message"]),
+            action=ActionResponse(type='execute', executed=True),
+            results=[{
+                "ui_actions": [
+                    {"type": "ui.fillInput", "payload": {"target": "textarea-post-content", "value": result["content"]}},
+                ]
+            }],
+            suggestions=["I'm done", "Cancel"],
+        )
+
+    # --- Handle forum post submit confirmation state ---
+    if conv_context.state == ConversationState.AWAITING_POST_SUBMIT_CONFIRMATION:
+        transcript_lower = transcript.lower()
+
+        # Check for confirmation or denial
+        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'post it', 'submit', 'go ahead', 'do it']
+        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind']
+
+        confirmed = any(word in transcript_lower for word in confirm_words)
+        denied = any(word in transcript_lower for word in deny_words)
+
+        if confirmed and not denied:
+            result = conversation_manager.handle_post_submit_response(request.user_id, True)
+            # Click the submit button
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.clickButton", "payload": {"target": "submit-post"}},
+                        {"type": "ui.toast", "payload": {"message": "Post submitted!", "type": "success"}},
+                    ]
+                }],
+                suggestions=["View posts", "Switch to case studies", "Select another session"],
+            )
+        elif denied:
+            result = conversation_manager.handle_post_submit_response(request.user_id, False)
+            # Clear the textarea
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.clearInput", "payload": {"target": "textarea-post-content"}},
+                        {"type": "ui.toast", "payload": {"message": "Post cancelled", "type": "info"}},
+                    ]
+                }],
+                suggestions=["Try again", "Switch to case studies", "Go to courses"],
+            )
+        else:
+            # Unclear response - ask again
+            return ConverseResponse(
+                message=sanitize_speech("Should I post this? Say yes to post or no to cancel."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, post it", "No, cancel"],
+            )
+
     # 1. Check for navigation intent first (fast regex - instant)
     nav_path = detect_navigation_intent(transcript)
     if nav_path:
@@ -1615,6 +1777,24 @@ async def execute_action(
         if action == 'ui_switch_tab':
             tab_info = _extract_tab_info(transcript or "")
             tab_name = tab_info.get("tabName", "")
+
+            # Special handling for forum discussion tab - offer to help post
+            if current_page and '/forum' in current_page and tab_name == 'discussion':
+                # Check if user hasn't already declined the offer
+                conv_context = conversation_manager.get_context(user_id)
+                if not conv_context.post_offer_declined:
+                    # Offer to help post after switching to discussion tab
+                    offer_prompt = conversation_manager.offer_forum_post(user_id)
+                    if offer_prompt:
+                        return {
+                            "action": "switch_tab_with_post_offer",
+                            "message": f"Switching to discussion. {offer_prompt}",
+                            "ui_actions": [
+                                {"type": "ui.switchTab", "payload": {"tabName": tab_name, "target": f"tab-{tab_name}"}},
+                            ],
+                            "post_offer": True,
+                        }
+
             return {
                 "action": "switch_tab",
                 "message": f"Switching to {tab_name} tab.",

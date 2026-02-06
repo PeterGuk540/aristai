@@ -219,8 +219,13 @@ ACTION_PATTERNS = {
     ],
     # Universal tab switching - works for ANY tab name
     'ui_switch_tab': [
-        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(\w+)\s*(tab|panel|section)\b',
-        r'\b(\w+)\s+(tab|panel|section)\b',
+        # With "tab/panel/section" suffix
+        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(.+?)\s*(tab|panel|section)\b',
+        r'\b(.+?)\s+(tab|panel|section)\b',
+        # Without suffix - for known tab names (must list explicitly to avoid false matches)
+        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|courses|copilot|polls|requests|roster)\b',
+        # Simple "switch to X" for common tabs
+        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|copilot|polls)$',
     ],
     # Universal button clicks - works for ANY button
     # Also handles form submission triggers like "submit", "create it", "post it"
@@ -436,16 +441,20 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             result["optionName"] = ordinal_match.group(1)
 
     elif action == 'ui_switch_tab':
-        # Extract tab name
+        # Extract tab name - order matters (longer phrases first)
         tab_keywords = [
+            'case studies', 'case-studies',  # Two-word tab name - check first
             'summary', 'participation', 'scoring', 'enrollment', 'create',
             'manage', 'sessions', 'courses', 'discussion', 'cases',
             'copilot', 'polls', 'requests', 'roster', 'my-performance', 'best-practice'
         ]
         for keyword in tab_keywords:
-            if keyword in text_lower or keyword.replace('-', ' ') in text_lower:
-                result["tabName"] = keyword.replace('-', '')
-                result["target"] = f"tab-{keyword}"
+            keyword_normalized = keyword.replace('-', ' ')
+            if keyword in text_lower or keyword_normalized in text_lower:
+                # Normalize "case studies" to "cases" (the actual tab value)
+                tab_value = 'cases' if keyword in ['case studies', 'case-studies'] else keyword.replace('-', '')
+                result["tabName"] = tab_value
+                result["target"] = f"tab-{tab_value}"
                 break
 
     elif action == 'ui_click_button':
@@ -1378,6 +1387,9 @@ def _extract_tab_info(transcript: str) -> Dict[str, str]:
         'ai assistant': 'copilot',
         'poll': 'polls',
         'case': 'cases',
+        'case study': 'cases',
+        'case studies': 'cases',
+        'casestudies': 'cases',
         'request': 'requests',
         'post case': 'cases',
         'student roster': 'roster',

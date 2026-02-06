@@ -202,11 +202,12 @@ ACTION_PATTERNS = {
     # Universal dropdown expansion - MUST come BEFORE ui_select_dropdown
     # Matches "select course", "select another course", "change course", "show options", "expand dropdown"
     'ui_expand_dropdown': [
-        # Simple "select course" / "select session" (user wants to see options)
-        r'^(select|choose|pick)\s+(a\s+)?(course|session)\.?$',
-        r'\b(select|choose|pick)\s+(another|a\s+different|other)\s+(course|session)\b',
-        r'\b(change|switch)\s+(the\s+)?(course|session)\b',
-        r'\bwhat\s+(courses?|sessions?)\s+(are\s+)?(available|there)\b',
+        # Simple "select course" / "select session" / "select live session" (user wants to see options)
+        r'^(select|choose|pick)\s+(a\s+)?(live\s+)?(course|session)\.?$',
+        r'\b(select|choose|pick)\s+(the\s+)?(live\s+)?session\b',
+        r'\b(select|choose|pick)\s+(another|a\s+different|other)\s+(live\s+)?(course|session)\b',
+        r'\b(change|switch)\s+(the\s+)?(live\s+)?(course|session)\b',
+        r'\bwhat\s+(live\s+)?(courses?|sessions?)\s+(are\s+)?(available|there)\b',
         r'\b(expand|open|show)\s+(the\s+)?(\w+\s+)?(dropdown|menu|list|options|select)\b',
         r'\b(show|see|view|what\s+are)\s+(the\s+)?(available\s+)?(\w+\s+)?(options|choices|items)\b',
         r'\blet\s+me\s+(see|choose|pick)\b',

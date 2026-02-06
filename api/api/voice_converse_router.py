@@ -185,6 +185,16 @@ ACTION_PATTERNS = {
         r'\bnew\s+case(\s+study)?\b',
         r'\bshare\s+(a\s+)?case\b',
     ],
+    # Post to forum discussion (different from post_case which is for case studies)
+    'post_to_discussion': [
+        r'\bpost\s+(to\s+)?(the\s+)?discussion\b',
+        r'\b(make|create|write|add)\s+(a\s+)?(forum\s+)?post\b',
+        r'\b(i\s+)?(want\s+to|would\s+like\s+to|let\s+me)\s+post\b',
+        r'\bpost\s+something\b',
+        r'\bshare\s+(my\s+)?(thoughts?|response|comment)\b',
+        r'\b(write|add)\s+(a\s+)?(comment|response|reply)\b',
+        r'\bcontribute\s+to\s+(the\s+)?discussion\b',
+    ],
     # Report actions
     'generate_report': [
         r'\bgenerate\s+(a\s+)?(session\s+)?report\b',
@@ -740,6 +750,14 @@ def generate_conversational_response(
         # === FORUM RESPONSES ===
         if intent_value == 'post_case':
             return "Opening case study creation. What scenario would you like students to discuss?"
+
+        if intent_value == 'post_to_discussion':
+            if isinstance(results, dict):
+                if results.get("post_offer"):
+                    return results.get("message", "Would you like to post something to the discussion?")
+                if results.get("error") == "no_session":
+                    return results.get("message", "Please select a live session first.")
+            return "Would you like to post something to the discussion?"
 
         if intent_value == 'view_posts':
             if isinstance(results, dict) and results.get("posts"):
@@ -2280,6 +2298,38 @@ async def execute_action(
                 "message": "Opening case study creation. What case would you like to post?",
             }
 
+        if action == 'post_to_discussion':
+            # Check if we have a session selected
+            session_id = _resolve_session_id(db, current_page, user_id)
+            if not session_id:
+                return {
+                    "action": "post_to_discussion",
+                    "error": "no_session",
+                    "message": "Please select a live session first before posting to the discussion.",
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": "/forum"}},
+                    ],
+                }
+
+            # Trigger the forum post offer flow
+            offer_prompt = conversation_manager.offer_forum_post(user_id)
+            if offer_prompt:
+                return {
+                    "action": "post_to_discussion",
+                    "session_id": session_id,
+                    "message": offer_prompt,
+                    "ui_actions": [
+                        {"type": "ui.switchTab", "payload": {"tabName": "discussion", "target": "tab-discussion"}},
+                    ],
+                    "post_offer": True,
+                }
+            else:
+                # User already declined the offer this session
+                return {
+                    "action": "post_to_discussion",
+                    "message": "You've already declined to post. Let me know if you change your mind!",
+                }
+
         if action == 'view_posts':
             session_id = _resolve_session_id(db, current_page, user_id)
             if session_id:
@@ -2457,6 +2507,7 @@ def get_action_suggestions(action: str) -> List[str]:
         'manage_enrollments': ["Add by email", "Upload roster", "View enrolled"],
         # Forum suggestions
         'post_case': ["View responses", "Pin post", "Create poll"],
+        'post_to_discussion': ["View posts", "Switch to case studies", "Select another session"],
         'view_posts': ["Pin a post", "Label post", "Summarize discussion"],
         'get_pinned_posts': ["View all posts", "Post case", "Create poll"],
         'summarize_discussion': ["Show questions", "View pinned", "Create poll"],

@@ -74,6 +74,11 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const isProcessingTranscriptRef = useRef(false);
   const userInitiatedDisconnectRef = useRef(false); // Track user-initiated Stop clicks
   const previousUserIdRef = useRef<number | null>(null); // Track user ID for logout detection
+  const messageCountRef = useRef(0); // Track message count for session refresh
+  const isRefreshingRef = useRef(false); // Track if this is a silent refresh (skip greeting)
+
+  // Session refresh threshold - restart to prevent context buildup slowdown
+  const MAX_MESSAGES_BEFORE_REFRESH = 10;
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -212,12 +217,18 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           setState('connected');
           onActiveChange?.(true);
           isInitializingRef.current = false;
-          
-          // Speak greeting
-          if (greeting) {
-            addAssistantMessage(greeting);
+
+          // Only speak greeting on initial connection, not on refresh
+          if (!isRefreshingRef.current) {
+            if (greeting) {
+              addAssistantMessage(greeting);
+            } else {
+              addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant, an expert in educational platform operations. I can help you navigate instantly to any page, create courses with AI-generated plans, manage live sessions, create polls, generate comprehensive reports, and much more. Just tell me what you'd like to do!`);
+            }
           } else {
-            addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant, an expert in educational platform operations. I can help you navigate instantly to any page, create courses with AI-generated plans, manage live sessions, create polls, generate comprehensive reports, and much more. Just tell me what you'd like to do!`);
+            // Silent refresh complete - reset the flag
+            console.log('🔄 Session refreshed silently (no greeting)');
+            isRefreshingRef.current = false;
           }
         },
         onDisconnect: (data?: any) => {
@@ -465,9 +476,25 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       // Remove any transcript messages - just add new message
       return [...prev, message];
     });
-    
-    // Update context
+
+    // Update context (keep last 20 entries to prevent memory buildup)
     conversationContextRef.current.push(`User: ${content}`);
+    if (conversationContextRef.current.length > 20) {
+      conversationContextRef.current = conversationContextRef.current.slice(-20);
+    }
+
+    // Increment message count and check for refresh threshold
+    messageCountRef.current += 1;
+    console.log(`📊 Message count: ${messageCountRef.current}/${MAX_MESSAGES_BEFORE_REFRESH}`);
+
+    if (messageCountRef.current >= MAX_MESSAGES_BEFORE_REFRESH) {
+      // Trigger silent refresh after current processing completes
+      setTimeout(() => {
+        if (!isProcessingTranscriptRef.current && !isRefreshingRef.current) {
+          silentRefresh();
+        }
+      }, 1000);
+    }
   };
 
   const addAssistantMessage = (content: string, action?: Message['action']) => {
@@ -479,9 +506,12 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       action,
     };
     setMessages(prev => [...prev, message]);
-    
-    // Update context
+
+    // Update context (keep last 20 entries to prevent memory buildup)
     conversationContextRef.current.push(`Assistant: ${content}`);
+    if (conversationContextRef.current.length > 20) {
+      conversationContextRef.current = conversationContextRef.current.slice(-20);
+    }
   };
 
   // Start/stop conversation
@@ -500,6 +530,30 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   // Restart conversation
   const restartConversation = async () => {
     await cleanup();
+    isInitializingRef.current = false;
+    await initializeConversation();
+  };
+
+  // Silent refresh - restart session without greeting to prevent context buildup slowdown
+  const silentRefresh = async () => {
+    console.log('🔄 Silently refreshing session to prevent slowdown...');
+    isRefreshingRef.current = true;
+    messageCountRef.current = 0; // Reset counter
+
+    // End current session
+    if (conversationRef.current) {
+      try {
+        await conversationRef.current.endSession();
+      } catch (error) {
+        console.error('Error ending session for refresh:', error);
+      }
+      conversationRef.current = null;
+    }
+
+    // Small delay to ensure clean disconnect
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Reinitialize without greeting
     isInitializingRef.current = false;
     await initializeConversation();
   };

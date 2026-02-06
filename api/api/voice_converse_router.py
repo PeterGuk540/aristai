@@ -1319,20 +1319,22 @@ def _get_page_context(db: Session, current_page: Optional[str]) -> Dict[str, Any
         course_id = _resolve_course_id(db, current_page)
         if course_id:
             course = _execute_tool(db, 'get_course', {"course_id": course_id})
-            sessions = _execute_tool(db, 'list_sessions', {"course_id": course_id})
+            result = _execute_tool(db, 'list_sessions', {"course_id": course_id})
+            sessions = result.get("sessions", []) if isinstance(result, dict) else []
             return {
                 "page": "course_detail",
                 "course": course,
-                "session_count": len(sessions) if sessions else 0,
-                "message": f"You're viewing {course.get('title', 'a course')} with {len(sessions) if sessions else 0} sessions.",
+                "session_count": len(sessions),
+                "message": f"You're viewing {course.get('title', 'a course')} with {len(sessions)} sessions.",
                 "available_actions": ["Create session", "View sessions", "Manage enrollments", "Go to forum"],
             }
         else:
-            courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
+            result = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
+            courses = result.get("courses", []) if isinstance(result, dict) else []
             return {
                 "page": "courses_list",
-                "course_count": len(courses) if courses else 0,
-                "message": f"You're on the courses page. You have {len(courses) if courses else 0} courses.",
+                "course_count": len(courses),
+                "message": f"You're on the courses page. You have {len(courses)} courses.",
                 "available_actions": ["Create course", "Select a course", "View sessions"],
             }
 
@@ -1393,11 +1395,12 @@ def _get_page_context(db: Session, current_page: Optional[str]) -> Dict[str, Any
         }
 
     # Default dashboard
-    courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
+    result = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
+    courses = result.get("courses", []) if isinstance(result, dict) else []
     return {
         "page": "dashboard",
-        "course_count": len(courses) if courses else 0,
-        "message": f"You're on the dashboard. You have {len(courses) if courses else 0} courses.",
+        "course_count": len(courses),
+        "message": f"You're on the dashboard. You have {len(courses)} courses.",
         "available_actions": ["Show courses", "Go to sessions", "Go to forum", "Go to console"],
     }
 
@@ -1440,16 +1443,18 @@ async def execute_action(
             # Fetch options based on dropdown type
             options: list[DropdownOption] = []
             if 'course' in dropdown_hint or not dropdown_hint:
-                # Fetch courses
-                courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 10})
+                # Fetch courses - result is {"courses": [...]}
+                result = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 10})
+                courses = result.get("courses", []) if isinstance(result, dict) else []
                 if courses:
                     options = [DropdownOption(label=c.get('title', f"Course {c['id']}"), value=str(c['id'])) for c in courses]
                     dropdown_hint = dropdown_hint or "select-course"
             elif 'session' in dropdown_hint:
-                # Fetch sessions for active course
+                # Fetch sessions for active course - result is {"sessions": [...]}
                 course_id = _resolve_course_id(db, current_page, user_id)
                 if course_id:
-                    sessions = _execute_tool(db, 'list_sessions', {"course_id": course_id})
+                    result = _execute_tool(db, 'list_sessions', {"course_id": course_id})
+                    sessions = result.get("sessions", []) if isinstance(result, dict) else []
                     if sessions:
                         options = [DropdownOption(label=s.get('title', f"Session {s['id']}"), value=str(s['id'])) for s in sessions]
 
@@ -1639,7 +1644,8 @@ async def execute_action(
             }
 
         if action == 'select_course':
-            courses = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 10})
+            result = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 10})
+            courses = result.get("courses", []) if isinstance(result, dict) else []
             if courses and len(courses) > 0:
                 first_course = courses[0]
                 # Update context memory with selected course
@@ -1688,7 +1694,8 @@ async def execute_action(
         if action == 'select_session':
             course_id = _resolve_course_id(db, current_page, user_id)
             if course_id:
-                sessions = _execute_tool(db, 'list_sessions', {"course_id": course_id})
+                result = _execute_tool(db, 'list_sessions', {"course_id": course_id})
+                sessions = result.get("sessions", []) if isinstance(result, dict) else []
                 if sessions and len(sessions) > 0:
                     first_session = sessions[0]
                     # Update context memory with selected session

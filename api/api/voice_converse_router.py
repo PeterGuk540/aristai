@@ -200,8 +200,10 @@ ACTION_PATTERNS = {
 
     # === UNIVERSAL UI ELEMENT INTERACTIONS (check these AFTER specific actions) ===
     # Universal dropdown expansion - MUST come BEFORE ui_select_dropdown
-    # Matches "select another course", "change course", "show options", "expand dropdown"
+    # Matches "select course", "select another course", "change course", "show options", "expand dropdown"
     'ui_expand_dropdown': [
+        # Simple "select course" / "select session" (user wants to see options)
+        r'^(select|choose|pick)\s+(a\s+)?(course|session)\.?$',
         r'\b(select|choose|pick)\s+(another|a\s+different|other)\s+(course|session)\b',
         r'\b(change|switch)\s+(the\s+)?(course|session)\b',
         r'\bwhat\s+(courses?|sessions?)\s+(are\s+)?(available|there)\b',

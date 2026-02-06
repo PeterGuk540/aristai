@@ -231,8 +231,21 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             <Menu className="h-5 w-5 text-gray-500 dark:text-gray-400" />
           </button>
 
-          {/* Page title placeholder */}
-          <div className="hidden lg:block" />
+          {/* Client Logo (EPGUPP) - switches based on dark/light mode */}
+          <div className="flex items-center">
+            {/* Light mode logo (black on white) */}
+            <img
+              src="/EPGUPP_logo_light.png"
+              alt="Postgrado Universidad Politécnica"
+              className="h-10 object-contain dark:hidden"
+            />
+            {/* Dark mode logo (white on dark) */}
+            <img
+              src="/EPGUPP_logo_white.png"
+              alt="Postgrado Universidad Politécnica"
+              className="h-10 object-contain hidden dark:block"
+            />
+          </div>
 
           {/* Right side actions */}
           <div className="flex items-center gap-2">

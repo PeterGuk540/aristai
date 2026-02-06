@@ -765,7 +765,15 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             onClick={toggleMinimize}
             className="flex items-center justify-center w-full h-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-lg"
           >
-            <MessageSquare className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            <img
+              src="/AristAI_logo.png"
+              alt="AristAI"
+              className="w-8 h-8 object-contain"
+              onError={(e) => {
+                // Fallback to MessageSquare icon if image fails to load
+                e.currentTarget.style.display = 'none';
+              }}
+            />
             {isActive && (
               <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             )}

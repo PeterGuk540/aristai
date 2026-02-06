@@ -13,7 +13,15 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
     <div className="min-h-screen flex">
       {/* Left side - Branding (hidden on mobile) */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-600 to-primary-800 p-12 flex-col justify-between">
-        <div>
+        <div className="space-y-6">
+          {/* Client Logo (EPGUPP) - white version for dark background */}
+          <div className="mb-4">
+            <img
+              src="/EPGUPP_logo_white.png"
+              alt="Postgrado Universidad Politécnica"
+              className="h-12 object-contain"
+            />
+          </div>
           <div className="flex items-center gap-3">
             <GraduationCap className="h-10 w-10 text-white" />
             <span className="text-2xl font-bold text-white">AristAI</span>
@@ -50,10 +58,25 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
       {/* Right side - Form */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-12 bg-gray-50 dark:bg-gray-900">
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center justify-center gap-2 mb-8">
-            <GraduationCap className="h-8 w-8 text-primary-600 dark:text-primary-400" />
-            <span className="text-xl font-bold text-gray-900 dark:text-white">AristAI</span>
+          {/* Mobile logos */}
+          <div className="lg:hidden flex flex-col items-center gap-4 mb-8">
+            {/* Client Logo (EPGUPP) - switches based on dark/light mode */}
+            <div>
+              <img
+                src="/EPGUPP_logo_light.png"
+                alt="Postgrado Universidad Politécnica"
+                className="h-10 object-contain dark:hidden"
+              />
+              <img
+                src="/EPGUPP_logo_white.png"
+                alt="Postgrado Universidad Politécnica"
+                className="h-10 object-contain hidden dark:block"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <GraduationCap className="h-8 w-8 text-primary-600 dark:text-primary-400" />
+              <span className="text-xl font-bold text-gray-900 dark:text-white">AristAI</span>
+            </div>
           </div>
 
           {/* Card */}

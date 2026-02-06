@@ -586,39 +586,7 @@ export default function ReportsPage() {
           </Card>
         )}
 
-        {/* Observability */}
-        {reportJson.observability && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Generation Stats</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <Clock className="h-5 w-5 mx-auto text-gray-400 mb-1" />
-                  <p className="font-medium">
-                    {reportJson.observability.execution_time_seconds.toFixed(1)}s
-                  </p>
-                  <p className="text-xs text-gray-500">Execution Time</p>
-                </div>
-                <div>
-                  <BarChart3 className="h-5 w-5 mx-auto text-gray-400 mb-1" />
-                  <p className="font-medium">
-                    {reportJson.observability.total_tokens.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-gray-500">Total Tokens</p>
-                </div>
-                <div>
-                  <DollarSign className="h-5 w-5 mx-auto text-gray-400 mb-1" />
-                  <p className="font-medium">
-                    ${reportJson.observability.estimated_cost_usd.toFixed(4)}
-                  </p>
-                  <p className="text-xs text-gray-500">Est. Cost</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Developer observability stats hidden from users */}
       </div>
     );
   };

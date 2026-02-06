@@ -691,6 +691,10 @@ class VoiceConversationManager:
             }
             self.save_context(user_id, context)
 
+            # Debug logging
+            print(f"📝 FORM COMPLETE: Setting up confirmation for button '{submit_button}', form '{form_name}'")
+            print(f"📝 State: {context.state}, pending_action: {context.pending_action}")
+
             return {
                 "done": True,
                 "next_prompt": "I've filled in all the fields. Would you like me to submit the form?",

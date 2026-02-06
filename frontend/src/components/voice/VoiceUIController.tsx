@@ -458,11 +458,14 @@ export const VoiceUIController = () => {
       element = emptyInput || visibleInputs[0] || null;
     }
 
-    // Fill the input - use native setter to trigger React state updates
+    // Fill the input - use React-compatible approach to trigger state updates
     if (element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')) {
       const input = element as HTMLInputElement | HTMLTextAreaElement;
 
-      // Get the native value setter to properly trigger React's onChange
+      // Focus first to ensure React is tracking this element
+      input.focus();
+
+      // Get the native value setter
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
         element.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
         'value'
@@ -474,15 +477,21 @@ export const VoiceUIController = () => {
         input.value = value || '';
       }
 
-      // Dispatch input event with bubbles to trigger React onChange
-      const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+      // React 16+ uses a tracker on the DOM node to detect value changes
+      // We need to update this tracker for React to pick up our change
+      const tracker = (input as any)._valueTracker;
+      if (tracker) {
+        tracker.setValue(''); // Set to something different so React sees a change
+      }
+
+      // Dispatch input event - this should now be picked up by React
+      const inputEvent = new Event('input', { bubbles: true });
       input.dispatchEvent(inputEvent);
 
-      // Also dispatch change event for good measure
-      const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+      // Also dispatch change event
+      const changeEvent = new Event('change', { bubbles: true });
       input.dispatchEvent(changeEvent);
 
-      input.focus();
       console.log('🎤 VoiceUI: Filled input:', element.getAttribute('data-voice-id') || element.getAttribute('name') || 'unknown', 'with:', value);
     } else {
       console.warn('🎤 VoiceUI: No input found to fill');

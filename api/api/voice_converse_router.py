@@ -801,7 +801,33 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         if confirmed or denied:
             result = conversation_manager.process_confirmation(request.user_id, confirmed)
             if result["confirmed"] and result["action"]:
-                # Execute the pending action
+                # For ui_click_button, use action_data directly instead of execute_action
+                # (because process_confirmation already cleared pending_action_data)
+                if result["action"] == "ui_click_button" and result.get("action_data"):
+                    action_data = result["action_data"]
+                    button_target = action_data.get("voice_id")
+                    form_name = action_data.get("form_name", "")
+                    button_label = form_name.replace("_", " ").title() if form_name else "Submit"
+
+                    # Debug logging
+                    print(f"🔘 CONFIRMATION: Clicking button '{button_target}' for form '{form_name}'")
+                    print(f"🔘 action_data: {action_data}")
+
+                    conversation_manager.reset_retry_count(request.user_id)
+                    return ConverseResponse(
+                        message=sanitize_speech(f"Submitting the form. Clicking {button_label}."),
+                        action=ActionResponse(type='execute', executed=True),
+                        results=[{
+                            "action": "click_button",
+                            "ui_actions": [
+                                {"type": "ui.clickButton", "payload": {"target": button_target}},
+                                {"type": "ui.toast", "payload": {"message": f"{button_label} submitted", "type": "success"}},
+                            ],
+                        }],
+                        suggestions=["What's next?", "Go to another page"],
+                    )
+
+                # For other actions, use execute_action
                 action_result = await execute_action(
                     result["action"],
                     request.user_id,

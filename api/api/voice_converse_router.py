@@ -331,6 +331,27 @@ ACTION_PATTERNS = {
         r'\bstudent\s+management\b',
         r'\benrollment\s+management\b',
     ],
+    'list_student_pool': [
+        r'\b(select|choose|pick)\s+(a\s+)?student\s+(from\s+)?(the\s+)?(student\s+)?pool\b',
+        r'\b(show|list|see)\s+(the\s+)?(student\s+)?pool\b',
+        r'\b(available|unenrolled)\s+students\b',
+        r'\bwho\s+(can|is available to)\s+enroll\b',
+        r'\bstudent\s+pool\b',
+    ],
+    'enroll_selected': [
+        r'\b(click\s+)?(enroll|add)\s+(the\s+)?selected(\s+students?)?\b',
+        r'\benroll\s+selected\b',
+        r'\badd\s+selected\s+students?\b',
+    ],
+    'enroll_all': [
+        r'\b(click\s+)?(enroll|add)\s+all(\s+students?)?\b',
+        r'\benroll\s+all\b',
+        r'\badd\s+all\s+students?\b',
+    ],
+    'select_student': [
+        r'\b(select|choose|pick|click|check)\s+(the\s+)?student\s+(.+)\b',
+        r'\b(select|choose|pick|click|check)\s+(.+?)\s+(from|in)\s+(the\s+)?(student\s+)?pool\b',
+    ],
     # === FORUM ACTIONS ===
     'view_posts': [
         r'\b(show|view|see|display)\s+(the\s+)?(forum\s+)?posts\b',
@@ -690,6 +711,21 @@ def generate_conversational_response(
 
         if intent_value == 'manage_enrollments':
             return "Opening enrollment management. You can add students by email or upload a roster."
+
+        if intent_value == 'list_student_pool':
+            if isinstance(results, dict) and results.get("students"):
+                count = len(results.get("students", []))
+                return f"There are {count} students available in the pool. Say a student's name to select them."
+            return "I'll show you the available students."
+
+        if intent_value == 'select_student':
+            return "Selecting the student."
+
+        if intent_value == 'enroll_selected':
+            return "Enrolling the selected students."
+
+        if intent_value == 'enroll_all':
+            return "Enrolling all available students."
 
         # === FORUM RESPONSES ===
         if intent_value == 'post_case':
@@ -1239,6 +1275,35 @@ def _extract_button_info(transcript: str) -> Dict[str, str]:
             return {"target": target, "label": phrase.title()}
 
     return {}
+
+
+def _extract_student_name(transcript: str) -> Optional[str]:
+    """Extract student name from transcript for student selection."""
+    text = transcript.strip()
+
+    # Remove common prefixes
+    prefixes = [
+        r'^(select|choose|pick|click|check|enroll)\s+(the\s+)?student\s+',
+        r'^(select|choose|pick|click|check|enroll)\s+',
+        r'^student\s+',
+    ]
+    for prefix in prefixes:
+        text = re.sub(prefix, '', text, flags=re.IGNORECASE)
+
+    # Remove common suffixes
+    suffixes = [
+        r'\s+(from|in)\s+(the\s+)?(student\s+)?pool$',
+        r'\s+please$',
+        r'\s+now$',
+    ]
+    for suffix in suffixes:
+        text = re.sub(suffix, '', text, flags=re.IGNORECASE)
+
+    # Clean up and return
+    text = text.strip()
+    if text and len(text) > 1:
+        return text
+    return None
 
 
 def _extract_tab_info(transcript: str) -> Dict[str, str]:
@@ -1886,6 +1951,77 @@ async def execute_action(
                     {"type": "ui.openModal", "payload": {"modal": "manageEnrollments", "courseId": course_id}},
                 ],
                 "message": "Opening enrollment management.",
+            }
+
+        if action == 'list_student_pool':
+            # List available students (not enrolled) for selection
+            course_id = _resolve_course_id(db, current_page, user_id)
+            if not course_id:
+                return {"message": "Please select a course first to see the student pool."}
+
+            # Get all students using get_users with role=student
+            result = _execute_tool(db, 'get_users', {"role": "student"})
+            all_students = result.get("users", []) if isinstance(result, dict) else (result if isinstance(result, list) else [])
+
+            # Get enrolled students
+            enrolled_result = _execute_tool(db, 'get_enrolled_students', {"course_id": course_id})
+            enrolled_students = enrolled_result.get("students", []) if isinstance(enrolled_result, dict) else (enrolled_result if isinstance(enrolled_result, list) else [])
+            enrolled_ids = {s.get("user_id") or s.get("id") for s in enrolled_students}
+
+            # Filter to available (not enrolled) students
+            available_students = [s for s in all_students if s.get("id") not in enrolled_ids]
+
+            if not available_students:
+                return {"message": "The student pool is empty. All students are already enrolled in this course."}
+
+            # Create options for dropdown-style selection
+            options = [DropdownOption(label=s.get("name") or s.get("email", f"Student {s['id']}"), value=str(s["id"])) for s in available_students[:10]]
+
+            # Start selection flow
+            prompt = conversation_manager.start_dropdown_selection(
+                user_id, "student-pool", options, current_page or "/courses"
+            )
+
+            return {
+                "action": "list_student_pool",
+                "message": prompt,
+                "students": available_students[:10],
+                "ui_actions": [
+                    {"type": "ui.toast", "payload": {"message": f"{len(available_students)} students available", "type": "info"}},
+                ],
+            }
+
+        if action == 'enroll_selected':
+            return {
+                "action": "enroll_selected",
+                "message": "Enrolling the selected students.",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "enroll-selected"}},
+                ],
+            }
+
+        if action == 'enroll_all':
+            return {
+                "action": "enroll_all",
+                "message": "Enrolling all available students.",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "enroll-all"}},
+                ],
+            }
+
+        if action == 'select_student':
+            # Extract student name from transcript
+            student_name = _extract_student_name(transcript or "")
+            if not student_name:
+                return {"message": "I couldn't hear the student name. Please say the student's name clearly."}
+
+            return {
+                "action": "select_student",
+                "message": f"Selecting {student_name}.",
+                "ui_actions": [
+                    {"type": "ui.selectListItem", "payload": {"itemName": student_name, "target": "student-pool"}},
+                    {"type": "ui.toast", "payload": {"message": f"Selected: {student_name}", "type": "success"}},
+                ],
             }
 
         # === FORUM ACTIONS ===

@@ -592,11 +592,12 @@ export default function CoursesPage() {
                               )}
                             </div>
                             {filteredAvailableStudents.length > 0 ? (
-                              <ul className="divide-y">
+                              <ul className="divide-y" data-voice-id="student-pool">
                                 {filteredAvailableStudents.map((student) => (
                                   <li
                                     key={student.id}
                                     className="px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                    data-voice-item={student.name}
                                     onClick={() => toggleStudentSelection(student.id)}
                                   >
                                     <label className="flex items-center gap-3 cursor-pointer">
@@ -624,6 +625,7 @@ export default function CoursesPage() {
                               onClick={handleBulkEnroll}
                               disabled={enrolling || selectedStudentIds.size === 0}
                               className="flex-1"
+                              data-voice-id="enroll-selected"
                             >
                               <UserPlus className="h-4 w-4 mr-2" />
                               Enroll Selected ({selectedStudentIds.size})
@@ -632,6 +634,7 @@ export default function CoursesPage() {
                               onClick={handleEnrollAll}
                               disabled={enrolling}
                               variant="outline"
+                              data-voice-id="enroll-all"
                             >
                               Enroll All
                             </Button>

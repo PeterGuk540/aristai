@@ -18,6 +18,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useUser } from '@/lib/context';
 import { UserMenu } from './UserMenu';
+import { Onboarding, useOnboarding } from './Onboarding';
 import { VoiceOnboarding } from './voice/VoiceOnboarding';
 import { ConversationalVoice } from './voice/ConversationalVoice';
 import { VoiceUiActionBridge } from './voice/VoiceUiActionBridge';
@@ -55,6 +56,9 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
   // Determine the effective role for onboarding
   const effectiveRole = isAdmin ? 'admin' : isInstructor ? 'instructor' : 'student';
+
+  // Regular onboarding (welcome guide)
+  const { showOnboarding: showWelcomeGuide, completeOnboarding: completeWelcomeGuide, showGuide, isReady } = useOnboarding(currentUser?.id, currentUser?.role);
 
   // Filter navigation based on user role and enrollment status
   const navigation = useMemo(() => {
@@ -130,8 +134,8 @@ export function AppShellHandsFree({ children }: AppShellProps) {
     router.push(path);
   };
 
-  // Show loading state while checking auth
-  if (isLoading) {
+  // Show loading state while checking auth or onboarding
+  if (isLoading || !isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
@@ -247,7 +251,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             </button>
 
             {/* User menu */}
-            <UserMenu />
+            <UserMenu onShowGuide={showGuide} />
           </div>
         </header>
 
@@ -261,6 +265,15 @@ export function AppShellHandsFree({ children }: AppShellProps) {
           role={effectiveRole}
           userName={currentUser.name}
           onComplete={handleOnboardingComplete}
+        />
+      )}
+
+      {/* Welcome Guide - shows on first login or when "View Guide" is clicked */}
+      {showWelcomeGuide && currentUser && (
+        <Onboarding
+          role={effectiveRole}
+          userName={currentUser.name}
+          onComplete={completeWelcomeGuide}
         />
       )}
 

@@ -719,7 +719,7 @@ def generate_conversational_response(
             return "I'll show you the available students."
 
         if intent_value == 'select_student':
-            return "Selecting the student."
+            return "Student selected. Say another name to select more, or 'enroll selected' to enroll them."
 
         if intent_value == 'enroll_selected':
             return "Enrolling the selected students."
@@ -2017,10 +2017,9 @@ async def execute_action(
 
             return {
                 "action": "select_student",
-                "message": f"Selecting {student_name}.",
+                "message": f"Selected {student_name}. Say another student name to select more, or say 'enroll selected' to enroll them.",
                 "ui_actions": [
                     {"type": "ui.selectListItem", "payload": {"itemName": student_name, "target": "student-pool"}},
-                    {"type": "ui.toast", "payload": {"message": f"Selected: {student_name}", "type": "success"}},
                 ],
             }
 

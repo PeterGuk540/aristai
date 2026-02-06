@@ -655,8 +655,16 @@ export const VoiceUIController = () => {
     }
 
     if (selectedItem) {
-      selectedItem.click();
-      console.log('🎤 VoiceUI: Selected list item:', itemName || itemIndex);
+      // If the item contains a checkbox, click the checkbox directly
+      // This avoids double-triggering from li onClick + checkbox onChange
+      const checkbox = selectedItem.querySelector('input[type="checkbox"]') as HTMLInputElement;
+      if (checkbox) {
+        checkbox.click();
+        console.log('🎤 VoiceUI: Clicked checkbox in list item:', itemName || itemIndex);
+      } else {
+        selectedItem.click();
+        console.log('🎤 VoiceUI: Selected list item:', itemName || itemIndex);
+      }
     } else {
       console.warn('🎤 VoiceUI: List item not found:', itemName, itemIndex);
     }

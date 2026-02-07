@@ -1498,6 +1498,145 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 suggestions=["Yes, create it", "No, cancel"],
             )
 
+    # --- Handle case offer response state ---
+    if conv_context.state == ConversationState.AWAITING_CASE_OFFER_RESPONSE:
+        # Check if user accepted or declined
+        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please', 'go ahead', "i'd like to", "i would like", "let's do it", "create one", "post one"]
+        decline_words = ['no', 'nope', 'not now', 'hold on', 'wait', 'no thanks', 'later', 'nevermind', 'never mind']
+
+        transcript_lower = transcript.lower()
+        accepted = any(word in transcript_lower for word in accept_words)
+        declined = any(word in transcript_lower for word in decline_words)
+
+        if accepted and not declined:
+            result = conversation_manager.handle_case_offer_response(request.user_id, True)
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='info'),
+                suggestions=["Cancel"],
+            )
+        elif declined:
+            result = conversation_manager.handle_case_offer_response(request.user_id, False)
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='info'),
+                suggestions=["Switch to polls", "Switch to copilot", "Go to forum"],
+            )
+        else:
+            # Unclear response - ask again
+            return ConverseResponse(
+                message=sanitize_speech("Would you like to post a case study? Say yes or no."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, post a case", "No thanks"],
+            )
+
+    # --- Handle case prompt dictation state ---
+    if conv_context.state == ConversationState.AWAITING_CASE_PROMPT:
+        transcript_lower = transcript.lower().strip()
+
+        # Check for navigation/escape intent first
+        nav_path = detect_navigation_intent(transcript)
+        if nav_path:
+            conversation_manager.reset_case_offer(request.user_id)
+            message = sanitize_speech(f"Cancelling case creation. {generate_conversational_response('navigate', nav_path)}")
+            return ConverseResponse(
+                message=message,
+                action=ActionResponse(type='navigate', target=nav_path),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": nav_path}},
+                    ]
+                }],
+                suggestions=get_page_suggestions(nav_path)
+            )
+
+        # Check for cancel keywords
+        cancel_words = ['cancel', 'stop', 'abort', 'quit', 'nevermind', 'never mind']
+        if any(word in transcript_lower for word in cancel_words):
+            conversation_manager.reset_case_offer(request.user_id)
+            return ConverseResponse(
+                message=sanitize_speech("Case creation cancelled. What else can I help you with?"),
+                action=ActionResponse(type='info'),
+                suggestions=["Switch to polls", "Switch to copilot"],
+            )
+
+        # Check for "done" or "finished" keywords to finish dictation
+        done_words = ['done', "i'm done", "that's it", "that is it", 'finished', 'post it', 'submit', "that's all", "that is all"]
+        if any(word in transcript_lower for word in done_words):
+            result = conversation_manager.finish_case_dictation(request.user_id)
+
+            if result.get("ready_to_confirm"):
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Yes, post it", "No, cancel"],
+                )
+            else:
+                # No content yet - ask again
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Cancel"],
+                )
+
+        # This is case content - append it
+        result = conversation_manager.append_case_content(request.user_id, transcript)
+        ui_actions = []
+        for action_item in result.get("ui_actions", []):
+            ui_actions.append({
+                "type": f"ui.{action_item['action']}",
+                "payload": {"target": action_item["voiceId"], "value": action_item.get("value", "")}
+            })
+
+        return ConverseResponse(
+            message=sanitize_speech(result["message"]),
+            action=ActionResponse(type='execute', executed=True),
+            results=[{"ui_actions": ui_actions}],
+            suggestions=["Done", "Cancel"],
+        )
+
+    # --- Handle case confirmation state ---
+    if conv_context.state == ConversationState.AWAITING_CASE_CONFIRM:
+        transcript_lower = transcript.lower()
+
+        # Check for confirmation or denial
+        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'post it', 'submit', 'go ahead', 'do it', 'create it']
+        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind']
+
+        confirmed = any(word in transcript_lower for word in confirm_words)
+        denied = any(word in transcript_lower for word in deny_words)
+
+        if confirmed and not denied:
+            result = conversation_manager.handle_case_confirm(request.user_id, True)
+            ui_actions = []
+            for action_item in result.get("ui_actions", []):
+                ui_actions.append({
+                    "type": f"ui.{action_item['action']}",
+                    "payload": {"target": action_item["voiceId"]}
+                })
+            ui_actions.append({"type": "ui.toast", "payload": {"message": "Case study posted!", "type": "success"}})
+
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions}],
+                suggestions=["Post another case", "Switch to polls", "View forum"],
+            )
+        elif denied:
+            conversation_manager.reset_case_offer(request.user_id)
+            return ConverseResponse(
+                message=sanitize_speech("Okay, case posting cancelled. The content is still in the form if you want to edit it."),
+                action=ActionResponse(type='info'),
+                suggestions=["Post a new case", "Switch to polls", "View forum"],
+            )
+        else:
+            # Unclear response - ask again
+            return ConverseResponse(
+                message=sanitize_speech("Should I post this case study? Say yes to post or no to cancel."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, post it", "No, cancel"],
+            )
+
     # 1. Check for navigation intent first (fast regex - instant)
     nav_path = detect_navigation_intent(transcript)
     if nav_path:
@@ -2740,17 +2879,31 @@ async def execute_action(
             course_id = _resolve_course_id(db, current_page, user_id)
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
-            # Check if we're on the console page - if so, just switch to cases tab
+            # Check if we're on the console page - offer conversational case creation
             if current_page and '/console' in current_page:
-                return {
-                    "action": "post_case",
-                    "session_id": session_id,
-                    "ui_actions": [
-                        {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
-                        {"type": "ui.toast", "payload": {"message": "Switched to Post Case tab", "type": "info"}},
-                    ],
-                    "message": "Switching to the Post Case tab. You can type or dictate your case study here.",
-                }
+                # Offer to help create a case using conversational flow
+                offer_prompt = conversation_manager.offer_case_posting(user_id)
+                if offer_prompt:
+                    return {
+                        "action": "post_case",
+                        "session_id": session_id,
+                        "ui_actions": [
+                            {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
+                        ],
+                        "message": f"Switching to the Post Case tab. {offer_prompt}",
+                        "case_offer": True,
+                    }
+                else:
+                    # User already declined the offer - just switch tab
+                    return {
+                        "action": "post_case",
+                        "session_id": session_id,
+                        "ui_actions": [
+                            {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
+                            {"type": "ui.toast", "payload": {"message": "Switched to Post Case tab", "type": "info"}},
+                        ],
+                        "message": "Switching to the Post Case tab. You can type your case study here.",
+                    }
 
             # If on forum page, switch to cases tab there
             if current_page and '/forum' in current_page:
@@ -2761,10 +2914,11 @@ async def execute_action(
                         {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
                         {"type": "ui.toast", "payload": {"message": "Switched to Case Studies tab", "type": "info"}},
                     ],
-                    "message": "Switching to the Case Studies tab. What case would you like to post?",
+                    "message": "Switching to the Case Studies tab.",
                 }
 
-            # Otherwise navigate to console page and switch to cases tab
+            # Otherwise navigate to console page and switch to cases tab with offer
+            offer_prompt = conversation_manager.offer_case_posting(user_id)
             return {
                 "action": "post_case",
                 "session_id": session_id,
@@ -2772,7 +2926,8 @@ async def execute_action(
                     {"type": "ui.navigate", "payload": {"path": "/console"}},
                     {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
                 ],
-                "message": "Opening the console. You can post your case study from the Post Case tab.",
+                "message": f"Opening the console. {offer_prompt or 'You can type your case study here.'}",
+                "case_offer": bool(offer_prompt),
             }
 
         if action == 'post_to_discussion':

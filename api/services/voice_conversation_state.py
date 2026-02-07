@@ -39,6 +39,10 @@ class ConversationState(str, Enum):
     AWAITING_POLL_OPTION = "awaiting_poll_option"  # Waiting for a poll option
     AWAITING_POLL_MORE_OPTIONS = "awaiting_poll_more_options"  # Asked "Do you need more options?"
     AWAITING_POLL_CONFIRM = "awaiting_poll_confirm"  # Asked "Should I create the poll?"
+    # Case posting states
+    AWAITING_CASE_OFFER_RESPONSE = "awaiting_case_offer_response"  # Asked "Would you like to post a case?"
+    AWAITING_CASE_PROMPT = "awaiting_case_prompt"  # Waiting for case prompt dictation
+    AWAITING_CASE_CONFIRM = "awaiting_case_confirm"  # Asked "Should I post the case?"
 
 
 @dataclass
@@ -497,6 +501,10 @@ class ConversationContext:
     poll_options: List[str] = field(default_factory=list)  # Poll options
     poll_current_option_index: int = 1  # Current option being filled (1-based)
     poll_offer_declined: bool = False  # Track if user declined the poll offer
+
+    # Case posting state
+    case_prompt_content: str = ""  # The case study prompt content
+    case_offer_declined: bool = False  # Track if user declined the case offer
 
     # Timestamps
     last_interaction: float = 0.0
@@ -1585,4 +1593,194 @@ class VoiceConversationManager:
             "question": context.poll_question,
             "options": context.poll_options.copy(),
             "current_option_index": context.poll_current_option_index
+        }
+
+    # === Case Posting Flow ===
+
+    def offer_case_posting(self, user_id: Optional[int]) -> Optional[str]:
+        """Offer to help user post a case study. Returns prompt or None if already declined."""
+        context = self.get_context(user_id)
+
+        # Don't offer if user already declined this session
+        if context.case_offer_declined:
+            return None
+
+        context.state = ConversationState.AWAITING_CASE_OFFER_RESPONSE
+        self.save_context(user_id, context)
+
+        return "Would you like to post a case study?"
+
+    def handle_case_offer_response(self, user_id: Optional[int], accepted: bool) -> Dict[str, Any]:
+        """Handle user's response to the case offer.
+
+        Returns:
+            {
+                "accepted": bool,
+                "message": str,
+                "start_case_creation": bool
+            }
+        """
+        context = self.get_context(user_id)
+
+        if accepted:
+            # User wants to post a case - ask for the content
+            context.state = ConversationState.AWAITING_CASE_PROMPT
+            context.case_prompt_content = ""
+            self.save_context(user_id, context)
+            return {
+                "accepted": True,
+                "message": "Great! What case scenario would you like to present to students? You can dictate it now, and say 'done' or 'that's it' when you're finished.",
+                "start_case_creation": True
+            }
+        else:
+            # User declined - mark as declined so we don't ask again
+            context.state = ConversationState.IDLE
+            context.case_offer_declined = True
+            self.save_context(user_id, context)
+            return {
+                "accepted": False,
+                "message": "No problem. Let me know if you need anything else.",
+                "start_case_creation": False
+            }
+
+    def append_case_content(self, user_id: Optional[int], content: str) -> Dict[str, Any]:
+        """Append content to the case prompt during dictation.
+
+        Returns:
+            {
+                "content": str,  # The appended content
+                "total_content": str,  # Full accumulated content
+                "message": str,
+                "ui_actions": List[Dict]
+            }
+        """
+        context = self.get_context(user_id)
+
+        # Clean and append the content
+        clean_content = self._sanitize_transcription(content)
+
+        if context.case_prompt_content:
+            context.case_prompt_content += " " + clean_content
+        else:
+            context.case_prompt_content = clean_content
+
+        self.save_context(user_id, context)
+
+        return {
+            "content": clean_content,
+            "total_content": context.case_prompt_content,
+            "message": "Got it. Continue dictating, or say 'done' when you're finished.",
+            "ui_actions": [
+                {
+                    "action": "fillInput",
+                    "voiceId": "case-prompt",
+                    "value": context.case_prompt_content
+                }
+            ]
+        }
+
+    def finish_case_dictation(self, user_id: Optional[int]) -> Dict[str, Any]:
+        """Finish dictation and ask for confirmation.
+
+        Returns:
+            {
+                "content": str,
+                "message": str,
+                "ui_actions": List[Dict],
+                "ready_to_confirm": bool
+            }
+        """
+        context = self.get_context(user_id)
+
+        if not context.case_prompt_content.strip():
+            return {
+                "content": "",
+                "message": "It seems you haven't dictated any content yet. What case would you like to post?",
+                "ui_actions": [],
+                "ready_to_confirm": False
+            }
+
+        context.state = ConversationState.AWAITING_CASE_CONFIRM
+        self.save_context(user_id, context)
+
+        # Create a preview (first 100 chars)
+        preview = context.case_prompt_content[:100]
+        if len(context.case_prompt_content) > 100:
+            preview += "..."
+
+        return {
+            "content": context.case_prompt_content,
+            "message": f"Your case study says: \"{preview}\". Should I post it now?",
+            "ui_actions": [],
+            "ready_to_confirm": True
+        }
+
+    def handle_case_confirm(self, user_id: Optional[int], confirmed: bool) -> Dict[str, Any]:
+        """Handle user's confirmation to post the case.
+
+        Returns:
+            {
+                "confirmed": bool,
+                "message": str,
+                "ui_actions": List[Dict],
+                "case_content": str
+            }
+        """
+        context = self.get_context(user_id)
+
+        case_content = context.case_prompt_content
+
+        if confirmed:
+            # Post the case
+            message = "Posting your case study now!"
+            ui_actions = [
+                {
+                    "action": "clickButton",
+                    "voiceId": "post-case"
+                }
+            ]
+        else:
+            message = "Okay, I've cancelled the case posting. The content is still in the form if you want to edit it."
+            ui_actions = []
+
+        # Reset case state
+        context.state = ConversationState.IDLE
+        if not confirmed:
+            # Only clear the content if cancelled
+            context.case_prompt_content = ""
+        self.save_context(user_id, context)
+
+        return {
+            "confirmed": confirmed,
+            "message": message,
+            "ui_actions": ui_actions,
+            "case_content": case_content
+        }
+
+    def reset_case_offer(self, user_id: Optional[int]) -> None:
+        """Reset the case offer declined flag (e.g., when leaving console page)."""
+        context = self.get_context(user_id)
+        context.case_offer_declined = False
+        context.case_prompt_content = ""
+        if context.state in [
+            ConversationState.AWAITING_CASE_OFFER_RESPONSE,
+            ConversationState.AWAITING_CASE_PROMPT,
+            ConversationState.AWAITING_CASE_CONFIRM
+        ]:
+            context.state = ConversationState.IDLE
+        self.save_context(user_id, context)
+
+    def is_in_case_creation(self, user_id: Optional[int]) -> bool:
+        """Check if user is currently creating a case."""
+        context = self.get_context(user_id)
+        return context.state in [
+            ConversationState.AWAITING_CASE_PROMPT,
+            ConversationState.AWAITING_CASE_CONFIRM
+        ]
+
+    def get_case_creation_data(self, user_id: Optional[int]) -> Dict[str, Any]:
+        """Get the current case creation data."""
+        context = self.get_context(user_id)
+        return {
+            "content": context.case_prompt_content
         }

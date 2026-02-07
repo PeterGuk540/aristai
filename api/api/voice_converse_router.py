@@ -2697,6 +2697,7 @@ async def execute_action(
                 )
             if result:
                 result["ui_actions"] = [
+                    {"type": "ui.clickButton", "payload": {"target": "start-copilot"}},
                     {"type": "ui.toast", "payload": {"message": "Copilot is now active!", "type": "success"}},
                 ]
             return result
@@ -2714,7 +2715,7 @@ async def execute_action(
                 confirmation_prompt = conversation_manager.request_confirmation(
                     user_id,
                     "stop_copilot",
-                    {"session_id": session_id, "voice_id": "btn-stop-copilot"},
+                    {"session_id": session_id, "voice_id": "stop-copilot"},
                     current_page or "/console"
                 )
                 return {
@@ -2736,6 +2737,7 @@ async def execute_action(
                 )
             if result:
                 result["ui_actions"] = [
+                    {"type": "ui.clickButton", "payload": {"target": "stop-copilot"}},
                     {"type": "ui.toast", "payload": {"message": "Copilot stopped", "type": "info"}},
                 ]
             return result

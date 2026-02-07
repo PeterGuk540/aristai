@@ -2716,7 +2716,17 @@ async def execute_action(
                 "conversation_state": "dropdown_selection",
             }
 
-        if action == 'go_live':
+        if action == 'go_live' or action == 'set_session_live':
+            # If on sessions page manage tab, just click the button - frontend handles API call
+            if current_page and '/sessions' in current_page:
+                return {
+                    "action": "set_session_live",
+                    "message": "Setting session to live...",
+                    "ui_actions": [
+                        {"type": "ui.clickButton", "payload": {"target": "go-live"}},
+                    ],
+                }
+            # On other pages, update via backend and navigate to console
             course_id = _resolve_course_id(db, current_page, user_id)
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if session_id:
@@ -2737,7 +2747,17 @@ async def execute_action(
                 return result
             return {"error": "No session found to go live."}
 
-        if action == 'end_session':
+        if action == 'end_session' or action == 'set_session_completed':
+            # If on sessions page manage tab, just click the button - frontend handles API call
+            if current_page and '/sessions' in current_page:
+                return {
+                    "action": "set_session_completed",
+                    "message": "Completing session...",
+                    "ui_actions": [
+                        {"type": "ui.clickButton", "payload": {"target": "complete-session"}},
+                    ],
+                }
+            # On other pages, use confirmation flow
             course_id = _resolve_course_id(db, current_page, user_id)
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if not session_id:
@@ -2853,34 +2873,13 @@ async def execute_action(
                 ],
             }
 
-        # === SESSION STATUS MANAGEMENT ===
+        # === SESSION STATUS MANAGEMENT (on sessions page) ===
         if action == 'set_session_draft':
             return {
                 "action": "set_session_draft",
                 "message": "Setting session to draft...",
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "set-to-draft"}},
-                    {"type": "ui.toast", "payload": {"message": "Session set to draft", "type": "success"}},
-                ],
-            }
-
-        if action == 'set_session_live':
-            return {
-                "action": "set_session_live",
-                "message": "Going live!",
-                "ui_actions": [
-                    {"type": "ui.clickButton", "payload": {"target": "go-live"}},
-                    {"type": "ui.toast", "payload": {"message": "Session is now live!", "type": "success"}},
-                ],
-            }
-
-        if action == 'set_session_completed':
-            return {
-                "action": "set_session_completed",
-                "message": "Completing session...",
-                "ui_actions": [
-                    {"type": "ui.clickButton", "payload": {"target": "complete-session"}},
-                    {"type": "ui.toast", "payload": {"message": "Session completed", "type": "success"}},
                 ],
             }
 

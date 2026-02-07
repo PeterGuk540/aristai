@@ -2046,10 +2046,40 @@ async def execute_action(
                 # Fetch sessions for active course - result is {"sessions": [...]}
                 course_id = _resolve_course_id(db, current_page, user_id)
                 if course_id:
-                    result = _execute_tool(db, 'list_sessions', {"course_id": course_id})
+                    # Check if user wants only live sessions
+                    transcript_lower = (transcript or "").lower()
+                    status_filter = None
+                    if 'live' in transcript_lower:
+                        status_filter = 'live'
+                    elif 'draft' in transcript_lower:
+                        status_filter = 'draft'
+                    elif 'completed' in transcript_lower or 'complete' in transcript_lower:
+                        status_filter = 'completed'
+                    elif 'scheduled' in transcript_lower:
+                        status_filter = 'scheduled'
+
+                    list_params = {"course_id": course_id}
+                    if status_filter:
+                        list_params["status"] = status_filter
+
+                    result = _execute_tool(db, 'list_sessions', list_params)
                     sessions = result.get("sessions", []) if isinstance(result, dict) else []
                     if sessions:
-                        options = [DropdownOption(label=s.get('title', f"Session {s['id']}"), value=str(s['id'])) for s in sessions]
+                        # Include status in label for clarity
+                        options = [
+                            DropdownOption(
+                                label=f"{s.get('title', f'Session {s[\"id\"]}')} ({s.get('status', 'unknown')})",
+                                value=str(s['id'])
+                            ) for s in sessions
+                        ]
+                else:
+                    # No course selected - prompt user to select course first
+                    return {
+                        "action": "expand_dropdown",
+                        "message": "Please select a course first before choosing a session.",
+                        "ui_actions": [],
+                        "needs_course": True,
+                    }
 
             if options:
                 # Start dropdown selection flow with verbal listing
@@ -2299,8 +2329,19 @@ async def execute_action(
         if action == 'list_sessions':
             course_id = _resolve_course_id(db, current_page, user_id)
             if not course_id:
-                return []
-            return _execute_tool(db, 'list_sessions', {"course_id": course_id})
+                return {"message": "Please select a course first to view sessions.", "sessions": []}
+
+            # Check if user wants only live sessions
+            transcript_lower = (transcript or "").lower()
+            status_filter = None
+            if 'live' in transcript_lower:
+                status_filter = 'live'
+
+            list_params = {"course_id": course_id}
+            if status_filter:
+                list_params["status"] = status_filter
+
+            return _execute_tool(db, 'list_sessions', list_params)
 
         if action == 'create_session':
             course_id = _resolve_course_id(db, current_page, user_id)
@@ -2321,23 +2362,61 @@ async def execute_action(
 
         if action == 'select_session':
             course_id = _resolve_course_id(db, current_page, user_id)
-            if course_id:
-                result = _execute_tool(db, 'list_sessions', {"course_id": course_id})
-                sessions = result.get("sessions", []) if isinstance(result, dict) else []
-                if sessions and len(sessions) > 0:
-                    first_session = sessions[0]
-                    # Update context memory with selected session
-                    if user_id:
-                        context_store.update_context(user_id, active_session_id=first_session['id'])
-                    return {
-                        "action": "select_session",
-                        "session": first_session,
-                        "ui_actions": [
-                            {"type": "ui.navigate", "payload": {"path": f"/sessions/{first_session['id']}"}},
-                            {"type": "ui.toast", "payload": {"message": f"Selected: {first_session.get('title', 'session')}", "type": "success"}},
-                        ],
-                    }
-            return {"error": "No sessions found to select."}
+            if not course_id:
+                return {"message": "Please select a course first before choosing a session."}
+
+            # Check if user wants only live sessions
+            transcript_lower = (transcript or "").lower()
+            status_filter = None
+            if 'live' in transcript_lower:
+                status_filter = 'live'
+            elif 'draft' in transcript_lower:
+                status_filter = 'draft'
+
+            list_params = {"course_id": course_id}
+            if status_filter:
+                list_params["status"] = status_filter
+
+            result = _execute_tool(db, 'list_sessions', list_params)
+            sessions = result.get("sessions", []) if isinstance(result, dict) else []
+
+            if not sessions:
+                status_msg = f" with status '{status_filter}'" if status_filter else ""
+                return {"message": f"No sessions found{status_msg} for this course."}
+
+            # If only one session, select it directly
+            if len(sessions) == 1:
+                session = sessions[0]
+                if user_id:
+                    context_store.update_context(user_id, active_session_id=session['id'])
+                return {
+                    "action": "select_session",
+                    "session": session,
+                    "ui_actions": [
+                        {"type": "ui.selectDropdown", "payload": {"target": "select-session", "value": str(session['id'])}},
+                        {"type": "ui.toast", "payload": {"message": f"Selected: {session.get('title', 'session')}", "type": "success"}},
+                    ],
+                }
+
+            # Multiple sessions - start dropdown selection flow
+            options = [
+                DropdownOption(
+                    label=f"{s.get('title', f'Session {s[\"id\"]}')} ({s.get('status', 'unknown')})",
+                    value=str(s['id'])
+                ) for s in sessions
+            ]
+            prompt = conversation_manager.start_dropdown_selection(
+                user_id, "select-session", options, current_page or "/sessions"
+            )
+            return {
+                "action": "select_session",
+                "message": prompt,
+                "ui_actions": [
+                    {"type": "ui.expandDropdown", "payload": {"target": "select-session"}},
+                ],
+                "options": [{"label": o.label, "value": o.value} for o in options],
+                "conversation_state": "dropdown_selection",
+            }
 
         if action == 'go_live':
             course_id = _resolve_course_id(db, current_page, user_id)

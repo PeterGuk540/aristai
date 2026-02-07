@@ -930,6 +930,29 @@ class VoiceConversationManager:
             "voice_id": voice_id
         }
 
+    def cancel_dropdown_selection(self, user_id: Optional[int]) -> Dict[str, Any]:
+        """Cancel an active dropdown selection and reset state to IDLE."""
+        context = self.get_context(user_id)
+
+        if context.state != ConversationState.AWAITING_DROPDOWN_SELECTION:
+            return {
+                "cancelled": False,
+                "message": "No active selection to cancel.",
+                "voice_id": None
+            }
+
+        voice_id = context.active_dropdown
+        context.state = ConversationState.IDLE
+        context.active_dropdown = None
+        context.dropdown_options = []
+        self.save_context(user_id, context)
+
+        return {
+            "cancelled": True,
+            "message": "Selection cancelled. What would you like to do next?",
+            "voice_id": voice_id
+        }
+
     # === Confirmation Flow ===
 
     def request_confirmation(

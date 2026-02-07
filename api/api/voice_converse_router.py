@@ -933,6 +933,32 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
     # --- Handle dropdown selection state ---
     if conv_context.state == ConversationState.AWAITING_DROPDOWN_SELECTION:
+        # Check for cancel/exit keywords BEFORE trying to match selection
+        cancel_words = ['cancel', 'stop', 'exit', 'quit', 'abort', 'nevermind', 'never mind', 'go back', 'no thanks', "don't want", "dont want", "no one", "nobody", "none"]
+        if any(word in transcript.lower() for word in cancel_words):
+            result = conversation_manager.cancel_dropdown_selection(request.user_id)
+            return ConverseResponse(
+                message=sanitize_speech(result["message"]),
+                action=ActionResponse(type='info'),
+                suggestions=["Go to sessions", "View courses", "Help"],
+            )
+
+        # Check for navigation intent - user wants to go somewhere else
+        nav_path = detect_navigation_intent(transcript)
+        if nav_path:
+            conversation_manager.cancel_dropdown_selection(request.user_id)
+            message = sanitize_speech(f"Cancelling selection. {generate_conversational_response('navigate', nav_path)}")
+            return ConverseResponse(
+                message=message,
+                action=ActionResponse(type='navigate', target=nav_path),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": nav_path}},
+                    ]
+                }],
+                suggestions=["What's next?", "Go back", "Help me"],
+            )
+
         result = conversation_manager.select_dropdown_option(request.user_id, transcript)
         if result["success"]:
             selected = result["selected"]

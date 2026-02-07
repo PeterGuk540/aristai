@@ -70,6 +70,68 @@ export default function ConsolePage() {
   const [uploadingRoster, setUploadingRoster] = useState(false);
   const [rosterResults, setRosterResults] = useState<any>(null);
 
+  // Active tab state for voice control
+  const [activeTab, setActiveTab] = useState<string>(isAdmin ? "requests" : "copilot");
+
+  // Listen for voice tab switching events
+  useEffect(() => {
+    const handleVoiceTabSwitch = (event: CustomEvent) => {
+      const { tabName, target } = event.detail || {};
+      console.log('🎤 Console: Voice tab switch received:', { tabName, target });
+
+      // Normalize the tab name
+      let normalizedTab = (tabName || '').toLowerCase().replace(/\s+/g, '');
+
+      // Map common names to tab values
+      const tabMap: Record<string, string> = {
+        'copilot': 'copilot',
+        'aicopilot': 'copilot',
+        'aiassistant': 'copilot',
+        'polls': 'polls',
+        'poll': 'polls',
+        'polling': 'polls',
+        'cases': 'cases',
+        'case': 'cases',
+        'postcase': 'cases',
+        'casestudy': 'cases',
+        'casestudies': 'cases',
+        'requests': 'requests',
+        'request': 'requests',
+        'instructorrequests': 'requests',
+        'roster': 'roster',
+        'rosterupload': 'roster',
+      };
+
+      const targetTab = tabMap[normalizedTab] || normalizedTab;
+      console.log('🎤 Console: Switching to tab:', targetTab);
+
+      // Check if the tab requires a session and we don't have one
+      const requiresSession = ['copilot', 'polls', 'cases'].includes(targetTab);
+      if (requiresSession && !selectedSessionId) {
+        console.warn('🎤 Console: Tab requires session but none selected:', targetTab);
+        // Still switch the tab - the UI will show the "select session" message
+      }
+
+      setActiveTab(targetTab);
+    };
+
+    // Listen for both event types
+    window.addEventListener('ui.switchTab', handleVoiceTabSwitch as EventListener);
+    window.addEventListener('voice-select-tab', handleVoiceTabSwitch as EventListener);
+
+    return () => {
+      window.removeEventListener('ui.switchTab', handleVoiceTabSwitch as EventListener);
+      window.removeEventListener('voice-select-tab', handleVoiceTabSwitch as EventListener);
+    };
+  }, [selectedSessionId]);
+
+  // Update active tab when session is selected/deselected
+  useEffect(() => {
+    if (selectedSessionId && activeTab === 'requests' && !isAdmin) {
+      setActiveTab('copilot');
+    }
+  }, [selectedSessionId, activeTab, isAdmin]);
+
   const fetchCourses = async () => {
     try {
       const data = await api.getCourses();
@@ -512,7 +574,7 @@ export default function ConsolePage() {
         </Select>
       </div>
 
-      <Tabs defaultValue={selectedSessionId ? "copilot" : (isAdmin ? "requests" : "copilot")}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="copilot" disabled={!selectedSessionId}>
             AI Copilot

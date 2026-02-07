@@ -2735,18 +2735,44 @@ async def execute_action(
                 ],
             }
 
-        # === FORUM ACTIONS ===
+        # === FORUM/CASE ACTIONS ===
         if action == 'post_case':
             course_id = _resolve_course_id(db, current_page, user_id)
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            # Check if we're on the console page - if so, just switch to cases tab
+            if current_page and '/console' in current_page:
+                return {
+                    "action": "post_case",
+                    "session_id": session_id,
+                    "ui_actions": [
+                        {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
+                        {"type": "ui.toast", "payload": {"message": "Switched to Post Case tab", "type": "info"}},
+                    ],
+                    "message": "Switching to the Post Case tab. You can type or dictate your case study here.",
+                }
+
+            # If on forum page, switch to cases tab there
+            if current_page and '/forum' in current_page:
+                return {
+                    "action": "post_case",
+                    "session_id": session_id,
+                    "ui_actions": [
+                        {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
+                        {"type": "ui.toast", "payload": {"message": "Switched to Case Studies tab", "type": "info"}},
+                    ],
+                    "message": "Switching to the Case Studies tab. What case would you like to post?",
+                }
+
+            # Otherwise navigate to console page and switch to cases tab
             return {
                 "action": "post_case",
                 "session_id": session_id,
                 "ui_actions": [
-                    {"type": "ui.navigate", "payload": {"path": "/forum"}},
-                    {"type": "ui.openModal", "payload": {"modal": "postCase", "sessionId": session_id}},
+                    {"type": "ui.navigate", "payload": {"path": "/console"}},
+                    {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
                 ],
-                "message": "Opening case study creation. What case would you like to post?",
+                "message": "Opening the console. You can post your case study from the Post Case tab.",
             }
 
         if action == 'post_to_discussion':

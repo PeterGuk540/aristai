@@ -65,6 +65,45 @@ export default function ForumPage() {
   // Moderation
   const [expandedPosts, setExpandedPosts] = useState<Set<number>>(new Set());
 
+  // Active tab state for voice control
+  const [activeTab, setActiveTab] = useState<string>('discussion');
+
+  // Listen for voice tab switching events
+  useEffect(() => {
+    const handleVoiceTabSwitch = (event: CustomEvent) => {
+      const { tabName, target } = event.detail || {};
+      console.log('🎤 Forum: Voice tab switch received:', { tabName, target });
+
+      // Normalize the tab name
+      let normalizedTab = (tabName || '').toLowerCase().replace(/\s+/g, '');
+
+      // Map common names to tab values
+      const tabMap: Record<string, string> = {
+        'cases': 'cases',
+        'case': 'cases',
+        'casestudies': 'cases',
+        'casestudy': 'cases',
+        'discussion': 'discussion',
+        'discussions': 'discussion',
+        'posts': 'discussion',
+        'forum': 'discussion',
+      };
+
+      const targetTab = tabMap[normalizedTab] || normalizedTab;
+      console.log('🎤 Forum: Switching to tab:', targetTab);
+      setActiveTab(targetTab);
+    };
+
+    // Listen for both event types
+    window.addEventListener('ui.switchTab', handleVoiceTabSwitch as EventListener);
+    window.addEventListener('voice-select-tab', handleVoiceTabSwitch as EventListener);
+
+    return () => {
+      window.removeEventListener('ui.switchTab', handleVoiceTabSwitch as EventListener);
+      window.removeEventListener('voice-select-tab', handleVoiceTabSwitch as EventListener);
+    };
+  }, []);
+
   const fetchCourses = async () => {
     try {
       if (isInstructor) {
@@ -478,7 +517,7 @@ export default function ForumPage() {
           </CardContent>
         </Card>
       ) : (
-        <Tabs defaultValue="discussion">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="cases">Case Studies</TabsTrigger>
             <TabsTrigger value="discussion">Discussion ({posts.length})</TabsTrigger>

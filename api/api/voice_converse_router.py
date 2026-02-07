@@ -970,14 +970,31 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         result = conversation_manager.select_dropdown_option(request.user_id, transcript)
         if result["success"]:
             selected = result["selected"]
+            voice_id = result["voice_id"]
             conversation_manager.reset_retry_count(request.user_id)
+
+            # Update context memory based on what was selected
+            if request.user_id and selected.value:
+                try:
+                    selected_id = int(selected.value)
+                    if voice_id and 'course' in voice_id.lower():
+                        # Course was selected - update active course
+                        context_store.update_context(request.user_id, active_course_id=selected_id)
+                        print(f"🔍 Updated active_course_id to {selected_id} for user {request.user_id}")
+                    elif voice_id and 'session' in voice_id.lower():
+                        # Session was selected - update active session
+                        context_store.update_context(request.user_id, active_session_id=selected_id)
+                        print(f"🔍 Updated active_session_id to {selected_id} for user {request.user_id}")
+                except (ValueError, TypeError):
+                    pass  # Value wasn't a numeric ID
+
             return ConverseResponse(
                 message=sanitize_speech(result["message"]),
                 action=ActionResponse(type='execute', executed=True),
                 results=[{
                     "ui_actions": [
                         {"type": "ui.selectDropdown", "payload": {
-                            "target": result["voice_id"],
+                            "target": voice_id,
                             "value": selected.value,
                             "optionName": selected.label,
                         }},
@@ -2047,13 +2064,16 @@ async def execute_action(
                 course_id = _resolve_course_id(db, current_page, user_id)
                 if course_id:
                     # Check if user wants only live sessions
+                    # Note: "live" can be pronounced two ways and transcribed differently
                     transcript_lower = (transcript or "").lower()
                     status_filter = None
-                    if 'live' in transcript_lower:
+                    # Check for "live" - various transcriptions for both pronunciations
+                    live_keywords = ['live', 'alive', 'active', 'ongoing', 'running', 'in progress', 'current']
+                    if any(kw in transcript_lower for kw in live_keywords):
                         status_filter = 'live'
                     elif 'draft' in transcript_lower:
                         status_filter = 'draft'
-                    elif 'completed' in transcript_lower or 'complete' in transcript_lower:
+                    elif 'completed' in transcript_lower or 'complete' in transcript_lower or 'ended' in transcript_lower:
                         status_filter = 'completed'
                     elif 'scheduled' in transcript_lower:
                         status_filter = 'scheduled'
@@ -2332,9 +2352,11 @@ async def execute_action(
                 return {"message": "Please select a course first to view sessions.", "sessions": []}
 
             # Check if user wants only live sessions
+            # Note: "live" can be pronounced two ways and transcribed differently
             transcript_lower = (transcript or "").lower()
             status_filter = None
-            if 'live' in transcript_lower:
+            live_keywords = ['live', 'alive', 'active', 'ongoing', 'running', 'in progress', 'current']
+            if any(kw in transcript_lower for kw in live_keywords):
                 status_filter = 'live'
 
             list_params = {"course_id": course_id}
@@ -2366,9 +2388,11 @@ async def execute_action(
                 return {"message": "Please select a course first before choosing a session."}
 
             # Check if user wants only live sessions
+            # Note: "live" can be pronounced two ways and transcribed differently
             transcript_lower = (transcript or "").lower()
             status_filter = None
-            if 'live' in transcript_lower:
+            live_keywords = ['live', 'alive', 'active', 'ongoing', 'running', 'in progress', 'current']
+            if any(kw in transcript_lower for kw in live_keywords):
                 status_filter = 'live'
             elif 'draft' in transcript_lower:
                 status_filter = 'draft'

@@ -866,6 +866,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     # === CHECK CONVERSATION STATE FIRST ===
     # Handle ongoing conversational flows (form filling, dropdown selection, confirmation)
     conv_context = conversation_manager.get_context(request.user_id)
+    print(f"🔍 VOICE STATE: user_id={request.user_id}, state={conv_context.state}, transcript='{transcript[:50]}...'")
 
     # --- Handle confirmation state ---
     if conv_context.state == ConversationState.AWAITING_CONFIRMATION:
@@ -933,9 +934,16 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
     # --- Handle dropdown selection state ---
     if conv_context.state == ConversationState.AWAITING_DROPDOWN_SELECTION:
+        print(f"🔍 DROPDOWN STATE: Checking cancel for transcript: '{transcript}'")
+        print(f"🔍 DROPDOWN STATE: active_dropdown={conv_context.active_dropdown}, options_count={len(conv_context.dropdown_options)}")
+
         # Check for cancel/exit keywords BEFORE trying to match selection
-        cancel_words = ['cancel', 'stop', 'exit', 'quit', 'abort', 'nevermind', 'never mind', 'go back', 'no thanks', "don't want", "dont want", "no one", "nobody", "none"]
-        if any(word in transcript.lower() for word in cancel_words):
+        cancel_words = ['cancel', 'stop', 'exit', 'quit', 'abort', 'nevermind', 'never mind', 'go back', 'no thanks', "don't want", "dont want", "no one", "nobody", "none", "no", "nope", "skip"]
+        transcript_lower = transcript.lower()
+        matched_cancel = [word for word in cancel_words if word in transcript_lower]
+        print(f"🔍 DROPDOWN STATE: Cancel words matched: {matched_cancel}")
+
+        if matched_cancel:
             result = conversation_manager.cancel_dropdown_selection(request.user_id)
             return ConverseResponse(
                 message=sanitize_speech(result["message"]),

@@ -166,6 +166,15 @@ ACTION_PATTERNS = {
         r'\bend\s+(the\s+)?copilot\b',
         r'\bpause\s+(the\s+)?copilot\b',
     ],
+    'refresh_interventions': [
+        r'\brefresh\s+(the\s+)?interventions?\b',
+        r'\bupdate\s+(the\s+)?interventions?\b',
+        r'\breload\s+(the\s+)?interventions?\b',
+        r'\bget\s+(new\s+)?interventions?\b',
+        r'\bfetch\s+(the\s+)?interventions?\b',
+        r'\bcheck\s+(for\s+)?(new\s+)?interventions?\b',
+        r'\binterventions?\s+refresh\b',
+    ],
     # Poll actions
     'create_poll': [
         r'\bcreate\s+(a\s+)?poll\b',
@@ -712,6 +721,9 @@ def generate_conversational_response(
 
         if intent_value == 'stop_copilot':
             return "Copilot has been stopped. You can restart it anytime by saying 'start copilot'."
+
+        if intent_value == 'refresh_interventions':
+            return "Refreshing interventions from the copilot."
 
         if intent_value == 'get_interventions':
             if isinstance(results, list) and len(results) > 0:
@@ -2741,6 +2753,16 @@ async def execute_action(
                     {"type": "ui.toast", "payload": {"message": "Copilot stopped", "type": "info"}},
                 ]
             return result
+
+        if action == 'refresh_interventions':
+            return {
+                "action": "refresh_interventions",
+                "message": "Refreshing interventions...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "refresh-interventions"}},
+                    {"type": "ui.toast", "payload": {"message": "Interventions refreshed", "type": "success"}},
+                ],
+            }
 
         # === POLL ACTIONS ===
         if action == 'create_poll':

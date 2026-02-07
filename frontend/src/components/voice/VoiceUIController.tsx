@@ -73,6 +73,7 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'stopCopilotButton': '[data-voice-id="stop-copilot"]',
     'stop-copilot': '[data-voice-id="stop-copilot"]',
     'refreshButton': '[data-voice-id="refresh-interventions"]',
+    'refresh-interventions': '[data-voice-id="refresh-interventions"]',
     'pollQuestionInput': '[data-voice-id="poll-question"]',
     'poll-question': '[data-voice-id="poll-question"]',
     'poll-option-1': '[data-voice-id="poll-option-1"]',

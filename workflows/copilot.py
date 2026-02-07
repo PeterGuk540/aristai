@@ -15,11 +15,15 @@ Each iteration:
    - Optional poll suggestion
 4. Includes evidence_post_ids for citations
 5. Tracks token usage and cost (Milestone 6)
+6. Sends proactive voice alerts for critical conditions
 """
 import logging
+import os
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+import requests
 
 from sqlalchemy.orm import Session
 
@@ -46,6 +50,127 @@ COPILOT_INTERVAL_SECONDS = 90  # Run analysis every 90 seconds
 COPILOT_MAX_DURATION_SECONDS = 3600  # Max 1 hour runtime
 MIN_POSTS_FOR_ANALYSIS = 1  # Minimum posts needed to generate interventions
 DEFAULT_POSTS_LIMIT = 20  # Default number of recent posts to analyze
+
+# Proactive alerts configuration
+PROACTIVE_ALERTS_ENABLED = True
+LOW_PARTICIPATION_THRESHOLD = 0.3  # Alert if participation < 30%
+CONFUSION_ALERT_THRESHOLD = 2  # Alert if confusion points >= 2
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+
+
+# ============ Proactive Voice Alerts ============
+
+def send_voice_alert(
+    user_id: int,
+    message: str,
+    alert_type: str = "info",
+    priority: str = "normal",
+) -> bool:
+    """
+    Send a proactive voice alert to the instructor.
+
+    This pushes a UI action that the frontend can use to speak the alert
+    via the voice assistant.
+
+    Args:
+        user_id: The instructor's user ID
+        message: The alert message to speak
+        alert_type: Type of alert (info, warning, critical)
+        priority: Priority level (normal, high)
+
+    Returns:
+        True if alert was sent successfully
+    """
+    if not PROACTIVE_ALERTS_ENABLED:
+        return False
+
+    try:
+        # Publish a UI action for voice alert
+        response = requests.post(
+            f"{API_BASE_URL}/api/ui-actions/publish",
+            json={
+                "user_id": user_id,
+                "type": "voice.alert",
+                "payload": {
+                    "message": message,
+                    "alert_type": alert_type,
+                    "priority": priority,
+                    "speak": True,
+                },
+            },
+            headers={"Authorization": "Bearer internal-worker"},
+            timeout=5,
+        )
+        if response.status_code == 200:
+            logger.info(f"Voice alert sent to user {user_id}: {message[:50]}...")
+            return True
+        else:
+            logger.warning(f"Failed to send voice alert: {response.status_code}")
+            return False
+    except Exception as e:
+        logger.warning(f"Error sending voice alert: {e}")
+        return False
+
+
+def check_and_send_alerts(
+    session_id: int,
+    intervention_data: Dict[str, Any],
+    db: Session,
+    instructor_user_id: Optional[int] = None,
+) -> List[str]:
+    """
+    Check intervention data for alert conditions and send proactive alerts.
+
+    Args:
+        session_id: The session being monitored
+        intervention_data: The generated intervention data
+        db: Database session
+        instructor_user_id: Override instructor user ID (otherwise looked up from course)
+
+    Returns:
+        List of alert messages that were sent
+    """
+    alerts_sent = []
+
+    if not PROACTIVE_ALERTS_ENABLED:
+        return alerts_sent
+
+    # Get instructor user ID if not provided
+    if not instructor_user_id:
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        if session:
+            course = db.query(Course).filter(Course.id == session.course_id).first()
+            if course:
+                instructor_user_id = course.instructor_id
+
+    if not instructor_user_id:
+        logger.warning("No instructor user ID found for alerts")
+        return alerts_sent
+
+    # Check for critical confusion points
+    confusion_points = intervention_data.get("confusion_points", [])
+    if len(confusion_points) >= CONFUSION_ALERT_THRESHOLD:
+        issues = [cp.get("issue", "Unknown") for cp in confusion_points[:2]]
+        message = f"Alert: {len(confusion_points)} areas of confusion detected. Top issues: {'; '.join(issues)}"
+        if send_voice_alert(instructor_user_id, message, "warning", "high"):
+            alerts_sent.append(message)
+
+    # Check overall assessment for low engagement
+    assessment = intervention_data.get("overall_assessment", {})
+    engagement_level = assessment.get("engagement_level", "").lower()
+    if engagement_level in ["low", "very_low", "minimal"]:
+        message = f"Alert: Student engagement is {engagement_level}. Consider using a re-engagement activity."
+        if send_voice_alert(instructor_user_id, message, "warning", "normal"):
+            alerts_sent.append(message)
+
+    # Check for low understanding
+    understanding_level = assessment.get("understanding_level", "").lower()
+    if understanding_level in ["low", "struggling", "confused"]:
+        message = f"Alert: Class understanding appears {understanding_level}. You may want to clarify key concepts."
+        if send_voice_alert(instructor_user_id, message, "warning", "normal"):
+            alerts_sent.append(message)
+
+    return alerts_sent
 
 
 # ============ Data Formatting ============
@@ -328,6 +453,11 @@ def run_copilot_single_iteration(
     db.add(db_intervention)
     db.commit()
     db.refresh(db_intervention)
+
+    # Send proactive voice alerts for critical conditions
+    alerts_sent = check_and_send_alerts(session_id, intervention_data, db)
+    if alerts_sent:
+        logger.info(f"Sent {len(alerts_sent)} proactive alerts for session {session_id}")
 
     logger.info(
         f"Copilot iteration complete for session {session_id}: "

@@ -86,6 +86,21 @@ export const executeUiAction = (action: UiAction, router: ReturnType<typeof useR
       console.log('🎤 Dispatching voice-menu-action:', payload);
       window.dispatchEvent(new CustomEvent('voice-menu-action', { detail: payload }));
       break;
+    case 'voice.alert':
+      // Proactive voice alert from backend (e.g., copilot alerts)
+      console.log('🔔 Voice alert received:', payload);
+      window.dispatchEvent(new CustomEvent('voice.alert', { detail: payload }));
+      // Also show a toast notification for visibility
+      if (payload?.message) {
+        window.dispatchEvent(new CustomEvent('ui.toast', {
+          detail: {
+            message: payload.message,
+            type: payload.alert_type || 'info',
+            duration: 8000, // Longer duration for alerts
+          }
+        }));
+      }
+      break;
     default:
       // For any unknown action types, try dispatching as a custom event
       if (type.startsWith('ui.')) {

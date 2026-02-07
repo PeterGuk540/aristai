@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Mic, Navigation, Settings, FileText, MessageSquare, BarChart, Users, Play, CheckCircle, Moon, LogOut } from 'lucide-react';
+import { X, Mic, Navigation, Settings, FileText, MessageSquare, BarChart, Users, Play, CheckCircle, Moon, LogOut, Brain, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceCommandGuideProps {
@@ -105,6 +105,23 @@ const commandCategories: CommandCategory[] = [
       { phrase: '"Select session"', alternatives: ['"Choose session"'], description: 'Open the session dropdown' },
       { phrase: '"Refresh report"', alternatives: ['"Reload report"', '"Update report"'], description: 'Refresh the current report' },
       { phrase: '"Regenerate report"', alternatives: ['"Generate new report"', '"Rebuild report"'], description: 'Regenerate the AI report' },
+    ],
+  },
+  {
+    id: 'intelligence',
+    label: 'AI Insights',
+    icon: Brain,
+    description: 'Ask questions and get intelligent summaries',
+    commands: [
+      { phrase: '"How\'s the class doing?"', alternatives: ['"Class status"', '"Quick update"', '"Session overview"'], description: 'Get a quick summary of participation, engagement, and copilot insights' },
+      { phrase: '"Who needs help?"', alternatives: ['"Struggling students"', '"Who\'s behind?"'], description: 'Identify students who haven\'t participated or are struggling' },
+      { phrase: '"What were the misconceptions?"', alternatives: ['"Common mistakes"', '"What did students get wrong?"'], description: 'Review misconceptions identified in reports or by copilot' },
+      { phrase: '"How did students score?"', alternatives: ['"Student scores"', '"Class performance"'], description: 'Get score statistics from the session report' },
+      { phrase: '"How was participation?"', alternatives: ['"Participation rate"', '"Who participated?"'], description: 'Get detailed participation statistics' },
+      { phrase: '"Read the latest posts"', alternatives: ['"What did students post?"', '"Recent activity"'], description: 'Have the assistant read recent discussion posts aloud' },
+      { phrase: '"What did copilot suggest?"', alternatives: ['"Copilot suggestions"', '"Teaching tips"'], description: 'Hear the latest copilot recommendations and insights' },
+      { phrase: '"Summarize the discussion"', alternatives: ['"Discussion summary"', '"Key themes"'], description: 'Get a summary of what students are discussing' },
+      { phrase: '"How is [name] doing?"', alternatives: ['"Check on [name]"', '"[name]\'s performance"'], description: 'Look up a specific student\'s participation and scores' },
     ],
   },
   {

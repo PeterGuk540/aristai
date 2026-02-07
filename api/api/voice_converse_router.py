@@ -497,6 +497,94 @@ ACTION_PATTERNS = {
         r'\bany\s+(confusion|misconceptions)\b',
         r'\bwhat\s+(do\s+)?students\s+(need|want|ask)\b',
     ],
+    # === NEW HIGH-IMPACT VOICE FEATURES ===
+    # Class status overview - "How's the class doing?"
+    'class_status': [
+        r'\bhow\'?s\s+(the\s+)?(class|session|discussion)\s+(doing|going)\b',
+        r'\bclass\s+(status|overview|update)\b',
+        r'\bhow\s+(is|are)\s+(the\s+)?(students?|class|everyone)\s+(doing|performing)\b',
+        r'\bgive\s+me\s+(a\s+)?(quick\s+)?(status|update|overview)\b',
+        r'\bquick\s+(status|update|overview)\b',
+        r'\bsession\s+(status|overview)\b',
+        r'\bwhat\'?s\s+happening\s+(in\s+)?(the\s+)?(class|session|discussion)\b',
+        r'\bsituation\s+report\b',
+        r'\bsitrep\b',
+    ],
+    # Who needs help - identify struggling students
+    'who_needs_help': [
+        r'\bwho\s+(needs|requires)\s+help\b',
+        r'\bwho\'?s\s+struggling\b',
+        r'\bstruggling\s+students\b',
+        r'\bstudents?\s+(who\s+)?(need|needs|requiring)\s+(help|attention|support)\b',
+        r'\bwho\s+(is|are)\s+confused\b',
+        r'\bconfused\s+students\b',
+        r'\bwho\s+(hasn\'?t|have\s*n\'?t|has\s+not)\s+(participated|posted)\b',
+        r'\bnon[-\s]?participants\b',
+        r'\bwho\'?s\s+behind\b',
+        r'\bat[-\s]?risk\s+students\b',
+        r'\bwho\s+should\s+i\s+(help|focus\s+on|pay\s+attention\s+to)\b',
+    ],
+    # Report Q&A - ask about misconceptions
+    'ask_misconceptions': [
+        r'\bwhat\s+(were|are)\s+(the\s+)?(main\s+)?misconceptions?\b',
+        r'\bwhat\s+did\s+students\s+get\s+wrong\b',
+        r'\bcommon\s+(mistakes?|errors?|misconceptions?)\b',
+        r'\bwhat\s+(concepts?|topics?)\s+confused\s+(them|students)\b',
+        r'\bwhere\s+did\s+(students|they)\s+(struggle|fail|have\s+trouble)\b',
+        r'\bmisunderstandings?\b',
+    ],
+    # Report Q&A - ask about scores
+    'ask_scores': [
+        r'\bhow\s+did\s+(students|the\s+class|everyone)\s+(do|perform|score)\b',
+        r'\bwhat\s+(were|are)\s+(the\s+)?scores?\b',
+        r'\bstudent\s+scores?\b',
+        r'\bclass\s+(performance|scores?|results?)\b',
+        r'\baverage\s+score\b',
+        r'\bwho\s+(scored|did)\s+(best|highest|lowest|worst)\b',
+        r'\btop\s+(performers?|students?|scores?)\b',
+        r'\blow\s+(performers?|students?|scores?)\b',
+        r'\bgrade\s+(distribution|breakdown)\b',
+    ],
+    # Report Q&A - ask about participation
+    'ask_participation': [
+        r'\bhow\s+(was|is)\s+(the\s+)?participation\b',
+        r'\bparticipation\s+(rate|stats?|statistics?)\b',
+        r'\bhow\s+many\s+(students\s+)?(participated|posted)\b',
+        r'\bwho\s+(participated|posted)\b',
+        r'\bwho\s+(didn\'?t|did\s+not)\s+(participate|post)\b',
+        r'\bparticipation\s+(level|overview)\b',
+        r'\bengagement\s+(level|rate|stats?)\b',
+    ],
+    # Read latest posts aloud
+    'read_posts': [
+        r'\bread\s+(the\s+)?(latest|recent|last)\s+(posts?|comments?|messages?)\b',
+        r'\bread\s+(me\s+)?(the\s+)?posts?\b',
+        r'\bwhat\s+(are\s+)?(the\s+)?(latest|recent)\s+posts?\b',
+        r'\bwhat\s+did\s+(students|they)\s+(post|say|write)\b',
+        r'\blatest\s+(from\s+)?(the\s+)?discussion\b',
+        r'\brecent\s+(activity|posts?|comments?)\b',
+        r'\bshow\s+(me\s+)?(the\s+)?recent\s+(posts?|activity)\b',
+    ],
+    # What did copilot suggest
+    'copilot_suggestions': [
+        r'\bwhat\s+(did|does)\s+(the\s+)?copilot\s+(suggest|recommend|say|think)\b',
+        r'\bcopilot\s+(suggestions?|recommendations?|insights?)\b',
+        r'\bwhat\s+(are\s+)?(the\s+)?copilot\'?s?\s+(suggestions?|thoughts?)\b',
+        r'\bai\s+(suggestions?|recommendations?|insights?)\b',
+        r'\bwhat\s+should\s+i\s+(do|say|ask)\s+next\b',
+        r'\bany\s+(teaching\s+)?(suggestions?|recommendations?|tips?)\b',
+        r'\bcopilot\s+update\b',
+        r'\bteaching\s+(tips?|suggestions?|advice)\b',
+    ],
+    # Student performance lookup
+    'student_lookup': [
+        r'\bhow\s+is\s+(\w+)\s+(doing|performing)\b',
+        r'\btell\s+me\s+about\s+(\w+)\'?s?\s+(performance|participation|scores?)\b',
+        r'\bwhat\s+about\s+(\w+)\b',
+        r'\b(\w+)\'?s?\s+(score|performance|participation|status)\b',
+        r'\bcheck\s+(on\s+)?(\w+)\b',
+        r'\blook\s+up\s+(\w+)\b',
+    ],
 }
 
 CONFIRMATION_PATTERNS = (
@@ -3069,6 +3157,528 @@ async def execute_action(
                 ],
             }
 
+        # === HIGH-IMPACT VOICE INTELLIGENCE FEATURES ===
+
+        # "How's the class doing?" - Quick class status summary
+        if action == 'class_status':
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            if not session_id:
+                return {
+                    "action": "class_status",
+                    "message": "Please select a session first to check on the class.",
+                }
+
+            # Gather data from multiple sources
+            status_parts = []
+
+            # Get session info
+            session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+            if session:
+                status_parts.append(f"Session '{session.title}' is {session.status.value if hasattr(session.status, 'value') else session.status}.")
+
+            # Get participation stats
+            participation_result = _execute_tool(db, 'get_participation_stats', {"session_id": session_id})
+            if participation_result and not participation_result.get("error"):
+                participated = participation_result.get("participated_count", 0)
+                total = participation_result.get("enrolled_count", 0)
+                rate = participation_result.get("participation_rate", 0)
+                if total > 0:
+                    status_parts.append(f"{participated} of {total} students have participated ({rate}%).")
+                non_participants = participation_result.get("non_participants", [])
+                if non_participants and len(non_participants) <= 3:
+                    names = [s.get("name", "Unknown") for s in non_participants[:3]]
+                    status_parts.append(f"Still waiting on: {', '.join(names)}.")
+                elif non_participants:
+                    status_parts.append(f"{len(non_participants)} students haven't posted yet.")
+
+            # Get post count
+            posts_result = _execute_tool(db, 'get_session_posts', {"session_id": session_id, "include_content": False})
+            if posts_result and not posts_result.get("error"):
+                post_count = posts_result.get("count", 0)
+                student_posts = posts_result.get("student_posts", 0)
+                if post_count > 0:
+                    status_parts.append(f"There are {post_count} posts total, {student_posts} from students.")
+
+            # Get copilot status if available
+            if session and session.copilot_active == 1:
+                copilot_result = _execute_tool(db, 'get_copilot_suggestions', {"session_id": session_id, "count": 1})
+                if copilot_result and not copilot_result.get("error"):
+                    latest = copilot_result.get("latest")
+                    if latest:
+                        # Check engagement level
+                        engagement = latest.get("engagement_level")
+                        understanding = latest.get("understanding_level")
+                        if engagement:
+                            status_parts.append(f"Engagement level: {engagement}.")
+                        if understanding:
+                            status_parts.append(f"Understanding level: {understanding}.")
+                        # Check confusion points
+                        confusion_points = latest.get("confusion_points", [])
+                        if confusion_points:
+                            status_parts.append(f"Copilot detected {len(confusion_points)} confusion point{'s' if len(confusion_points) != 1 else ''}.")
+                        # Get recommendation
+                        recommendation = latest.get("recommendation")
+                        if recommendation:
+                            status_parts.append(f"Recommendation: {recommendation}")
+
+            message = " ".join(status_parts) if status_parts else "No status information available for this session."
+
+            return {
+                "action": "class_status",
+                "message": message,
+                "session_id": session_id,
+                "ui_actions": [
+                    {"type": "ui.toast", "payload": {"message": "Class status retrieved", "type": "info"}},
+                ],
+            }
+
+        # "Who needs help?" - Identify struggling students
+        if action == 'who_needs_help':
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            if not session_id:
+                return {
+                    "action": "who_needs_help",
+                    "message": "Please select a session first to identify students who need help.",
+                }
+
+            help_parts = []
+            students_needing_help = []
+
+            # Get non-participants
+            participation_result = _execute_tool(db, 'get_participation_stats', {"session_id": session_id})
+            if participation_result and not participation_result.get("error"):
+                non_participants = participation_result.get("non_participants", [])
+                if non_participants:
+                    names = [s.get("name", "Unknown") for s in non_participants[:5]]
+                    help_parts.append(f"Students who haven't participated: {', '.join(names)}")
+                    if len(non_participants) > 5:
+                        help_parts.append(f"and {len(non_participants) - 5} more.")
+                    students_needing_help.extend(non_participants)
+
+            # Get confusion points from copilot
+            copilot_result = _execute_tool(db, 'get_copilot_suggestions', {"session_id": session_id, "count": 1})
+            if copilot_result and not copilot_result.get("error"):
+                latest = copilot_result.get("latest")
+                if latest and latest.get("confusion_points"):
+                    confusion_points = latest["confusion_points"]
+                    help_parts.append(f"Copilot detected {len(confusion_points)} area{'s' if len(confusion_points) != 1 else ''} of confusion:")
+                    for i, cp in enumerate(confusion_points[:3], 1):
+                        issue = cp.get("issue", "Unknown issue")
+                        help_parts.append(f"{i}. {issue[:100]}")
+
+            # Get low scorers if report exists
+            scores_result = _execute_tool(db, 'get_student_scores', {"session_id": session_id})
+            if scores_result and not scores_result.get("error") and scores_result.get("has_scores"):
+                furthest = scores_result.get("furthest_from_correct", {})
+                if furthest.get("user_name"):
+                    help_parts.append(f"Lowest scorer: {furthest['user_name']} with {furthest.get('score', 0)} points.")
+
+                # Check for students below 50
+                student_scores = scores_result.get("student_scores", [])
+                low_scorers = [s for s in student_scores if s.get("score", 100) < 50]
+                if low_scorers:
+                    names = [s.get("user_name", "Unknown") for s in low_scorers[:3]]
+                    help_parts.append(f"Students scoring below 50: {', '.join(names)}")
+
+            if not help_parts:
+                message = "Good news! No immediate concerns detected. All students seem to be on track."
+            else:
+                message = " ".join(help_parts)
+
+            return {
+                "action": "who_needs_help",
+                "message": message,
+                "session_id": session_id,
+                "students_needing_help": students_needing_help,
+                "ui_actions": [
+                    {"type": "ui.toast", "payload": {"message": "Help analysis complete", "type": "info"}},
+                ],
+            }
+
+        # "What were the misconceptions?" - Report Q&A about misconceptions
+        if action == 'ask_misconceptions':
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            if not session_id:
+                return {
+                    "action": "ask_misconceptions",
+                    "message": "Please select a session first to view misconceptions.",
+                }
+
+            # Get report data
+            report_result = _execute_tool(db, 'get_report', {"session_id": session_id})
+            if report_result and report_result.get("error"):
+                return report_result
+
+            if not report_result or not report_result.get("has_report"):
+                # Try to get from copilot instead
+                copilot_result = _execute_tool(db, 'get_copilot_suggestions', {"session_id": session_id, "count": 1})
+                if copilot_result and not copilot_result.get("error"):
+                    latest = copilot_result.get("latest")
+                    if latest and latest.get("confusion_points"):
+                        confusion_points = latest["confusion_points"]
+                        parts = [f"From copilot analysis, {len(confusion_points)} confusion point{'s' if len(confusion_points) != 1 else ''} detected:"]
+                        for i, cp in enumerate(confusion_points[:5], 1):
+                            issue = cp.get("issue", "Unknown")
+                            parts.append(f"{i}. {issue}")
+                        return {
+                            "action": "ask_misconceptions",
+                            "message": " ".join(parts),
+                            "source": "copilot",
+                            "confusion_points": confusion_points,
+                        }
+
+                return {
+                    "action": "ask_misconceptions",
+                    "message": "No report available for this session yet. Generate a report first or start the copilot for real-time analysis.",
+                }
+
+            misconceptions = report_result.get("misconceptions", [])
+            if not misconceptions:
+                return {
+                    "action": "ask_misconceptions",
+                    "message": "No misconceptions were identified in this session's report. Students seem to have understood the material well.",
+                }
+
+            parts = [f"The report identified {len(misconceptions)} misconception{'s' if len(misconceptions) != 1 else ''}:"]
+            for i, misc in enumerate(misconceptions[:5], 1):
+                misconception = misc.get("misconception", "Unknown")
+                parts.append(f"{i}. {misconception[:150]}")
+
+            return {
+                "action": "ask_misconceptions",
+                "message": " ".join(parts),
+                "misconceptions": misconceptions,
+                "count": len(misconceptions),
+            }
+
+        # "How did students score?" - Report Q&A about scores
+        if action == 'ask_scores':
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            if not session_id:
+                return {
+                    "action": "ask_scores",
+                    "message": "Please select a session first to view scores.",
+                }
+
+            scores_result = _execute_tool(db, 'get_student_scores', {"session_id": session_id})
+            if scores_result and scores_result.get("error"):
+                return scores_result
+
+            if not scores_result or not scores_result.get("has_scores"):
+                return {
+                    "action": "ask_scores",
+                    "message": "No scores available yet. Generate a report for this session first.",
+                }
+
+            parts = []
+            avg = scores_result.get("average_score")
+            if avg is not None:
+                parts.append(f"The class average is {avg} out of 100.")
+
+            highest = scores_result.get("highest_score")
+            lowest = scores_result.get("lowest_score")
+            if highest is not None and lowest is not None:
+                parts.append(f"Scores range from {lowest} to {highest}.")
+
+            closest = scores_result.get("closest_to_correct", {})
+            if closest.get("user_name"):
+                parts.append(f"Top performer: {closest['user_name']} with {closest.get('score', 0)}.")
+
+            furthest = scores_result.get("furthest_from_correct", {})
+            if furthest.get("user_name"):
+                parts.append(f"Lowest scorer: {furthest['user_name']} with {furthest.get('score', 0)}.")
+
+            # Score distribution
+            distribution = scores_result.get("score_distribution", {})
+            if distribution:
+                high_performers = sum(v for k, v in distribution.items() if int(k.split('-')[0]) >= 80)
+                low_performers = sum(v for k, v in distribution.items() if int(k.split('-')[0]) < 50)
+                if high_performers:
+                    parts.append(f"{high_performers} student{'s' if high_performers != 1 else ''} scored 80 or above.")
+                if low_performers:
+                    parts.append(f"{low_performers} student{'s' if low_performers != 1 else ''} scored below 50.")
+
+            return {
+                "action": "ask_scores",
+                "message": " ".join(parts) if parts else "Score information is available in the report.",
+                "average_score": avg,
+                "student_scores": scores_result.get("student_scores", []),
+            }
+
+        # "How was participation?" - Report Q&A about participation
+        if action == 'ask_participation':
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            if not session_id:
+                return {
+                    "action": "ask_participation",
+                    "message": "Please select a session first to view participation stats.",
+                }
+
+            result = _execute_tool(db, 'get_participation_stats', {"session_id": session_id})
+            if result and result.get("error"):
+                return result
+
+            # The tool already returns a voice-friendly message
+            return {
+                "action": "ask_participation",
+                "message": result.get("message", "Participation data retrieved."),
+                "participation_rate": result.get("participation_rate"),
+                "participants": result.get("participants", []),
+                "non_participants": result.get("non_participants", []),
+            }
+
+        # "Read the latest posts" - Read posts aloud
+        if action == 'read_posts':
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            if not session_id:
+                return {
+                    "action": "read_posts",
+                    "message": "Please select a session first to read posts.",
+                }
+
+            result = _execute_tool(db, 'get_latest_posts', {"session_id": session_id, "count": 3})
+            if result and result.get("error"):
+                return result
+
+            posts = result.get("posts", [])
+            if not posts:
+                return {
+                    "action": "read_posts",
+                    "message": "There are no posts in this discussion yet.",
+                }
+
+            # Format posts for voice reading
+            parts = [f"Here are the {len(posts)} most recent posts:"]
+            for i, post in enumerate(posts, 1):
+                name = post.get("user_name", "Someone")
+                content = post.get("content", "")[:200]
+                # Clean content for speech
+                content = content.replace("\n", " ").strip()
+                parts.append(f"{i}. {name} wrote: {content}")
+
+            return {
+                "action": "read_posts",
+                "message": " ".join(parts),
+                "posts": posts,
+                "count": len(posts),
+            }
+
+        # "What did copilot suggest?" - Copilot suggestions summary
+        if action == 'copilot_suggestions':
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            if not session_id:
+                return {
+                    "action": "copilot_suggestions",
+                    "message": "Please select a session first to get copilot suggestions.",
+                }
+
+            # Check if copilot is active
+            session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+
+            result = _execute_tool(db, 'get_copilot_suggestions', {"session_id": session_id, "count": 1})
+            if result and result.get("error"):
+                return result
+
+            if not result or not result.get("suggestions"):
+                if session and session.copilot_active != 1:
+                    return {
+                        "action": "copilot_suggestions",
+                        "message": "The copilot is not running. Say 'start copilot' to begin monitoring.",
+                    }
+                return {
+                    "action": "copilot_suggestions",
+                    "message": "No suggestions from the copilot yet. It analyzes the discussion every 90 seconds.",
+                }
+
+            latest = result.get("latest", {})
+            parts = ["Here's what the copilot suggests:"]
+
+            # Rolling summary
+            summary = latest.get("summary")
+            if summary:
+                parts.append(f"Discussion summary: {summary[:200]}")
+
+            # Confusion points
+            confusion_points = latest.get("confusion_points", [])
+            if confusion_points:
+                parts.append(f"Confusion detected in {len(confusion_points)} area{'s' if len(confusion_points) != 1 else ''}.")
+                first_cp = confusion_points[0]
+                parts.append(f"Main issue: {first_cp.get('issue', 'Unknown')[:100]}")
+
+            # Suggested prompts
+            prompts = latest.get("instructor_prompts", [])
+            if prompts:
+                parts.append("Suggested question to ask:")
+                first_prompt = prompts[0]
+                parts.append(f"\"{first_prompt.get('prompt', '')[:150]}\"")
+
+            # Poll suggestion
+            poll = latest.get("poll_suggestion")
+            if poll:
+                parts.append(f"Poll idea: {poll.get('question', '')[:100]}")
+
+            # Overall recommendation
+            recommendation = latest.get("recommendation")
+            if recommendation:
+                parts.append(f"Recommendation: {recommendation}")
+
+            return {
+                "action": "copilot_suggestions",
+                "message": " ".join(parts),
+                "latest": latest,
+            }
+
+        # Student lookup - "How is [student] doing?"
+        if action == 'student_lookup':
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            # Try to extract student name from transcript
+            student_name = None
+            name_patterns = [
+                r'\bhow\s+is\s+(\w+)\s+(doing|performing)\b',
+                r'\btell\s+me\s+about\s+(\w+)',
+                r'\bcheck\s+(?:on\s+)?(\w+)\b',
+                r'\blook\s+up\s+(\w+)\b',
+                r'\bwhat\s+about\s+(\w+)\b',
+            ]
+            for pattern in name_patterns:
+                match = re.search(pattern, transcript.lower())
+                if match:
+                    student_name = match.group(1)
+                    break
+
+            if not student_name:
+                return {
+                    "action": "student_lookup",
+                    "message": "Which student would you like to know about? Say 'How is [name] doing?'",
+                }
+
+            if not session_id:
+                return {
+                    "action": "student_lookup",
+                    "message": f"Please select a session first to check on {student_name}.",
+                }
+
+            # Search for student in participation data
+            participation_result = _execute_tool(db, 'get_participation_stats', {"session_id": session_id})
+            participants = participation_result.get("participants", []) if participation_result else []
+            non_participants = participation_result.get("non_participants", []) if participation_result else []
+
+            # Find the student (fuzzy match)
+            student_name_lower = student_name.lower()
+            found_participant = None
+            found_non_participant = None
+
+            for p in participants:
+                if student_name_lower in p.get("name", "").lower():
+                    found_participant = p
+                    break
+
+            for np in non_participants:
+                if student_name_lower in np.get("name", "").lower():
+                    found_non_participant = np
+                    break
+
+            parts = []
+
+            if found_participant:
+                name = found_participant.get("name", student_name)
+                post_count = found_participant.get("post_count", 0)
+                parts.append(f"{name} has participated with {post_count} post{'s' if post_count != 1 else ''}.")
+
+                # Check if they have a score in the report
+                scores_result = _execute_tool(db, 'get_student_scores', {"session_id": session_id})
+                if scores_result and scores_result.get("has_scores"):
+                    student_scores = scores_result.get("student_scores", [])
+                    for s in student_scores:
+                        if student_name_lower in s.get("user_name", "").lower():
+                            parts.append(f"Their score is {s.get('score', 'N/A')} out of 100.")
+                            break
+            elif found_non_participant:
+                name = found_non_participant.get("name", student_name)
+                parts.append(f"{name} has not participated in this session yet.")
+            else:
+                parts.append(f"I couldn't find a student named '{student_name}' in this session.")
+
+            return {
+                "action": "student_lookup",
+                "message": " ".join(parts),
+                "student_name": student_name,
+            }
+
+        # Summarize discussion (enhanced version)
+        if action == 'summarize_discussion':
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            if not session_id:
+                return {
+                    "action": "summarize_discussion",
+                    "message": "Please select a session first to summarize the discussion.",
+                }
+
+            # Try to get summary from copilot first (most up-to-date)
+            copilot_result = _execute_tool(db, 'get_copilot_suggestions', {"session_id": session_id, "count": 1})
+            if copilot_result and not copilot_result.get("error"):
+                latest = copilot_result.get("latest")
+                if latest and latest.get("summary"):
+                    return {
+                        "action": "summarize_discussion",
+                        "message": f"Discussion summary: {latest['summary']}",
+                        "source": "copilot",
+                    }
+
+            # Fall back to report themes
+            report_result = _execute_tool(db, 'get_report', {"session_id": session_id})
+            if report_result and report_result.get("has_report"):
+                themes = report_result.get("themes", [])
+                if themes:
+                    theme_names = [t.get("theme", "") for t in themes[:5]]
+                    parts = [f"Main themes discussed: {', '.join(theme_names)}."]
+
+                    # Add misconceptions if any
+                    misconceptions = report_result.get("misconceptions", [])
+                    if misconceptions:
+                        parts.append(f"Key misconception: {misconceptions[0].get('misconception', '')[:100]}")
+
+                    return {
+                        "action": "summarize_discussion",
+                        "message": " ".join(parts),
+                        "source": "report",
+                        "themes": themes,
+                    }
+
+            # Fall back to post count
+            posts_result = _execute_tool(db, 'get_session_posts', {"session_id": session_id, "include_content": False})
+            if posts_result and not posts_result.get("error"):
+                count = posts_result.get("count", 0)
+                student_posts = posts_result.get("student_posts", 0)
+                return {
+                    "action": "summarize_discussion",
+                    "message": f"There are {count} posts in this discussion, {student_posts} from students. Start the copilot for a detailed summary.",
+                    "source": "posts",
+                }
+
+            return {
+                "action": "summarize_discussion",
+                "message": "No discussion content to summarize yet.",
+            }
+
         # === POLL ACTIONS ===
         if action == 'create_poll':
             course_id = _resolve_course_id(db, current_page, user_id)
@@ -3478,6 +4088,15 @@ def get_action_suggestions(action: str) -> List[str]:
         'get_pinned_posts': ["View all posts", "Post case", "Create poll"],
         'summarize_discussion': ["Show questions", "View pinned", "Create poll"],
         'get_student_questions': ["View posts", "Create poll", "Pin a post"],
+        # High-impact intelligence features
+        'class_status': ["Who needs help?", "What did copilot suggest?", "Read latest posts"],
+        'who_needs_help': ["Check on a student", "Summarize discussion", "Create poll"],
+        'ask_misconceptions': ["How did students score?", "Who needs help?", "Create poll"],
+        'ask_scores': ["Who needs help?", "View participation", "Generate report"],
+        'ask_participation': ["Who needs help?", "Read latest posts", "Create poll"],
+        'read_posts': ["Summarize discussion", "Pin a post", "Create poll"],
+        'copilot_suggestions': ["Create suggested poll", "Post to discussion", "Who needs help?"],
+        'student_lookup': ["Check another student", "Who needs help?", "View participation"],
     }
     return suggestions.get(action, ["What else can I help with?"])
 

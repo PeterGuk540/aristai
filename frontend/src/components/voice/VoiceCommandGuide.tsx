@@ -32,7 +32,6 @@ const commandCategories: CommandCategory[] = [
       { phrase: '"Go to forum"', alternatives: ['"Open forum"', '"Forum page"'], description: 'Navigate to the Forum page' },
       { phrase: '"Go to console"', alternatives: ['"Open console"', '"Console page"'], description: 'Navigate to the Console page (instructors only)' },
       { phrase: '"Go to reports"', alternatives: ['"Open reports"', '"Reports page"'], description: 'Navigate to the Reports page' },
-      { phrase: '"Go back"', alternatives: ['"Back"', '"Previous page"'], description: 'Go to the previous page' },
     ],
   },
   {
@@ -41,11 +40,10 @@ const commandCategories: CommandCategory[] = [
     icon: FileText,
     description: 'Course management commands',
     commands: [
-      { phrase: '"Create a course"', alternatives: ['"New course"', '"Make a course"'], description: 'Start the course creation form' },
-      { phrase: '"Join a course"', alternatives: ['"Join course"', '"Enter join code"'], description: 'Open the join course form' },
+      { phrase: '"Create a course"', alternatives: ['"New course"', '"Make a course"'], description: 'Start the course creation form (voice will guide you through fields)' },
       { phrase: '"Select first course"', alternatives: ['"Choose first course"', '"Open first course"'], description: 'Select the first course in the list' },
       { phrase: '"Select [course name]"', alternatives: ['"Open [course name]"', '"Choose [course name]"'], description: 'Select a specific course by name' },
-      { phrase: '"Generate plans"', alternatives: ['"Create session plans"', '"AI generate plans"'], description: 'Generate AI session plans for a course' },
+      { phrase: '"Yes" / "No"', description: 'When asked to generate plans after course creation, say Yes or No' },
     ],
   },
   {

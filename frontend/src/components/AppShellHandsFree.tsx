@@ -265,6 +265,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                 'focus:outline-none focus:ring-2 focus:ring-primary-500'
               )}
               aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              data-voice-id="toggle-theme"
             >
               {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>

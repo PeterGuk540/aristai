@@ -413,6 +413,36 @@ export const VoiceUIController = () => {
   }, [findElement]);
 
   /**
+   * Handle opening a menu and clicking an item inside it with proper timing
+   * This handles dropdown menus where items are only rendered when menu is open
+   */
+  const handleOpenMenuAndClick = useCallback((event: CustomEvent) => {
+    const { menuTarget, itemTarget } = event.detail || {};
+    console.log('🎤 VoiceUI: openMenuAndClick', { menuTarget, itemTarget });
+
+    // First, find and click the menu button
+    const menuButton = findElement(menuTarget);
+    if (!menuButton) {
+      console.warn('🎤 VoiceUI: Menu button not found:', menuTarget);
+      return;
+    }
+
+    menuButton.click();
+    console.log('🎤 VoiceUI: Clicked menu button:', menuTarget);
+
+    // Wait for menu to render, then click the item
+    setTimeout(() => {
+      const menuItem = findElement(itemTarget);
+      if (menuItem) {
+        menuItem.click();
+        console.log('🎤 VoiceUI: Clicked menu item:', itemTarget);
+      } else {
+        console.warn('🎤 VoiceUI: Menu item not found after delay:', itemTarget);
+      }
+    }, 300); // 300ms delay for menu to render
+  }, [findElement]);
+
+  /**
    * UNIVERSAL input fill - works for ANY input field on any page
    * Finds inputs by: data-voice-id, label text, placeholder, aria-label, or active focus
    */
@@ -807,6 +837,7 @@ export const VoiceUIController = () => {
       'ui.selectDropdown': handleSelectDropdown,
       'ui.expandDropdown': handleExpandDropdown,
       'ui.clickButton': handleClickButton,
+      'ui.openMenuAndClick': handleOpenMenuAndClick,
       'ui.fillInput': handleFillInput,
       'ui.clearInput': handleClearInput,
       'ui.switchTab': handleSwitchTab,
@@ -832,6 +863,7 @@ export const VoiceUIController = () => {
     handleSelectDropdown,
     handleExpandDropdown,
     handleClickButton,
+    handleOpenMenuAndClick,
     handleFillInput,
     handleClearInput,
     handleSwitchTab,

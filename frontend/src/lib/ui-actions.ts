@@ -78,6 +78,10 @@ export const executeUiAction = (action: UiAction, router: ReturnType<typeof useR
       console.log('🎤 Dispatching selectListItem:', payload);
       window.dispatchEvent(new CustomEvent('ui.selectListItem', { detail: payload }));
       break;
+    case 'ui.openMenuAndClick':
+      console.log('🎤 Dispatching openMenuAndClick:', payload);
+      window.dispatchEvent(new CustomEvent('ui.openMenuAndClick', { detail: payload }));
+      break;
     default:
       // For any unknown action types, try dispatching as a custom event
       if (type.startsWith('ui.')) {

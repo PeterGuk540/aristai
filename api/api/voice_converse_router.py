@@ -3004,8 +3004,7 @@ async def execute_action(
                 "action": "view_voice_guide",
                 "message": "Opening voice guide...",
                 "ui_actions": [
-                    {"type": "ui.clickButton", "payload": {"target": "user-menu"}},
-                    {"type": "ui.clickButton", "payload": {"target": "view-voice-guide"}},
+                    {"type": "ui.openMenuAndClick", "payload": {"menuTarget": "user-menu", "itemTarget": "view-voice-guide"}},
                 ],
             }
 
@@ -3014,8 +3013,7 @@ async def execute_action(
                 "action": "open_profile",
                 "message": "Opening profile...",
                 "ui_actions": [
-                    {"type": "ui.clickButton", "payload": {"target": "user-menu"}},
-                    {"type": "ui.clickButton", "payload": {"target": "open-profile"}},
+                    {"type": "ui.openMenuAndClick", "payload": {"menuTarget": "user-menu", "itemTarget": "open-profile"}},
                 ],
             }
 
@@ -3024,8 +3022,7 @@ async def execute_action(
                 "action": "sign_out",
                 "message": "Signing out...",
                 "ui_actions": [
-                    {"type": "ui.clickButton", "payload": {"target": "user-menu"}},
-                    {"type": "ui.clickButton", "payload": {"target": "sign-out"}},
+                    {"type": "ui.openMenuAndClick", "payload": {"menuTarget": "user-menu", "itemTarget": "sign-out"}},
                 ],
             }
 

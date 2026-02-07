@@ -579,6 +579,7 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
               <Button
                 onClick={handleComplete}
                 className="px-6 py-2 bg-primary-600 hover:bg-primary-700"
+                data-voice-id="got-it-platform-guide"
               >
                 I Got It!
               </Button>

@@ -82,6 +82,10 @@ export const executeUiAction = (action: UiAction, router: ReturnType<typeof useR
       console.log('🎤 Dispatching openMenuAndClick:', payload);
       window.dispatchEvent(new CustomEvent('ui.openMenuAndClick', { detail: payload }));
       break;
+    case 'voice-menu-action':
+      console.log('🎤 Dispatching voice-menu-action:', payload);
+      window.dispatchEvent(new CustomEvent('voice-menu-action', { detail: payload }));
+      break;
     default:
       // For any unknown action types, try dispatching as a custom event
       if (type.startsWith('ui.')) {

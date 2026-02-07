@@ -258,6 +258,15 @@ ACTION_PATTERNS = {
         r'\bsignout\b',
         r'\bexit\s+(the\s+)?app\b',
     ],
+    'close_modal': [
+        r'\bgot\s+it\b',
+        r'\bi\s+got\s+it\b',
+        r'\bokay\b',
+        r'\bok\b',
+        r'\bclose\s+(this|the)?\s*(window|modal|dialog|guide)?\b',
+        r'\bdismiss\b',
+        r'\bdone\b',
+    ],
     # Poll actions
     'create_poll': [
         r'\bcreate\s+(a\s+)?poll\b',
@@ -836,6 +845,9 @@ def generate_conversational_response(
 
         if intent_value == 'sign_out':
             return "Signing you out. Goodbye!"
+
+        if intent_value == 'close_modal':
+            return "Closing the window."
 
         # === COPILOT RESPONSES ===
         if intent_value == 'start_copilot':
@@ -3013,9 +3025,9 @@ async def execute_action(
         if action == 'view_voice_guide':
             return {
                 "action": "view_voice_guide",
-                "message": "Opening voice guide...",
+                "message": "Opening voice commands guide...",
                 "ui_actions": [
-                    {"type": "ui.openMenuAndClick", "payload": {"menuTarget": "user-menu", "itemTarget": "view-voice-guide"}},
+                    {"type": "voice-menu-action", "payload": {"action": "view-voice-guide"}},
                 ],
             }
 
@@ -3024,7 +3036,7 @@ async def execute_action(
                 "action": "open_profile",
                 "message": "Opening profile...",
                 "ui_actions": [
-                    {"type": "ui.openMenuAndClick", "payload": {"menuTarget": "user-menu", "itemTarget": "open-profile"}},
+                    {"type": "voice-menu-action", "payload": {"action": "open-profile"}},
                 ],
             }
 
@@ -3033,7 +3045,7 @@ async def execute_action(
                 "action": "sign_out",
                 "message": "Signing out...",
                 "ui_actions": [
-                    {"type": "ui.openMenuAndClick", "payload": {"menuTarget": "user-menu", "itemTarget": "sign-out"}},
+                    {"type": "voice-menu-action", "payload": {"action": "sign-out"}},
                 ],
             }
 
@@ -3042,7 +3054,18 @@ async def execute_action(
                 "action": "forum_instructions",
                 "message": "Opening platform instructions...",
                 "ui_actions": [
-                    {"type": "ui.openMenuAndClick", "payload": {"menuTarget": "user-menu", "itemTarget": "forum-instructions"}},
+                    {"type": "voice-menu-action", "payload": {"action": "forum-instructions"}},
+                ],
+            }
+
+        if action == 'close_modal':
+            # Try to click "Got It" buttons in any open modal
+            return {
+                "action": "close_modal",
+                "message": "Closing...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "got-it-voice-guide"}},
+                    {"type": "ui.clickButton", "payload": {"target": "got-it-platform-guide"}},
                 ],
             }
 

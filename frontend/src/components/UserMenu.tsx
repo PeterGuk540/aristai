@@ -39,6 +39,31 @@ export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
     return () => document.removeEventListener('keydown', handleEscape);
   }, []);
 
+  // Listen for voice commands to trigger menu actions directly
+  useEffect(() => {
+    const handleVoiceMenuAction = (event: CustomEvent) => {
+      const { action } = event.detail || {};
+      console.log('🎤 UserMenu: Voice action received:', action);
+
+      if (action === 'view-voice-guide') {
+        setIsOpen(false);
+        onShowVoiceGuide?.();
+      } else if (action === 'forum-instructions') {
+        setIsOpen(false);
+        onShowGuide?.();
+      } else if (action === 'open-profile') {
+        setIsOpen(false);
+        alert('Profile page coming soon');
+      } else if (action === 'sign-out') {
+        setIsOpen(false);
+        signOut();
+      }
+    };
+
+    window.addEventListener('voice-menu-action', handleVoiceMenuAction as EventListener);
+    return () => window.removeEventListener('voice-menu-action', handleVoiceMenuAction as EventListener);
+  }, [onShowVoiceGuide, onShowGuide, signOut]);
+
   const displayName = user?.name || user?.email?.split('@')[0] || 'User';
 
   return (

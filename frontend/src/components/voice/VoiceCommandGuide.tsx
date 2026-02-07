@@ -147,6 +147,7 @@ const commandCategories: CommandCategory[] = [
       { phrase: '"View voice guide"', alternatives: ['"Voice commands"', '"Show commands"'], description: 'Open this voice command guide' },
       { phrase: '"Forum instructions"', alternatives: ['"Platform guide"', '"How to use"'], description: 'Open the platform instructions' },
       { phrase: '"Sign out"', alternatives: ['"Log out"', '"Logout"'], description: 'Sign out of the application' },
+      { phrase: '"Got it"', alternatives: ['"Okay"', '"Done"', '"Close"'], description: 'Close popup windows like this guide' },
     ],
   },
 ];
@@ -268,6 +269,7 @@ export function VoiceCommandGuide({ onClose }: VoiceCommandGuideProps) {
           <button
             onClick={onClose}
             className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+            data-voice-id="got-it-voice-guide"
           >
             Got It!
           </button>

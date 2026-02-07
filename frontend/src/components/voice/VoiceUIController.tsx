@@ -118,6 +118,9 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'viewVoiceGuide': '[data-voice-id="view-voice-guide"]',
     'forum-instructions': '[data-voice-id="forum-instructions"]',
     'forumInstructions': '[data-voice-id="forum-instructions"]',
+    // Got It buttons for closing floating windows
+    'got-it-voice-guide': '[data-voice-id="got-it-voice-guide"]',
+    'got-it-platform-guide': '[data-voice-id="got-it-platform-guide"]',
     'open-profile': '[data-voice-id="open-profile"]',
     'openProfile': '[data-voice-id="open-profile"]',
     'sign-out': '[data-voice-id="sign-out"]',

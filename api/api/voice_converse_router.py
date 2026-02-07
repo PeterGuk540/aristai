@@ -1610,14 +1610,20 @@ def _resolve_course_id(db: Session, current_page: Optional[str], user_id: Option
     return course.id if course else None
 
 
-def _resolve_session_id(db: Session, current_page: Optional[str], user_id: Optional[int] = None) -> Optional[int]:
+def _resolve_session_id(db: Session, current_page: Optional[str], user_id: Optional[int] = None, course_id: Optional[int] = None) -> Optional[int]:
     """Resolve session ID from URL, context memory, or database.
 
     Priority:
     1. Session ID in URL path
     2. Active session from user context memory
-    3. Any live session
-    4. Most recently created session (fallback)
+    3. Live session (filtered by course_id if provided)
+    4. Most recently created session (filtered by course_id if provided)
+
+    Args:
+        db: Database session
+        current_page: Current URL path
+        user_id: User ID for context memory lookup
+        course_id: Optional course ID to filter sessions by
     """
     _, session_id = _parse_ids_from_path(current_page)
     if session_id:
@@ -1632,18 +1638,19 @@ def _resolve_session_id(db: Session, current_page: Optional[str], user_id: Optio
         if active_session_id:
             return active_session_id
 
-    # Try to find a live session
-    session = (
-        db.query(SessionModel)
-        .filter(SessionModel.status == SessionStatus.live)
-        .order_by(SessionModel.created_at.desc())
-        .first()
-    )
+    # Try to find a live session (filtered by course if provided)
+    query = db.query(SessionModel).filter(SessionModel.status == SessionStatus.live)
+    if course_id:
+        query = query.filter(SessionModel.course_id == course_id)
+    session = query.order_by(SessionModel.created_at.desc()).first()
     if session:
         return session.id
 
-    # Fallback to most recent session
-    session = db.query(SessionModel).order_by(SessionModel.created_at.desc()).first()
+    # Fallback to most recent session (filtered by course if provided)
+    query = db.query(SessionModel)
+    if course_id:
+        query = query.filter(SessionModel.course_id == course_id)
+    session = query.order_by(SessionModel.created_at.desc()).first()
     return session.id if session else None
 
 
@@ -1922,7 +1929,8 @@ def _get_page_context(db: Session, current_page: Optional[str]) -> Dict[str, Any
             }
 
     elif "/sessions" in page:
-        session_id = _resolve_session_id(db, current_page)
+        course_id = _resolve_course_id(db, current_page, user_id)
+        session_id = _resolve_session_id(db, current_page, user_id, course_id)
         if session_id:
             session = _execute_tool(db, 'get_session', {"session_id": session_id})
             status = session.get('status', 'unknown') if session else 'unknown'
@@ -1941,7 +1949,8 @@ def _get_page_context(db: Session, current_page: Optional[str]) -> Dict[str, Any
         }
 
     elif "/forum" in page:
-        session_id = _resolve_session_id(db, current_page)
+        course_id = _resolve_course_id(db, current_page, user_id)
+        session_id = _resolve_session_id(db, current_page, user_id, course_id)
         if session_id:
             posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
             pinned = [p for p in posts if p.get('pinned')] if posts else []
@@ -1959,7 +1968,8 @@ def _get_page_context(db: Session, current_page: Optional[str]) -> Dict[str, Any
         }
 
     elif "/console" in page:
-        session_id = _resolve_session_id(db, current_page)
+        course_id = _resolve_course_id(db, current_page, user_id)
+        session_id = _resolve_session_id(db, current_page, user_id, course_id)
         copilot_status = _execute_tool(db, 'get_copilot_status', {"session_id": session_id}) if session_id else None
         is_active = copilot_status.get('is_active', False) if copilot_status else False
         return {
@@ -2330,7 +2340,8 @@ async def execute_action(
             return {"error": "No sessions found to select."}
 
         if action == 'go_live':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if session_id:
                 result = _execute_tool(db, 'update_session_status', {"session_id": session_id, "status": "live"})
                 if result:
@@ -2350,7 +2361,8 @@ async def execute_action(
             return {"error": "No session found to go live."}
 
         if action == 'end_session':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if not session_id:
                 return {"error": "No active session found to end."}
 
@@ -2388,13 +2400,15 @@ async def execute_action(
 
         # === COPILOT ACTIONS ===
         if action == 'get_interventions':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if not session_id:
                 return []
             return _execute_tool(db, 'get_copilot_suggestions', {"session_id": session_id})
 
         if action == 'start_copilot':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if not session_id:
                 return None
             result = _execute_tool(db, 'start_copilot', {"session_id": session_id})
@@ -2412,7 +2426,8 @@ async def execute_action(
             return result
 
         if action == 'stop_copilot':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if not session_id:
                 return None
 
@@ -2451,7 +2466,8 @@ async def execute_action(
 
         # === POLL ACTIONS ===
         if action == 'create_poll':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             # Start conversational poll creation flow
             # First, offer to create a poll (or go directly to asking for question)
             conv_context = conversation_manager.get_context(user_id)
@@ -2474,7 +2490,8 @@ async def execute_action(
 
         # === REPORT ACTIONS ===
         if action == 'generate_report':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if not session_id:
                 return None
             result = _execute_tool(db, 'generate_report', {"session_id": session_id})
@@ -2583,7 +2600,8 @@ async def execute_action(
 
         # === FORUM ACTIONS ===
         if action == 'post_case':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             return {
                 "action": "post_case",
                 "session_id": session_id,
@@ -2596,7 +2614,8 @@ async def execute_action(
 
         if action == 'post_to_discussion':
             # Check if we have a session selected
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if not session_id:
                 return {
                     "action": "post_to_discussion",
@@ -2627,7 +2646,8 @@ async def execute_action(
                 }
 
         if action == 'view_posts':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if session_id:
                 posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
                 if posts:
@@ -2640,7 +2660,8 @@ async def execute_action(
             }
 
         if action == 'get_pinned_posts':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if session_id:
                 pinned = _execute_tool(db, 'get_pinned_posts', {"session_id": session_id})
                 return {
@@ -2651,7 +2672,8 @@ async def execute_action(
             return {"pinned_posts": [], "count": 0}
 
         if action == 'summarize_discussion':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if session_id:
                 posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
                 if posts and len(posts) > 0:
@@ -2678,7 +2700,8 @@ async def execute_action(
             return {"error": "No active session. Select a live session first."}
 
         if action == 'get_student_questions':
-            session_id = _resolve_session_id(db, current_page, user_id)
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if session_id:
                 posts = _execute_tool(db, 'get_session_posts', {"session_id": session_id})
                 if posts:

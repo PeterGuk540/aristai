@@ -9,6 +9,7 @@ This package contains all tool implementations organized by domain:
 - copilot: Live AI copilot control
 - reports: Report generation and viewing
 - enrollment: Student enrollment management
+- content_generation: AI-powered content generation (syllabus, objectives, session plans)
 """
 
 from mcp_server.tools import (
@@ -19,6 +20,7 @@ from mcp_server.tools import (
     copilot,
     reports,
     enrollment,
+    content_generation,
 )
 
 __all__ = [
@@ -29,4 +31,5 @@ __all__ = [
     "copilot",
     "reports",
     "enrollment",
+    "content_generation",
 ]

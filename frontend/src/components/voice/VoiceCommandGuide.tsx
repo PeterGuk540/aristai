@@ -41,9 +41,11 @@ const commandCategories: CommandCategory[] = [
     description: 'Course management commands',
     commands: [
       { phrase: '"Create a course"', alternatives: ['"New course"', '"Make a course"'], description: 'Start the course creation form (voice will guide you through fields)' },
+      { phrase: '"Generate"', alternatives: ['"Generate syllabus"', '"AI help"'], description: 'When asked for syllabus or objectives, say "generate" for AI assistance' },
+      { phrase: '"Yes" / "Use it"', alternatives: ['"Looks good"', '"Accept"'], description: 'Accept the AI-generated content' },
+      { phrase: '"No" / "Edit"', alternatives: ['"Let me edit"', '"I\'ll dictate"'], description: 'Decline AI content and enter manually' },
       { phrase: '"Select first course"', alternatives: ['"Choose first course"', '"Open first course"'], description: 'Select the first course in the list' },
       { phrase: '"Select [course name]"', alternatives: ['"Open [course name]"', '"Choose [course name]"'], description: 'Select a specific course by name' },
-      { phrase: '"Yes" / "No"', description: 'When asked to generate plans after course creation, say Yes or No' },
     ],
   },
   {
@@ -54,6 +56,7 @@ const commandCategories: CommandCategory[] = [
     commands: [
       { phrase: '"Go to manage status tab"', alternatives: ['"Manage status"', '"Status tab"'], description: 'Switch to the manage status tab' },
       { phrase: '"Go to create tab"', alternatives: ['"Create session tab"', '"New session"'], description: 'Switch to the create session tab' },
+      { phrase: '"Generate"', alternatives: ['"Generate session plan"', '"AI help"'], description: 'When asked for description, say "generate" for AI session plan with prompts and case study' },
       { phrase: '"Select course"', alternatives: ['"Choose course"', '"Pick a course"'], description: 'Open the course dropdown' },
       { phrase: '"Select first"', alternatives: ['"Choose first"', '"First option"'], description: 'Select the first item in a dropdown' },
       { phrase: '"Select [name]"', alternatives: ['"Choose [name]"'], description: 'Select a specific item by name' },
@@ -108,9 +111,22 @@ const commandCategories: CommandCategory[] = [
     ],
   },
   {
+    id: 'ai-generation',
+    label: 'AI Content Generation',
+    icon: Brain,
+    description: 'Let AI help create course content',
+    commands: [
+      { phrase: '"Generate"', alternatives: ['"Generate syllabus"', '"AI help"', '"Create for me"'], description: 'When filling forms, say "generate" to have AI create content for you' },
+      { phrase: '"Yes, use it"', alternatives: ['"Looks good"', '"Accept"', '"Use this"'], description: 'Accept the AI-generated content and continue' },
+      { phrase: '"No, let me edit"', alternatives: ['"I\'ll dictate"', '"Manual"'], description: 'Decline AI content and enter manually or edit the generated text' },
+      { phrase: 'During Course Creation:', description: 'AI can generate syllabus (8-12 weeks) and learning objectives (5-7 items)' },
+      { phrase: 'During Session Creation:', description: 'AI can generate session plans with discussion prompts and case studies' },
+    ],
+  },
+  {
     id: 'intelligence',
     label: 'AI Insights',
-    icon: Brain,
+    icon: HelpCircle,
     description: 'Ask questions and get intelligent summaries',
     commands: [
       { phrase: '"How\'s the class doing?"', alternatives: ['"Class status"', '"Quick update"', '"Session overview"'], description: 'Get a quick summary of participation, engagement, and copilot insights' },
@@ -277,6 +293,13 @@ export function VoiceCommandGuide({ onClose }: VoiceCommandGuideProps) {
               <li>- Wait for the assistant to finish speaking before giving the next command</li>
               <li>- Say "cancel" or "stop" to abort any ongoing operation</li>
               <li>- The voice controller is at the bottom-right corner of the screen</li>
+            </ul>
+            <p className="font-medium text-blue-900 dark:text-blue-100 mt-3 mb-1">New! AI Insights:</p>
+            <ul className="text-blue-700 dark:text-blue-300 space-y-1">
+              <li>- Ask "How's the class doing?" for a quick status during live sessions</li>
+              <li>- Ask "Who needs help?" to identify struggling or silent students</li>
+              <li>- Ask "What did copilot suggest?" for teaching recommendations</li>
+              <li>- Say "How is [student name] doing?" to check on specific students</li>
             </ul>
           </div>
         </div>

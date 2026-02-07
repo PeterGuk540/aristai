@@ -43,6 +43,13 @@ class ConversationState(str, Enum):
     AWAITING_CASE_OFFER_RESPONSE = "awaiting_case_offer_response"  # Asked "Would you like to post a case?"
     AWAITING_CASE_PROMPT = "awaiting_case_prompt"  # Waiting for case prompt dictation
     AWAITING_CASE_CONFIRM = "awaiting_case_confirm"  # Asked "Should I post the case?"
+    # AI content generation states
+    AWAITING_SYLLABUS_GENERATION_CONFIRM = "awaiting_syllabus_generation_confirm"  # Asked "Generate syllabus?"
+    AWAITING_SYLLABUS_REVIEW = "awaiting_syllabus_review"  # Reviewing generated syllabus
+    AWAITING_OBJECTIVES_GENERATION_CONFIRM = "awaiting_objectives_generation_confirm"  # Asked "Generate objectives?"
+    AWAITING_OBJECTIVES_REVIEW = "awaiting_objectives_review"  # Reviewing generated objectives
+    AWAITING_SESSION_PLAN_GENERATION_CONFIRM = "awaiting_session_plan_generation_confirm"  # Asked "Generate session plan?"
+    AWAITING_SESSION_PLAN_REVIEW = "awaiting_session_plan_review"  # Reviewing generated session plan
 
 
 @dataclass
@@ -132,7 +139,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                     voice_id="syllabus",
                     field_type="textarea",
                     required=False,
-                    prompt="Would you like to add a syllabus? You can describe the course content and schedule.",
+                    prompt="Would you like me to generate a syllabus for this course? Say 'generate' for AI assistance, or dictate the syllabus yourself. You can also say 'skip'.",
                     validation_hint="You can skip this for now and add it later"
                 ),
                 FormField(
@@ -140,7 +147,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                     voice_id="learning-objectives",
                     field_type="textarea",
                     required=False,
-                    prompt="What are the learning objectives for this course?",
+                    prompt="Would you like me to generate learning objectives? Say 'generate' for AI assistance, or dictate them yourself. You can also say 'skip'.",
                     validation_hint="List what students will learn, like 'Understand basic concepts of...'"
                 ),
             ],
@@ -202,7 +209,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                     voice_id="input-session-title",
                     field_type="input",
                     required=True,
-                    prompt="What would you like to call this session?",
+                    prompt="What would you like to call this session? This will also be the topic for AI-generated content.",
                 ),
                 FormField(
                     name="Date",
@@ -216,7 +223,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                     voice_id="textarea-session-description",
                     field_type="textarea",
                     required=False,
-                    prompt="Would you like to add a description for this session?",
+                    prompt="Would you like me to generate a session plan with discussion prompts and a case study? Say 'generate' for AI assistance, or dictate a description yourself.",
                 ),
             ],
         },
@@ -505,6 +512,12 @@ class ConversationContext:
     # Case posting state
     case_prompt_content: str = ""  # The case study prompt content
     case_offer_declined: bool = False  # Track if user declined the case offer
+
+    # AI content generation state
+    generated_syllabus: str = ""  # AI-generated syllabus pending review
+    generated_objectives: List[str] = field(default_factory=list)  # AI-generated objectives pending review
+    generated_session_plan: Dict[str, Any] = field(default_factory=dict)  # AI-generated session plan pending review
+    course_name_for_generation: str = ""  # Course name used for content generation
 
     # Timestamps
     last_interaction: float = 0.0

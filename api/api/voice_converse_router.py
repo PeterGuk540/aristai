@@ -1325,6 +1325,57 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     suggestions=["Continue", "Cancel form", "Help"],
                 )
 
+            # Check if this is the course title field - save it for later generation
+            if current_field.voice_id == "course-title":
+                # Save the course name for potential AI generation
+                conv_context = conversation_manager.get_context(request.user_id)
+                conv_context.course_name_for_generation = transcript.strip().rstrip('.!?,')
+                conversation_manager.save_context(request.user_id, conv_context)
+
+            # Check if we're on the syllabus field - offer AI generation
+            if current_field.voice_id == "syllabus":
+                # Check if user wants AI to generate it
+                generate_words = ['generate', 'create', 'make', 'write', 'ai', 'auto', 'automatic', 'yes please', 'help me']
+                if any(word in transcript.lower() for word in generate_words):
+                    conv_context = conversation_manager.get_context(request.user_id)
+                    course_name = conv_context.course_name_for_generation or conv_context.collected_values.get("course-title", "this course")
+                    conv_context.state = ConversationState.AWAITING_SYLLABUS_GENERATION_CONFIRM
+                    conversation_manager.save_context(request.user_id, conv_context)
+                    return ConverseResponse(
+                        message=sanitize_speech(f"I can generate a syllabus for '{course_name}'. Would you like me to create one?"),
+                        action=ActionResponse(type='info'),
+                        suggestions=["Yes, generate it", "No, I'll dictate", "Skip"],
+                    )
+
+            # Check if we're on the learning objectives field - offer AI generation
+            if current_field.voice_id == "learning-objectives":
+                # Check if user wants AI to generate it
+                generate_words = ['generate', 'create', 'make', 'write', 'ai', 'auto', 'automatic', 'yes please', 'help me']
+                if any(word in transcript.lower() for word in generate_words):
+                    conv_context = conversation_manager.get_context(request.user_id)
+                    course_name = conv_context.course_name_for_generation or conv_context.collected_values.get("course-title", "this course")
+                    conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
+                    conversation_manager.save_context(request.user_id, conv_context)
+                    return ConverseResponse(
+                        message=sanitize_speech(f"I can generate learning objectives for '{course_name}'. Would you like me to create them?"),
+                        action=ActionResponse(type='info'),
+                        suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
+                    )
+
+            # Check if we're on session description field - offer AI session plan generation
+            if current_field.voice_id == "textarea-session-description":
+                generate_words = ['generate', 'create', 'make', 'write', 'ai', 'auto', 'automatic', 'yes please', 'help me', 'session plan', 'case study', 'discussion']
+                if any(word in transcript.lower() for word in generate_words):
+                    conv_context = conversation_manager.get_context(request.user_id)
+                    session_topic = conv_context.collected_values.get("input-session-title", "this session")
+                    conv_context.state = ConversationState.AWAITING_SESSION_PLAN_GENERATION_CONFIRM
+                    conversation_manager.save_context(request.user_id, conv_context)
+                    return ConverseResponse(
+                        message=sanitize_speech(f"I can generate a session plan for '{session_topic}' including discussion prompts and a case study. Would you like me to create it?"),
+                        action=ActionResponse(type='info'),
+                        suggestions=["Yes, generate it", "No, I'll dictate", "Skip"],
+                    )
+
             # Record the user's answer and fill the field
             result = conversation_manager.record_field_value(request.user_id, transcript)
             field_to_fill = result["field_to_fill"]
@@ -1884,6 +1935,443 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 message=sanitize_speech("Should I post this case study? Say yes to post or no to cancel."),
                 action=ActionResponse(type='info'),
                 suggestions=["Yes, post it", "No, cancel"],
+            )
+
+    # --- Handle AI syllabus generation confirmation state ---
+    if conv_context.state == ConversationState.AWAITING_SYLLABUS_GENERATION_CONFIRM:
+        transcript_lower = transcript.lower()
+        yes_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'generate', 'create', 'please', 'go ahead', 'do it']
+        no_words = ['no', 'nope', 'dictate', "i'll type", "i will type", "i'll write", "i will write", 'manual', 'myself', 'skip']
+
+        accepted = any(word in transcript_lower for word in yes_words)
+        declined = any(word in transcript_lower for word in no_words)
+
+        if accepted and not declined:
+            # Generate syllabus using AI
+            course_name = conv_context.course_name_for_generation or "the course"
+
+            # Call the content generation tool
+            from mcp_server.tools.content_generation import generate_syllabus
+            gen_result = generate_syllabus(course_name=course_name)
+
+            if gen_result.get("success") and gen_result.get("syllabus"):
+                syllabus = gen_result["syllabus"]
+                # Save the generated syllabus
+                conv_context.generated_syllabus = syllabus
+                conv_context.state = ConversationState.AWAITING_SYLLABUS_REVIEW
+                conversation_manager.save_context(request.user_id, conv_context)
+
+                # Preview (first 150 chars)
+                preview = syllabus[:150] + "..." if len(syllabus) > 150 else syllabus
+
+                return ConverseResponse(
+                    message=sanitize_speech(f"I've generated a syllabus for '{course_name}'. Here's a preview: {preview}. Should I use this syllabus?"),
+                    action=ActionResponse(type='info'),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.fillInput", "payload": {"target": "syllabus", "value": syllabus}},
+                        ]
+                    }],
+                    suggestions=["Yes, use it", "No, let me edit", "Skip syllabus"],
+                )
+            else:
+                # Generation failed - fallback to manual
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                error_msg = gen_result.get("error", "Generation failed")
+                return ConverseResponse(
+                    message=sanitize_speech(f"Sorry, I couldn't generate the syllabus: {error_msg}. Please dictate the syllabus or say 'skip'."),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Skip", "Cancel form"],
+                )
+
+        elif declined or 'skip' in transcript_lower:
+            # User wants to dictate or skip
+            if 'skip' in transcript_lower:
+                skip_result = conversation_manager.skip_current_field(request.user_id)
+                return ConverseResponse(
+                    message=sanitize_speech(skip_result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Continue", "Cancel form"],
+                )
+            else:
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                return ConverseResponse(
+                    message=sanitize_speech("Okay, please dictate the syllabus now. Say what you'd like to include."),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Skip", "Cancel form"],
+                )
+        else:
+            return ConverseResponse(
+                message=sanitize_speech("Would you like me to generate a syllabus for you? Say 'yes' to generate, 'no' to dictate it yourself, or 'skip' to move on."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, generate it", "No, I'll dictate", "Skip"],
+            )
+
+    # --- Handle syllabus review state ---
+    if conv_context.state == ConversationState.AWAITING_SYLLABUS_REVIEW:
+        transcript_lower = transcript.lower()
+        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'use it', 'looks good', 'perfect', 'great', 'accept', 'good']
+        edit_words = ['no', 'edit', 'change', 'modify', 'different', 'regenerate', 'try again']
+        skip_words = ['skip', 'next', 'move on']
+
+        accepted = any(word in transcript_lower for word in accept_words)
+        wants_edit = any(word in transcript_lower for word in edit_words)
+        wants_skip = any(word in transcript_lower for word in skip_words)
+
+        if accepted and not wants_edit:
+            # Accept the generated syllabus and move to next field
+            conv_context.collected_values["syllabus"] = conv_context.generated_syllabus
+            conv_context.current_field_index += 1
+            conv_context.generated_syllabus = ""
+            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conversation_manager.save_context(request.user_id, conv_context)
+
+            # Get next field prompt
+            next_field = conversation_manager.get_current_field(request.user_id)
+            if next_field:
+                # Offer AI generation for objectives too
+                if next_field.voice_id == "learning-objectives":
+                    return ConverseResponse(
+                        message=sanitize_speech(f"Syllabus saved! Now for learning objectives. Would you like me to generate learning objectives based on the syllabus?"),
+                        action=ActionResponse(type='info'),
+                        suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
+                    )
+                return ConverseResponse(
+                    message=sanitize_speech(f"Syllabus saved! {next_field.prompt}"),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Skip", "Cancel form"],
+                )
+            else:
+                return ConverseResponse(
+                    message=sanitize_speech("Syllabus saved! The form is ready to submit. Would you like me to create the course?"),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Yes, create course", "No, cancel"],
+                )
+
+        elif wants_skip:
+            skip_result = conversation_manager.skip_current_field(request.user_id)
+            conv_context.generated_syllabus = ""
+            conversation_manager.save_context(request.user_id, conv_context)
+            return ConverseResponse(
+                message=sanitize_speech(skip_result["message"]),
+                action=ActionResponse(type='info'),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.clearInput", "payload": {"target": "syllabus"}},
+                    ]
+                }],
+                suggestions=["Continue", "Cancel form"],
+            )
+
+        else:
+            # User wants to edit - keep the text in the form for manual editing
+            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conversation_manager.save_context(request.user_id, conv_context)
+            return ConverseResponse(
+                message=sanitize_speech("The syllabus is in the form. You can edit it manually, or dictate a new one. Say 'done' when finished or 'skip' to move on."),
+                action=ActionResponse(type='info'),
+                suggestions=["Skip", "Cancel form"],
+            )
+
+    # --- Handle AI objectives generation confirmation state ---
+    if conv_context.state == ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM:
+        transcript_lower = transcript.lower()
+        yes_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'generate', 'create', 'please', 'go ahead', 'do it']
+        no_words = ['no', 'nope', 'dictate', "i'll type", "i will type", "i'll write", "i will write", 'manual', 'myself', 'skip']
+
+        accepted = any(word in transcript_lower for word in yes_words)
+        declined = any(word in transcript_lower for word in no_words)
+
+        if accepted and not declined:
+            # Generate objectives using AI
+            course_name = conv_context.course_name_for_generation or "the course"
+            syllabus = conv_context.collected_values.get("syllabus", "")
+
+            from mcp_server.tools.content_generation import generate_objectives
+            gen_result = generate_objectives(course_name=course_name, syllabus=syllabus)
+
+            if gen_result.get("success") and gen_result.get("objectives"):
+                objectives = gen_result["objectives"]
+                objectives_text = "\n".join(f"- {obj}" for obj in objectives)
+
+                # Save the generated objectives
+                conv_context.generated_objectives = objectives
+                conv_context.state = ConversationState.AWAITING_OBJECTIVES_REVIEW
+                conversation_manager.save_context(request.user_id, conv_context)
+
+                # Preview (first 3 objectives)
+                preview = ", ".join(objectives[:3])
+                if len(objectives) > 3:
+                    preview += f", and {len(objectives) - 3} more"
+
+                return ConverseResponse(
+                    message=sanitize_speech(f"I've generated {len(objectives)} learning objectives. Here are the first few: {preview}. Should I use these objectives?"),
+                    action=ActionResponse(type='info'),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.fillInput", "payload": {"target": "learning-objectives", "value": objectives_text}},
+                        ]
+                    }],
+                    suggestions=["Yes, use them", "No, let me edit", "Skip objectives"],
+                )
+            else:
+                # Generation failed
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                error_msg = gen_result.get("error", "Generation failed")
+                return ConverseResponse(
+                    message=sanitize_speech(f"Sorry, I couldn't generate objectives: {error_msg}. Please dictate them or say 'skip'."),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Skip", "Cancel form"],
+                )
+
+        elif declined or 'skip' in transcript_lower:
+            if 'skip' in transcript_lower:
+                skip_result = conversation_manager.skip_current_field(request.user_id)
+                return ConverseResponse(
+                    message=sanitize_speech(skip_result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Continue", "Cancel form"],
+                )
+            else:
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                return ConverseResponse(
+                    message=sanitize_speech("Okay, please dictate the learning objectives now."),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Skip", "Cancel form"],
+                )
+        else:
+            return ConverseResponse(
+                message=sanitize_speech("Would you like me to generate learning objectives? Say 'yes' to generate, 'no' to dictate them, or 'skip'."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
+            )
+
+    # --- Handle objectives review state ---
+    if conv_context.state == ConversationState.AWAITING_OBJECTIVES_REVIEW:
+        transcript_lower = transcript.lower()
+        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'use them', 'looks good', 'perfect', 'great', 'accept', 'good']
+        edit_words = ['no', 'edit', 'change', 'modify', 'different', 'regenerate', 'try again']
+        skip_words = ['skip', 'next', 'move on']
+
+        accepted = any(word in transcript_lower for word in accept_words)
+        wants_edit = any(word in transcript_lower for word in edit_words)
+        wants_skip = any(word in transcript_lower for word in skip_words)
+
+        if accepted and not wants_edit:
+            # Accept the generated objectives
+            objectives_text = "\n".join(f"- {obj}" for obj in conv_context.generated_objectives)
+            conv_context.collected_values["learning-objectives"] = objectives_text
+            conv_context.current_field_index += 1
+            conv_context.generated_objectives = []
+            conv_context.state = ConversationState.AWAITING_CONFIRMATION
+            conv_context.pending_action = "ui_click_button"
+            conv_context.pending_action_data = {
+                "voice_id": "create-course-with-plans",
+                "form_name": "create_course",
+            }
+            conversation_manager.save_context(request.user_id, conv_context)
+
+            return ConverseResponse(
+                message=sanitize_speech("Objectives saved! The course is ready to create. Would you like me to create it now and generate session plans?"),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, create it", "No, cancel"],
+            )
+
+        elif wants_skip:
+            skip_result = conversation_manager.skip_current_field(request.user_id)
+            conv_context.generated_objectives = []
+            conversation_manager.save_context(request.user_id, conv_context)
+            return ConverseResponse(
+                message=sanitize_speech(skip_result["message"]),
+                action=ActionResponse(type='info'),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.clearInput", "payload": {"target": "learning-objectives"}},
+                    ]
+                }],
+                suggestions=["Continue", "Cancel form"],
+            )
+
+        else:
+            # User wants to edit
+            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conversation_manager.save_context(request.user_id, conv_context)
+            return ConverseResponse(
+                message=sanitize_speech("The objectives are in the form. You can edit them manually, or dictate new ones. Say 'done' when finished or 'skip' to move on."),
+                action=ActionResponse(type='info'),
+                suggestions=["Skip", "Cancel form"],
+            )
+
+    # --- Handle AI session plan generation confirmation state ---
+    if conv_context.state == ConversationState.AWAITING_SESSION_PLAN_GENERATION_CONFIRM:
+        transcript_lower = transcript.lower()
+        yes_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'generate', 'create', 'please', 'go ahead', 'do it']
+        no_words = ['no', 'nope', 'dictate', "i'll type", "i will type", "i'll write", "i will write", 'manual', 'myself', 'skip']
+
+        accepted = any(word in transcript_lower for word in yes_words)
+        declined = any(word in transcript_lower for word in no_words)
+
+        if accepted and not declined:
+            # Generate session plan using AI
+            session_topic = conv_context.collected_values.get("input-session-title", "the session")
+            # Get course info from context if available
+            course_id = context_store.get_context(request.user_id).get("active_course_id") if request.user_id else None
+            course_name = "the course"
+            syllabus = None
+
+            if course_id and db:
+                course = db.query(Course).filter(Course.id == course_id).first()
+                if course:
+                    course_name = course.title
+                    syllabus = course.syllabus_text
+
+            from mcp_server.tools.content_generation import generate_session_plan
+            gen_result = generate_session_plan(
+                course_name=course_name,
+                session_topic=session_topic,
+                syllabus=syllabus,
+            )
+
+            if gen_result.get("success") and gen_result.get("plan"):
+                plan = gen_result["plan"]
+                # Format the plan as a description
+                description_parts = []
+                if plan.get("goals"):
+                    description_parts.append("Learning Goals:\n" + "\n".join(f"- {g}" for g in plan["goals"]))
+                if plan.get("key_concepts"):
+                    description_parts.append("\nKey Concepts:\n" + "\n".join(f"- {c}" for c in plan["key_concepts"]))
+                if plan.get("discussion_prompts"):
+                    description_parts.append("\nDiscussion Prompts:\n" + "\n".join(f"- {p}" for p in plan["discussion_prompts"]))
+                if plan.get("case_prompt"):
+                    description_parts.append(f"\nCase Study:\n{plan['case_prompt']}")
+
+                description = "\n".join(description_parts)
+
+                # Save the generated plan
+                conv_context.generated_session_plan = plan
+                conv_context.state = ConversationState.AWAITING_SESSION_PLAN_REVIEW
+                conversation_manager.save_context(request.user_id, conv_context)
+
+                # Create a voice-friendly summary
+                prompt_count = len(plan.get("discussion_prompts", []))
+                summary = f"I've generated a session plan for '{session_topic}' with {prompt_count} discussion prompts"
+                if plan.get("case_prompt"):
+                    summary += " and a case study"
+                summary += ". Should I use this plan?"
+
+                return ConverseResponse(
+                    message=sanitize_speech(summary),
+                    action=ActionResponse(type='info'),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.fillInput", "payload": {"target": "textarea-session-description", "value": description}},
+                        ]
+                    }],
+                    suggestions=["Yes, use it", "No, let me edit", "Skip"],
+                )
+            else:
+                # Generation failed
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                error_msg = gen_result.get("error", "Generation failed")
+                return ConverseResponse(
+                    message=sanitize_speech(f"Sorry, I couldn't generate the session plan: {error_msg}. Please dictate a description or say 'skip'."),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Skip", "Cancel form"],
+                )
+
+        elif declined or 'skip' in transcript_lower:
+            if 'skip' in transcript_lower:
+                skip_result = conversation_manager.skip_current_field(request.user_id)
+                return ConverseResponse(
+                    message=sanitize_speech(skip_result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Create session", "Cancel form"],
+                )
+            else:
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                return ConverseResponse(
+                    message=sanitize_speech("Okay, please dictate the session description now."),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Skip", "Cancel form"],
+                )
+        else:
+            return ConverseResponse(
+                message=sanitize_speech("Would you like me to generate a session plan with discussion prompts and a case study? Say 'yes' to generate, 'no' to dictate, or 'skip'."),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, generate it", "No, I'll dictate", "Skip"],
+            )
+
+    # --- Handle session plan review state ---
+    if conv_context.state == ConversationState.AWAITING_SESSION_PLAN_REVIEW:
+        transcript_lower = transcript.lower()
+        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'use it', 'looks good', 'perfect', 'great', 'accept', 'good']
+        edit_words = ['no', 'edit', 'change', 'modify', 'different', 'regenerate', 'try again']
+        skip_words = ['skip', 'next', 'move on']
+
+        accepted = any(word in transcript_lower for word in accept_words)
+        wants_edit = any(word in transcript_lower for word in edit_words)
+        wants_skip = any(word in transcript_lower for word in skip_words)
+
+        if accepted and not wants_edit:
+            # Accept the generated plan
+            plan = conv_context.generated_session_plan
+            description_parts = []
+            if plan.get("goals"):
+                description_parts.append("Learning Goals:\n" + "\n".join(f"- {g}" for g in plan["goals"]))
+            if plan.get("key_concepts"):
+                description_parts.append("\nKey Concepts:\n" + "\n".join(f"- {c}" for c in plan["key_concepts"]))
+            if plan.get("discussion_prompts"):
+                description_parts.append("\nDiscussion Prompts:\n" + "\n".join(f"- {p}" for p in plan["discussion_prompts"]))
+            if plan.get("case_prompt"):
+                description_parts.append(f"\nCase Study:\n{plan['case_prompt']}")
+            description = "\n".join(description_parts)
+
+            conv_context.collected_values["textarea-session-description"] = description
+            conv_context.current_field_index += 1
+            conv_context.generated_session_plan = {}
+            conv_context.state = ConversationState.AWAITING_CONFIRMATION
+            conv_context.pending_action = "ui_click_button"
+            conv_context.pending_action_data = {
+                "voice_id": "create-session",
+                "form_name": "create_session",
+            }
+            conversation_manager.save_context(request.user_id, conv_context)
+
+            return ConverseResponse(
+                message=sanitize_speech("Session plan saved! The session is ready to create. Would you like me to create it now?"),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, create it", "No, cancel"],
+            )
+
+        elif wants_skip:
+            skip_result = conversation_manager.skip_current_field(request.user_id)
+            conv_context.generated_session_plan = {}
+            conversation_manager.save_context(request.user_id, conv_context)
+            return ConverseResponse(
+                message=sanitize_speech(skip_result["message"]),
+                action=ActionResponse(type='info'),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.clearInput", "payload": {"target": "textarea-session-description"}},
+                    ]
+                }],
+                suggestions=["Create session", "Cancel form"],
+            )
+
+        else:
+            # User wants to edit
+            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conversation_manager.save_context(request.user_id, conv_context)
+            return ConverseResponse(
+                message=sanitize_speech("The session plan is in the form. You can edit it manually, or dictate a new description. Say 'done' when finished or 'skip'."),
+                action=ActionResponse(type='info'),
+                suggestions=["Skip", "Cancel form"],
             )
 
     # 1. Check for navigation intent first (fast regex - instant)

@@ -30,11 +30,13 @@ const adminTabs: TabContent[] = [
       {
         title: 'Creating a Course',
         steps: [
-          'Click the "Create Course" button on the Courses page',
-          'Enter course name, description, syllabus, and learning objectives',
+          'Click "Create Course" on the Courses page',
+          'Enter course name - this is required',
+          'For syllabus: Say "generate" for AI to create a full syllabus (8-12 weeks)',
+          'For objectives: Say "generate" for AI to create learning objectives (5-7 items)',
+          'Review AI-generated content, accept, edit, or dictate your own',
           'Click "Save" - your course is created with a unique Join Code',
-          'Find the Join Code displayed on the course card',
-          'Share this code with students so they can self-enroll',
+          'Share the Join Code with students for self-enrollment',
         ],
       },
       {
@@ -63,7 +65,17 @@ const adminTabs: TabContent[] = [
     icon: '🎯',
     sections: [
       {
-        title: 'Understanding Session Lifecycle',
+        title: 'Creating Sessions with AI',
+        steps: [
+          'Go to Sessions page → Create tab',
+          'Enter session title (topic) and date',
+          'For description: Say "generate" for AI session plan',
+          'AI creates discussion prompts and case studies based on topic',
+          'Review and accept, or edit as needed',
+        ],
+      },
+      {
+        title: 'Session Lifecycle',
         steps: [
           'Draft: Initial state, still being prepared',
           'Scheduled: Ready to go, waiting for start time',
@@ -74,11 +86,11 @@ const adminTabs: TabContent[] = [
       {
         title: 'Running a Live Session',
         steps: [
-          'Go to Sessions page and select your session',
-          'Click "Start Session" to change status to Live',
-          'Students can now post in the Forum for this session',
-          'Use AI Copilot in Console for real-time teaching suggestions',
-          'When finished, click "End Session" to mark as Completed',
+          'Select your session and click "Start Session" (Go Live)',
+          'Students can now post in the Forum',
+          'Use AI Copilot in Console for real-time suggestions',
+          'Ask "How\'s the class doing?" for status updates',
+          'When finished, click "End Session" to complete',
         ],
       },
     ],
@@ -183,13 +195,14 @@ const instructorTabs: TabContent[] = [
     icon: '📚',
     sections: [
       {
-        title: 'Creating a Course',
+        title: 'Creating a Course with AI',
         steps: [
-          'Click the "Create Course" button on the Courses page',
-          'Enter course name, description, syllabus, and learning objectives',
+          'Click "Create Course" on the Courses page',
+          'Enter course name - this is required',
+          'For syllabus: Say "generate" for AI to create a full syllabus (8-12 weeks)',
+          'For objectives: Say "generate" for AI to create learning objectives (5-7 items)',
+          'Review AI content, accept, edit, or dictate your own',
           'Click "Save" - your course is created with a unique Join Code',
-          'Find the Join Code displayed on the course card',
-          'Share this code with students so they can self-enroll',
         ],
       },
       {
@@ -199,14 +212,6 @@ const instructorTabs: TabContent[] = [
           'Find it on your course card or course detail page',
           'Share this code via email, LMS, or in class',
           'Students enter the code on their Courses page to enroll',
-          'This is the easiest way to get students into your course',
-        ],
-      },
-      {
-        title: 'Other Enrollment Options',
-        steps: [
-          'Console → Roster Upload: Upload a CSV file with student emails and names',
-          'Manage Enrollment: Add students one-by-one by email',
         ],
       },
       {
@@ -216,7 +221,6 @@ const instructorTabs: TabContent[] = [
           'Click "Generate Plans" button',
           'AI analyzes your syllabus and creates structured session plans',
           'Each plan includes: topics, objectives, discussion prompts, case studies',
-          'Review and edit plans before using them',
         ],
       },
     ],
@@ -227,7 +231,16 @@ const instructorTabs: TabContent[] = [
     icon: '🎯',
     sections: [
       {
-        title: 'Understanding Session Lifecycle',
+        title: 'Creating Sessions with AI',
+        steps: [
+          'Go to Sessions page → Create tab',
+          'Enter session title (topic) and date',
+          'For description: Say "generate" for AI session plan with prompts and case study',
+          'Review and accept the generated content',
+        ],
+      },
+      {
+        title: 'Session Lifecycle',
         steps: [
           'Draft: Initial state, still being prepared',
           'Scheduled: Ready to go, waiting for start time',

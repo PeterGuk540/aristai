@@ -2066,12 +2066,12 @@ async def execute_action(
                     sessions = result.get("sessions", []) if isinstance(result, dict) else []
                     if sessions:
                         # Include status in label for clarity
-                        options = [
-                            DropdownOption(
-                                label=f"{s.get('title', f'Session {s[\"id\"]}')} ({s.get('status', 'unknown')})",
-                                value=str(s['id'])
-                            ) for s in sessions
-                        ]
+                        options = []
+                        for s in sessions:
+                            session_id = s['id']
+                            title = s.get('title', f'Session {session_id}')
+                            status = s.get('status', 'unknown')
+                            options.append(DropdownOption(label=f"{title} ({status})", value=str(session_id)))
                 else:
                     # No course selected - prompt user to select course first
                     return {
@@ -2399,12 +2399,12 @@ async def execute_action(
                 }
 
             # Multiple sessions - start dropdown selection flow
-            options = [
-                DropdownOption(
-                    label=f"{s.get('title', f'Session {s[\"id\"]}')} ({s.get('status', 'unknown')})",
-                    value=str(s['id'])
-                ) for s in sessions
-            ]
+            options = []
+            for s in sessions:
+                session_id = s['id']
+                title = s.get('title', f'Session {session_id}')
+                status = s.get('status', 'unknown')
+                options.append(DropdownOption(label=f"{title} ({status})", value=str(session_id)))
             prompt = conversation_manager.start_dropdown_selection(
                 user_id, "select-session", options, current_page or "/sessions"
             )

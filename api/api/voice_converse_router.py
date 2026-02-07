@@ -232,11 +232,19 @@ ACTION_PATTERNS = {
         r'\bmy\s+account\b',
     ],
     'view_voice_guide': [
-        r'\b(view|show|open)\s+(the\s+)?voice\s+guide\b',
-        r'\bvoice\s+guide\b',
+        r'\b(view|show|open)\s+(the\s+)?voice\s+(guide|commands?)\b',
+        r'\bvoice\s+(guide|commands?)\b',
         r'\bhelp\s+with\s+voice\b',
-        r'\bvoice\s+commands?\b',
-        r'\bshow\s+(me\s+)?commands?\b',
+        r'\bshow\s+(me\s+)?(voice\s+)?commands?\b',
+        r'\bwhat\s+can\s+i\s+say\b',
+        r'\blist\s+commands?\b',
+    ],
+    'forum_instructions': [
+        r'\b(view|show|open)\s+(the\s+)?(forum|platform)\s+instructions?\b',
+        r'\b(forum|platform)\s+instructions?\b',
+        r'\b(forum|platform)\s+guide\b',
+        r'\bhow\s+to\s+use\s+(the\s+)?(forum|platform|app)\b',
+        r'\bplatform\s+help\b',
     ],
     'open_profile': [
         r'\b(open|view|show)\s+(my\s+)?profile\b',
@@ -818,7 +826,10 @@ def generate_conversational_response(
             return "Opening the user menu."
 
         if intent_value == 'view_voice_guide':
-            return "Opening the voice guide to show available commands."
+            return "Opening the voice command guide to show all available voice commands."
+
+        if intent_value == 'forum_instructions':
+            return "Opening the platform instructions to show how to use AristAI."
 
         if intent_value == 'open_profile':
             return "Opening your profile settings."
@@ -3023,6 +3034,15 @@ async def execute_action(
                 "message": "Signing out...",
                 "ui_actions": [
                     {"type": "ui.openMenuAndClick", "payload": {"menuTarget": "user-menu", "itemTarget": "sign-out"}},
+                ],
+            }
+
+        if action == 'forum_instructions':
+            return {
+                "action": "forum_instructions",
+                "message": "Opening platform instructions...",
+                "ui_actions": [
+                    {"type": "ui.openMenuAndClick", "payload": {"menuTarget": "user-menu", "itemTarget": "forum-instructions"}},
                 ],
             }
 

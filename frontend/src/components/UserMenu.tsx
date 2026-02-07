@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { User, LogOut, Settings, ChevronDown, HelpCircle } from 'lucide-react';
+import { User, LogOut, Settings, ChevronDown, HelpCircle, Mic, BookOpen } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 
 interface UserMenuProps {
   onShowGuide?: () => void;
+  onShowVoiceGuide?: () => void;
 }
 
-export function UserMenu({ onShowGuide }: UserMenuProps) {
+export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
   const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -97,7 +98,7 @@ export function UserMenu({ onShowGuide }: UserMenuProps) {
             <button
               onClick={() => {
                 setIsOpen(false);
-                onShowGuide?.();
+                onShowVoiceGuide?.();
               }}
               className={cn(
                 'w-full flex items-center gap-3 px-4 py-2 text-sm',
@@ -108,8 +109,26 @@ export function UserMenu({ onShowGuide }: UserMenuProps) {
               role="menuitem"
               data-voice-id="view-voice-guide"
             >
-              <HelpCircle className="h-4 w-4" />
-              View Voice Guide
+              <Mic className="h-4 w-4" />
+              Voice Commands
+            </button>
+
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onShowGuide?.();
+              }}
+              className={cn(
+                'w-full flex items-center gap-3 px-4 py-2 text-sm',
+                'text-gray-700 dark:text-gray-200',
+                'hover:bg-gray-100 dark:hover:bg-gray-700',
+                'transition-colors duration-200'
+              )}
+              role="menuitem"
+              data-voice-id="forum-instructions"
+            >
+              <BookOpen className="h-4 w-4" />
+              Platform Instructions
             </button>
 
             <button

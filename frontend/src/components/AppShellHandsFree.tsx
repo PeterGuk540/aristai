@@ -20,6 +20,7 @@ import { useUser } from '@/lib/context';
 import { UserMenu } from './UserMenu';
 import { Onboarding, useOnboarding } from './Onboarding';
 import { VoiceOnboarding } from './voice/VoiceOnboarding';
+import { VoiceCommandGuide } from './voice/VoiceCommandGuide';
 import { ConversationalVoice } from './voice/ConversationalVoice';
 import { VoiceUiActionBridge } from './voice/VoiceUiActionBridge';
 import { UiActionHandler } from './voice/UiActionHandler';
@@ -53,6 +54,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceConnected, setVoiceConnected] = useState(false);
+  const [showVoiceCommandGuide, setShowVoiceCommandGuide] = useState(false);
 
   // Determine the effective role for onboarding
   const effectiveRole = isAdmin ? 'admin' : isInstructor ? 'instructor' : 'student';
@@ -271,7 +273,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             </button>
 
             {/* User menu */}
-            <UserMenu onShowGuide={showGuide} />
+            <UserMenu onShowGuide={showGuide} onShowVoiceGuide={() => setShowVoiceCommandGuide(true)} />
           </div>
         </header>
 
@@ -295,6 +297,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
           userName={currentUser.name}
           onComplete={completeWelcomeGuide}
         />
+      )}
+
+      {/* Voice Command Guide - shows when "Voice Commands" is clicked */}
+      {showVoiceCommandGuide && (
+        <VoiceCommandGuide onClose={() => setShowVoiceCommandGuide(false)} />
       )}
 
       {/* Conversational Voice Assistant - always on for instructors after onboarding */}

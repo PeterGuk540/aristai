@@ -664,6 +664,21 @@ export const VoiceUIController = () => {
     }
 
     if (element) {
+      // Check if the tab is disabled
+      const isDisabled = element.hasAttribute('disabled') ||
+                         element.getAttribute('aria-disabled') === 'true' ||
+                         element.classList.contains('disabled') ||
+                         (element as HTMLButtonElement).disabled;
+
+      if (isDisabled) {
+        console.warn('🎤 VoiceUI: Tab is disabled:', searchName);
+        // Dispatch an event to notify that the tab is disabled
+        window.dispatchEvent(new CustomEvent('voice-tab-disabled', {
+          detail: { tabName: searchName, message: 'This tab is disabled. Please select a session first.' }
+        }));
+        return;
+      }
+
       element.click();
       console.log('🎤 VoiceUI: Switched to tab:', searchName);
     } else {

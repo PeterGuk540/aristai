@@ -1860,26 +1860,60 @@ def _extract_tab_info(transcript: str) -> Dict[str, str]:
     tab_name = text_lower.strip()
 
     # Normalize common variations
+    # Note: Speech recognition may confuse similar-sounding words
     tab_aliases = {
         'ai copilot': 'copilot',
         'ai assistant': 'copilot',
+        'copilot': 'copilot',
+        # Polls tab - handle various transcriptions and mishearings
         'poll': 'polls',
+        'polls': 'polls',
+        'pulse': 'polls',   # Common mishearing
+        'pose': 'polls',    # Common mishearing
+        'pols': 'polls',    # Common mishearing
+        'paul': 'polls',    # Common mishearing
+        'polling': 'polls',
+        'poles': 'polls',   # Common mishearing
+        'pulls': 'polls',   # Common mishearing
+        'bowls': 'polls',   # Common mishearing
+        'goals': 'polls',   # Common mishearing (unlikely but possible)
+        # Cases tab
         'case': 'cases',
+        'cases': 'cases',
         'case study': 'cases',
         'case studies': 'cases',
         'casestudies': 'cases',
-        'request': 'requests',
         'post case': 'cases',
+        'post cases': 'cases',
+        # Requests tab
+        'request': 'requests',
+        'requests': 'requests',
+        'instructor request': 'requests',
+        'instructor requests': 'requests',
+        # Roster tab
+        'roster': 'roster',
         'student roster': 'roster',
         'class roster': 'roster',
+        'roster upload': 'roster',
+        # Other tabs
         'enroll': 'enrollment',
+        'enrollment': 'enrollment',
         'enrollments': 'enrollment',
         'my performance': 'my-performance',
         'best practice': 'best-practice',
         'best practices': 'best-practice',
     }
 
-    return {"tabName": tab_aliases.get(tab_name, tab_name)}
+    # First try exact match
+    if tab_name in tab_aliases:
+        return {"tabName": tab_aliases[tab_name]}
+
+    # Then try partial match - if the tab_name contains a key word
+    for alias, normalized in tab_aliases.items():
+        if alias in tab_name or tab_name in alias:
+            return {"tabName": normalized}
+
+    return {"tabName": tab_name}
 
 
 def _extract_dropdown_selection(transcript: str) -> Dict[str, Any]:

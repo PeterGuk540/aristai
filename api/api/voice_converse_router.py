@@ -175,6 +175,36 @@ ACTION_PATTERNS = {
         r'\bcheck\s+(for\s+)?(new\s+)?interventions?\b',
         r'\binterventions?\s+refresh\b',
     ],
+    # Session status management
+    'set_session_draft': [
+        r'\bset\s+(to\s+)?draft\b',
+        r'\b(change|switch)\s+(to\s+)?draft\b',
+        r'\bdraft\s+(the\s+)?session\b',
+        r'\bmake\s+(it\s+)?draft\b',
+        r'\brevert\s+to\s+draft\b',
+        r'\bback\s+to\s+draft\b',
+    ],
+    'set_session_live': [
+        r'\bgo\s+live\b',
+        r'\bset\s+(to\s+)?live\b',
+        r'\b(change|switch)\s+(to\s+)?live\b',
+        r'\bstart\s+(the\s+)?session\b',
+        r'\bmake\s+(it\s+)?live\b',
+        r'\blaunch\s+(the\s+)?session\b',
+    ],
+    'set_session_completed': [
+        r'\bcomplete(\s+session)?\b',
+        r'\bset\s+(to\s+)?complete(d)?\b',
+        r'\b(change|switch)\s+(to\s+)?complete(d)?\b',
+        r'\bend\s+(the\s+)?session\b',
+        r'\bfinish\s+(the\s+)?session\b',
+        r'\bmark\s+(as\s+)?complete(d)?\b',
+    ],
+    'schedule_session': [
+        r'\bschedule(\s+session)?\b',
+        r'\bset\s+(to\s+)?schedule(d)?\b',
+        r'\b(change|switch)\s+(to\s+)?schedule(d)?\b',
+    ],
     # Poll actions
     'create_poll': [
         r'\bcreate\s+(a\s+)?poll\b',
@@ -715,6 +745,19 @@ def generate_conversational_response(
         if intent_value == 'end_session':
             return "Session has ended. Would you like me to generate a report?"
 
+        # === SESSION STATUS MANAGEMENT RESPONSES ===
+        if intent_value == 'set_session_draft':
+            return "Session has been set to draft. You can edit it or go live when ready."
+
+        if intent_value == 'set_session_live':
+            return "Session is now live! Students can join and start participating."
+
+        if intent_value == 'set_session_completed':
+            return "Session has been completed. You can now generate a report for this session."
+
+        if intent_value == 'schedule_session':
+            return "Session has been scheduled. You can go live when you're ready to start."
+
         # === COPILOT RESPONSES ===
         if intent_value == 'start_copilot':
             return "Copilot is now active! It will monitor the discussion and provide suggestions every 90 seconds."
@@ -1056,6 +1099,21 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 if re.search(pattern, transcript.lower()):
                     # User wants to switch tabs - cancel form and switch
                     conversation_manager.cancel_form(request.user_id)
+
+                    # Special handling for manage status tab - offer status options
+                    if tab_name == 'manage':
+                        return ConverseResponse(
+                            message=sanitize_speech("Cancelling form. Switching to manage status tab. You can say 'go live', 'set to draft', 'complete', or 'schedule' to change the session status."),
+                            action=ActionResponse(type='execute', executed=True),
+                            results=[{
+                                "ui_actions": [
+                                    {"type": "ui.switchTab", "payload": {"tabName": tab_name}},
+                                    {"type": "ui.toast", "payload": {"message": "Switched to manage status", "type": "info"}},
+                                ]
+                            }],
+                            suggestions=["Go live", "Set to draft", "Complete session", "Schedule"],
+                        )
+
                     return ConverseResponse(
                         message=sanitize_speech(f"Cancelling form. Switching to {tab_name} tab."),
                         action=ActionResponse(type='execute', executed=True),
@@ -2053,6 +2111,25 @@ def _extract_tab_info(transcript: str) -> Dict[str, str]:
         'my performance': 'my-performance',
         'best practice': 'best-practice',
         'best practices': 'best-practice',
+        # Session status management tab
+        'manage': 'manage',
+        'management': 'manage',
+        'manage status': 'manage',
+        'managestatus': 'manage',
+        'status': 'manage',
+        'session status': 'manage',
+        'status control': 'manage',
+        # Create tab
+        'create': 'create',
+        'creation': 'create',
+        'create session': 'create',
+        'new session': 'create',
+        # View sessions tab
+        'sessions': 'sessions',
+        'session': 'sessions',
+        'view sessions': 'sessions',
+        'list': 'sessions',
+        'session list': 'sessions',
     }
 
     # First try exact match
@@ -2348,6 +2425,18 @@ async def execute_action(
                             ],
                             "poll_offer": True,
                         }
+
+            # Special handling for sessions page manage status tab - offer status options
+            if current_page and '/sessions' in current_page and tab_name in ['manage', 'management', 'manage status', 'managestatus']:
+                return {
+                    "action": "switch_tab_with_status_offer",
+                    "message": "Switching to manage status. You can say 'go live', 'set to draft', 'complete', or 'schedule' to change the session status.",
+                    "ui_actions": [
+                        {"type": "ui.switchTab", "payload": {"tabName": "manage", "target": "tab-manage"}},
+                        {"type": "ui.toast", "payload": {"message": "Switched to manage status", "type": "info"}},
+                    ],
+                    "status_offer": True,
+                }
 
             return {
                 "action": "switch_tab",
@@ -2761,6 +2850,47 @@ async def execute_action(
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "refresh-interventions"}},
                     {"type": "ui.toast", "payload": {"message": "Interventions refreshed", "type": "success"}},
+                ],
+            }
+
+        # === SESSION STATUS MANAGEMENT ===
+        if action == 'set_session_draft':
+            return {
+                "action": "set_session_draft",
+                "message": "Setting session to draft...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "set-to-draft"}},
+                    {"type": "ui.toast", "payload": {"message": "Session set to draft", "type": "success"}},
+                ],
+            }
+
+        if action == 'set_session_live':
+            return {
+                "action": "set_session_live",
+                "message": "Going live!",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "go-live"}},
+                    {"type": "ui.toast", "payload": {"message": "Session is now live!", "type": "success"}},
+                ],
+            }
+
+        if action == 'set_session_completed':
+            return {
+                "action": "set_session_completed",
+                "message": "Completing session...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "complete-session"}},
+                    {"type": "ui.toast", "payload": {"message": "Session completed", "type": "success"}},
+                ],
+            }
+
+        if action == 'schedule_session':
+            return {
+                "action": "schedule_session",
+                "message": "Scheduling session...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "schedule-session"}},
+                    {"type": "ui.toast", "payload": {"message": "Session scheduled", "type": "success"}},
                 ],
             }
 

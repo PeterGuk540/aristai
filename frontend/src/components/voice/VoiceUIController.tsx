@@ -93,6 +93,15 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'rosterTab': '[data-voice-id="tab-roster"]',
     'rosterCourseDropdown': '[data-voice-id="roster-course"]',
     'uploadRosterButton': '[data-voice-id="upload-roster"]',
+    // Session status management buttons
+    'go-live': '[data-voice-id="go-live"]',
+    'goLiveButton': '[data-voice-id="go-live"]',
+    'set-to-draft': '[data-voice-id="set-to-draft"]',
+    'setToDraftButton': '[data-voice-id="set-to-draft"]',
+    'complete-session': '[data-voice-id="complete-session"]',
+    'completeSessionButton': '[data-voice-id="complete-session"]',
+    'schedule-session': '[data-voice-id="schedule-session"]',
+    'scheduleSessionButton': '[data-voice-id="schedule-session"]',
   },
 };
 

@@ -429,6 +429,7 @@ export default function SessionsPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleStatusChange(selectedSession.id, 'draft')}
+                            data-voice-id="set-to-draft"
                           >
                             Set to Draft
                           </Button>
@@ -438,6 +439,7 @@ export default function SessionsPage() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleStatusChange(selectedSession.id, 'scheduled')}
+                            data-voice-id="schedule-session"
                           >
                             Schedule
                           </Button>

@@ -102,6 +102,13 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'completeSessionButton': '[data-voice-id="complete-session"]',
     'schedule-session': '[data-voice-id="schedule-session"]',
     'scheduleSessionButton': '[data-voice-id="schedule-session"]',
+    // Report buttons
+    'refresh-report': '[data-voice-id="refresh-report"]',
+    'refreshReportButton': '[data-voice-id="refresh-report"]',
+    'regenerate-report': '[data-voice-id="regenerate-report"]',
+    'regenerateReportButton': '[data-voice-id="regenerate-report"]',
+    'generate-report': '[data-voice-id="generate-report"]',
+    'generateReportButton': '[data-voice-id="generate-report"]',
   },
 };
 

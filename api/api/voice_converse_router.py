@@ -205,6 +205,20 @@ ACTION_PATTERNS = {
         r'\bset\s+(to\s+)?schedule(d)?\b',
         r'\b(change|switch)\s+(to\s+)?schedule(d)?\b',
     ],
+    # Report actions
+    'refresh_report': [
+        r'\brefresh\s+(the\s+)?report\b',
+        r'\breload\s+(the\s+)?report\b',
+        r'\bupdate\s+(the\s+)?report\b',
+        r'\bget\s+(the\s+)?(latest|new)\s+report\b',
+    ],
+    'regenerate_report': [
+        r'\bregenerate\s+(the\s+)?report\b',
+        r'\bgenerate\s+(a\s+)?(new\s+)?report\b',
+        r'\bcreate\s+(a\s+)?(new\s+)?report\b',
+        r'\brebuild\s+(the\s+)?report\b',
+        r'\bredo\s+(the\s+)?report\b',
+    ],
     # Poll actions
     'create_poll': [
         r'\bcreate\s+(a\s+)?poll\b',
@@ -757,6 +771,13 @@ def generate_conversational_response(
 
         if intent_value == 'schedule_session':
             return "Session has been scheduled. You can go live when you're ready to start."
+
+        # === REPORT RESPONSES ===
+        if intent_value == 'refresh_report':
+            return "Refreshing the report to show the latest data."
+
+        if intent_value == 'regenerate_report':
+            return "Regenerating the report. This may take a moment to complete."
 
         # === COPILOT RESPONSES ===
         if intent_value == 'start_copilot':
@@ -2890,6 +2911,25 @@ async def execute_action(
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "schedule-session"}},
                     {"type": "ui.toast", "payload": {"message": "Session scheduled", "type": "success"}},
+                ],
+            }
+
+        # === REPORT ACTIONS ===
+        if action == 'refresh_report':
+            return {
+                "action": "refresh_report",
+                "message": "Refreshing report...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "refresh-report"}},
+                ],
+            }
+
+        if action == 'regenerate_report':
+            return {
+                "action": "regenerate_report",
+                "message": "Regenerating report. This may take a moment...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "regenerate-report"}},
                 ],
             }
 

@@ -53,6 +53,7 @@ export function UserMenu({ onShowGuide }: UserMenuProps) {
         )}
         aria-expanded={isOpen}
         aria-haspopup="true"
+        data-voice-id="user-menu"
       >
         <div className="h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
           <User className="h-4 w-4 text-primary-600 dark:text-primary-400" />
@@ -105,6 +106,7 @@ export function UserMenu({ onShowGuide }: UserMenuProps) {
                 'transition-colors duration-200'
               )}
               role="menuitem"
+              data-voice-id="view-voice-guide"
             >
               <HelpCircle className="h-4 w-4" />
               View Voice Guide
@@ -123,6 +125,7 @@ export function UserMenu({ onShowGuide }: UserMenuProps) {
                 'transition-colors duration-200'
               )}
               role="menuitem"
+              data-voice-id="open-profile"
             >
               <Settings className="h-4 w-4" />
               Profile
@@ -140,6 +143,7 @@ export function UserMenu({ onShowGuide }: UserMenuProps) {
                 'transition-colors duration-200'
               )}
               role="menuitem"
+              data-voice-id="sign-out"
             >
               <LogOut className="h-4 w-4" />
               Sign out

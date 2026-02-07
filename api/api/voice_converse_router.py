@@ -219,6 +219,37 @@ ACTION_PATTERNS = {
         r'\brebuild\s+(the\s+)?report\b',
         r'\bredo\s+(the\s+)?report\b',
     ],
+    # Theme and user menu actions
+    'toggle_theme': [
+        r'\b(toggle|switch|change)\s+(the\s+)?(theme|mode)\b',
+        r'\b(dark|light)\s+mode\b',
+        r'\b(enable|disable|turn\s+on|turn\s+off)\s+(dark|light)\s+mode\b',
+        r'\bswitch\s+to\s+(dark|light)\b',
+    ],
+    'open_user_menu': [
+        r'\b(open|show)\s+(the\s+)?(user\s+)?menu\b',
+        r'\b(open|show)\s+(the\s+)?account(\s+menu)?\b',
+        r'\bmy\s+account\b',
+    ],
+    'view_voice_guide': [
+        r'\b(view|show|open)\s+(the\s+)?voice\s+guide\b',
+        r'\bvoice\s+guide\b',
+        r'\bhelp\s+with\s+voice\b',
+        r'\bvoice\s+commands?\b',
+        r'\bshow\s+(me\s+)?commands?\b',
+    ],
+    'open_profile': [
+        r'\b(open|view|show)\s+(my\s+)?profile\b',
+        r'\b(go\s+to|view)\s+(my\s+)?settings\b',
+        r'\bmy\s+profile\b',
+        r'\baccount\s+settings\b',
+    ],
+    'sign_out': [
+        r'\b(sign|log)\s*(out|off)\b',
+        r'\blogout\b',
+        r'\bsignout\b',
+        r'\bexit\s+(the\s+)?app\b',
+    ],
     # Poll actions
     'create_poll': [
         r'\bcreate\s+(a\s+)?poll\b',
@@ -778,6 +809,22 @@ def generate_conversational_response(
 
         if intent_value == 'regenerate_report':
             return "Regenerating the report. This may take a moment to complete."
+
+        # === THEME AND USER MENU RESPONSES ===
+        if intent_value == 'toggle_theme':
+            return "Toggling between light and dark mode."
+
+        if intent_value == 'open_user_menu':
+            return "Opening the user menu."
+
+        if intent_value == 'view_voice_guide':
+            return "Opening the voice guide to show available commands."
+
+        if intent_value == 'open_profile':
+            return "Opening your profile settings."
+
+        if intent_value == 'sign_out':
+            return "Signing you out. Goodbye!"
 
         # === COPILOT RESPONSES ===
         if intent_value == 'start_copilot':
@@ -2930,6 +2977,55 @@ async def execute_action(
                 "message": "Regenerating report. This may take a moment...",
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "regenerate-report"}},
+                ],
+            }
+
+        # === THEME AND USER MENU ACTIONS ===
+        if action == 'toggle_theme':
+            return {
+                "action": "toggle_theme",
+                "message": "Toggling theme...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "toggle-theme"}},
+                ],
+            }
+
+        if action == 'open_user_menu':
+            return {
+                "action": "open_user_menu",
+                "message": "Opening user menu...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "user-menu"}},
+                ],
+            }
+
+        if action == 'view_voice_guide':
+            return {
+                "action": "view_voice_guide",
+                "message": "Opening voice guide...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "user-menu"}},
+                    {"type": "ui.clickButton", "payload": {"target": "view-voice-guide"}},
+                ],
+            }
+
+        if action == 'open_profile':
+            return {
+                "action": "open_profile",
+                "message": "Opening profile...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "user-menu"}},
+                    {"type": "ui.clickButton", "payload": {"target": "open-profile"}},
+                ],
+            }
+
+        if action == 'sign_out':
+            return {
+                "action": "sign_out",
+                "message": "Signing out...",
+                "ui_actions": [
+                    {"type": "ui.clickButton", "payload": {"target": "user-menu"}},
+                    {"type": "ui.clickButton", "payload": {"target": "sign-out"}},
                 ],
             }
 

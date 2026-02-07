@@ -109,6 +109,17 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'regenerateReportButton': '[data-voice-id="regenerate-report"]',
     'generate-report': '[data-voice-id="generate-report"]',
     'generateReportButton': '[data-voice-id="generate-report"]',
+    // Theme and user menu
+    'toggle-theme': '[data-voice-id="toggle-theme"]',
+    'toggleTheme': '[data-voice-id="toggle-theme"]',
+    'user-menu': '[data-voice-id="user-menu"]',
+    'userMenu': '[data-voice-id="user-menu"]',
+    'view-voice-guide': '[data-voice-id="view-voice-guide"]',
+    'viewVoiceGuide': '[data-voice-id="view-voice-guide"]',
+    'open-profile': '[data-voice-id="open-profile"]',
+    'openProfile': '[data-voice-id="open-profile"]',
+    'sign-out': '[data-voice-id="sign-out"]',
+    'signOut': '[data-voice-id="sign-out"]',
   },
 };
 

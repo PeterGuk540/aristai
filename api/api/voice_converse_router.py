@@ -2037,6 +2037,8 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             if next_field:
                 # Offer AI generation for objectives too
                 if next_field.voice_id == "learning-objectives":
+                    conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
+                    conversation_manager.save_context(request.user_id, conv_context)
                     return ConverseResponse(
                         message=sanitize_speech(f"Syllabus saved! Now for learning objectives. Would you like me to generate learning objectives based on the syllabus?"),
                         action=ActionResponse(type='info'),

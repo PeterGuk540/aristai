@@ -9,6 +9,8 @@ This package contains all tool implementations organized by domain:
 - copilot: Live AI copilot control
 - reports: Report generation and viewing
 - enrollment: Student enrollment management
+- resolve: Entity resolution (course, session, user lookup)
+- voice: Voice-specific navigation and actions
 - content_generation: AI-powered content generation (syllabus, objectives, session plans)
 """
 
@@ -20,6 +22,8 @@ from mcp_server.tools import (
     copilot,
     reports,
     enrollment,
+    resolve,
+    voice,
     content_generation,
 )
 
@@ -31,5 +35,7 @@ __all__ = [
     "copilot",
     "reports",
     "enrollment",
+    "resolve",
+    "voice",
     "content_generation",
 ]

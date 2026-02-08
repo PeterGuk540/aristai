@@ -1951,9 +1951,14 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             course_name = conv_context.course_name_for_generation or "the course"
 
             # Call the content generation tool via MCP registry
-            gen_result = _execute_tool(db, 'generate_syllabus', {"course_name": course_name})
+            try:
+                gen_result = _execute_tool(db, 'generate_syllabus', {"course_name": course_name})
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Syllabus generation error: {e}")
+                gen_result = None
 
-            if gen_result.get("success") and gen_result.get("syllabus"):
+            if gen_result and gen_result.get("success") and gen_result.get("syllabus"):
                 syllabus = gen_result["syllabus"]
                 # Save the generated syllabus
                 conv_context.generated_syllabus = syllabus
@@ -1977,7 +1982,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 # Generation failed - fallback to manual
                 conv_context.state = ConversationState.AWAITING_FIELD_INPUT
                 conversation_manager.save_context(request.user_id, conv_context)
-                error_msg = gen_result.get("error", "Generation failed")
+                error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
                 return ConverseResponse(
                     message=sanitize_speech(f"Sorry, I couldn't generate the syllabus: {error_msg}. Please dictate the syllabus or say 'skip'."),
                     action=ActionResponse(type='info'),
@@ -2088,9 +2093,14 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             course_name = conv_context.course_name_for_generation or "the course"
             syllabus = conv_context.collected_values.get("syllabus", "")
 
-            gen_result = _execute_tool(db, 'generate_objectives', {"course_name": course_name, "syllabus": syllabus})
+            try:
+                gen_result = _execute_tool(db, 'generate_objectives', {"course_name": course_name, "syllabus": syllabus})
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Objectives generation error: {e}")
+                gen_result = None
 
-            if gen_result.get("success") and gen_result.get("objectives"):
+            if gen_result and gen_result.get("success") and gen_result.get("objectives"):
                 objectives = gen_result["objectives"]
                 objectives_text = "\n".join(f"- {obj}" for obj in objectives)
 
@@ -2118,7 +2128,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 # Generation failed
                 conv_context.state = ConversationState.AWAITING_FIELD_INPUT
                 conversation_manager.save_context(request.user_id, conv_context)
-                error_msg = gen_result.get("error", "Generation failed")
+                error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
                 return ConverseResponse(
                     message=sanitize_speech(f"Sorry, I couldn't generate objectives: {error_msg}. Please dictate them or say 'skip'."),
                     action=ActionResponse(type='info'),
@@ -2227,13 +2237,18 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     course_name = course.title
                     syllabus = course.syllabus_text
 
-            gen_result = _execute_tool(db, 'generate_session_plan', {
-                "course_name": course_name,
-                "session_topic": session_topic,
-                "syllabus": syllabus,
-            })
+            try:
+                gen_result = _execute_tool(db, 'generate_session_plan', {
+                    "course_name": course_name,
+                    "session_topic": session_topic,
+                    "syllabus": syllabus,
+                })
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Session plan generation error: {e}")
+                gen_result = None
 
-            if gen_result.get("success") and gen_result.get("plan"):
+            if gen_result and gen_result.get("success") and gen_result.get("plan"):
                 plan = gen_result["plan"]
                 # Format the plan as a description
                 description_parts = []
@@ -2274,7 +2289,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 # Generation failed
                 conv_context.state = ConversationState.AWAITING_FIELD_INPUT
                 conversation_manager.save_context(request.user_id, conv_context)
-                error_msg = gen_result.get("error", "Generation failed")
+                error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
                 return ConverseResponse(
                     message=sanitize_speech(f"Sorry, I couldn't generate the session plan: {error_msg}. Please dictate a description or say 'skip'."),
                     action=ActionResponse(type='info'),

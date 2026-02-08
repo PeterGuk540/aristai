@@ -56,6 +56,7 @@ from mcp_server.tools import (
     navigation,
     resolve,
     voice,
+    content_generation,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -1154,6 +1155,92 @@ def build_tool_registry():
         handler=enrollment.bulk_enroll_students,
         mode="write",
         category="enrollment",
+    )
+
+    # ============ CONTENT GENERATION TOOLS ============
+
+    register_tool(
+        name="generate_syllabus",
+        description="Generate a course syllabus using AI. Provide the course name and optionally a description.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_name": {"type": "string", "description": "The name of the course"},
+                "description": {"type": "string", "description": "Optional additional description or context for the course"},
+            },
+            "required": ["course_name"],
+        },
+        handler=content_generation.generate_syllabus,
+        mode="read",
+        category="content_generation",
+    )
+
+    register_tool(
+        name="generate_objectives",
+        description="Generate learning objectives for a course using AI. Provide the course name and optionally the syllabus for better context.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_name": {"type": "string", "description": "The name of the course"},
+                "syllabus": {"type": "string", "description": "Optional syllabus text for better context"},
+            },
+            "required": ["course_name"],
+        },
+        handler=content_generation.generate_objectives,
+        mode="read",
+        category="content_generation",
+    )
+
+    register_tool(
+        name="generate_session_plan",
+        description="Generate a session plan with discussion prompts and case study using AI.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_name": {"type": "string", "description": "The name of the course"},
+                "session_topic": {"type": "string", "description": "The topic for this session"},
+                "syllabus": {"type": "string", "description": "Optional syllabus for context"},
+                "objectives": {"type": "array", "items": {"type": "string"}, "description": "Optional learning objectives for alignment"},
+            },
+            "required": ["course_name", "session_topic"],
+        },
+        handler=content_generation.generate_session_plan,
+        mode="read",
+        category="content_generation",
+    )
+
+    register_tool(
+        name="generate_case_study",
+        description="Generate a case study for a session topic using AI.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_name": {"type": "string", "description": "The name of the course"},
+                "session_topic": {"type": "string", "description": "The topic for the case study"},
+                "context": {"type": "string", "description": "Optional additional context"},
+            },
+            "required": ["course_name", "session_topic"],
+        },
+        handler=content_generation.generate_case_study,
+        mode="read",
+        category="content_generation",
+    )
+
+    register_tool(
+        name="generate_discussion_prompts",
+        description="Generate discussion prompts for a session topic using AI.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "course_name": {"type": "string", "description": "The name of the course"},
+                "session_topic": {"type": "string", "description": "The topic for discussion"},
+                "count": {"type": "integer", "description": "Number of prompts to generate (default: 3)"},
+            },
+            "required": ["course_name", "session_topic"],
+        },
+        handler=content_generation.generate_discussion_prompts,
+        mode="read",
+        category="content_generation",
     )
 
 

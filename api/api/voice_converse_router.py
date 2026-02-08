@@ -1950,9 +1950,8 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             # Generate syllabus using AI
             course_name = conv_context.course_name_for_generation or "the course"
 
-            # Call the content generation tool
-            from mcp_server.tools.content_generation import generate_syllabus
-            gen_result = generate_syllabus(course_name=course_name)
+            # Call the content generation tool via MCP registry
+            gen_result = _execute_tool(db, 'generate_syllabus', {"course_name": course_name})
 
             if gen_result.get("success") and gen_result.get("syllabus"):
                 syllabus = gen_result["syllabus"]
@@ -2089,8 +2088,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             course_name = conv_context.course_name_for_generation or "the course"
             syllabus = conv_context.collected_values.get("syllabus", "")
 
-            from mcp_server.tools.content_generation import generate_objectives
-            gen_result = generate_objectives(course_name=course_name, syllabus=syllabus)
+            gen_result = _execute_tool(db, 'generate_objectives', {"course_name": course_name, "syllabus": syllabus})
 
             if gen_result.get("success") and gen_result.get("objectives"):
                 objectives = gen_result["objectives"]
@@ -2229,12 +2227,11 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     course_name = course.title
                     syllabus = course.syllabus_text
 
-            from mcp_server.tools.content_generation import generate_session_plan
-            gen_result = generate_session_plan(
-                course_name=course_name,
-                session_topic=session_topic,
-                syllabus=syllabus,
-            )
+            gen_result = _execute_tool(db, 'generate_session_plan', {
+                "course_name": course_name,
+                "session_topic": session_topic,
+                "syllabus": syllabus,
+            })
 
             if gen_result.get("success") and gen_result.get("plan"):
                 plan = gen_result["plan"]

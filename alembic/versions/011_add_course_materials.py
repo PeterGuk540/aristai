@@ -1,15 +1,15 @@
 """Add course_materials table for S3 file uploads
 
-Revision ID: 008_course_materials
-Revises: 007_add_join_code_to_courses
+Revision ID: 011_course_materials
+Revises: 010_add_voice_audit
 Create Date: 2025-02-08
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '008_course_materials'
-down_revision = '007_add_join_code_to_courses'
+revision = '011_course_materials'
+down_revision = '010_add_voice_audit'
 branch_labels = None
 depends_on = None
 

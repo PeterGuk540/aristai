@@ -46,12 +46,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return 'cognito';
   }, []);
 
-  // Fetch user from database by email and auth provider
+  // Fetch or register user in database by email and auth provider
   // Users are uniquely identified by (email, auth_provider) combination
   // This allows separate accounts for the same email with different auth methods
-  const fetchUserFromDb = useCallback(async (email: string, authProvider: 'cognito' | 'google' | 'microsoft') => {
+  const fetchUserFromDb = useCallback(async (email: string, authProvider: 'cognito' | 'google' | 'microsoft', userName?: string) => {
     try {
-      const userData = await api.getUserByEmail(email, authProvider);
+      // Use register-or-get to ensure user exists in database
+      // This creates the user if they don't exist, or returns existing user
+      const userData = await api.registerOrGetUser({
+        name: userName || email.split('@')[0],
+        email: email,
+        auth_provider: authProvider,
+      });
       setDbUser(userData);
 
       // Check if user has any enrollments (only for students)
@@ -67,11 +73,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setHasEnrollments(true);
       }
     } catch (error) {
-      console.error('Failed to fetch user from database:', error);
+      console.error('Failed to fetch/register user in database:', error);
       // Fallback: create a temporary user object with student role
       setDbUser({
         id: 0,
-        name: email.split('@')[0],
+        name: userName || email.split('@')[0],
         email: email,
         role: 'student',
         auth_provider: authProvider,
@@ -83,9 +89,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     if (user?.email) {
       const authProvider = getAuthProvider();
-      await fetchUserFromDb(user.email, authProvider);
+      await fetchUserFromDb(user.email, authProvider, user.name);
     }
-  }, [user?.email, fetchUserFromDb, getAuthProvider]);
+  }, [user?.email, user?.name, fetchUserFromDb, getAuthProvider]);
 
   // Fetch user from database when auth user changes
   useEffect(() => {
@@ -93,7 +99,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (!authLoading && isAuthenticated && user?.email) {
         setLoading(true);
         const authProvider = getAuthProvider();
-        await fetchUserFromDb(user.email, authProvider);
+        await fetchUserFromDb(user.email, authProvider, user.name);
         setLoading(false);
       } else if (!authLoading && !isAuthenticated) {
         setDbUser(null);
@@ -101,7 +107,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     };
     loadUser();
-  }, [authLoading, isAuthenticated, user?.email, fetchUserFromDb, getAuthProvider]);
+  }, [authLoading, isAuthenticated, user?.email, user?.name, fetchUserFromDb, getAuthProvider]);
 
   // Determine if current user is an instructor
   const isInstructor = dbUser?.role === 'instructor';

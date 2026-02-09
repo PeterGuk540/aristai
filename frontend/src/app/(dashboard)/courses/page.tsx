@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, Search, UserPlus, GraduationCap, Clock } from 'lucide-react';
+import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, EnrolledStudent, User } from '@/types';
@@ -36,6 +36,13 @@ export default function CoursesPage() {
   const [title, setTitle] = useState('');
   const [syllabus, setSyllabus] = useState('');
   const [objectives, setObjectives] = useState('');
+
+  // Syllabus upload state
+  const [syllabusInputMode, setSyllabusInputMode] = useState<'paste' | 'upload'>('paste');
+  const [syllabusFile, setSyllabusFile] = useState<File | null>(null);
+  const [uploadingSyllabus, setUploadingSyllabus] = useState(false);
+  const [syllabusUploadError, setSyllabusUploadError] = useState<string | null>(null);
+  const syllabusFileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle voice-triggered tab selection
   const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
@@ -133,6 +140,37 @@ export default function CoursesPage() {
     }
   }, [selectedCourseId]);
 
+  const handleSyllabusFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    setSyllabusFile(file);
+    setSyllabusUploadError(null);
+    setUploadingSyllabus(true);
+
+    try {
+      const result = await api.uploadSyllabus(file);
+      setSyllabus(result.extracted_text);
+      setSyllabusUploadError(null);
+    } catch (error: any) {
+      console.error('Failed to extract syllabus:', error);
+      setSyllabusUploadError(error.message || 'Failed to extract text from file');
+      setSyllabusFile(null);
+    } finally {
+      setUploadingSyllabus(false);
+    }
+  };
+
+  const handleRemoveSyllabusFile = () => {
+    setSyllabusFile(null);
+    setSyllabus('');
+    setSyllabusUploadError(null);
+    if (syllabusFileInputRef.current) {
+      syllabusFileInputRef.current.value = '';
+    }
+  };
+
   const handleCreateCourse = async (generatePlans: boolean) => {
     if (!title.trim()) return;
 
@@ -149,6 +187,19 @@ export default function CoursesPage() {
         objectives_json: objectivesList,
       });
 
+      // If a syllabus file was uploaded, save it to the course materials
+      if (syllabusFile && course.id) {
+        try {
+          await api.uploadSyllabus(syllabusFile, {
+            courseId: course.id,
+            userId: currentUser?.id,
+          });
+        } catch (err) {
+          console.error('Failed to save syllabus to materials:', err);
+          // Don't fail the whole operation if this fails
+        }
+      }
+
       if (generatePlans) {
         await api.generatePlans(course.id);
         alert(`Course created! Plan generation started.`);
@@ -159,6 +210,11 @@ export default function CoursesPage() {
       setTitle('');
       setSyllabus('');
       setObjectives('');
+      setSyllabusFile(null);
+      setSyllabusInputMode('paste');
+      if (syllabusFileInputRef.current) {
+        syllabusFileInputRef.current.value = '';
+      }
       fetchCourses();
     } catch (error) {
       console.error('Failed to create course:', error);
@@ -462,14 +518,121 @@ export default function CoursesPage() {
                   data-voice-id="course-title"
                 />
 
-                <Textarea
-                  label="Syllabus"
-                  placeholder="Paste your full syllabus here..."
-                  rows={8}
-                  value={syllabus}
-                  onChange={(e) => setSyllabus(e.target.value)}
-                  data-voice-id="syllabus"
-                />
+                {/* Syllabus Input - Toggle between Upload and Paste */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">Syllabus</label>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setSyllabusInputMode('paste')}
+                      className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                        syllabusInputMode === 'paste'
+                          ? 'bg-primary-100 text-primary-700 border border-primary-300'
+                          : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                      }`}
+                    >
+                      <FileText className="h-4 w-4" />
+                      Paste Text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSyllabusInputMode('upload')}
+                      className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                        syllabusInputMode === 'upload'
+                          ? 'bg-primary-100 text-primary-700 border border-primary-300'
+                          : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload File
+                    </button>
+                  </div>
+
+                  {syllabusInputMode === 'paste' ? (
+                    <Textarea
+                      placeholder="Paste your full syllabus here..."
+                      rows={8}
+                      value={syllabus}
+                      onChange={(e) => setSyllabus(e.target.value)}
+                      data-voice-id="syllabus"
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      <input
+                        ref={syllabusFileInputRef}
+                        type="file"
+                        accept=".pdf,.doc,.docx,.txt"
+                        onChange={handleSyllabusFileSelect}
+                        className="hidden"
+                        disabled={uploadingSyllabus}
+                      />
+
+                      {!syllabusFile ? (
+                        <div
+                          onClick={() => syllabusFileInputRef.current?.click()}
+                          className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors"
+                        >
+                          <Upload className="h-10 w-10 mx-auto text-gray-400 mb-3" />
+                          <p className="text-sm text-gray-600 mb-1">
+                            Click to upload your syllabus
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Supports PDF, Word (.docx), and text files
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-5 w-5 text-primary-500" />
+                              <span className="text-sm font-medium text-gray-700">
+                                {syllabusFile.name}
+                              </span>
+                              <span className="text-xs text-gray-400">
+                                ({(syllabusFile.size / 1024).toFixed(1)} KB)
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleRemoveSyllabusFile}
+                              className="p-1 rounded hover:bg-gray-100"
+                              title="Remove file"
+                            >
+                              <X className="h-4 w-4 text-gray-500" />
+                            </button>
+                          </div>
+
+                          {uploadingSyllabus && (
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              Extracting text from file...
+                            </div>
+                          )}
+
+                          {syllabusUploadError && (
+                            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+                              {syllabusUploadError}
+                            </div>
+                          )}
+
+                          {syllabus && !uploadingSyllabus && (
+                            <div className="mt-2">
+                              <p className="text-xs text-gray-500 mb-1">Extracted text preview:</p>
+                              <div className="bg-gray-50 rounded p-2 max-h-32 overflow-y-auto">
+                                <p className="text-xs text-gray-600 whitespace-pre-wrap">
+                                  {syllabus.length > 500 ? syllabus.substring(0, 500) + '...' : syllabus}
+                                </p>
+                              </div>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {syllabus.length.toLocaleString()} characters extracted
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <Textarea
                   label="Learning Objectives (one per line)"

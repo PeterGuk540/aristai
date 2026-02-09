@@ -142,6 +142,42 @@ export const api = {
   joinCourseByCode: (joinCode: string, userId: number) =>
     fetchApi<any>(`/courses/join?user_id=${userId}`, { method: 'POST', body: JSON.stringify({ join_code: joinCode }) }),
 
+  uploadSyllabus: async (
+    file: File,
+    options?: { courseId?: number; userId?: number }
+  ): Promise<{
+    extracted_text: string;
+    filename: string;
+    file_size: number;
+    material_id: number | null;
+    message: string;
+  }> => {
+    const url = `${API_PROXY_BASE}/courses/upload-syllabus`;
+
+    const googleToken = getGoogleIdToken();
+    const msToken = getMicrosoftIdToken();
+    const idToken = googleToken || msToken || await getIdToken();
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (options?.courseId) formData.append('course_id', String(options.courseId));
+    if (options?.userId) formData.append('user_id', String(options.userId));
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      const message = formatApiErrorMessage(error?.detail ?? error);
+      throw new ApiError(response.status, message || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  },
+
   getCourseSessions: (courseId: number) =>
     fetchApi<any[]>(`/courses/${courseId}/sessions`),
 

@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from typing import List, Optional
+from pydantic import BaseModel
 from api.core.database import get_db
+from api.core.config import get_settings
 from api.models.course import Course, CourseResource, generate_join_code
 from api.models.session import Session as SessionModel
 from api.models.enrollment import Enrollment
 from api.models.user import User, UserRole
+from api.models.course_material import CourseMaterial
 from api.schemas.course import (
     CourseCreate,
     CourseResponse,
@@ -16,8 +19,21 @@ from api.schemas.course import (
     JoinCourseResponse,
 )
 from api.schemas.session import SessionResponse
+from api.services.document_extractor import extract_text, is_supported_document, get_supported_extensions_display
+from api.services.s3_service import get_s3_service
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+class SyllabusUploadResponse(BaseModel):
+    """Response for syllabus upload endpoint."""
+    extracted_text: str
+    filename: str
+    file_size: int
+    material_id: Optional[int] = None
+    message: str
 
 
 @router.post("/", response_model=CourseResponse, status_code=status.HTTP_201_CREATED)
@@ -189,3 +205,119 @@ def join_course_by_code(
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.post("/upload-syllabus", response_model=SyllabusUploadResponse)
+async def upload_syllabus(
+    file: UploadFile = File(...),
+    course_id: Optional[int] = Form(None),
+    user_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload a syllabus file and extract its text content.
+
+    - Supports PDF, Word (.docx), and text files
+    - Extracts text for use in course creation
+    - If course_id is provided, stores the file as a course material
+
+    Returns the extracted text for use in the course creation form.
+    """
+    # Validate file type
+    if not is_supported_document(file.filename, file.content_type or ""):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type. Supported formats: {get_supported_extensions_display()}"
+        )
+
+    # Read file content
+    file_content = await file.read()
+    file_size = len(file_content)
+
+    # Check file size (10MB limit for syllabus)
+    max_size = 10 * 1024 * 1024
+    if file_size > max_size:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum size for syllabus is 10MB."
+        )
+
+    # Extract text
+    extracted_text, error = extract_text(
+        file_content,
+        file.filename,
+        file.content_type or "application/octet-stream"
+    )
+
+    if error:
+        raise HTTPException(status_code=422, detail=error)
+
+    material_id = None
+
+    # If course_id provided, save to S3 and create material record
+    if course_id:
+        course = db.query(Course).filter(Course.id == course_id).first()
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found")
+
+        s3_service = get_s3_service()
+
+        if s3_service.is_enabled():
+            try:
+                # Find the materials session for this course
+                materials_session = db.query(SessionModel).filter(
+                    SessionModel.course_id == course_id,
+                    SessionModel.title == "Course Materials"
+                ).first()
+
+                session_id = materials_session.id if materials_session else None
+
+                # Generate S3 key and upload
+                s3_key = s3_service.generate_s3_key(
+                    course_id,
+                    f"syllabus_{file.filename}",
+                    session_id
+                )
+
+                # Reset file position and upload
+                await file.seek(0)
+                success, upload_error = s3_service.upload_file(
+                    file.file,
+                    s3_key,
+                    file.content_type or "application/octet-stream",
+                    file.filename,
+                )
+
+                if success:
+                    # Create material record
+                    material = CourseMaterial(
+                        course_id=course_id,
+                        session_id=session_id,
+                        filename=file.filename,
+                        s3_key=s3_key,
+                        file_size=file_size,
+                        content_type=file.content_type or "application/octet-stream",
+                        title=f"Syllabus - {file.filename}",
+                        description="Course syllabus uploaded during course creation",
+                        uploaded_by=user_id,
+                    )
+                    db.add(material)
+                    db.commit()
+                    db.refresh(material)
+                    material_id = material.id
+                    logger.info(f"Syllabus uploaded and saved as material {material_id} for course {course_id}")
+                else:
+                    logger.warning(f"Failed to upload syllabus to S3: {upload_error}")
+            except Exception as e:
+                logger.error(f"Error saving syllabus to S3: {e}")
+                # Don't fail the whole request, just log the error
+
+    return SyllabusUploadResponse(
+        extracted_text=extracted_text,
+        filename=file.filename,
+        file_size=file_size,
+        material_id=material_id,
+        message="Syllabus text extracted successfully" + (
+            " and saved to course materials" if material_id else ""
+        )
+    )

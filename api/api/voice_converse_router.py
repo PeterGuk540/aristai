@@ -340,17 +340,24 @@ ACTION_PATTERNS = {
         r'\bcrear\s+(un\s+)?(nuevo\s+)?reporte\b',
         r'\brehacer\s+(el\s+)?reporte\b',
     ],
-    # Theme and user menu actions
+    # Theme and user menu actions - English + Spanish
     'toggle_theme': [
         r'\b(toggle|switch|change)\s+(the\s+)?(theme|mode)\b',
         r'\b(dark|light)\s+mode\b',
         r'\b(enable|disable|turn\s+on|turn\s+off)\s+(dark|light)\s+mode\b',
         r'\bswitch\s+to\s+(dark|light)\b',
+        # Spanish
+        r'\b(cambiar|alternar)\s+(el\s+)?(tema|modo)\b',
+        r'\bmodo\s+(oscuro|claro)\b',
+        r'\b(activar|desactivar)\s+(el\s+)?modo\s+(oscuro|claro)\b',
     ],
     'open_user_menu': [
         r'\b(open|show)\s+(the\s+)?(user\s+)?menu\b',
         r'\b(open|show)\s+(the\s+)?account(\s+menu)?\b',
         r'\bmy\s+account\b',
+        # Spanish
+        r'\b(abrir|mostrar)\s+(el\s+)?menu(\s+de\s+usuario)?\b',
+        r'\bmi\s+cuenta\b',
     ],
     'view_voice_guide': [
         r'\b(view|show|open)\s+(the\s+)?voice\s+(guide|commands?)\b',
@@ -359,6 +366,11 @@ ACTION_PATTERNS = {
         r'\bshow\s+(me\s+)?(voice\s+)?commands?\b',
         r'\bwhat\s+can\s+i\s+say\b',
         r'\blist\s+commands?\b',
+        # Spanish
+        r'\b(ver|mostrar|abrir)\s+(la\s+)?guia\s+de\s+voz\b',
+        r'\bcomandos\s+de\s+voz\b',
+        r'\bque\s+puedo\s+decir\b',
+        r'\bayuda\s+de\s+voz\b',
     ],
     'forum_instructions': [
         r'\b(view|show|open)\s+(the\s+)?(forum|platform)\s+instructions?\b',
@@ -366,18 +378,30 @@ ACTION_PATTERNS = {
         r'\b(forum|platform)\s+guide\b',
         r'\bhow\s+to\s+use\s+(the\s+)?(forum|platform|app)\b',
         r'\bplatform\s+help\b',
+        # Spanish
+        r'\b(ver|mostrar)\s+(las\s+)?instrucciones\s+(del\s+)?(foro|plataforma)\b',
+        r'\bguia\s+(del\s+)?(foro|plataforma)\b',
+        r'\bcomo\s+usar\s+(el\s+)?(foro|la\s+plataforma|la\s+aplicacion)\b',
     ],
     'open_profile': [
         r'\b(open|view|show)\s+(my\s+)?profile\b',
         r'\b(go\s+to|view)\s+(my\s+)?settings\b',
         r'\bmy\s+profile\b',
         r'\baccount\s+settings\b',
+        # Spanish
+        r'\b(abrir|ver|mostrar)\s+(mi\s+)?perfil\b',
+        r'\bmi\s+perfil\b',
+        r'\bconfiguracion\s+(de\s+cuenta)?\b',
     ],
     'sign_out': [
         r'\b(sign|log)\s*(out|off)\b',
         r'\blogout\b',
         r'\bsignout\b',
         r'\bexit\s+(the\s+)?app\b',
+        # Spanish
+        r'\bcerrar\s+sesion\b',
+        r'\bsalir\b',
+        r'\bdesconectar(me)?\b',
     ],
     'close_modal': [
         r'\bgot\s+it\b',
@@ -387,8 +411,13 @@ ACTION_PATTERNS = {
         r'\bclose\s+(this|the)?\s*(window|modal|dialog|guide)?\b',
         r'\bdismiss\b',
         r'\bdone\b',
+        # Spanish
+        r'\bentendido\b',
+        r'\bya\s+entendi\b',
+        r'\bcerrar\b',
+        r'\blisto\b',
     ],
-    # Poll actions
+    # Poll actions - English + Spanish
     'create_poll': [
         r'\bcreate\s+(a\s+)?poll\b',
         r'\bmake\s+(a\s+)?poll\b',
@@ -398,16 +427,27 @@ ACTION_PATTERNS = {
         r'\blaunch\s+(a\s+)?poll\b',
         r'\bquick\s+poll\b',
         r'\bask\s+(the\s+)?(class|students)\s+(a\s+)?question\b',
+        # Spanish
+        r'\bcrear\s+(una\s+)?encuesta\b',
+        r'\bhacer\s+(una\s+)?encuesta\b',
+        r'\bnueva\s+encuesta\b',
+        r'\biniciar\s+(una\s+)?encuesta\b',
+        r'\bpreguntar\s+(a\s+)?(la\s+clase|los\s+estudiantes)\b',
     ],
-    # Forum actions
+    # Forum actions - English + Spanish
     'post_case': [
         r'\bpost\s+(a\s+)?case(\s+study)?\b',
         r'\bcreate\s+(a\s+)?case(\s+study)?\b',
         r'\badd\s+(a\s+)?case(\s+study)?\b',
         r'\bnew\s+case(\s+study)?\b',
         r'\bshare\s+(a\s+)?case\b',
+        # Spanish
+        r'\bpublicar\s+(un\s+)?caso(\s+de\s+estudio)?\b',
+        r'\bcrear\s+(un\s+)?caso(\s+de\s+estudio)?\b',
+        r'\bnuevo\s+caso(\s+de\s+estudio)?\b',
+        r'\bcompartir\s+(un\s+)?caso\b',
     ],
-    # Post to forum discussion (different from post_case which is for case studies)
+    # Post to forum discussion (different from post_case which is for case studies) - English + Spanish
     'post_to_discussion': [
         r'\bpost\s+(to\s+)?(the\s+)?discussion\b',
         r'\b(make|create|write|add)\s+(a\s+)?(forum\s+)?post\b',
@@ -416,8 +456,15 @@ ACTION_PATTERNS = {
         r'\bshare\s+(my\s+)?(thoughts?|response|comment)\b',
         r'\b(write|add)\s+(a\s+)?(comment|response|reply)\b',
         r'\bcontribute\s+to\s+(the\s+)?discussion\b',
+        # Spanish
+        r'\bpublicar\s+(en\s+)?(la\s+)?discusion\b',
+        r'\b(hacer|crear|escribir)\s+(una?\s+)?(publicacion|post)\b',
+        r'\bquiero\s+publicar\b',
+        r'\bcompartir\s+(mis?\s+)?(pensamientos?|comentario|respuesta)\b',
+        r'\b(escribir|agregar)\s+(un\s+)?(comentario|respuesta)\b',
+        r'\bcontribuir\s+(a\s+)?(la\s+)?discusion\b',
     ],
-    # Report actions
+    # Report actions - English + Spanish
     'generate_report': [
         r'\bgenerate\s+(a\s+)?(session\s+)?report\b',
         r'\bcreate\s+(a\s+)?(session\s+)?report\b',
@@ -428,6 +475,13 @@ ACTION_PATTERNS = {
         r'\breport\s+(please|now)\b',
         r'\bsession\s+summary\b',
         r'\bclass\s+report\b',
+        # Spanish
+        r'\bgenerar\s+(un\s+)?(reporte|informe)(\s+de\s+sesion)?\b',
+        r'\bcrear\s+(un\s+)?(reporte|informe)\b',
+        r'\bhacer\s+(un\s+)?(reporte|informe)\b',
+        r'\bmostrar\s+(el\s+)?(reporte|informe)\b',
+        r'\bresumen\s+de\s+(la\s+)?sesion\b',
+        r'\breporte\s+de\s+(la\s+)?clase\b',
     ],
 
     # === UNIVERSAL UI ELEMENT INTERACTIONS (check these AFTER specific actions) ===
@@ -443,11 +497,24 @@ ACTION_PATTERNS = {
         r'\b(expand|open|show)\s+(the\s+)?(\w+\s+)?(dropdown|menu|list|options|select)\b',
         r'\b(show|see|view|what\s+are)\s+(the\s+)?(available\s+)?(\w+\s+)?(options|choices|items)\b',
         r'\blet\s+me\s+(see|choose|pick)\b',
+        # Spanish
+        r'^(seleccionar|elegir|escoger)\s+(un\s+)?(curso|sesion)\.?$',
+        r'\b(seleccionar|elegir|escoger)\s+(la\s+)?sesion(\s+en\s+vivo)?\b',
+        r'\b(seleccionar|elegir|escoger)\s+(otro|otra|diferente)\s+(curso|sesion)\b',
+        r'\b(cambiar|cambio)\s+(de\s+)?(curso|sesion)\b',
+        r'\bque\s+(cursos?|sesiones?)\s+(hay|estan|tengo)\s*(disponibles?)?\b',
+        r'\b(expandir|abrir|mostrar)\s+(el\s+)?(\w+\s+)?(menu|lista|opciones)\b',
+        r'\b(mostrar|ver|cuales\s+son)\s+(las\s+)?(opciones|alternativas)\s*(disponibles)?\b',
+        r'\bdejame\s+(ver|elegir|escoger)\b',
     ],
     # Universal dropdown selection - direct selection like "select the first course"
     'ui_select_dropdown': [
         r'\b(select|choose|pick)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+(\w+)\b',
         r'\buse\s+(the\s+)?(\w+)\s+(.+)',
+        # Spanish
+        r'\b(seleccionar|elegir|escoger)\s+(el|la\s+)?(primero?|segundo?|tercero?|cuarto?|ultimo?|ultima?)\s+(\w+)\b',
+        r'\b(usar|utilizar)\s+(el|la\s+)?(\w+)\s+(.+)',
+        r'\b(el|la)\s+(primero?|segundo?|tercero?|ultimo?|ultima?)\b',
     ],
     # Universal tab switching - works for ANY tab name
     'ui_switch_tab': [
@@ -460,6 +527,12 @@ ACTION_PATTERNS = {
         r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls?|requests|roster)\b',
         # Simple "switch to X" for common tabs
         r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|ai\s+copilot|copilot|polls?)$',
+        # Spanish - with tab/panel/section suffix (pestana, panel, seccion)
+        r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(.+?)\s*(pestana|panel|seccion)\b',
+        r'\b(.+?)\s+(pestana|panel|seccion)\b',
+        # Spanish - known tab names (discusion, casos, resumen, participacion, puntuacion, inscripcion, encuestas, solicitudes, lista)
+        r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(discusion|casos|estudios\s+de\s+caso|resumen|participacion|puntuacion|inscripcion|crear|administrar|sesiones|cursos|copilot|asistente\s+de\s+ia|encuestas?|solicitudes|lista)\b',
+        r'^(cambiar\s+a|ir\s+a)\s+(discusion|casos|resumen|participacion|puntuacion|inscripcion|crear|administrar|sesiones|copilot|encuestas?)$',
     ],
     # Universal button clicks - works for ANY button
     # Also handles form submission triggers like "submit", "create it", "post it"
@@ -469,6 +542,12 @@ ACTION_PATTERNS = {
         r'\b(submit|confirm|send|post)\s*(it|this|the\s+form|now)?\s*$',
         r'\b(create|make)\s+(it|this|the\s+course|the\s+session|the\s+poll)\s*$',
         r'\byes,?\s*(submit|create|post|do\s+it)\b',
+        # Spanish
+        r'\b(hacer\s+clic|presionar|pulsar|tocar)\s+(el\s+)?(.+?)\s*(boton)?\b',
+        r'\b(hacer\s+clic|presionar)\s+(en\s+)?(.+)\b',
+        r'\b(enviar|confirmar|publicar)\s*(lo|esto|el\s+formulario|ahora)?\s*$',
+        r'\b(crear|hacer)\s+(lo|esto|el\s+curso|la\s+sesion|la\s+encuesta)\s*$',
+        r'\bsi,?\s*(enviar|crear|publicar|hazlo)\b',
     ],
     # === UNIVERSAL FORM DICTATION ===
     # Detects when user is providing content for ANY input field
@@ -485,6 +564,17 @@ ACTION_PATTERNS = {
         r'\b(type|enter|write|put|input)\s+(.+)',
         # "fill in Introduction to AI"
         r'\b(fill\s+in|fill)\s+(.+)',
+        # Spanish
+        # "el titulo es Introduccion a la IA"
+        r'\b(el|la\s+)?(\w+)\s+(es|sera|debe\s+ser)\s+(.+)',
+        # "poner titulo como Introduccion a la IA"
+        r'\b(poner|establecer|cambiar)\s+(el|la\s+)?(\w+)\s+(a|como)\s+(.+)',
+        # "para el titulo, usar Introduccion a la IA"
+        r'\bpara\s+(el|la\s+)?(\w+),?\s+(usar|poner|escribir|ingresar)\s+(.+)',
+        # "escribir Introduccion a la IA"
+        r'\b(escribir|ingresar|poner|teclear)\s+(.+)',
+        # "llenar con Introduccion a la IA"
+        r'\b(llenar\s+con|rellenar)\s+(.+)',
     ],
     # === CONTEXT/STATUS ACTIONS ===
     'get_status': [
@@ -494,12 +584,25 @@ ACTION_PATTERNS = {
         r'\bwhat\'?s\s+(happening|going\s+on)\b',
         r'\bstatus\s+update\b',
         r'\bgive\s+me\s+(a\s+)?summary\b',
+        # Spanish
+        r'\b(que|donde)\s+(estoy|es\s+esto|pagina)\b',
+        r'\b(esta|actual)\s+(pagina|estado)\b',
+        r'\bque\s+puedo\s+hacer\b',
+        r'\bque\s+(esta\s+)?pasando\b',
+        r'\bactualizacion\s+de\s+estado\b',
+        r'\bdame\s+(un\s+)?resumen\b',
     ],
     'get_help': [
         r'\bhelp(\s+me)?\b',
         r'\bwhat\s+can\s+you\s+do\b',
         r'\bwhat\s+are\s+(my|the)\s+options\b',
         r'\bshow\s+(me\s+)?(the\s+)?commands\b',
+        # Spanish
+        r'\bayuda(\s+me)?\b',
+        r'\bque\s+puedes\s+hacer\b',
+        r'\bcuales\s+son\s+(mis|las)\s+opciones\b',
+        r'\bmostrar\s+(me\s+)?(los\s+)?comandos\b',
+        r'\bnecesito\s+ayuda\b',
     ],
     # === UNDO/CONTEXT ACTIONS ===
     'undo_action': [
@@ -510,28 +613,54 @@ ACTION_PATTERNS = {
         r'\bcancel\s+(that|this|the\s+last)\b',
         r'\bnever\s*mind\b',
         r'\btake\s+(that|it)\s+back\b',
+        # Spanish
+        r'\bdeshacer\b',
+        r'\bdeshacer\s+(eso|esto|lo\s+ultimo|la\s+ultima\s+accion)\b',
+        r'\brevertir\b',
+        r'\bvolver\s+atras\b',
+        r'\bcancelar\s+(eso|esto|lo\s+ultimo)\b',
+        r'\bolvidalo\b',
+        r'\bno\s+importa\b',
+        r'\bquitar\s+(eso|esto)\b',
     ],
     'get_context': [
         r'\bwhat\s+(course|session)\s+(am\s+I|is)\s+(on|in|using|selected)\b',
         r'\bwhich\s+(course|session)\s+(is\s+)?(active|selected|current)\b',
         r'\bmy\s+(current|active)\s+(course|session)\b',
         r'\bwhat\'?s\s+my\s+context\b',
+        # Spanish
+        r'\bque\s+(curso|sesion)\s+(estoy|esta)\s+(en|usando|seleccionado)\b',
+        r'\bcual\s+(curso|sesion)\s+(esta\s+)?(activo|seleccionado|actual)\b',
+        r'\bmi\s+(curso|sesion)\s+(actual|activo)\b',
+        r'\bcual\s+es\s+mi\s+contexto\b',
     ],
     'clear_context': [
         r'\b(clear|reset)\s+(my\s+)?(context|selection|choices)\b',
         r'\bstart\s+(fresh|over|again)\b',
         r'\bforget\s+(everything|all|my\s+selections)\b',
+        # Spanish
+        r'\b(limpiar|borrar|resetear)\s+(mi\s+)?(contexto|seleccion|opciones)\b',
+        r'\bempezar\s+(de\s+nuevo|otra\s+vez|de\s+cero)\b',
+        r'\bolvidar\s+(todo|mis\s+selecciones)\b',
     ],
     # === ADDITIONAL COURSE ACTIONS ===
     'select_course': [
         r'\b(select|choose|pick|open)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+course\b',
         r'\b(select|choose|pick|open)\s+course\s+(\d+|one|two|three)\b',
         r'\bgo\s+(to|into)\s+(the\s+)?(first|second|third|last)\s+course\b',
+        # Spanish
+        r'\b(seleccionar|elegir|escoger|abrir)\s+(el\s+)?(primero?|segundo?|tercero?|ultimo?)\s+curso\b',
+        r'\b(seleccionar|elegir|escoger|abrir)\s+curso\s+(\d+|uno|dos|tres)\b',
+        r'\bir\s+(a|al)\s+(el\s+)?(primero?|segundo?|tercero?|ultimo?)\s+curso\b',
     ],
     'view_course_details': [
         r'\b(view|show|see|display)\s+(the\s+)?course\s+(details?|info|information)\b',
         r'\bcourse\s+(details?|info|information)\b',
         r'\babout\s+(this|the)\s+course\b',
+        # Spanish
+        r'\b(ver|mostrar|visualizar)\s+(los\s+)?detalles?\s+(del\s+)?curso\b',
+        r'\b(informacion|detalles?)\s+(del\s+)?curso\b',
+        r'\bsobre\s+(este|el)\s+curso\b',
     ],
     # === SESSION ACTIONS ===
     'list_sessions': [
@@ -540,11 +669,21 @@ ACTION_PATTERNS = {
         r'\bactive sessions\b',
         r'\bcurrent sessions?\b',
         r'\bwhat sessions\b',
+        # Spanish
+        r'\b(listar|mostrar|obtener|cuales son|ver)\s+(las\s+)?(sesiones)(\s+en\s+vivo)?\b',
+        r'\bsesiones\s+en\s+vivo\b',
+        r'\bsesiones\s+activas\b',
+        r'\bsesiones?\s+actuales?\b',
+        r'\bque\s+sesiones\b',
     ],
     'select_session': [
         r'\b(select|choose|pick|open)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+session\b',
         r'\b(select|choose|pick|open)\s+session\s+(\d+|one|two|three)\b',
         r'\bgo\s+(to|into)\s+(the\s+)?(first|second|third|last)\s+session\b',
+        # Spanish
+        r'\b(seleccionar|elegir|escoger|abrir)\s+(la\s+)?(primera|segunda|tercera|ultima)\s+sesion\b',
+        r'\b(seleccionar|elegir|escoger|abrir)\s+sesion\s+(\d+|uno|dos|tres)\b',
+        r'\bir\s+(a|a\s+la)\s+(primera|segunda|tercera|ultima)\s+sesion\b',
     ],
     # === COPILOT ACTIONS ===
     'get_interventions': [
@@ -554,6 +693,14 @@ ACTION_PATTERNS = {
         r'\bcopilot\s+(suggestions|insights|recommendations)\b',
         r'\bwhat does\s+(the\s+)?copilot\s+(suggest|recommend|say)\b',
         r'\bany\s+suggestions\b',
+        # Spanish
+        r'\b(mostrar|obtener|cuales son|ver)\s+(las\s+)?(sugerencias)(\s+del\s+copilot)?\b',
+        r'\bintervenciones\b',
+        r'\bpuntos\s+de\s+confusion\b',
+        r'\bsugerencias\s+(del\s+)?(copilot|asistente)\b',
+        r'\bque\s+(sugiere|recomienda|dice)\s+(el\s+)?copilot\b',
+        r'\balguna\s+sugerencia\b',
+        r'\bhay\s+sugerencias\b',
     ],
     # === ENROLLMENT ACTIONS ===
     'list_enrollments': [
@@ -563,6 +710,13 @@ ACTION_PATTERNS = {
         r'\bstudent\s+(list|count|roster)\b',
         r'\bwho\s+is\s+enrolled\b',
         r'\bclass\s+roster\b',
+        # Spanish
+        r'\b(listar|mostrar|quienes son|ver|obtener)\s+(los\s+)?(estudiantes)(\s+inscritos)?\b',
+        r'\b(lista|estado)\s+de\s+inscripcion\b',
+        r'\bcuantos\s+estudiantes\b',
+        r'\b(lista|cantidad|registro)\s+de\s+estudiantes\b',
+        r'\bquien\s+esta\s+inscrito\b',
+        r'\bregistro\s+de\s+(la\s+)?clase\b',
     ],
     'manage_enrollments': [
         r'\bmanage\s+(the\s+)?(student\s+)?enrollments?\b',
@@ -570,6 +724,12 @@ ACTION_PATTERNS = {
         r'\badd\s+students?\s+(to|into)\b',
         r'\bstudent\s+management\b',
         r'\benrollment\s+management\b',
+        # Spanish
+        r'\badministrar\s+(las\s+)?inscripciones?(\s+de\s+estudiantes)?\b',
+        r'\binscribir\s+(nuevos\s+)?estudiantes?\b',
+        r'\bagregar\s+estudiantes?\s+(a|en)\b',
+        r'\bgestion\s+de\s+estudiantes\b',
+        r'\badministracion\s+de\s+inscripciones?\b',
     ],
     'list_student_pool': [
         r'\b(select|choose|pick)\s+(a\s+)?student\s+(from\s+)?(the\s+)?(student\s+)?pool\b',
@@ -577,20 +737,37 @@ ACTION_PATTERNS = {
         r'\b(available|unenrolled)\s+students\b',
         r'\bwho\s+(can|is available to)\s+enroll\b',
         r'\bstudent\s+pool\b',
+        # Spanish
+        r'\b(seleccionar|elegir|escoger)\s+(un\s+)?estudiante\s+(del?\s+)?(grupo|lista)\b',
+        r'\b(mostrar|listar|ver)\s+(el\s+)?(grupo|lista)\s+de\s+estudiantes\b',
+        r'\bestudiantes\s+(disponibles|no\s+inscritos)\b',
+        r'\bquien\s+puede\s+inscribirse\b',
+        r'\bgrupo\s+de\s+estudiantes\b',
     ],
     'enroll_selected': [
         r'\b(click\s+)?(enroll|add)\s+(the\s+)?selected(\s+students?)?\b',
         r'\benroll\s+selected\b',
         r'\badd\s+selected\s+students?\b',
+        # Spanish
+        r'\b(hacer\s+clic\s+)?(inscribir|agregar)\s+(los\s+)?seleccionados?\b',
+        r'\binscribir\s+seleccionados\b',
+        r'\bagregar\s+estudiantes?\s+seleccionados?\b',
     ],
     'enroll_all': [
         r'\b(click\s+)?(enroll|add)\s+all(\s+students?)?\b',
         r'\benroll\s+all\b',
         r'\badd\s+all\s+students?\b',
+        # Spanish
+        r'\b(hacer\s+clic\s+)?(inscribir|agregar)\s+todos?(\s+los\s+estudiantes)?\b',
+        r'\binscribir\s+a\s+todos\b',
+        r'\bagregar\s+todos\s+los\s+estudiantes\b',
     ],
     'select_student': [
         r'\b(select|choose|pick|click|check)\s+(the\s+)?student\s+(.+)\b',
         r'\b(select|choose|pick|click|check)\s+(.+?)\s+(from|in)\s+(the\s+)?(student\s+)?pool\b',
+        # Spanish
+        r'\b(seleccionar|elegir|escoger|hacer\s+clic|marcar)\s+(al\s+)?estudiante\s+(.+)\b',
+        r'\b(seleccionar|elegir|escoger|hacer\s+clic|marcar)\s+(.+?)\s+(del?|en)\s+(el\s+)?(grupo|lista)\s+de\s+estudiantes\b',
     ],
     # === FORUM ACTIONS ===
     'view_posts': [
@@ -599,11 +776,22 @@ ACTION_PATTERNS = {
         r'\bwhat\s+(are\s+)?(students|people)\s+(saying|discussing|posting)\b',
         r'\brecent\s+posts\b',
         r'\blatest\s+posts\b',
+        # Spanish
+        r'\b(mostrar|ver|visualizar)\s+(las\s+)?(publicaciones)(\s+del\s+foro)?\b',
+        r'\b(mostrar|ver)\s+(las\s+)?discusiones?\b',
+        r'\bque\s+(estan\s+)?(diciendo|discutiendo|publicando)\s+(los\s+)?(estudiantes|la\s+gente)\b',
+        r'\bpublicaciones\s+recientes\b',
+        r'\bultimas\s+publicaciones\b',
     ],
     'get_pinned_posts': [
         r'\b(show|view|get|what are)\s+(the\s+)?pinned\s+(posts|discussions)?\b',
         r'\bpinned\s+(posts|content|discussions)\b',
         r'\bimportant\s+posts\b',
+        # Spanish
+        r'\b(mostrar|ver|obtener|cuales son)\s+(las\s+)?publicaciones\s+fijadas?\b',
+        r'\bpublicaciones\s+(fijadas?|importantes)\b',
+        r'\bcontenido\s+fijado\b',
+        r'\bpublicaciones\s+importantes\b',
     ],
     'summarize_discussion': [
         r'\bsummarize\s+(the\s+)?(forum|discussion|posts)\b',
@@ -611,12 +799,23 @@ ACTION_PATTERNS = {
         r'\bwhat\s+are\s+(students|people)\s+talking\s+about\b',
         r'\bkey\s+(points|themes|topics)\b',
         r'\bmain\s+(discussion|points)\b',
+        # Spanish
+        r'\bresume\s+(el\s+)?(foro|discusion|publicaciones)\b',
+        r'\bresumen\s+(de\s+)?(la\s+)?(discusion|foro)\b',
+        r'\bde\s+que\s+(estan\s+)?(hablando|discutiendo)\s+(los\s+)?(estudiantes|la\s+gente)\b',
+        r'\bpuntos\s+(clave|principales|importantes)\b',
+        r'\b(puntos|temas)\s+principales\b',
     ],
     'get_student_questions': [
         r'\b(show|what are|any)\s+(student\s+)?questions\b',
         r'\bquestions\s+from\s+(students|class)\b',
         r'\bany\s+(confusion|misconceptions)\b',
         r'\bwhat\s+(do\s+)?students\s+(need|want|ask)\b',
+        # Spanish
+        r'\b(mostrar|cuales son|hay)\s+(preguntas)(\s+de\s+estudiantes)?\b',
+        r'\bpreguntas\s+de\s+(los\s+)?(estudiantes|la\s+clase)\b',
+        r'\bhay\s+(confusion|confusiones|malentendidos)\b',
+        r'\bque\s+(necesitan|quieren|preguntan)\s+(los\s+)?estudiantes\b',
     ],
     # === NEW HIGH-IMPACT VOICE FEATURES ===
     # Class status overview - "How's the class doing?"
@@ -630,6 +829,15 @@ ACTION_PATTERNS = {
         r'\bwhat\'?s\s+happening\s+(in\s+)?(the\s+)?(class|session|discussion)\b',
         r'\bsituation\s+report\b',
         r'\bsitrep\b',
+        # Spanish
+        r'\bcomo\s+(va|esta)\s+(la\s+)?(clase|sesion|discusion)\b',
+        r'\b(estado|resumen|actualizacion)\s+de\s+(la\s+)?clase\b',
+        r'\bcomo\s+(estan|van)\s+(los\s+)?(estudiantes|la\s+clase|todos)\b',
+        r'\bdame\s+(un\s+)?(rapido\s+)?(estado|actualizacion|resumen)\b',
+        r'\b(estado|actualizacion|resumen)\s+rapido\b',
+        r'\b(estado|resumen)\s+de\s+(la\s+)?sesion\b',
+        r'\bque\s+(esta\s+)?pasando\s+(en\s+)?(la\s+)?(clase|sesion|discusion)\b',
+        r'\binforme\s+de\s+situacion\b',
     ],
     # Who needs help - identify struggling students
     'who_needs_help': [
@@ -644,6 +852,18 @@ ACTION_PATTERNS = {
         r'\bwho\'?s\s+behind\b',
         r'\bat[-\s]?risk\s+students\b',
         r'\bwho\s+should\s+i\s+(help|focus\s+on|pay\s+attention\s+to)\b',
+        # Spanish
+        r'\bquien\s+(necesita|requiere)\s+ayuda\b',
+        r'\bquien\s+esta\s+(teniendo\s+)?dificultades\b',
+        r'\bestudiantes\s+(con\s+)?dificultades\b',
+        r'\bestudiantes?\s+(que\s+)?(necesitan?|requieren?)\s+(ayuda|atencion|apoyo)\b',
+        r'\bquien\s+esta\s+confundido\b',
+        r'\bestudiantes\s+confundidos\b',
+        r'\bquien\s+no\s+ha\s+(participado|publicado)\b',
+        r'\bno\s+participantes\b',
+        r'\bquien\s+esta\s+atrasado\b',
+        r'\bestudiantes\s+en\s+riesgo\b',
+        r'\ba\s+quien\s+debo\s+(ayudar|prestar\s+atencion)\b',
     ],
     # Report Q&A - ask about misconceptions
     'ask_misconceptions': [
@@ -653,6 +873,14 @@ ACTION_PATTERNS = {
         r'\bwhat\s+(concepts?|topics?)\s+confused\s+(them|students)\b',
         r'\bwhere\s+did\s+(students|they)\s+(struggle|fail|have\s+trouble)\b',
         r'\bmisunderstandings?\b',
+        # Spanish
+        r'\bcuales\s+(fueron|son)\s+(los\s+)?(principales\s+)?malentendidos\b',
+        r'\bque\s+entendieron\s+mal\s+(los\s+)?estudiantes\b',
+        r'\berrores\s+(comunes|frecuentes)\b',
+        r'\bque\s+(conceptos?|temas?)\s+confundieron\s+(a\s+)?(los\s+)?estudiantes\b',
+        r'\bdonde\s+(tuvieron\s+)?dificultades\s+(los\s+)?estudiantes\b',
+        r'\bmalentendidos\b',
+        r'\bconceptos\s+erroneos\b',
     ],
     # Report Q&A - ask about scores
     'ask_scores': [
@@ -665,6 +893,15 @@ ACTION_PATTERNS = {
         r'\btop\s+(performers?|students?|scores?)\b',
         r'\blow\s+(performers?|students?|scores?)\b',
         r'\bgrade\s+(distribution|breakdown)\b',
+        # Spanish
+        r'\bcomo\s+les\s+fue\s+(a\s+)?(los\s+)?(estudiantes|la\s+clase|todos)\b',
+        r'\bcuales\s+(fueron|son)\s+(los\s+)?puntajes?\b',
+        r'\bpuntajes?\s+de\s+(los\s+)?estudiantes\b',
+        r'\b(rendimiento|puntajes?|resultados?)\s+de\s+(la\s+)?clase\b',
+        r'\bpuntaje\s+promedio\b',
+        r'\bquien\s+(obtuvo|tuvo)\s+(el\s+)?(mejor|peor|mas\s+alto|mas\s+bajo)\s+(puntaje)?\b',
+        r'\b(mejores|peores)\s+(estudiantes|puntajes?)\b',
+        r'\bdistribucion\s+de\s+(notas|calificaciones|puntajes)\b',
     ],
     # Report Q&A - ask about participation
     'ask_participation': [
@@ -675,6 +912,14 @@ ACTION_PATTERNS = {
         r'\bwho\s+(didn\'?t|did\s+not)\s+(participate|post)\b',
         r'\bparticipation\s+(level|overview)\b',
         r'\bengagement\s+(level|rate|stats?)\b',
+        # Spanish
+        r'\bcomo\s+(fue|esta|estuvo)\s+(la\s+)?participacion\b',
+        r'\b(tasa|estadisticas?)\s+de\s+participacion\b',
+        r'\bcuantos\s+(estudiantes\s+)?(participaron|publicaron)\b',
+        r'\bquien\s+(participo|publico)\b',
+        r'\bquien\s+no\s+(participo|publico)\b',
+        r'\bnivel\s+de\s+participacion\b',
+        r'\bnivel\s+de\s+(compromiso|participacion)\b',
     ],
     # Read latest posts aloud
     'read_posts': [
@@ -685,6 +930,14 @@ ACTION_PATTERNS = {
         r'\blatest\s+(from\s+)?(the\s+)?discussion\b',
         r'\brecent\s+(activity|posts?|comments?)\b',
         r'\bshow\s+(me\s+)?(the\s+)?recent\s+(posts?|activity)\b',
+        # Spanish
+        r'\bleer\s+(las\s+)?(ultimas?|recientes?)\s+(publicaciones?|comentarios?|mensajes?)\b',
+        r'\bleer\s+(me\s+)?(las\s+)?publicaciones?\b',
+        r'\bcuales\s+son\s+(las\s+)?(ultimas?|recientes?)\s+publicaciones?\b',
+        r'\bque\s+(publicaron|dijeron|escribieron)\s+(los\s+)?(estudiantes|ellos)\b',
+        r'\blo\s+ultimo\s+de\s+(la\s+)?discusion\b',
+        r'\b(actividad|publicaciones?|comentarios?)\s+recientes?\b',
+        r'\bmostrar\s+(me\s+)?(las\s+)?(publicaciones?|actividad)\s+recientes?\b',
     ],
     # What did copilot suggest
     'copilot_suggestions': [
@@ -696,6 +949,15 @@ ACTION_PATTERNS = {
         r'\bany\s+(teaching\s+)?(suggestions?|recommendations?|tips?)\b',
         r'\bcopilot\s+update\b',
         r'\bteaching\s+(tips?|suggestions?|advice)\b',
+        # Spanish
+        r'\bque\s+(sugirio|sugiere|recomienda|dijo|piensa)\s+(el\s+)?copilot\b',
+        r'\bsugerencias?\s+(del\s+)?copilot\b',
+        r'\bcuales\s+son\s+(las\s+)?sugerencias?\s+(del\s+)?copilot\b',
+        r'\bsugerencias?\s+de\s+(la\s+)?ia\b',
+        r'\bque\s+debo\s+(hacer|decir|preguntar)\s+ahora\b',
+        r'\balguna\s+(sugerencia|recomendacion|consejo)\s+(de\s+ensenanza)?\b',
+        r'\bactualizacion\s+del\s+copilot\b',
+        r'\bconsejos?\s+de\s+ensenanza\b',
     ],
     # Student performance lookup
     'student_lookup': [
@@ -705,6 +967,13 @@ ACTION_PATTERNS = {
         r'\b(\w+)\'?s?\s+(score|performance|participation|status)\b',
         r'\bcheck\s+(on\s+)?(\w+)\b',
         r'\blook\s+up\s+(\w+)\b',
+        # Spanish
+        r'\bcomo\s+(esta|le\s+va)\s+(a\s+)?(\w+)\b',
+        r'\bdime\s+sobre\s+(el\s+)?(rendimiento|participacion|puntaje)\s+de\s+(\w+)\b',
+        r'\bque\s+tal\s+(\w+)\b',
+        r'\b(puntaje|rendimiento|participacion|estado)\s+de\s+(\w+)\b',
+        r'\brevisar\s+(a\s+)?(\w+)\b',
+        r'\bbuscar\s+(a\s+)?(\w+)\b',
     ],
 }
 

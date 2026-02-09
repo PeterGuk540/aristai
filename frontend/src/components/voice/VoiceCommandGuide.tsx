@@ -56,6 +56,7 @@ const commandCategories: CommandCategory[] = [
     commands: [
       { phrase: '"Go to manage status tab"', alternatives: ['"Manage status"', '"Status tab"'], description: 'Switch to the manage status tab' },
       { phrase: '"Go to create tab"', alternatives: ['"Create session tab"', '"New session"'], description: 'Switch to the create session tab' },
+      { phrase: '"View materials"', alternatives: ['"Show materials"', '"Open materials"', '"Course materials"'], description: 'Switch to the Materials tab to view/download course files' },
       { phrase: '"Generate"', alternatives: ['"Generate session plan"', '"AI help"'], description: 'When asked for description, say "generate" for AI session plan with prompts and case study' },
       { phrase: '"Select course"', alternatives: ['"Choose course"', '"Pick a course"'], description: 'Open the course dropdown' },
       { phrase: '"Select first"', alternatives: ['"Choose first"', '"First option"'], description: 'Select the first item in a dropdown' },

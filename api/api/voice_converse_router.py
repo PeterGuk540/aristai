@@ -147,6 +147,15 @@ ACTION_PATTERNS = {
         r'\bfinish\s+(the\s+)?session\b',
         r'\bterminate\s+(the\s+)?session\b',
     ],
+    # Materials actions
+    'view_materials': [
+        r'\b(view|show|open|see)\s+(the\s+)?(course\s+)?materials?\b',
+        r'\bmaterials?\s+(tab|page|section)\b',
+        r'\b(go\s+to|open)\s+(the\s+)?materials?\b',
+        r'\bshow\s+(me\s+)?(the\s+)?materials?\b',
+        r'\b(view|see)\s+(the\s+)?(uploaded\s+)?(files?|documents?|readings?)\b',
+        r'\bcourse\s+(files?|documents?|readings?)\b',
+    ],
     # Copilot actions
     'start_copilot': [
         r'\bstart\s+(the\s+)?copilot\b',
@@ -894,6 +903,9 @@ def generate_conversational_response(
 
         if intent_value == 'end_session':
             return "Session has ended. Would you like me to generate a report?"
+
+        if intent_value == 'view_materials':
+            return "Opening the course materials. You can view and download uploaded files here."
 
         # === SESSION STATUS MANAGEMENT RESPONSES ===
         if intent_value == 'set_session_draft':
@@ -3476,6 +3488,17 @@ async def execute_action(
                 ]
             return result
 
+        # === MATERIALS ACTIONS ===
+        if action == 'view_materials':
+            # Navigate to sessions page with materials tab
+            return {
+                "action": "view_materials",
+                "message": "Opening the course materials tab.",
+                "ui_actions": [
+                    {"type": "ui.openModal", "payload": {"modal": "viewMaterials"}},
+                ],
+            }
+
         # === COPILOT ACTIONS ===
         if action == 'get_interventions':
             course_id = _resolve_course_id(db, current_page, user_id)
@@ -4572,6 +4595,7 @@ def get_action_suggestions(action: str) -> List[str]:
         'select_session': ["Go live", "View details", "Start copilot"],
         'go_live': ["Start copilot", "Create poll", "Post case"],
         'end_session': ["Generate report", "View posts", "Create new session"],
+        'view_materials': ["Download file", "View sessions", "Go to forum"],
         # Copilot suggestions
         'start_copilot': ["View suggestions", "Create a poll", "Post case"],
         'stop_copilot': ["Generate report", "View interventions", "Go to forum"],

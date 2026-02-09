@@ -111,6 +111,16 @@ export const UiActionHandler = () => {
         showToast('Opening session controls...', 'info');
         break;
 
+      case 'viewMaterials':
+        // Navigate to sessions page with materials tab
+        if (pathname !== '/sessions') {
+          router.push('/sessions?tab=materials');
+        } else {
+          window.dispatchEvent(new CustomEvent('voice-select-tab', { detail: { tab: 'materials' } }));
+        }
+        showToast('Opening course materials...', 'info');
+        break;
+
       // Forum actions
       case 'postCase':
       case 'createPost':

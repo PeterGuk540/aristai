@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import {
   GraduationCap,
   BookOpen,
@@ -26,15 +27,17 @@ import { VoiceUiActionBridge } from './voice/VoiceUiActionBridge';
 import { UiActionHandler } from './voice/UiActionHandler';
 import { VoiceUIController } from './voice/VoiceUIController';
 import { ToastProvider } from './ui/Toast';
+import { LanguageToggleCompact } from './LanguageToggle';
 import { cn } from '@/lib/utils';
 
 // Navigation items with optional instructor-only flag and enrollment requirement
+// Using translation keys instead of hardcoded names
 const allNavigation = [
-  { name: 'Courses', href: '/courses', icon: BookOpen, instructorOnly: false, requiresEnrollment: false },
-  { name: 'Sessions', href: '/sessions', icon: Calendar, instructorOnly: false, requiresEnrollment: true },
-  { name: 'Forum', href: '/forum', icon: MessageSquare, instructorOnly: false, requiresEnrollment: true },
-  { name: 'Console', href: '/console', icon: Settings, instructorOnly: true, requiresEnrollment: false },
-  { name: 'Reports', href: '/reports', icon: FileText, instructorOnly: false, requiresEnrollment: true },
+  { key: 'courses', href: '/courses', icon: BookOpen, instructorOnly: false, requiresEnrollment: false },
+  { key: 'sessions', href: '/sessions', icon: Calendar, instructorOnly: false, requiresEnrollment: true },
+  { key: 'forum', href: '/forum', icon: MessageSquare, instructorOnly: false, requiresEnrollment: true },
+  { key: 'console', href: '/console', icon: Settings, instructorOnly: true, requiresEnrollment: false },
+  { key: 'reports', href: '/reports', icon: FileText, instructorOnly: false, requiresEnrollment: true },
 ];
 
 interface AppShellProps {
@@ -44,6 +47,7 @@ interface AppShellProps {
 export function AppShellHandsFree({ children }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const t = useTranslations('nav');
   const { isAuthenticated, isLoading } = useAuth();
   const { currentUser, isInstructor, isAdmin, hasEnrollments } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -194,7 +198,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
             return (
               <Link
-                key={item.name}
+                key={item.key}
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
@@ -205,7 +209,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                 )}
               >
                 <item.icon className="h-5 w-5" />
-                {item.name}
+                {t(item.key)}
               </Link>
             );
           })}
@@ -257,6 +261,9 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
           {/* Right side actions - flex-shrink-0 to keep right-aligned */}
           <div className="flex-shrink-0 flex items-center gap-2">
+            {/* Language toggle */}
+            <LanguageToggleCompact />
+
             {/* Dark mode toggle */}
             <button
               onClick={toggleDarkMode}

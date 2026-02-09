@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, EnrolledStudent, User } from '@/types';
 import { formatTimestamp, truncate } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 import {
   Button,
   Card,
@@ -25,6 +26,7 @@ import {
 export default function CoursesPage() {
   const { isInstructor, currentUser, refreshUser } = useUser();
   const searchParams = useSearchParams();
+  const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -361,37 +363,37 @@ export default function CoursesPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Course Management</h1>
-          <p className="text-gray-600">Create and manage courses</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('courses.title')}</h1>
+          <p className="text-gray-600">{t('courses.subtitle')}</p>
         </div>
         <Button onClick={fetchCourses} variant="outline" size="sm">
           <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
+          {t('common.refresh')}
         </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="courses">Courses</TabsTrigger>
-          {isInstructor && <TabsTrigger value="create">Create Course</TabsTrigger>}
-          {isInstructor && <TabsTrigger value="enrollment">Enrollment</TabsTrigger>}
-          {!isInstructor && <TabsTrigger value="join">Join Course</TabsTrigger>}
-          {!isInstructor && <TabsTrigger value="instructor">Become Instructor</TabsTrigger>}
+          <TabsTrigger value="courses">{t('nav.courses')}</TabsTrigger>
+          {isInstructor && <TabsTrigger value="create">{t('courses.createCourse')}</TabsTrigger>}
+          {isInstructor && <TabsTrigger value="enrollment">{t('courses.enrollment')}</TabsTrigger>}
+          {!isInstructor && <TabsTrigger value="join">{t('courses.joinCourse')}</TabsTrigger>}
+          {!isInstructor && <TabsTrigger value="instructor">{t('courses.becomeInstructor')}</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="courses">
           {loading ? (
-            <div className="text-center py-8 text-gray-500">Loading courses...</div>
+            <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
           ) : courses.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-gray-500">
                 <BookOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                 {isInstructor ? (
-                  <p>No courses found. Create one to get started!</p>
+                  <p>{t('courses.noCourses')}</p>
                 ) : (
                   <div>
-                    <p className="mb-2">You are not enrolled in any courses yet.</p>
-                    <p className="text-sm">Use the "Join Course" tab to enter a course code from your instructor.</p>
+                    <p className="mb-2">{t('courses.noEnrolledCourses')}</p>
+                    <p className="text-sm">{t('courses.useJoinCode')}</p>
                   </div>
                 )}
               </CardContent>
@@ -412,13 +414,13 @@ export default function CoursesPage() {
                   <CardContent>
                     <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <h4 className="font-medium text-gray-900 mb-2">Syllabus Preview</h4>
+                        <h4 className="font-medium text-gray-900 mb-2">{t('courses.syllabus')}</h4>
                         <p className="text-sm text-gray-600 whitespace-pre-wrap">
-                          {truncate(course.syllabus_text || 'No syllabus', 300)}
+                          {truncate(course.syllabus_text || t('courses.syllabus'), 300)}
                         </p>
                       </div>
                       <div>
-                        <h4 className="font-medium text-gray-900 mb-2">Learning Objectives</h4>
+                        <h4 className="font-medium text-gray-900 mb-2">{t('courses.learningObjectives')}</h4>
                         {course.objectives_json && course.objectives_json.length > 0 ? (
                           <ul className="text-sm text-gray-600 space-y-1">
                             {course.objectives_json.slice(0, 5).map((obj, i) => (
@@ -443,7 +445,7 @@ export default function CoursesPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Key className="h-4 w-4 text-gray-400" />
-                            <span className="text-sm text-gray-600">Join Code:</span>
+                            <span className="text-sm text-gray-600">{t('courses.joinCode')}:</span>
                             <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono font-bold text-primary-600">
                               {course.join_code}
                             </code>
@@ -492,7 +494,7 @@ export default function CoursesPage() {
                           }}
                         >
                           <Sparkles className="h-4 w-4 mr-2" />
-                          Generate Plans
+                          {t('courses.generatePlans')}
                         </Button>
                       )}
                     </div>
@@ -507,12 +509,12 @@ export default function CoursesPage() {
           <TabsContent value="create">
             <Card>
               <CardHeader>
-                <CardTitle>Create New Course</CardTitle>
+                <CardTitle>{t('courses.createNew')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Input
-                  label="Course Title"
-                  placeholder="e.g., Introduction to Machine Learning"
+                  label={t('courses.courseTitle')}
+                  placeholder={t('courses.courseTitlePlaceholder')}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   data-voice-id="course-title"
@@ -520,7 +522,7 @@ export default function CoursesPage() {
 
                 {/* Syllabus Input - Toggle between Upload and Paste */}
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">Syllabus</label>
+                  <label className="block text-sm font-medium text-gray-700">{t('courses.syllabus')}</label>
                   <div className="flex gap-2 mb-2">
                     <button
                       type="button"
@@ -532,7 +534,7 @@ export default function CoursesPage() {
                       }`}
                     >
                       <FileText className="h-4 w-4" />
-                      Paste Text
+                      {t('courses.pasteText')}
                     </button>
                     <button
                       type="button"
@@ -544,13 +546,13 @@ export default function CoursesPage() {
                       }`}
                     >
                       <Upload className="h-4 w-4" />
-                      Upload File
+                      {t('courses.uploadFile')}
                     </button>
                   </div>
 
                   {syllabusInputMode === 'paste' ? (
                     <Textarea
-                      placeholder="Paste your full syllabus here..."
+                      placeholder={t('courses.syllabusPlaceholder')}
                       rows={8}
                       value={syllabus}
                       onChange={(e) => setSyllabus(e.target.value)}
@@ -574,10 +576,10 @@ export default function CoursesPage() {
                         >
                           <Upload className="h-10 w-10 mx-auto text-gray-400 mb-3" />
                           <p className="text-sm text-gray-600 mb-1">
-                            Click to upload your syllabus
+                            {t('courses.uploadSyllabus')}
                           </p>
                           <p className="text-xs text-gray-400">
-                            Supports PDF, Word (.docx), and text files
+                            {t('courses.supportedFormats')}
                           </p>
                         </div>
                       ) : (
@@ -617,14 +619,14 @@ export default function CoursesPage() {
 
                           {syllabus && !uploadingSyllabus && (
                             <div className="mt-2">
-                              <p className="text-xs text-gray-500 mb-1">Extracted text preview:</p>
+                              <p className="text-xs text-gray-500 mb-1">{t('courses.extractedTextPreview')}</p>
                               <div className="bg-gray-50 rounded p-2 max-h-32 overflow-y-auto">
                                 <p className="text-xs text-gray-600 whitespace-pre-wrap">
                                   {syllabus.length > 500 ? syllabus.substring(0, 500) + '...' : syllabus}
                                 </p>
                               </div>
                               <p className="text-xs text-gray-400 mt-1">
-                                {syllabus.length.toLocaleString()} characters extracted
+                                {t('courses.charactersExtracted', { count: syllabus.length.toLocaleString() })}
                               </p>
                             </div>
                           )}
@@ -635,8 +637,8 @@ export default function CoursesPage() {
                 </div>
 
                 <Textarea
-                  label="Learning Objectives (one per line)"
-                  placeholder="Understand ML fundamentals&#10;Apply supervised learning&#10;Evaluate model performance"
+                  label={`${t('courses.learningObjectives')} ${t('courses.onePerLine')}`}
+                  placeholder={t('courses.learningObjectivesPlaceholder')}
                   rows={5}
                   value={objectives}
                   onChange={(e) => setObjectives(e.target.value)}
@@ -651,7 +653,7 @@ export default function CoursesPage() {
                     data-voice-id="create-course"
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Create Course
+                    {t('courses.createCourse')}
                   </Button>
                   <Button
                     onClick={() => handleCreateCourse(true)}
@@ -659,7 +661,7 @@ export default function CoursesPage() {
                     data-voice-id="create-course-with-plans"
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
-                    Create & Generate Plans
+                    {t('courses.createAndGeneratePlans')}
                   </Button>
                 </div>
               </CardContent>
@@ -673,12 +675,12 @@ export default function CoursesPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
-                  Enrollment Management
+                  {t('courses.enrollmentManagement')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <Select
-                  label="Select Course"
+                  label={t('courses.selectCourse')}
                   value={selectedCourseId?.toString() || ''}
                   onChange={(e) => {
                     setSelectedCourseId(Number(e.target.value));
@@ -699,7 +701,7 @@ export default function CoursesPage() {
                   <div className="mt-6 grid md:grid-cols-2 gap-6">
                     <div>
                       <h4 className="font-medium text-gray-900 mb-3">
-                        Enrolled Students ({enrolledStudents.length})
+                        {t('courses.enrolledStudents')} ({enrolledStudents.length})
                       </h4>
                       {enrolledStudents.length > 0 ? (
                         <ul className="space-y-2 max-h-96 overflow-y-auto">
@@ -717,20 +719,20 @@ export default function CoursesPage() {
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-sm text-gray-500">No students enrolled yet.</p>
+                        <p className="text-sm text-gray-500">{t('courses.noStudentsEnrolled')}</p>
                       )}
                     </div>
 
                     <div>
                       <h4 className="font-medium text-gray-900 mb-3">
-                        Student Pool ({availableStudents.length} available)
+                        {t('courses.availableStudents')} ({availableStudents.length})
                       </h4>
                       {availableStudents.length > 0 ? (
                         <div className="space-y-3">
                           <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                             <Input
-                              placeholder="Search by name or email..."
+                              placeholder={t('courses.searchStudents')}
                               value={studentSearchQuery}
                               onChange={(e) => setStudentSearchQuery(e.target.value)}
                               className="pl-10"
@@ -791,7 +793,7 @@ export default function CoursesPage() {
                               data-voice-id="enroll-selected"
                             >
                               <UserPlus className="h-4 w-4 mr-2" />
-                              Enroll Selected ({selectedStudentIds.size})
+                              {t('courses.enrollSelected')} ({selectedStudentIds.size})
                             </Button>
                             <Button
                               onClick={handleEnrollAll}
@@ -799,7 +801,7 @@ export default function CoursesPage() {
                               variant="outline"
                               data-voice-id="enroll-all"
                             >
-                              Enroll All
+                              {t('courses.enrollAll')}
                             </Button>
                           </div>
                         </div>
@@ -824,16 +826,16 @@ export default function CoursesPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Key className="h-5 w-5" />
-                  Join a Course
+                  {t('courses.joinCourse')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600 mb-4">
-                  Enter the join code provided by your instructor to enroll in a course.
+                  {t('courses.useJoinCode')}
                 </p>
                 <div className="flex gap-3 max-w-md">
                   <Input
-                    placeholder="Enter join code (e.g., ABC12345)"
+                    placeholder={t('courses.joinCodePlaceholder')}
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                     className="font-mono text-lg tracking-wider"
@@ -848,7 +850,7 @@ export default function CoursesPage() {
                     ) : (
                       <UserPlus className="h-4 w-4 mr-2" />
                     )}
-                    Join
+                    {t('courses.join')}
                   </Button>
                 </div>
               </CardContent>
@@ -862,7 +864,7 @@ export default function CoursesPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <GraduationCap className="h-5 w-5" />
-                  Request Instructor Access
+                  {t('courses.requestInstructorAccess')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -870,35 +872,26 @@ export default function CoursesPage() {
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-yellow-800 mb-2">
                       <Clock className="h-5 w-5" />
-                      <span className="font-medium">Request Pending</span>
+                      <span className="font-medium">{t('courses.instructorRequestPending')}</span>
                     </div>
-                    <p className="text-sm text-yellow-700">
-                      Your instructor access request is being reviewed. An existing instructor will approve or reject your request.
-                    </p>
                   </div>
                 ) : currentUser?.instructor_request_status === 'rejected' ? (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-red-800 mb-2">
-                      <span className="font-medium">Request Rejected</span>
+                      <span className="font-medium">{t('courses.instructorRequestRejected')}</span>
                     </div>
-                    <p className="text-sm text-red-700 mb-4">
-                      Your previous request was not approved. If you believe this was a mistake, please contact an administrator.
-                    </p>
                     <Button
                       onClick={handleRequestInstructor}
                       disabled={requestingInstructor}
                       variant="outline"
+                      className="mt-4"
                     >
                       <GraduationCap className="h-4 w-4 mr-2" />
-                      Request Again
+                      {t('courses.requestInstructorAccess')}
                     </Button>
                   </div>
                 ) : (
                   <div>
-                    <p className="text-sm text-gray-600 mb-4">
-                      If you are an instructor and need to create and manage courses, you can request instructor access.
-                      An existing instructor will review and approve your request.
-                    </p>
                     <Button
                       onClick={handleRequestInstructor}
                       disabled={requestingInstructor}
@@ -908,7 +901,7 @@ export default function CoursesPage() {
                       ) : (
                         <GraduationCap className="h-4 w-4 mr-2" />
                       )}
-                      Request Instructor Access
+                      {t('courses.requestInstructorAccess')}
                     </Button>
                   </div>
                 )}

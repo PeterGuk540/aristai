@@ -2,22 +2,24 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { BookOpen, Calendar, MessageSquare, TrendingUp, Users, Activity } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const t = useTranslations();
 
   const stats = [
-    { name: 'Active Courses', value: '4', icon: BookOpen, color: 'bg-blue-500' },
-    { name: 'Upcoming Sessions', value: '12', icon: Calendar, color: 'bg-green-500' },
-    { name: 'Forum Posts', value: '89', icon: MessageSquare, color: 'bg-purple-500' },
-    { name: 'Students Engaged', value: '156', icon: Users, color: 'bg-orange-500' },
+    { name: t('dashboard.activeCourses'), value: '4', icon: BookOpen, color: 'bg-blue-500' },
+    { name: t('dashboard.upcomingSessions'), value: '12', icon: Calendar, color: 'bg-green-500' },
+    { name: t('dashboard.forumPosts'), value: '89', icon: MessageSquare, color: 'bg-purple-500' },
+    { name: t('dashboard.studentsEngaged'), value: '156', icon: Users, color: 'bg-orange-500' },
   ];
 
   const recentActivity = [
-    { title: 'New discussion started in CS101', time: '5 minutes ago', type: 'discussion' },
-    { title: 'Session "Intro to AI" completed', time: '1 hour ago', type: 'session' },
-    { title: 'Report generated for Week 3', time: '2 hours ago', type: 'report' },
-    { title: 'New student enrolled in Data Science', time: '3 hours ago', type: 'enrollment' },
+    { title: t('dashboard.activity.newDiscussion'), time: t('dashboard.activity.fiveMinutesAgo'), type: 'discussion' },
+    { title: t('dashboard.activity.sessionCompleted'), time: t('dashboard.activity.oneHourAgo'), type: 'session' },
+    { title: t('dashboard.activity.reportGenerated'), time: t('dashboard.activity.twoHoursAgo'), type: 'report' },
+    { title: t('dashboard.activity.newEnrollment'), time: t('dashboard.activity.threeHoursAgo'), type: 'enrollment' },
   ];
 
   return (
@@ -25,10 +27,10 @@ export default function DashboardPage() {
       {/* Welcome section */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Welcome back, {user?.name || user?.email?.split('@')[0] || 'User'}!
+          {t('dashboard.welcomeBack', { name: user?.name || user?.email?.split('@')[0] || 'User' })}
         </h1>
         <p className="mt-1 text-gray-600 dark:text-gray-400">
-          Here&apos;s what&apos;s happening with your courses today.
+          {t('dashboard.subtitle')}
         </p>
       </div>
 
@@ -59,7 +61,7 @@ export default function DashboardPage() {
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <Activity className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-              Recent Activity
+              {t('dashboard.recentActivity')}
             </h2>
           </div>
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -72,7 +74,7 @@ export default function DashboardPage() {
           </div>
           <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700">
             <button className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium">
-              View all activity
+              {t('dashboard.viewAllActivity')}
             </button>
           </div>
         </div>
@@ -82,25 +84,25 @@ export default function DashboardPage() {
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-              Quick Actions
+              {t('dashboard.quickActions')}
             </h2>
           </div>
           <div className="p-6 grid grid-cols-2 gap-4">
             <button className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-primary-500 dark:hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
               <BookOpen className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Create Course</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.createCourse')}</span>
             </button>
             <button className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-primary-500 dark:hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
               <Calendar className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Start Session</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.startSession')}</span>
             </button>
             <button className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-primary-500 dark:hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
               <MessageSquare className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">New Discussion</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.newDiscussion')}</span>
             </button>
             <button className="flex flex-col items-center justify-center p-4 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-primary-500 dark:hover:border-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
               <Users className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Invite Students</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('dashboard.inviteStudents')}</span>
             </button>
           </div>
         </div>

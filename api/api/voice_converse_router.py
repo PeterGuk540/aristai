@@ -80,34 +80,52 @@ class ConverseResponse(BaseModel):
     suggestions: Optional[List[str]] = None
 
 
-# Navigation intent patterns - expanded for better coverage
+# Navigation intent patterns - expanded for better coverage (English + Spanish)
 NAVIGATION_PATTERNS = {
-    # Courses
+    # Courses - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(courses?|course list|my courses)\b': '/courses',
     r'\bcourses?\s*page\b': '/courses',
-    # Sessions
+    # Courses - Spanish
+    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(los\s+)?(cursos?|lista de cursos|mis cursos)\b': '/courses',
+    r'\bpágina\s+de\s+cursos?\b': '/courses',
+    # Sessions - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(sessions?|session list|class)\b': '/sessions',
     r'\bsessions?\s*page\b': '/sessions',
-    # Forum
+    # Sessions - Spanish
+    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(las\s+)?(sesiones?|lista de sesiones|clase)\b': '/sessions',
+    r'\bpágina\s+de\s+sesiones?\b': '/sessions',
+    # Forum - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(forum|discussion|discussions|posts)\b': '/forum',
     r'\bforum\s*page\b': '/forum',
-    # Console
+    # Forum - Spanish
+    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(el\s+)?(foro|discusión|discusiones|publicaciones)\b': '/forum',
+    r'\bpágina\s+del?\s+foro\b': '/forum',
+    # Console - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(console|instructor console|control panel)\b': '/console',
     r'\bconsole\s*page\b': '/console',
-    # Reports
+    # Console - Spanish
+    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(la\s+)?(consola|consola del instructor|panel de control)\b': '/console',
+    r'\bpágina\s+de\s+(la\s+)?consola\b': '/console',
+    # Reports - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(reports?|report page|analytics)\b': '/reports',
     r'\breports?\s*page\b': '/reports',
-    # Dashboard
+    # Reports - Spanish
+    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(los\s+)?(reportes?|informes?|página de reportes|analíticas?)\b': '/reports',
+    r'\bpágina\s+de\s+reportes?\b': '/reports',
+    # Dashboard - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(dashboard|home|main)\b': '/dashboard',
     r'\bdashboard\s*page\b': '/dashboard',
+    # Dashboard - Spanish
+    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(el\s+)?(tablero|inicio|principal)\b': '/dashboard',
+    r'\bpágina\s+(de\s+)?inicio\b': '/dashboard',
 }
 
-# Action intent patterns - expanded for better voice command coverage
+# Action intent patterns - expanded for better voice command coverage (English + Spanish)
 # IMPORTANT: Specific domain actions MUST come BEFORE generic UI actions
 # because detect_action_intent returns the first match
 ACTION_PATTERNS = {
     # === SPECIFIC DOMAIN ACTIONS (check these FIRST) ===
-    # Course actions
+    # Course actions - English
     'create_course': [
         r'\bcreate\s+(a\s+)?(new\s+)?course\b',
         r'\bmake\s+(a\s+)?(new\s+)?course\b',
@@ -115,6 +133,12 @@ ACTION_PATTERNS = {
         r'\bnew\s+course\b',
         r'\bset\s*up\s+(a\s+)?course\b',
         r'\bstart\s+(a\s+)?new\s+course\b',
+        # Spanish
+        r'\bcrear\s+(un\s+)?(nuevo\s+)?curso\b',
+        r'\bhacer\s+(un\s+)?(nuevo\s+)?curso\b',
+        r'\bañadir\s+(un\s+)?(nuevo\s+)?curso\b',
+        r'\bnuevo\s+curso\b',
+        r'\bconfigurar\s+(un\s+)?curso\b',
     ],
     'list_courses': [
         r'\b(list|show|get|what are|display|see)\s+(all\s+)?(my\s+)?courses\b',
@@ -122,8 +146,14 @@ ACTION_PATTERNS = {
         r'\bcourse list\b',
         r'\bwhat courses\b',
         r'\bhow many courses\b',
+        # Spanish
+        r'\b(listar|mostrar|ver|cuáles son)\s+(todos\s+)?(mis\s+)?cursos\b',
+        r'\bmis cursos\b',
+        r'\blista de cursos\b',
+        r'\bqué cursos\b',
+        r'\bcuántos cursos\b',
     ],
-    # Session actions
+    # Session actions - English + Spanish
     'create_session': [
         r'\bcreate\s+(a\s+)?(new\s+)?session\b',
         r'\bmake\s+(a\s+)?(new\s+)?session\b',
@@ -131,6 +161,12 @@ ACTION_PATTERNS = {
         r'\bnew\s+session\b',
         r'\bschedule\s+(a\s+)?session\b',
         r'\bset\s*up\s+(a\s+)?session\b',
+        # Spanish
+        r'\bcrear\s+(una\s+)?(nueva\s+)?sesión\b',
+        r'\bhacer\s+(una\s+)?(nueva\s+)?sesión\b',
+        r'\bañadir\s+(una\s+)?(nueva\s+)?sesión\b',
+        r'\bnueva\s+sesión\b',
+        r'\bprogramar\s+(una\s+)?sesión\b',
     ],
     'go_live': [
         r'\bgo\s+live\b',
@@ -139,6 +175,11 @@ ACTION_PATTERNS = {
         r'\blaunch\s+(the\s+)?session\b',
         r'\bmake\s+(the\s+)?session\s+live\b',
         r'\bactivate\s+(the\s+)?session\b',
+        # Spanish
+        r'\b(iniciar|comenzar|empezar)\s+(la\s+)?sesión(\s+en\s+vivo)?\b',
+        r'\bponer\s+(la\s+)?sesión\s+en\s+vivo\b',
+        r'\bactivar\s+(la\s+)?sesión\b',
+        r'\ben\s+vivo\b',
     ],
     'end_session': [
         r'\bend\s+(the\s+)?(live\s+)?session\b',
@@ -146,8 +187,12 @@ ACTION_PATTERNS = {
         r'\bclose\s+(the\s+)?session\b',
         r'\bfinish\s+(the\s+)?session\b',
         r'\bterminate\s+(the\s+)?session\b',
+        # Spanish
+        r'\b(terminar|finalizar|cerrar)\s+(la\s+)?sesión\b',
+        r'\bdetener\s+(la\s+)?sesión\b',
+        r'\bacabar\s+(la\s+)?sesión\b',
     ],
-    # Materials actions
+    # Materials actions - English + Spanish
     'view_materials': [
         r'\b(view|show|open|see)\s+(the\s+)?(course\s+)?materials?\b',
         r'\bmaterials?\s+(tab|page|section)\b',
@@ -155,8 +200,14 @@ ACTION_PATTERNS = {
         r'\bshow\s+(me\s+)?(the\s+)?materials?\b',
         r'\b(view|see)\s+(the\s+)?(uploaded\s+)?(files?|documents?|readings?)\b',
         r'\bcourse\s+(files?|documents?|readings?)\b',
+        # Spanish
+        r'\b(ver|mostrar|abrir)\s+(los\s+)?materiales?\b',
+        r'\bmateriales?\s+(pestaña|página|sección)\b',
+        r'\b(ir a|abrir)\s+(los\s+)?materiales?\b',
+        r'\bmuéstrame\s+(los\s+)?materiales?\b',
+        r'\b(ver|mostrar)\s+(los\s+)?(archivos?|documentos?|lecturas?)\b',
     ],
-    # Copilot actions
+    # Copilot actions - English + Spanish
     'start_copilot': [
         r'\bstart\s+(the\s+)?copilot\b',
         r'\bactivate\s+(the\s+)?copilot\b',
@@ -165,6 +216,11 @@ ACTION_PATTERNS = {
         r'\blaunch\s+(the\s+)?copilot\b',
         r'\bcopilot\s+on\b',
         r'\bbegin\s+(the\s+)?copilot\b',
+        # Spanish
+        r'\b(iniciar|activar|encender)\s+(el\s+)?copilot\b',
+        r'\bhabilitar\s+(el\s+)?copilot\b',
+        r'\bcopilot\s+(encendido|activado)\b',
+        r'\b(iniciar|activar)\s+(el\s+)?asistente\b',
     ],
     'stop_copilot': [
         r'\bstop\s+(the\s+)?copilot\b',
@@ -174,6 +230,11 @@ ACTION_PATTERNS = {
         r'\bcopilot\s+off\b',
         r'\bend\s+(the\s+)?copilot\b',
         r'\bpause\s+(the\s+)?copilot\b',
+        # Spanish
+        r'\b(detener|desactivar|apagar)\s+(el\s+)?copilot\b',
+        r'\bdeshabilitar\s+(el\s+)?copilot\b',
+        r'\bcopilot\s+(apagado|desactivado)\b',
+        r'\bpausar\s+(el\s+)?copilot\b',
     ],
     'refresh_interventions': [
         r'\brefresh\s+(the\s+)?interventions?\b',
@@ -183,8 +244,13 @@ ACTION_PATTERNS = {
         r'\bfetch\s+(the\s+)?interventions?\b',
         r'\bcheck\s+(for\s+)?(new\s+)?interventions?\b',
         r'\binterventions?\s+refresh\b',
+        # Spanish
+        r'\b(actualizar|refrescar)\s+(las\s+)?intervenciones?\b',
+        r'\brecargar\s+(las\s+)?intervenciones?\b',
+        r'\bobtener\s+(nuevas?\s+)?intervenciones?\b',
+        r'\bver\s+(las\s+)?intervenciones?\b',
     ],
-    # Session status management
+    # Session status management - English + Spanish
     'set_session_draft': [
         r'\bset\s+(to\s+)?draft\b',
         r'\b(change|switch)\s+(to\s+)?draft\b',
@@ -192,6 +258,10 @@ ACTION_PATTERNS = {
         r'\bmake\s+(it\s+)?draft\b',
         r'\brevert\s+to\s+draft\b',
         r'\bback\s+to\s+draft\b',
+        # Spanish
+        r'\bponer\s+(en\s+)?borrador\b',
+        r'\b(cambiar|pasar)\s+(a\s+)?borrador\b',
+        r'\bvolver\s+a\s+borrador\b',
     ],
     'set_session_live': [
         r'\bgo\s+live\b',
@@ -200,6 +270,10 @@ ACTION_PATTERNS = {
         r'\bstart\s+(the\s+)?session\b',
         r'\bmake\s+(it\s+)?live\b',
         r'\blaunch\s+(the\s+)?session\b',
+        # Spanish
+        r'\bponer\s+en\s+vivo\b',
+        r'\b(cambiar|pasar)\s+a\s+en\s+vivo\b',
+        r'\bactivar\s+(la\s+)?sesión\b',
     ],
     'set_session_completed': [
         r'\bcomplete(\s+session)?\b',
@@ -208,18 +282,31 @@ ACTION_PATTERNS = {
         r'\bend\s+(the\s+)?session\b',
         r'\bfinish\s+(the\s+)?session\b',
         r'\bmark\s+(as\s+)?complete(d)?\b',
+        # Spanish
+        r'\bcompletar(\s+sesión)?\b',
+        r'\b(marcar|poner)\s+(como\s+)?completad[oa]\b',
+        r'\bterminar\s+(la\s+)?sesión\b',
+        r'\bfinalizar\s+(la\s+)?sesión\b',
     ],
     'schedule_session': [
         r'\bschedule(\s+session)?\b',
         r'\bset\s+(to\s+)?schedule(d)?\b',
         r'\b(change|switch)\s+(to\s+)?schedule(d)?\b',
+        # Spanish
+        r'\bprogramar(\s+sesión)?\b',
+        r'\bagendar(\s+sesión)?\b',
+        r'\b(poner|marcar)\s+(como\s+)?programad[oa]\b',
     ],
-    # Report actions
+    # Report actions - English + Spanish
     'refresh_report': [
         r'\brefresh\s+(the\s+)?report\b',
         r'\breload\s+(the\s+)?report\b',
         r'\bupdate\s+(the\s+)?report\b',
         r'\bget\s+(the\s+)?(latest|new)\s+report\b',
+        # Spanish
+        r'\b(actualizar|refrescar)\s+(el\s+)?reporte\b',
+        r'\brecargar\s+(el\s+)?reporte\b',
+        r'\b(actualizar|refrescar)\s+(el\s+)?informe\b',
     ],
     'regenerate_report': [
         r'\bregenerate\s+(the\s+)?report\b',
@@ -227,6 +314,11 @@ ACTION_PATTERNS = {
         r'\bcreate\s+(a\s+)?(new\s+)?report\b',
         r'\brebuild\s+(the\s+)?report\b',
         r'\bredo\s+(the\s+)?report\b',
+        # Spanish
+        r'\bregenerar\s+(el\s+)?reporte\b',
+        r'\bgenerar\s+(un\s+)?(nuevo\s+)?reporte\b',
+        r'\bcrear\s+(un\s+)?(nuevo\s+)?reporte\b',
+        r'\brehacer\s+(el\s+)?reporte\b',
     ],
     # Theme and user menu actions
     'toggle_theme': [

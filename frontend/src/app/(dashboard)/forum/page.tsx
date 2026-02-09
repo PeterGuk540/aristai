@@ -17,6 +17,7 @@ import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, Session, Post, Case } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 import {
   Button,
   Card,
@@ -48,6 +49,7 @@ interface PostWithReplies extends Post {
 
 export default function ForumPage() {
   const { currentUser: user, isInstructor } = useUser();
+  const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -465,19 +467,19 @@ export default function ForumPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Discussion Forum</h1>
-          <p className="text-gray-600">Participate in live session discussions</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('forum.title')}</h1>
+          <p className="text-gray-600">{t('forum.subtitle')}</p>
         </div>
         <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId} data-voice-id="refresh">
           <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
+          {t('common.refresh')}
         </Button>
       </div>
 
       {/* Course & Session Selector */}
       <div className="grid md:grid-cols-2 gap-4 mb-6">
         <Select
-          label="Select Course"
+          label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
           onChange={(e) => setSelectedCourseId(Number(e.target.value))}
           data-voice-id="select-course"
@@ -519,8 +521,8 @@ export default function ForumPage() {
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
-            <TabsTrigger value="cases">Case Studies</TabsTrigger>
-            <TabsTrigger value="discussion">Discussion ({posts.length})</TabsTrigger>
+            <TabsTrigger value="cases">{t('forum.cases')}</TabsTrigger>
+            <TabsTrigger value="discussion">{t('forum.discussion')} ({posts.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="cases">

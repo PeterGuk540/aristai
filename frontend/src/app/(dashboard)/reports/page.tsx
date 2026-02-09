@@ -21,6 +21,7 @@ import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, Session, Report, ReportJSON } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 import {
   Button,
   Card,
@@ -37,6 +38,7 @@ import {
 
 export default function ReportsPage() {
   const { isInstructor, currentUser } = useUser();
+  const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -763,15 +765,15 @@ export default function ReportsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Session Reports</h1>
-          <p className="text-gray-600">View and generate session analysis reports</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('reports.title')}</h1>
+          <p className="text-gray-600">{t('reports.subtitle')}</p>
         </div>
       </div>
 
       {/* Course & Session Selector */}
       <div className="grid md:grid-cols-2 gap-4 mb-6">
         <Select
-          label="Select Course"
+          label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
           onChange={(e) => setSelectedCourseId(Number(e.target.value))}
           data-voice-id="select-course"
@@ -804,20 +806,20 @@ export default function ReportsPage() {
         <Card>
           <CardContent className="py-8 text-center text-gray-500">
             <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p>Select a session to view or generate a report.</p>
+            <p>{t('reports.generateFirst')}</p>
           </CardContent>
         </Card>
       ) : loading ? (
-        <div className="text-center py-8 text-gray-500">Loading report...</div>
+        <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
       ) : !report ? (
         <Card>
           <CardContent className="py-8 text-center">
             <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p className="text-gray-500 mb-4">No report found for this session.</p>
+            <p className="text-gray-500 mb-4">{t('reports.noReport')}</p>
             {isInstructor && (
               <Button onClick={handleGenerateReport} disabled={generating} data-voice-id="generate-report">
                 <Sparkles className="h-4 w-4 mr-2" />
-                {generating ? 'Generating...' : 'Generate Report'}
+                {generating ? t('common.loading') : t('reports.generateReport')}
               </Button>
             )}
           </CardContent>
@@ -839,12 +841,12 @@ export default function ReportsPage() {
                 <div className="flex gap-2">
                   <Button onClick={fetchReport} variant="outline" size="sm" data-voice-id="refresh-report">
                     <RefreshCw className="h-4 w-4 mr-2" />
-                    Refresh
+                    {t('reports.refreshReport')}
                   </Button>
                   {isInstructor && (
                     <Button onClick={handleGenerateReport} size="sm" disabled={generating} data-voice-id="regenerate-report">
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Regenerate
+                      {t('reports.regenerateReport')}
                     </Button>
                   )}
                 </div>
@@ -856,9 +858,9 @@ export default function ReportsPage() {
           {isInstructor ? (
             <Tabs defaultValue="summary">
               <TabsList>
-                <TabsTrigger value="summary">Summary</TabsTrigger>
-                <TabsTrigger value="participation">Participation</TabsTrigger>
-                <TabsTrigger value="scoring">Scoring</TabsTrigger>
+                <TabsTrigger value="summary">{t('reports.summary')}</TabsTrigger>
+                <TabsTrigger value="participation">{t('reports.participation')}</TabsTrigger>
+                <TabsTrigger value="scoring">{t('reports.answerScores')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="summary">{renderSummary()}</TabsContent>

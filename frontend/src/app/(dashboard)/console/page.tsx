@@ -22,6 +22,7 @@ import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, Session, Intervention, PollResults, User } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 import {
   Button,
   Card,
@@ -37,10 +38,10 @@ import {
   TabsTrigger,
   TabsContent,
 } from '@/components/ui';
-// Import the new VoiceTabContent component
 
 export default function ConsolePage() {
   const { isInstructor, isAdmin, currentUser } = useUser();
+  const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -526,7 +527,7 @@ export default function ConsolePage() {
         <Card>
           <CardContent className="py-8 text-center text-gray-500">
             <Bot className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p>The Instructor Console is only available to instructors.</p>
+            <p>{t('errors.forbidden')}</p>
           </CardContent>
         </Card>
       </div>
@@ -537,15 +538,15 @@ export default function ConsolePage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Instructor Console</h1>
-          <p className="text-gray-600">AI copilot and live session tools</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('console.title')}</h1>
+          <p className="text-gray-600">{t('console.subtitle')}</p>
         </div>
       </div>
 
       {/* Course & Session Selector */}
       <div className="grid md:grid-cols-2 gap-4 mb-6">
         <Select
-          label="Select Course"
+          label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
           onChange={(e) => setSelectedCourseId(Number(e.target.value))}
           data-voice-id="select-course"
@@ -577,17 +578,17 @@ export default function ConsolePage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="copilot" disabled={!selectedSessionId}>
-            AI Copilot
+            {t('console.copilot')}
           </TabsTrigger>
           <TabsTrigger value="polls" disabled={!selectedSessionId}>
-            Polls
+            {t('console.polls')}
           </TabsTrigger>
           <TabsTrigger value="cases" disabled={!selectedSessionId}>
-            Post Case
+            {t('console.postCase')}
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="requests">
-              Instructor Requests
+              {t('console.instructorRequests')}
               {instructorRequests.length > 0 && (
                 <Badge variant="error" className="ml-2">{instructorRequests.length}</Badge>
               )}
@@ -596,7 +597,7 @@ export default function ConsolePage() {
           {isAdmin && (
             <TabsTrigger value="roster">
               <FileSpreadsheet className="h-4 w-4 mr-1" />
-              Roster Upload
+              {t('console.roster')}
             </TabsTrigger>
           )}
         </TabsList>
@@ -639,7 +640,7 @@ export default function ConsolePage() {
                     {!copilotActive ? (
                       <Button onClick={handleStartCopilot} className="w-full" data-voice-id="start-copilot">
                         <Play className="h-4 w-4 mr-2" />
-                        Start Copilot
+                        {t('console.startCopilot')}
                       </Button>
                     ) : (
                       <Button
@@ -649,7 +650,7 @@ export default function ConsolePage() {
                         data-voice-id="stop-copilot"
                       >
                         <Square className="h-4 w-4 mr-2" />
-                        Stop Copilot
+                        {t('console.stopCopilot')}
                       </Button>
                     )}
 
@@ -660,7 +661,7 @@ export default function ConsolePage() {
                       data-voice-id="refresh-interventions"
                     >
                       <RefreshCw className="h-4 w-4 mr-2" />
-                      Refresh Interventions
+                      {t('console.refreshInterventions')}
                     </Button>
                   </div>
 

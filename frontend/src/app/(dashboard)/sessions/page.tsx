@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, Session, SessionStatus } from '@/types';
 import { formatTimestamp, getStatusColor } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 import {
   Button,
   Card,
@@ -33,6 +34,7 @@ const statusIcons: Record<SessionStatus, any> = {
 export default function SessionsPage() {
   const { isInstructor, currentUser } = useUser();
   const searchParams = useSearchParams();
+  const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -158,7 +160,7 @@ export default function SessionsPage() {
     if (!plan) {
       return (
         <p className="text-gray-500 italic">
-          No session plan available. This session may have been created manually.
+          {t('sessions.noPlanAvailable')}
         </p>
       );
     }
@@ -167,7 +169,7 @@ export default function SessionsPage() {
       <div className="space-y-4">
         {plan.topics && plan.topics.length > 0 && (
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Topics</h4>
+            <h4 className="font-medium text-gray-900 mb-2">{t('sessions.topics')}</h4>
             <ul className="text-sm text-gray-600 space-y-1">
               {plan.topics.map((topic, i) => (
                 <li key={i} className="flex items-start gap-2">
@@ -181,7 +183,7 @@ export default function SessionsPage() {
 
         {plan.goals && (
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Goals</h4>
+            <h4 className="font-medium text-gray-900 mb-2">{t('sessions.goals')}</h4>
             <ul className="text-sm text-gray-600 space-y-1">
               {(Array.isArray(plan.goals) ? plan.goals : [plan.goals]).map((goal, i) => (
                 <li key={i} className="flex items-start gap-2">
@@ -195,7 +197,7 @@ export default function SessionsPage() {
 
         {plan.key_concepts && plan.key_concepts.length > 0 && (
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Key Concepts</h4>
+            <h4 className="font-medium text-gray-900 mb-2">{t('sessions.keyConcepts')}</h4>
             <div className="flex flex-wrap gap-2">
               {plan.key_concepts.map((concept, i) => (
                 <Badge key={i} variant="info">
@@ -208,7 +210,7 @@ export default function SessionsPage() {
 
         {plan.case && (
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Case Study</h4>
+            <h4 className="font-medium text-gray-900 mb-2">{t('sessions.caseStudy')}</h4>
             <div className="bg-blue-50 p-3 rounded-lg text-sm">
               {typeof plan.case === 'string' ? (
                 <p>{plan.case}</p>
@@ -228,7 +230,7 @@ export default function SessionsPage() {
 
         {plan.discussion_prompts && plan.discussion_prompts.length > 0 && (
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Discussion Prompts</h4>
+            <h4 className="font-medium text-gray-900 mb-2">{t('sessions.discussionPrompts')}</h4>
             <ol className="text-sm text-gray-600 space-y-2 list-decimal list-inside">
               {plan.discussion_prompts.map((prompt, i) => (
                 <li key={i}>{prompt}</li>
@@ -246,15 +248,15 @@ export default function SessionsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Session Management</h1>
-          <p className="text-gray-600">View and manage session plans</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('sessions.title')}</h1>
+          <p className="text-gray-600">{t('sessions.subtitle')}</p>
         </div>
       </div>
 
       {/* Course Selector */}
       <div className="mb-6">
         <Select
-          label="Select Course"
+          label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
           onChange={(e) => setSelectedCourseId(Number(e.target.value))}
           data-voice-id="select-course"
@@ -271,25 +273,25 @@ export default function SessionsPage() {
       {selectedCourseId && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
-            <TabsTrigger value="sessions">View Sessions</TabsTrigger>
+            <TabsTrigger value="sessions">{t('sessions.viewSessions')}</TabsTrigger>
             <TabsTrigger value="materials">
               <FileText className="w-4 h-4 mr-1" />
-              Materials
+              {t('sessions.materials')}
             </TabsTrigger>
-            {isInstructor && <TabsTrigger value="create">Create Session</TabsTrigger>}
-            {isInstructor && <TabsTrigger value="manage">Manage Status</TabsTrigger>}
+            {isInstructor && <TabsTrigger value="create">{t('sessions.createSession')}</TabsTrigger>}
+            {isInstructor && <TabsTrigger value="manage">{t('sessions.manageStatus')}</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="sessions">
             {loading ? (
-              <div className="text-center py-8 text-gray-500">Loading sessions...</div>
+              <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
             ) : sessions.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-gray-500">
                   <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>No sessions found for this course.</p>
+                  <p>{t('sessions.noSessions')}</p>
                   <p className="text-sm mt-2">
-                    Create a session or generate plans from the Courses page.
+                    {t('sessions.createOrGenerate')}
                   </p>
                 </CardContent>
               </Card>
@@ -370,7 +372,7 @@ export default function SessionsPage() {
                   ) : (
                     <Card>
                       <CardContent className="py-8 text-center text-gray-500">
-                        Select a session to view its details
+                        {t('sessions.selectSession')}
                       </CardContent>
                     </Card>
                   )}
@@ -409,12 +411,12 @@ export default function SessionsPage() {
             <TabsContent value="create">
               <Card>
                 <CardHeader>
-                  <CardTitle>Create New Session</CardTitle>
+                  <CardTitle>{t('sessions.createNew')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Input
-                    label="Session Title"
-                    placeholder="e.g., Week 1: Introduction to ML"
+                    label={t('sessions.sessionTitle')}
+                    placeholder={t('sessions.sessionTitlePlaceholder')}
                     value={newSessionTitle}
                     onChange={(e) => setNewSessionTitle(e.target.value)}
                   />
@@ -423,7 +425,7 @@ export default function SessionsPage() {
                     disabled={creating || !newSessionTitle.trim()}
                     data-voice-id="create-session"
                   >
-                    Create Session
+                    {t('sessions.createSession')}
                   </Button>
                 </CardContent>
               </Card>
@@ -434,7 +436,7 @@ export default function SessionsPage() {
             <TabsContent value="manage">
               <Card>
                 <CardHeader>
-                  <CardTitle>Session Status Control</CardTitle>
+                  <CardTitle>{t('sessions.statusControl')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {selectedSession ? (
@@ -450,7 +452,7 @@ export default function SessionsPage() {
                               : 'default'
                           }
                         >
-                          {selectedSession.status.toUpperCase()}
+                          {t(`sessions.status.${selectedSession.status}`)}
                         </Badge>
                       </div>
 
@@ -462,7 +464,7 @@ export default function SessionsPage() {
                             onClick={() => handleStatusChange(selectedSession.id, 'draft')}
                             data-voice-id="set-to-draft"
                           >
-                            Set to Draft
+                            {t('sessions.setToDraft')}
                           </Button>
                         )}
                         {selectedSession.status === 'draft' && (
@@ -472,7 +474,7 @@ export default function SessionsPage() {
                             onClick={() => handleStatusChange(selectedSession.id, 'scheduled')}
                             data-voice-id="schedule-session"
                           >
-                            Schedule
+                            {t('sessions.schedule')}
                           </Button>
                         )}
                         {(selectedSession.status === 'draft' ||
@@ -483,7 +485,7 @@ export default function SessionsPage() {
                             data-voice-id="go-live"
                           >
                             <Play className="h-4 w-4 mr-2" />
-                            Go Live
+                            {t('sessions.goLive')}
                           </Button>
                         )}
                         {selectedSession.status === 'live' && (
@@ -494,13 +496,13 @@ export default function SessionsPage() {
                             data-voice-id="complete-session"
                           >
                             <CheckCircle className="h-4 w-4 mr-2" />
-                            Complete
+                            {t('sessions.complete')}
                           </Button>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <p className="text-gray-500">Select a session from the list to manage its status.</p>
+                    <p className="text-gray-500">{t('sessions.selectSession')}</p>
                   )}
                 </CardContent>
               </Card>

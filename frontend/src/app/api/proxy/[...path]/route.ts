@@ -35,13 +35,25 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
   const headers = new Headers(request.headers);
   headers.delete('host');
 
-  // Read body as text for methods that have a body (fixes Node.js 18+ duplex requirement)
-  let body: string | undefined;
+  // Handle body for methods that have one (fixes Node.js 18+ duplex requirement)
+  let body: BodyInit | undefined;
   if (request.method !== 'GET' && request.method !== 'HEAD') {
-    try {
-      body = await request.text();
-    } catch {
-      body = undefined;
+    const contentType = request.headers.get('content-type') || '';
+
+    // For multipart/form-data (file uploads), pass raw bytes to preserve binary data
+    if (contentType.includes('multipart/form-data')) {
+      try {
+        body = await request.arrayBuffer();
+      } catch {
+        body = undefined;
+      }
+    } else {
+      // For JSON and other text content, read as text
+      try {
+        body = await request.text();
+      } catch {
+        body = undefined;
+      }
     }
   }
 

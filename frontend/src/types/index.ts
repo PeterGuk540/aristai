@@ -36,6 +36,8 @@ export interface SessionPlan {
   discussion_prompts?: string[];
   checkpoints?: string[];
   flow?: string[];
+  is_materials_session?: boolean;
+  description?: string;
 }
 
 export interface Session {

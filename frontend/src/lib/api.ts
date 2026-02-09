@@ -263,6 +263,89 @@ export const api = {
 
     return response.json();
   },
+
+  // Course Materials
+  getCourseMaterials: (courseId: number, sessionId?: number) =>
+    fetchApi<{ materials: any[]; total: number }>(
+      `/courses/${courseId}/materials${sessionId ? `?session_id=${sessionId}` : ''}`
+    ),
+
+  getSessionMaterials: (sessionId: number) =>
+    fetchApi<{ materials: any[]; total: number }>(`/sessions/${sessionId}/materials`),
+
+  getMaterial: (courseId: number, materialId: number) =>
+    fetchApi<any>(`/courses/${courseId}/materials/${materialId}`),
+
+  uploadMaterial: async (
+    courseId: number,
+    file: File,
+    options?: { title?: string; description?: string; sessionId?: number; userId?: number }
+  ) => {
+    const url = `${API_PROXY_BASE}/courses/${courseId}/materials`;
+
+    const googleToken = getGoogleIdToken();
+    const msToken = getMicrosoftIdToken();
+    const idToken = googleToken || msToken || await getIdToken();
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (options?.title) formData.append('title', options.title);
+    if (options?.description) formData.append('description', options.description);
+    if (options?.sessionId) formData.append('session_id', String(options.sessionId));
+    if (options?.userId) formData.append('user_id', String(options.userId));
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      const message = formatApiErrorMessage(error?.detail ?? error);
+      throw new ApiError(response.status, message || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  },
+
+  updateMaterial: (courseId: number, materialId: number, data: { title?: string; description?: string }) =>
+    fetchApi<any>(`/courses/${courseId}/materials/${materialId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  replaceMaterial: async (courseId: number, materialId: number, file: File, userId?: number) => {
+    const url = `${API_PROXY_BASE}/courses/${courseId}/materials/${materialId}/replace`;
+
+    const googleToken = getGoogleIdToken();
+    const msToken = getMicrosoftIdToken();
+    const idToken = googleToken || msToken || await getIdToken();
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (userId) formData.append('user_id', String(userId));
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+      const message = formatApiErrorMessage(error?.detail ?? error);
+      throw new ApiError(response.status, message || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  },
+
+  deleteMaterial: (courseId: number, materialId: number) =>
+    fetchApi<void>(`/courses/${courseId}/materials/${materialId}`, { method: 'DELETE' }),
+
+  getMaterialDownloadUrl: (courseId: number, materialId: number) =>
+    `${API_PROXY_BASE}/courses/${courseId}/materials/${materialId}/download`,
 };
 
 export { ApiError };

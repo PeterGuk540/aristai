@@ -32,6 +32,21 @@ def create_course(course: CourseCreate, db: Session = Depends(get_db)):
 
         db_course = Course(**course.model_dump(), join_code=join_code)
         db.add(db_course)
+        db.flush()  # Get the course ID before commit
+
+        # Auto-create a "Materials" session for course resources
+        from api.models.session import SessionStatus
+        materials_session = SessionModel(
+            course_id=db_course.id,
+            title="Course Materials",
+            status=SessionStatus.completed,  # Always accessible, not live
+            plan_json={
+                "is_materials_session": True,
+                "description": "Repository for course readings, documents, and other materials.",
+            },
+        )
+        db.add(materials_session)
+
         db.commit()
         db.refresh(db_course)
         return db_course

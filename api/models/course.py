@@ -29,6 +29,7 @@ class Course(Base):
     resources = relationship("CourseResource", back_populates="course", cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="course", cascade="all, delete-orphan")
     enrollments = relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
+    materials = relationship("CourseMaterial", back_populates="course", cascade="all, delete-orphan")
 
 
 class CourseResource(Base):

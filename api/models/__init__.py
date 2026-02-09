@@ -8,6 +8,7 @@ from api.models.intervention import Intervention
 from api.models.report import Report
 from api.models.enrollment import Enrollment
 from api.models.voice_audit import VoiceAudit
+from api.models.course_material import CourseMaterial
 
 __all__ = [
     "User",
@@ -22,4 +23,5 @@ __all__ = [
     "Report",
     "Enrollment",
     "VoiceAudit",
+    "CourseMaterial",
 ]

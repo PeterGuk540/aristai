@@ -47,6 +47,7 @@ class Session(Base):
     polls = relationship("Poll", back_populates="session", cascade="all, delete-orphan")
     interventions = relationship("Intervention", back_populates="session", cascade="all, delete-orphan")
     reports = relationship("Report", back_populates="session", cascade="all, delete-orphan")
+    materials = relationship("CourseMaterial", back_populates="session")
 
 
 class Case(Base):

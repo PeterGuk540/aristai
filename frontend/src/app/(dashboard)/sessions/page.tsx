@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight } from 'lucide-react';
+import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, Session, SessionStatus } from '@/types';
@@ -21,6 +21,7 @@ import {
   TabsTrigger,
   TabsContent,
 } from '@/components/ui';
+import MaterialsManager from '@/components/materials/MaterialsManager';
 
 const statusIcons: Record<SessionStatus, any> = {
   draft: FileEdit,
@@ -271,6 +272,10 @@ export default function SessionsPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="sessions">View Sessions</TabsTrigger>
+            <TabsTrigger value="materials">
+              <FileText className="w-4 h-4 mr-1" />
+              Materials
+            </TabsTrigger>
             {isInstructor && <TabsTrigger value="create">Create Session</TabsTrigger>}
             {isInstructor && <TabsTrigger value="manage">Manage Status</TabsTrigger>}
           </TabsList>
@@ -372,6 +377,32 @@ export default function SessionsPage() {
                 </div>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="materials">
+            <div className="space-y-6">
+              {/* Course-wide materials */}
+              <MaterialsManager
+                courseId={selectedCourseId}
+                isInstructor={isInstructor}
+                userId={currentUser?.id}
+              />
+
+              {/* Session-specific materials */}
+              {selectedSession && selectedSession.plan_json?.is_materials_session !== true && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-medium mb-4">
+                    Materials for: {selectedSession.title}
+                  </h3>
+                  <MaterialsManager
+                    courseId={selectedCourseId}
+                    sessionId={selectedSession.id}
+                    isInstructor={isInstructor}
+                    userId={currentUser?.id}
+                  />
+                </div>
+              )}
+            </div>
           </TabsContent>
 
           {isInstructor && (

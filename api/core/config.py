@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     app_name: str = "AristAI"
     debug: bool = False
 
+    # AWS S3 Configuration for Course Materials
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    aws_s3_bucket_name: str = "aristai-course-materials"
+    aws_region: str = "us-east-1"
+    aws_s3_max_file_size_mb: int = 100
+
     # Voice Assistant
     voice_asr_provider: str = "whisper"       # "stub" | "whisper"
     voice_tts_provider: str = "elevenlabs_realtime"       # "stub" | "elevenlabs" | "elevenlabs_realtime" | "elevenlabs_agent"

@@ -1733,7 +1733,8 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                          'si', 'claro', 'publicar', 'enviar', 'adelante', 'hazlo', 'de acuerdo']
         # English + Spanish denial words
         deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind',
-                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo']
+                      'stop', 'quit', 'abort',  # Added stop/quit/abort
+                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo', 'parar', 'detener']
 
         transcript_normalized = normalize_spanish_text(transcript_lower)
         confirmed = any(word in transcript_normalized for word in confirm_words)
@@ -1957,7 +1958,8 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                          'si', 'claro', 'crealo', 'publicar', 'enviar', 'adelante', 'hazlo', 'de acuerdo']
         # English + Spanish denial words
         deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind',
-                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo']
+                      'stop', 'quit', 'abort',  # Added stop/quit/abort
+                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo', 'parar', 'detener']
 
         transcript_normalized = normalize_spanish_text(transcript_lower)
         confirmed = any(word in transcript_normalized for word in confirm_words)
@@ -2101,7 +2103,8 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                          'si', 'claro', 'publicar', 'crealo', 'enviar', 'adelante', 'hazlo', 'de acuerdo']
         # English + Spanish denial words
         deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind',
-                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo']
+                      'stop', 'quit', 'abort',  # Added stop/quit/abort
+                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo', 'parar', 'detener']
 
         transcript_normalized = normalize_spanish_text(transcript_lower)
         confirmed = any(word in transcript_normalized for word in confirm_words)
@@ -2672,12 +2675,15 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             )
 
     # 4. No clear intent - provide helpful fallback instantly (no LLM call)
-    fallback_message = generate_fallback_response(transcript, request.context)
+    fallback_message = generate_fallback_response(transcript, request.context, request.current_page)
+
+    # Get page-specific suggestions instead of generic ones
+    page_suggestions = get_page_suggestions(request.current_page)
 
     return ConverseResponse(
         message=sanitize_speech(fallback_message),
         action=ActionResponse(type='info'),
-        suggestions=["Show my courses", "Go to forum", "Start copilot", "Create a poll"],
+        suggestions=page_suggestions,
     )
 
 
@@ -4816,22 +4822,41 @@ def get_action_suggestions(action: str) -> List[str]:
     return suggestions.get(action, ["What else can I help with?"])
 
 
-def generate_fallback_response(transcript: str, context: Optional[List[str]]) -> str:
-    """Generate a helpful response when intent is unclear"""
-    
-    # Check for greetings
-    greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon']
-    if any(g in transcript.lower() for g in greetings):
-        return "Hello! How can I help you today? You can ask me to show your courses, start a session, or navigate to any page."
-    
-    # Check for thanks
-    thanks = ['thank', 'thanks', 'appreciate']
-    if any(t in transcript.lower() for t in thanks):
+def generate_fallback_response(transcript: str, context: Optional[List[str]], current_page: Optional[str] = None) -> str:
+    """Generate a helpful response when intent is unclear.
+
+    Provides page-specific suggestions based on the user's current location.
+    """
+    # Normalize transcript for matching
+    transcript_lower = normalize_spanish_text(transcript.lower())
+
+    # Check for greetings (English + Spanish)
+    greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon',
+                 'hola', 'buenos dias', 'buenas tardes', 'buenas noches']
+    if any(g in transcript_lower for g in greetings):
+        suggestions = get_page_suggestions(current_page)
+        return f"Hello! How can I help you today? On this page you can: {', '.join(suggestions)}."
+
+    # Check for thanks (English + Spanish)
+    thanks = ['thank', 'thanks', 'appreciate', 'gracias', 'muchas gracias']
+    if any(t in transcript_lower for t in thanks):
         return "You're welcome! Is there anything else I can help you with?"
-    
-    # Check for help
-    if 'help' in transcript.lower():
-        return "I can help you with: navigating pages, listing your courses and sessions, starting the AI copilot, creating polls, and generating reports. What would you like to do?"
-    
-    # Default
-    return f"I heard '{transcript}', but I'm not sure what you'd like me to do. Try saying 'show my courses', 'go to forum', or 'start copilot'."
+
+    # Check for help (English + Spanish)
+    help_words = ['help', 'ayuda', 'ayudame']
+    if any(h in transcript_lower for h in help_words):
+        suggestions = get_page_suggestions(current_page)
+        return f"On this page, you can: {', '.join(suggestions)}. What would you like to do?"
+
+    # Page-specific fallback suggestions
+    page_specific_hints = {
+        '/courses': "Try saying 'create a course', 'show my courses', or 'view materials'.",
+        '/sessions': "Try saying 'create a session', 'go live', or 'select a session'.",
+        '/forum': "Try saying 'post to discussion', 'view posts', or 'switch to case studies'.",
+        '/console': "Try saying 'start copilot', 'create a poll', or 'view roster'.",
+        '/reports': "Try saying 'generate report', 'view participation', or 'check scores'.",
+        '/dashboard': "Try saying 'go to courses', 'go to sessions', or 'go to forum'.",
+    }
+
+    hint = page_specific_hints.get(current_page, "Try saying 'show my courses', 'go to forum', or 'start copilot'.")
+    return f"I heard '{transcript}', but I'm not sure what you'd like me to do. {hint}"

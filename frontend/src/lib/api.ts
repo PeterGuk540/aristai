@@ -124,14 +124,20 @@ export const api = {
     fetchApi<any>('/users/register-or-get', { method: 'POST', body: JSON.stringify(data) }),
 
   // Courses
-  getCourses: () =>
-    fetchApi<any[]>('/courses/'),
+  getCourses: (userId?: number) =>
+    fetchApi<any[]>(userId ? `/courses/?user_id=${userId}` : '/courses/'),
 
   getCourse: (id: number) =>
     fetchApi<any>(`/courses/${id}`),
 
-  createCourse: (data: { title: string; syllabus_text?: string; objectives_json?: string[] }) =>
+  createCourse: (data: { title: string; syllabus_text?: string; objectives_json?: string[]; created_by?: number }) =>
     fetchApi<any>('/courses/', { method: 'POST', body: JSON.stringify(data) }),
+
+  updateCourse: (courseId: number, userId: number, data: { title?: string; syllabus_text?: string; objectives_json?: string[] }) =>
+    fetchApi<any>(`/courses/${courseId}?user_id=${userId}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteCourse: (courseId: number, userId: number) =>
+    fetchApi<void>(`/courses/${courseId}?user_id=${userId}`, { method: 'DELETE' }),
 
   generatePlans: (courseId: number) =>
     fetchApi<any>(`/courses/${courseId}/generate_plans`, { method: 'POST' }),

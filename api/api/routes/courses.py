@@ -12,6 +12,7 @@ from api.models.user import User, UserRole
 from api.models.course_material import CourseMaterial
 from api.schemas.course import (
     CourseCreate,
+    CourseUpdate,
     CourseResponse,
     CourseResourceCreate,
     CourseResourceResponse,
@@ -80,9 +81,106 @@ def get_course(course_id: int, db: Session = Depends(get_db)):
     return course
 
 
+@router.put("/{course_id}", response_model=CourseResponse)
+def update_course(
+    course_id: int,
+    course_update: CourseUpdate,
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Update a course.
+    - Admin: Can update any course
+    - Instructor: Can only update courses they created
+    """
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    # Check permissions
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.is_admin and course.created_by != user_id:
+        raise HTTPException(status_code=403, detail="You don't have permission to edit this course")
+
+    try:
+        # Update only provided fields
+        update_data = course_update.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(course, field, value)
+
+        db.commit()
+        db.refresh(course)
+        return course
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_course(
+    course_id: int,
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a course and all related data (sessions, enrollments, materials, etc.).
+    - Admin: Can delete any course
+    - Instructor: Can only delete courses they created
+    """
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    # Check permissions
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.is_admin and course.created_by != user_id:
+        raise HTTPException(status_code=403, detail="You don't have permission to delete this course")
+
+    try:
+        db.delete(course)
+        db.commit()
+        return None
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
 @router.get("/", response_model=List[CourseResponse])
-def list_courses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """List all courses."""
+def list_courses(
+    skip: int = 0,
+    limit: int = 100,
+    user_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    List courses based on user role:
+    - Admin: See all courses
+    - Instructor: See only courses they created
+    - Student: See only courses they are enrolled in (handled in frontend)
+
+    If user_id is not provided, returns all courses (for backward compatibility).
+    """
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            if user.is_admin:
+                # Admin sees all courses
+                courses = db.query(Course).offset(skip).limit(limit).all()
+            elif user.role == UserRole.instructor:
+                # Instructor sees only their own courses
+                courses = db.query(Course).filter(Course.created_by == user_id).offset(skip).limit(limit).all()
+            else:
+                # Student - return empty, frontend handles enrolled courses separately
+                courses = []
+            return courses
+
+    # Default: return all courses (backward compatibility)
     courses = db.query(Course).offset(skip).limit(limit).all()
     return courses
 

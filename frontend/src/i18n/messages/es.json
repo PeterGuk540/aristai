@@ -77,6 +77,7 @@
     "subtitle": "Crear y administrar cursos",
     "createCourse": "Crear Curso",
     "createNew": "Crear Nuevo Curso",
+    "editCourse": "Editar Curso",
     "myCourses": "Mis Cursos",
     "noCourses": "No se encontraron cursos. ¡Crea uno para comenzar!",
     "noEnrolledCourses": "Aún no estás inscrito en ningún curso.",

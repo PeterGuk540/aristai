@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X } from 'lucide-react';
+import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, EnrolledStudent, User } from '@/types';
@@ -91,13 +91,36 @@ export default function CoursesPage() {
   // Instructor request
   const [requestingInstructor, setRequestingInstructor] = useState(false);
 
+  // Edit/Delete course state
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editSyllabus, setEditSyllabus] = useState('');
+  const [editObjectives, setEditObjectives] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+
+  // Check if user can edit/delete a course
+  const canEditCourse = (course: Course) => {
+    if (!currentUser) return false;
+    if (currentUser.is_admin) return true;
+    if (isInstructor && course.created_by === currentUser.id) return true;
+    return false;
+  };
+
   const fetchCourses = async () => {
     try {
       setLoading(true);
 
-      if (isInstructor) {
-        // Instructors see all courses
-        const data = await api.getCourses();
+      if (currentUser?.is_admin) {
+        // Admin sees all courses
+        const data = await api.getCourses(currentUser.id);
+        setCourses(data);
+        if (data.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(data[0].id);
+        }
+      } else if (isInstructor && currentUser) {
+        // Instructors see only their own courses
+        const data = await api.getCourses(currentUser.id);
         setCourses(data);
         if (data.length > 0 && !selectedCourseId) {
           setSelectedCourseId(data[0].id);
@@ -187,6 +210,7 @@ export default function CoursesPage() {
         title,
         syllabus_text: syllabus,
         objectives_json: objectivesList,
+        created_by: currentUser?.id,
       });
 
       // If a syllabus file was uploaded, save it to the course materials
@@ -327,6 +351,69 @@ export default function CoursesPage() {
       alert(error.message || 'Failed to submit request. Please try again.');
     } finally {
       setRequestingInstructor(false);
+    }
+  };
+
+  const handleStartEdit = (course: Course) => {
+    setEditingCourse(course);
+    setEditTitle(course.title);
+    setEditSyllabus(course.syllabus_text || '');
+    setEditObjectives(course.objectives_json?.join('\n') || '');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCourse(null);
+    setEditTitle('');
+    setEditSyllabus('');
+    setEditObjectives('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingCourse || !currentUser) return;
+
+    setSaving(true);
+    try {
+      const objectivesList = editObjectives
+        .split('\n')
+        .map((o) => o.trim())
+        .filter((o) => o);
+
+      await api.updateCourse(editingCourse.id, currentUser.id, {
+        title: editTitle,
+        syllabus_text: editSyllabus,
+        objectives_json: objectivesList,
+      });
+
+      alert('Course updated successfully!');
+      handleCancelEdit();
+      fetchCourses();
+    } catch (error: any) {
+      console.error('Failed to update course:', error);
+      alert(error.message || 'Failed to update course. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: number) => {
+    if (!currentUser) return;
+
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this course? This will also delete all sessions, enrollments, and materials associated with this course. This action cannot be undone.'
+    );
+
+    if (!confirmed) return;
+
+    setDeleting(courseId);
+    try {
+      await api.deleteCourse(courseId, currentUser.id);
+      alert('Course deleted successfully!');
+      fetchCourses();
+    } catch (error: any) {
+      console.error('Failed to delete course:', error);
+      alert(error.message || 'Failed to delete course. Please try again.');
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -480,23 +567,51 @@ export default function CoursesPage() {
                       <span className="text-xs text-gray-500">
                         Created: {formatTimestamp(course.created_at)}
                       </span>
-                      {isInstructor && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            try {
-                              await api.generatePlans(course.id);
-                              alert('Plan generation started!');
-                            } catch (error) {
-                              alert('Failed to start plan generation');
-                            }
-                          }}
-                        >
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          {t('courses.generatePlans')}
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {canEditCourse(course) && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleStartEdit(course)}
+                              title={t('common.edit')}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteCourse(course.id)}
+                              disabled={deleting === course.id}
+                              title={t('common.delete')}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              {deleting === course.id ? (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </>
+                        )}
+                        {isInstructor && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              try {
+                                await api.generatePlans(course.id);
+                                alert('Plan generation started!');
+                              } catch (error) {
+                                alert('Failed to start plan generation');
+                              }
+                            }}
+                          >
+                            <Sparkles className="h-4 w-4 mr-2" />
+                            {t('courses.generatePlans')}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -910,6 +1025,70 @@ export default function CoursesPage() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Edit Course Modal */}
+      {editingCourse && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {t('courses.editCourse')}
+                </h2>
+                <button
+                  onClick={handleCancelEdit}
+                  className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <Input
+                  label={t('courses.courseTitle')}
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                />
+
+                <Textarea
+                  label={t('courses.syllabus')}
+                  rows={6}
+                  value={editSyllabus}
+                  onChange={(e) => setEditSyllabus(e.target.value)}
+                />
+
+                <Textarea
+                  label={`${t('courses.learningObjectives')} ${t('courses.onePerLine')}`}
+                  rows={4}
+                  value={editObjectives}
+                  onChange={(e) => setEditObjectives(e.target.value)}
+                />
+
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelEdit}
+                    disabled={saving}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    onClick={handleSaveEdit}
+                    disabled={saving || !editTitle.trim()}
+                  >
+                    {saving ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4 mr-2" />
+                    )}
+                    {t('common.save')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

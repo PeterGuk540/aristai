@@ -9,6 +9,13 @@ class CourseCreate(BaseModel):
     title: str
     syllabus_text: Optional[str] = None
     objectives_json: Optional[List[Any]] = None
+    created_by: Optional[int] = None
+
+
+class CourseUpdate(BaseModel):
+    title: Optional[str] = None
+    syllabus_text: Optional[str] = None
+    objectives_json: Optional[List[Any]] = None
 
 
 class CourseResourceCreate(BaseModel):
@@ -35,6 +42,7 @@ class CourseResponse(BaseSchema):
     syllabus_text: Optional[str] = None
     objectives_json: Optional[List[Any]] = None
     join_code: Optional[str] = None
+    created_by: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

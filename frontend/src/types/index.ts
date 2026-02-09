@@ -20,6 +20,7 @@ export interface Course {
   syllabus_text?: string;
   objectives_json?: string[];
   join_code?: string;
+  created_by?: number;
   created_at: string;
   updated_at: string;
 }

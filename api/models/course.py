@@ -22,6 +22,7 @@ class Course(Base):
     syllabus_text = Column(Text, nullable=True)
     objectives_json = Column(JSON, nullable=True)
     join_code = Column(String(20), unique=True, nullable=True, index=True)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -30,6 +31,7 @@ class Course(Base):
     sessions = relationship("Session", back_populates="course", cascade="all, delete-orphan")
     enrollments = relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
     materials = relationship("CourseMaterial", back_populates="course", cascade="all, delete-orphan")
+    creator = relationship("User", foreign_keys=[created_by])
 
 
 class CourseResource(Base):

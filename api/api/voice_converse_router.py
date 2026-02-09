@@ -14,8 +14,24 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Any, Dict, Tuple
 import re
+import unicodedata
 
 from sqlalchemy.orm import Session
+
+
+def normalize_spanish_text(text: str) -> str:
+    """
+    Normalize Spanish text by removing accents and diacritics.
+    This allows voice transcripts (which often lack accents) to match patterns.
+    E.g., "sesión" -> "sesion", "llévame" -> "llevame"
+    """
+    if not text:
+        return text
+    # Normalize to decomposed form (NFD), then remove combining marks
+    normalized = unicodedata.normalize('NFD', text)
+    # Remove combining diacritical marks (accents)
+    without_accents = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
+    return without_accents
 
 from api.core.database import get_db
 from api.models.course import Course
@@ -81,48 +97,52 @@ class ConverseResponse(BaseModel):
 
 
 # Navigation intent patterns - expanded for better coverage (English + Spanish)
+# NOTE: Spanish patterns use non-accented characters because speech-to-text often omits accents.
+# The input text is normalized via normalize_spanish_text() before matching.
 NAVIGATION_PATTERNS = {
     # Courses - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(courses?|course list|my courses)\b': '/courses',
     r'\bcourses?\s*page\b': '/courses',
-    # Courses - Spanish
-    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(los\s+)?(cursos?|lista de cursos|mis cursos)\b': '/courses',
-    r'\bpágina\s+de\s+cursos?\b': '/courses',
+    # Courses - Spanish (non-accented: llevame instead of llévame)
+    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(los\s+)?(cursos?|lista de cursos|mis cursos)\b': '/courses',
+    r'\bpagina\s+de\s+cursos?\b': '/courses',
     # Sessions - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(sessions?|session list|class)\b': '/sessions',
     r'\bsessions?\s*page\b': '/sessions',
-    # Sessions - Spanish
-    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(las\s+)?(sesiones?|lista de sesiones|clase)\b': '/sessions',
-    r'\bpágina\s+de\s+sesiones?\b': '/sessions',
+    # Sessions - Spanish (non-accented: sesion/sesiones instead of sesión/sesiones)
+    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(las\s+)?(sesiones?|lista de sesiones|clase)\b': '/sessions',
+    r'\bpagina\s+de\s+sesiones?\b': '/sessions',
     # Forum - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(forum|discussion|discussions|posts)\b': '/forum',
     r'\bforum\s*page\b': '/forum',
-    # Forum - Spanish
-    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(el\s+)?(foro|discusión|discusiones|publicaciones)\b': '/forum',
-    r'\bpágina\s+del?\s+foro\b': '/forum',
+    # Forum - Spanish (non-accented: discusion instead of discusión)
+    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(el\s+)?(foro|discusion|discusiones|publicaciones)\b': '/forum',
+    r'\bpagina\s+del?\s+foro\b': '/forum',
     # Console - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(console|instructor console|control panel)\b': '/console',
     r'\bconsole\s*page\b': '/console',
     # Console - Spanish
-    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(la\s+)?(consola|consola del instructor|panel de control)\b': '/console',
-    r'\bpágina\s+de\s+(la\s+)?consola\b': '/console',
+    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(la\s+)?(consola|consola del instructor|panel de control)\b': '/console',
+    r'\bpagina\s+de\s+(la\s+)?consola\b': '/console',
     # Reports - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(reports?|report page|analytics)\b': '/reports',
     r'\breports?\s*page\b': '/reports',
-    # Reports - Spanish
-    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(los\s+)?(reportes?|informes?|página de reportes|analíticas?)\b': '/reports',
-    r'\bpágina\s+de\s+reportes?\b': '/reports',
+    # Reports - Spanish (non-accented: analiticas instead of analíticas)
+    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(los\s+)?(reportes?|informes?|pagina de reportes|analiticas?)\b': '/reports',
+    r'\bpagina\s+de\s+reportes?\b': '/reports',
     # Dashboard - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(dashboard|home|main)\b': '/dashboard',
     r'\bdashboard\s*page\b': '/dashboard',
     # Dashboard - Spanish
-    r'\b(ir a|abrir|mostrar|ver|llévame a)\s+(el\s+)?(tablero|inicio|principal)\b': '/dashboard',
-    r'\bpágina\s+(de\s+)?inicio\b': '/dashboard',
+    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(el\s+)?(tablero|inicio|principal)\b': '/dashboard',
+    r'\bpagina\s+(de\s+)?inicio\b': '/dashboard',
 }
 
 # Action intent patterns - expanded for better voice command coverage (English + Spanish)
 # IMPORTANT: Specific domain actions MUST come BEFORE generic UI actions
 # because detect_action_intent returns the first match
+# NOTE: Spanish patterns use non-accented characters because speech-to-text often omits accents.
+# The input text is normalized via normalize_spanish_text() before matching.
 ACTION_PATTERNS = {
     # === SPECIFIC DOMAIN ACTIONS (check these FIRST) ===
     # Course actions - English
@@ -133,10 +153,10 @@ ACTION_PATTERNS = {
         r'\bnew\s+course\b',
         r'\bset\s*up\s+(a\s+)?course\b',
         r'\bstart\s+(a\s+)?new\s+course\b',
-        # Spanish
+        # Spanish (non-accented: anadir instead of añadir)
         r'\bcrear\s+(un\s+)?(nuevo\s+)?curso\b',
         r'\bhacer\s+(un\s+)?(nuevo\s+)?curso\b',
-        r'\bañadir\s+(un\s+)?(nuevo\s+)?curso\b',
+        r'\banadir\s+(un\s+)?(nuevo\s+)?curso\b',
         r'\bnuevo\s+curso\b',
         r'\bconfigurar\s+(un\s+)?curso\b',
     ],
@@ -146,12 +166,12 @@ ACTION_PATTERNS = {
         r'\bcourse list\b',
         r'\bwhat courses\b',
         r'\bhow many courses\b',
-        # Spanish
-        r'\b(listar|mostrar|ver|cuáles son)\s+(todos\s+)?(mis\s+)?cursos\b',
+        # Spanish (non-accented: cuales, que, cuantos)
+        r'\b(listar|mostrar|ver|cuales son)\s+(todos\s+)?(mis\s+)?cursos\b',
         r'\bmis cursos\b',
         r'\blista de cursos\b',
-        r'\bqué cursos\b',
-        r'\bcuántos cursos\b',
+        r'\bque cursos\b',
+        r'\bcuantos cursos\b',
     ],
     # Session actions - English + Spanish
     'create_session': [
@@ -161,12 +181,12 @@ ACTION_PATTERNS = {
         r'\bnew\s+session\b',
         r'\bschedule\s+(a\s+)?session\b',
         r'\bset\s*up\s+(a\s+)?session\b',
-        # Spanish
-        r'\bcrear\s+(una\s+)?(nueva\s+)?sesión\b',
-        r'\bhacer\s+(una\s+)?(nueva\s+)?sesión\b',
-        r'\bañadir\s+(una\s+)?(nueva\s+)?sesión\b',
-        r'\bnueva\s+sesión\b',
-        r'\bprogramar\s+(una\s+)?sesión\b',
+        # Spanish (non-accented: sesion, anadir)
+        r'\bcrear\s+(una\s+)?(nueva\s+)?sesion\b',
+        r'\bhacer\s+(una\s+)?(nueva\s+)?sesion\b',
+        r'\banadir\s+(una\s+)?(nueva\s+)?sesion\b',
+        r'\bnueva\s+sesion\b',
+        r'\bprogramar\s+(una\s+)?sesion\b',
     ],
     'go_live': [
         r'\bgo\s+live\b',
@@ -175,10 +195,10 @@ ACTION_PATTERNS = {
         r'\blaunch\s+(the\s+)?session\b',
         r'\bmake\s+(the\s+)?session\s+live\b',
         r'\bactivate\s+(the\s+)?session\b',
-        # Spanish
-        r'\b(iniciar|comenzar|empezar)\s+(la\s+)?sesión(\s+en\s+vivo)?\b',
-        r'\bponer\s+(la\s+)?sesión\s+en\s+vivo\b',
-        r'\bactivar\s+(la\s+)?sesión\b',
+        # Spanish (non-accented: sesion)
+        r'\b(iniciar|comenzar|empezar)\s+(la\s+)?sesion(\s+en\s+vivo)?\b',
+        r'\bponer\s+(la\s+)?sesion\s+en\s+vivo\b',
+        r'\bactivar\s+(la\s+)?sesion\b',
         r'\ben\s+vivo\b',
     ],
     'end_session': [
@@ -187,10 +207,10 @@ ACTION_PATTERNS = {
         r'\bclose\s+(the\s+)?session\b',
         r'\bfinish\s+(the\s+)?session\b',
         r'\bterminate\s+(the\s+)?session\b',
-        # Spanish
-        r'\b(terminar|finalizar|cerrar)\s+(la\s+)?sesión\b',
-        r'\bdetener\s+(la\s+)?sesión\b',
-        r'\bacabar\s+(la\s+)?sesión\b',
+        # Spanish (non-accented: sesion)
+        r'\b(terminar|finalizar|cerrar)\s+(la\s+)?sesion\b',
+        r'\bdetener\s+(la\s+)?sesion\b',
+        r'\bacabar\s+(la\s+)?sesion\b',
     ],
     # Materials actions - English + Spanish
     'view_materials': [
@@ -200,11 +220,11 @@ ACTION_PATTERNS = {
         r'\bshow\s+(me\s+)?(the\s+)?materials?\b',
         r'\b(view|see)\s+(the\s+)?(uploaded\s+)?(files?|documents?|readings?)\b',
         r'\bcourse\s+(files?|documents?|readings?)\b',
-        # Spanish
+        # Spanish (non-accented: pestana, pagina, seccion, muestrame)
         r'\b(ver|mostrar|abrir)\s+(los\s+)?materiales?\b',
-        r'\bmateriales?\s+(pestaña|página|sección)\b',
+        r'\bmateriales?\s+(pestana|pagina|seccion)\b',
         r'\b(ir a|abrir)\s+(los\s+)?materiales?\b',
-        r'\bmuéstrame\s+(los\s+)?materiales?\b',
+        r'\bmuestrame\s+(los\s+)?materiales?\b',
         r'\b(ver|mostrar)\s+(los\s+)?(archivos?|documentos?|lecturas?)\b',
     ],
     # Copilot actions - English + Spanish
@@ -270,10 +290,10 @@ ACTION_PATTERNS = {
         r'\bstart\s+(the\s+)?session\b',
         r'\bmake\s+(it\s+)?live\b',
         r'\blaunch\s+(the\s+)?session\b',
-        # Spanish
+        # Spanish (non-accented: sesion)
         r'\bponer\s+en\s+vivo\b',
         r'\b(cambiar|pasar)\s+a\s+en\s+vivo\b',
-        r'\bactivar\s+(la\s+)?sesión\b',
+        r'\bactivar\s+(la\s+)?sesion\b',
     ],
     'set_session_completed': [
         r'\bcomplete(\s+session)?\b',
@@ -282,19 +302,19 @@ ACTION_PATTERNS = {
         r'\bend\s+(the\s+)?session\b',
         r'\bfinish\s+(the\s+)?session\b',
         r'\bmark\s+(as\s+)?complete(d)?\b',
-        # Spanish
-        r'\bcompletar(\s+sesión)?\b',
+        # Spanish (non-accented: sesion)
+        r'\bcompletar(\s+sesion)?\b',
         r'\b(marcar|poner)\s+(como\s+)?completad[oa]\b',
-        r'\bterminar\s+(la\s+)?sesión\b',
-        r'\bfinalizar\s+(la\s+)?sesión\b',
+        r'\bterminar\s+(la\s+)?sesion\b',
+        r'\bfinalizar\s+(la\s+)?sesion\b',
     ],
     'schedule_session': [
         r'\bschedule(\s+session)?\b',
         r'\bset\s+(to\s+)?schedule(d)?\b',
         r'\b(change|switch)\s+(to\s+)?schedule(d)?\b',
-        # Spanish
-        r'\bprogramar(\s+sesión)?\b',
-        r'\bagendar(\s+sesión)?\b',
+        # Spanish (non-accented: sesion)
+        r'\bprogramar(\s+sesion)?\b',
+        r'\bagendar(\s+sesion)?\b',
         r'\b(poner|marcar)\s+(como\s+)?programad[oa]\b',
     ],
     # Report actions - English + Spanish
@@ -689,87 +709,126 @@ ACTION_PATTERNS = {
 }
 
 CONFIRMATION_PATTERNS = (
-    r"\b(yes|yeah|yep|confirm|confirmed|approve|approved|proceed|go ahead|do it|sounds good|ok|okay)\b"
+    # English confirmations
+    r"\b(yes|yeah|yep|confirm|confirmed|approve|approved|proceed|go ahead|do it|sounds good|ok|okay|"
+    # Spanish confirmations (non-accented: si instead of sí)
+    r"si|claro|por supuesto|adelante|hazlo|confirmado|confirmar|de acuerdo|esta bien)\b"
 )
 
 
 def detect_navigation_intent(text: str) -> Optional[str]:
-    """Detect if user wants to navigate somewhere"""
-    text_lower = text.lower()
+    """Detect if user wants to navigate somewhere.
+
+    Normalizes text to handle Spanish accents (e.g., sesión -> sesion)
+    since speech-to-text often omits diacritics.
+    """
+    # Normalize to handle both accented and non-accented Spanish
+    text_normalized = normalize_spanish_text(text.lower())
     for pattern, path in NAVIGATION_PATTERNS.items():
-        if re.search(pattern, text_lower):
+        if re.search(pattern, text_normalized):
             return path
     return None
 
 
 def detect_action_intent(text: str) -> Optional[str]:
-    """Detect if user wants to perform an action"""
-    text_lower = text.lower()
+    """Detect if user wants to perform an action.
+
+    Normalizes text to handle Spanish accents (e.g., sesión -> sesion)
+    since speech-to-text often omits diacritics.
+    """
+    # Normalize to handle both accented and non-accented Spanish
+    text_normalized = normalize_spanish_text(text.lower())
     for action, patterns in ACTION_PATTERNS.items():
         for pattern in patterns:
-            if re.search(pattern, text_lower):
+            if re.search(pattern, text_normalized):
                 return action
     return None
 
 
 def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
-    """Extract the target value from a UI interaction command."""
-    text_lower = text.lower().strip()
+    """Extract the target value from a UI interaction command.
+
+    Normalizes text to handle Spanish accents since speech-to-text often omits diacritics.
+    """
+    text_normalized = normalize_spanish_text(text.lower().strip())
     result = {"action": action}
 
     if action == 'ui_select_course':
-        # Extract course name or ordinal
-        # Try to find the course name after "course"
-        match = re.search(r'(course|class)\s+(.+?)(?:\s+please|\s+now|\s*$)', text_lower)
+        # Extract course name or ordinal (English + Spanish)
+        match = re.search(r'(course|class|curso|clase)\s+(.+?)(?:\s+please|\s+now|\s+por favor|\s+ahora|\s*$)', text_normalized)
         if match:
             result["target"] = "select-course"
             result["optionName"] = match.group(2).strip()
-        # Check for ordinal patterns
-        ordinal_match = re.search(r'(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+(course|class)', text_lower)
+        # Check for ordinal patterns (English + Spanish: primero, segundo, tercero, ultimo)
+        ordinal_match = re.search(r'(first|second|third|last|primero?|segundo?|tercero?|ultimo?|\d+(?:st|nd|rd|th)?)\s+(course|class|curso|clase)', text_normalized)
         if ordinal_match:
             result["target"] = "select-course"
             result["optionName"] = ordinal_match.group(1)
 
     elif action == 'ui_select_session':
-        # Extract session name or ordinal
-        match = re.search(r'session\s+(.+?)(?:\s+please|\s+now|\s*$)', text_lower)
+        # Extract session name or ordinal (English + Spanish)
+        match = re.search(r'(session|sesion)\s+(.+?)(?:\s+please|\s+now|\s+por favor|\s+ahora|\s*$)', text_normalized)
         if match:
             result["target"] = "select-session"
             result["optionName"] = match.group(1).strip()
-        # Check for ordinal patterns
-        ordinal_match = re.search(r'(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+session', text_lower)
+        # Check for ordinal patterns (English + Spanish)
+        ordinal_match = re.search(r'(first|second|third|last|primero?|segundo?|tercero?|ultimo?|\d+(?:st|nd|rd|th)?)\s+(session|sesion)', text_normalized)
         if ordinal_match:
             result["target"] = "select-session"
             result["optionName"] = ordinal_match.group(1)
 
     elif action == 'ui_switch_tab':
         # Extract tab name - order matters (longer phrases first)
-        tab_keywords = [
-            'case studies', 'case-studies',  # Two-word tab name - check first
-            'ai copilot', 'ai assistant',  # Multi-word copilot variations
-            'summary', 'participation', 'scoring', 'enrollment', 'create',
-            'manage', 'sessions', 'courses', 'discussion', 'cases',
-            'copilot', 'polls', 'poll', 'requests', 'roster', 'my-performance', 'best-practice'
-        ]
-        for keyword in tab_keywords:
+        # Includes both English and Spanish tab keywords
+        tab_keywords = {
+            # English keywords -> tab value
+            'case studies': 'cases',
+            'case-studies': 'cases',
+            'ai copilot': 'copilot',
+            'ai assistant': 'copilot',
+            # Spanish keywords -> tab value (non-accented: discusion, participacion, etc.)
+            'estudios de caso': 'cases',
+            'casos de estudio': 'cases',
+            'asistente de ia': 'copilot',
+            'asistente ia': 'copilot',
+            'discusion': 'discussion',
+            'participacion': 'participation',
+            'puntuacion': 'scoring',
+            'inscripcion': 'enrollment',
+            'resumen': 'summary',
+            'encuestas': 'polls',
+            'solicitudes': 'requests',
+            'lista': 'roster',
+            # Simple English keywords
+            'summary': 'summary',
+            'participation': 'participation',
+            'scoring': 'scoring',
+            'enrollment': 'enrollment',
+            'create': 'create',
+            'manage': 'manage',
+            'sessions': 'sessions',
+            'courses': 'courses',
+            'discussion': 'discussion',
+            'cases': 'cases',
+            'copilot': 'copilot',
+            'polls': 'polls',
+            'poll': 'polls',
+            'requests': 'requests',
+            'roster': 'roster',
+            'my-performance': 'myperformance',
+            'best-practice': 'bestpractice',
+        }
+        for keyword, tab_value in tab_keywords.items():
             keyword_normalized = keyword.replace('-', ' ')
-            if keyword in text_lower or keyword_normalized in text_lower:
-                # Normalize multi-word tab names to their actual tab values
-                if keyword in ['case studies', 'case-studies']:
-                    tab_value = 'cases'
-                elif keyword in ['ai copilot', 'ai assistant']:
-                    tab_value = 'copilot'
-                elif keyword == 'poll':
-                    tab_value = 'polls'
-                else:
-                    tab_value = keyword.replace('-', '')
+            if keyword in text_normalized or keyword_normalized in text_normalized:
                 result["tabName"] = tab_value
                 result["target"] = f"tab-{tab_value}"
                 break
 
     elif action == 'ui_click_button':
-        # Extract button target
+        # Extract button target (English + Spanish)
         button_mappings = {
+            # English
             'generate report': 'generate-report',
             'regenerate report': 'regenerate-report',
             'refresh': 'refresh',
@@ -786,9 +845,26 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'submit': 'submit-post',
             'create course': 'create-course',
             'create session': 'create-session',
+            # Spanish (non-accented)
+            'generar reporte': 'generate-report',
+            'regenerar reporte': 'regenerate-report',
+            'actualizar': 'refresh',
+            'actualizar reporte': 'refresh-report',
+            'iniciar copilot': 'start-copilot',
+            'detener copilot': 'stop-copilot',
+            'crear encuesta': 'create-poll',
+            'publicar caso': 'post-case',
+            'en vivo': 'go-live',
+            'completar': 'complete-session',
+            'completar sesion': 'complete-session',
+            'inscribir': 'enroll-students',
+            'subir lista': 'upload-roster',
+            'enviar': 'submit-post',
+            'crear curso': 'create-course',
+            'crear sesion': 'create-session',
         }
         for phrase, target in button_mappings.items():
-            if phrase in text_lower:
+            if phrase in text_normalized:
                 result["target"] = target
                 result["buttonLabel"] = phrase
                 break
@@ -797,8 +873,12 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
 
 
 def is_confirmation(text: str) -> bool:
-    """Return True if transcript is a confirmation to proceed."""
-    return bool(re.search(CONFIRMATION_PATTERNS, text.lower()))
+    """Return True if transcript is a confirmation to proceed.
+
+    Normalizes text to handle Spanish accents since speech-to-text often omits diacritics.
+    """
+    text_normalized = normalize_spanish_text(text.lower())
+    return bool(re.search(CONFIRMATION_PATTERNS, text_normalized))
 
 
 def build_confirmation_message(steps: List[Dict[str, Any]]) -> str:
@@ -1210,8 +1290,10 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     if conv_context.state == ConversationState.AWAITING_CONFIRMATION:
         # Check if user confirmed or denied
         confirmed = is_confirmation(transcript)
-        denial_words = ['no', 'nope', 'cancel', 'stop', 'never mind', 'nevermind']
-        denied = any(word in transcript.lower() for word in denial_words)
+        # English + Spanish denial words (non-accented for speech-to-text compatibility)
+        denial_words = ['no', 'nope', 'cancel', 'stop', 'never mind', 'nevermind',
+                        'cancelar', 'parar', 'detener', 'no gracias', 'dejalo']
+        denied = any(word in normalize_spanish_text(transcript.lower()) for word in denial_words)
 
         if confirmed or denied:
             result = conversation_manager.process_confirmation(request.user_id, confirmed)
@@ -1646,11 +1728,16 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         transcript_lower = transcript.lower()
 
         # Check for confirmation or denial
-        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'post it', 'submit', 'go ahead', 'do it']
-        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind']
+        # English + Spanish confirmation words
+        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'post it', 'submit', 'go ahead', 'do it',
+                         'si', 'claro', 'publicar', 'enviar', 'adelante', 'hazlo', 'de acuerdo']
+        # English + Spanish denial words
+        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind',
+                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo']
 
-        confirmed = any(word in transcript_lower for word in confirm_words)
-        denied = any(word in transcript_lower for word in deny_words)
+        transcript_normalized = normalize_spanish_text(transcript_lower)
+        confirmed = any(word in transcript_normalized for word in confirm_words)
+        denied = any(word in transcript_normalized for word in deny_words)
 
         if confirmed and not denied:
             result = conversation_manager.handle_post_submit_response(request.user_id, True)
@@ -1865,11 +1952,16 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         transcript_lower = transcript.lower()
 
         # Check for confirmation or denial
-        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'create it', 'submit', 'go ahead', 'do it', 'post it']
-        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind']
+        # English + Spanish confirmation words
+        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'create it', 'submit', 'go ahead', 'do it', 'post it',
+                         'si', 'claro', 'crealo', 'publicar', 'enviar', 'adelante', 'hazlo', 'de acuerdo']
+        # English + Spanish denial words
+        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind',
+                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo']
 
-        confirmed = any(word in transcript_lower for word in confirm_words)
-        denied = any(word in transcript_lower for word in deny_words)
+        transcript_normalized = normalize_spanish_text(transcript_lower)
+        confirmed = any(word in transcript_normalized for word in confirm_words)
+        denied = any(word in transcript_normalized for word in deny_words)
 
         if confirmed and not denied:
             result = conversation_manager.handle_poll_confirm(request.user_id, True)
@@ -2004,11 +2096,16 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         transcript_lower = transcript.lower()
 
         # Check for confirmation or denial
-        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'post it', 'submit', 'go ahead', 'do it', 'create it']
-        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind']
+        # English + Spanish confirmation words
+        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'post it', 'submit', 'go ahead', 'do it', 'create it',
+                         'si', 'claro', 'publicar', 'crealo', 'enviar', 'adelante', 'hazlo', 'de acuerdo']
+        # English + Spanish denial words
+        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind',
+                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo']
 
-        confirmed = any(word in transcript_lower for word in confirm_words)
-        denied = any(word in transcript_lower for word in deny_words)
+        transcript_normalized = normalize_spanish_text(transcript_lower)
+        confirmed = any(word in transcript_normalized for word in confirm_words)
+        denied = any(word in transcript_normalized for word in deny_words)
 
         if confirmed and not denied:
             result = conversation_manager.handle_case_confirm(request.user_id, True)

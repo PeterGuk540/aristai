@@ -260,7 +260,8 @@
     "profile": "Perfil",
     "settings": "Configuración",
     "account": "Cuenta",
-    "signOut": "Cerrar Sesión"
+    "signOut": "Cerrar Sesión",
+    "platformInstructions": "Instrucciones de la Plataforma"
   },
   "errors": {
     "generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
@@ -268,5 +269,500 @@
     "unauthorized": "No autorizado",
     "forbidden": "Acceso denegado",
     "serverError": "Error del servidor. Por favor, inténtalo más tarde."
+  },
+  "voiceGuide": {
+    "subtitle": "Lista completa de comandos de voz para AristAI",
+    "gotIt": "¡Entendido!",
+    "aiInsights": "¡Nuevo! Información de IA:",
+    "tipClassStatus": "Pregunta \"¿Cómo va la clase?\" para un resumen rápido durante sesiones en vivo",
+    "tipWhoNeedsHelp": "Pregunta \"¿Quién necesita ayuda?\" para identificar estudiantes con dificultades",
+    "tipCopilotSuggestions": "Pregunta \"¿Qué sugirió el copiloto?\" para recomendaciones de enseñanza",
+    "tipSpecificStudent": "Di \"¿Cómo le va a [nombre]?\" para consultar sobre estudiantes específicos",
+    "categories": {
+      "navigation": "Navegación",
+      "courses": "Página de Cursos",
+      "sessions": "Página de Sesiones",
+      "materials": "Materiales",
+      "forum": "Página del Foro",
+      "console": "Página de Consola",
+      "reports": "Página de Reportes",
+      "aiGeneration": "Generación de Contenido IA",
+      "intelligence": "Información de IA",
+      "dropdowns": "Selección de Menús",
+      "forms": "Llenado de Formularios",
+      "theme": "Tema y Cuenta"
+    },
+    "descriptions": {
+      "navigation": "Navegar entre páginas",
+      "courses": "Comandos de gestión de cursos",
+      "sessions": "Comandos de gestión de sesiones",
+      "materials": "Ver materiales y archivos del curso",
+      "forum": "Comandos del foro y discusiones",
+      "console": "Comandos de consola y copiloto",
+      "reports": "Comandos de reportes",
+      "aiGeneration": "Deja que la IA ayude a crear contenido del curso",
+      "intelligence": "Haz preguntas y obtén resúmenes inteligentes",
+      "dropdowns": "Seleccionar elementos de menús desplegables",
+      "forms": "Llenar formularios por voz",
+      "theme": "Comandos de tema y cuenta"
+    },
+    "commands": {
+      "goToCourses": "Navegar a la página de Cursos",
+      "goToSessions": "Navegar a la página de Sesiones",
+      "goToForum": "Navegar a la página del Foro",
+      "goToConsole": "Navegar a la página de Consola (solo instructores)",
+      "goToReports": "Navegar a la página de Reportes",
+      "createCourse": "Iniciar el formulario de creación de curso (la voz te guiará)",
+      "generate": "Cuando te pidan programa u objetivos, di \"generar\" para asistencia de IA",
+      "acceptGenerated": "Aceptar el contenido generado por IA",
+      "declineGenerated": "Rechazar contenido de IA e ingresar manualmente",
+      "selectFirstCourse": "Seleccionar el primer curso de la lista",
+      "manageStatus": "Cambiar a la pestaña de gestión de estado",
+      "viewMaterials": "Cambiar a la pestaña de Materiales para ver/descargar archivos",
+      "goLive": "Poner el estado de la sesión en Vivo",
+      "setToDraft": "Poner el estado de la sesión en Borrador",
+      "completeSession": "Poner el estado de la sesión en Completada",
+      "scheduleSession": "Poner el estado de la sesión en Programada",
+      "showCourseFiles": "Ver documentos y lecturas subidos del curso",
+      "goToCases": "Cambiar a la pestaña de Casos",
+      "goToDiscussion": "Cambiar a la pestaña de Discusión",
+      "postToDiscussion": "Comenzar a crear una nueva publicación de discusión",
+      "postCase": "Comenzar a crear un nuevo caso de estudio",
+      "goToCopilot": "Cambiar a la pestaña de Copiloto IA",
+      "startCopilot": "Iniciar el monitoreo del Copiloto IA",
+      "stopCopilot": "Detener el monitoreo del Copiloto IA",
+      "refreshInterventions": "Actualizar las sugerencias del copiloto",
+      "createPoll": "Comenzar a crear una nueva encuesta",
+      "refreshReport": "Actualizar el reporte actual",
+      "regenerateReport": "Regenerar el reporte de IA",
+      "generateContent": "Al llenar formularios, di \"generar\" para que la IA cree contenido",
+      "acceptAIContent": "Aceptar el contenido generado por IA y continuar",
+      "declineAIContent": "Rechazar contenido de IA e ingresar o editar manualmente",
+      "classStatus": "Obtener un resumen rápido de participación y engagement",
+      "whoNeedsHelp": "Identificar estudiantes que no han participado o tienen dificultades",
+      "misconceptions": "Revisar conceptos erróneos identificados en reportes o por copiloto",
+      "studentScores": "Obtener estadísticas de puntuación del reporte de sesión",
+      "summarizeDiscussion": "Obtener un resumen de lo que discuten los estudiantes",
+      "selectFirst": "Seleccionar el primer elemento",
+      "selectSecond": "Seleccionar el segundo elemento",
+      "selectByName": "Seleccionar elemento por nombre",
+      "cancel": "Cancelar la selección actual",
+      "skip": "Saltar el campo actual",
+      "dictateAnswer": "Dictar texto para el campo actual del formulario",
+      "confirm": "Confirmar o aceptar una solicitud",
+      "decline": "Rechazar o declinar",
+      "finishAdding": "Dejar de agregar más elementos (ej. opciones de encuesta)",
+      "submit": "Enviar el formulario actual",
+      "darkMode": "Cambiar a tema oscuro",
+      "lightMode": "Cambiar a tema claro",
+      "openMenu": "Abrir el menú desplegable de usuario",
+      "viewVoiceGuide": "Abrir esta guía de comandos de voz",
+      "signOut": "Cerrar sesión de la aplicación",
+      "gotIt": "Cerrar ventanas emergentes como esta guía"
+    }
+  },
+  "onboarding": {
+    "hello": "¡Hola, {name}!",
+    "accessAnytime": "Accede a esta guía en cualquier momento desde el menú de usuario → Instrucciones de la Plataforma",
+    "gotIt": "¡Entendido!",
+    "tabs": {
+      "courses": "Cursos",
+      "sessions": "Sesiones",
+      "forum": "Foro",
+      "console": "Consola",
+      "reports": "Reportes",
+      "becomeInstructor": "Ser Instructor"
+    },
+    "admin": {
+      "title": "Bienvenido, Administrador",
+      "subtitle": "Guía completa para administrar AristAI",
+      "courses": {
+        "creating": {
+          "title": "Crear un Curso",
+          "steps": [
+            "Haz clic en \"Crear Curso\" en la página de Cursos",
+            "Ingresa el nombre del curso - esto es requerido",
+            "Para el programa: Di \"generar\" para que la IA cree un programa completo (8-12 semanas)",
+            "Para objetivos: Di \"generar\" para que la IA cree objetivos de aprendizaje (5-7 items)",
+            "Revisa el contenido generado por IA, acepta, edita o dicta el tuyo",
+            "Haz clic en \"Guardar\" - tu curso se crea con un Código de Acceso único",
+            "Comparte el Código de Acceso con los estudiantes para auto-inscripción"
+          ]
+        },
+        "enrolling": {
+          "title": "Inscribir Estudiantes",
+          "steps": [
+            "Opción A: Comparte el Código de Acceso - los estudiantes lo ingresan en su página de Cursos",
+            "Opción B: Ve a Consola → Subir Lista → Sube un archivo CSV (columnas: email, nombre)",
+            "Opción C: Haz clic en \"Gestionar Inscripción\" en cualquier curso para agregar estudiantes individualmente"
+          ]
+        },
+        "generating": {
+          "title": "Generar Planes de Sesión con IA",
+          "steps": [
+            "Abre la página de detalles de tu curso",
+            "Haz clic en el botón \"Generar Planes\"",
+            "La IA analizará tu programa y creará planes de sesión estructurados",
+            "Revisa y edita los planes generados según sea necesario",
+            "Las sesiones aparecerán en la página de Sesiones"
+          ]
+        }
+      },
+      "sessions": {
+        "creating": {
+          "title": "Crear Sesiones con IA",
+          "steps": [
+            "Ve a la página de Sesiones → pestaña Crear",
+            "Ingresa el título de la sesión (tema) y fecha",
+            "Para descripción: Di \"generar\" para plan de sesión con IA",
+            "La IA crea preguntas de discusión y casos de estudio basados en el tema",
+            "Revisa y acepta, o edita según sea necesario"
+          ]
+        },
+        "lifecycle": {
+          "title": "Ciclo de Vida de la Sesión",
+          "steps": [
+            "Borrador: Estado inicial, aún en preparación",
+            "Programada: Lista para comenzar, esperando hora de inicio",
+            "En Vivo: Actualmente activa - los estudiantes pueden participar",
+            "Completada: La sesión ha terminado, lista para reportes"
+          ]
+        },
+        "running": {
+          "title": "Ejecutar una Sesión en Vivo",
+          "steps": [
+            "Selecciona tu sesión y haz clic en \"Iniciar Sesión\" (En Vivo)",
+            "Los estudiantes ahora pueden publicar en el Foro",
+            "Usa el Copiloto IA en la Consola para sugerencias en tiempo real",
+            "Pregunta \"¿Cómo va la clase?\" para actualizaciones de estado",
+            "Cuando termines, haz clic en \"Terminar Sesión\" para completar"
+          ]
+        }
+      },
+      "forum": {
+        "managing": {
+          "title": "Gestionar Discusiones",
+          "steps": [
+            "Selecciona un curso del menú desplegable en la parte superior",
+            "Selecciona una sesión (debe estar En Vivo para discusión activa)",
+            "Publica casos de estudio o preguntas de discusión para los estudiantes",
+            "Ve todas las publicaciones y respuestas de estudiantes en tiempo real"
+          ]
+        },
+        "moderation": {
+          "title": "Herramientas de Moderación",
+          "steps": [
+            "Fijar publicaciones: Haz clic en el icono de pin para mantener publicaciones importantes arriba",
+            "Agregar etiquetas: Categoriza publicaciones como Pregunta, Respuesta, Insight, etc.",
+            "Monitorea participación: Ve qué estudiantes están participando"
+          ]
+        }
+      },
+      "console": {
+        "requests": {
+          "title": "Gestionar Solicitudes de Instructor (Solo Admin)",
+          "steps": [
+            "Ve a Consola → pestaña Solicitudes de Instructor",
+            "Ve todas las solicitudes pendientes de estudiantes que quieren acceso de instructor",
+            "Revisa cada solicitud - ve el nombre y correo del usuario",
+            "Haz clic en \"Aprobar\" para otorgar privilegios de instructor",
+            "Haz clic en \"Rechazar\" para denegar la solicitud",
+            "Los usuarios aprobados pueden crear sus propios cursos inmediatamente"
+          ]
+        },
+        "roster": {
+          "title": "Subir Lista Masiva (Solo Admin)",
+          "steps": [
+            "Ve a Consola → pestaña Subir Lista",
+            "Selecciona el curso donde quieres inscribir estudiantes",
+            "Prepara un archivo CSV con columnas: email, nombre",
+            "Sube el archivo CSV",
+            "Los estudiantes serán inscritos automáticamente (cuentas creadas si es necesario)"
+          ]
+        },
+        "copilot": {
+          "title": "Usar Copiloto IA",
+          "steps": [
+            "Ve a Consola → pestaña Copiloto",
+            "Selecciona una sesión En Vivo del menú desplegable",
+            "Haz clic en \"Iniciar Copiloto\" para comenzar el monitoreo con IA",
+            "Cada 90 segundos, recibirás: resumen de discusión, puntos de confusión, sugerencias de preguntas, ideas de encuestas",
+            "Usa las sugerencias para guiar tu enseñanza en tiempo real",
+            "Haz clic en \"Detener Copiloto\" cuando termine la sesión"
+          ]
+        },
+        "polls": {
+          "title": "Crear Encuestas",
+          "steps": [
+            "Ve a Consola → pestaña Encuestas",
+            "Haz clic en el botón \"Crear Encuesta\"",
+            "Ingresa tu pregunta y opciones de respuesta",
+            "Publica la encuesta - los estudiantes pueden votar inmediatamente",
+            "Ve los resultados en tiempo real mientras llegan los votos"
+          ]
+        }
+      },
+      "reports": {
+        "generating": {
+          "title": "Generar Reportes de Sesión",
+          "steps": [
+            "Ve a la página de Reportes",
+            "Selecciona una sesión completada",
+            "Haz clic en \"Generar Reporte\" - la IA analiza todas las publicaciones de discusión",
+            "El reporte incluye: temas, métricas de participación, respuestas calificadas por IA, conceptos erróneos",
+            "Usa los insights para mejorar futuras sesiones"
+          ]
+        }
+      }
+    },
+    "instructor": {
+      "title": "Bienvenido, Instructor",
+      "subtitle": "Tu guía de asistente de enseñanza con IA",
+      "courses": {
+        "creating": {
+          "title": "Crear un Curso con IA",
+          "steps": [
+            "Haz clic en \"Crear Curso\" en la página de Cursos",
+            "Ingresa el nombre del curso - esto es requerido",
+            "Para el programa: Di \"generar\" para que la IA cree un programa completo (8-12 semanas)",
+            "Para objetivos: Di \"generar\" para que la IA cree objetivos de aprendizaje (5-7 items)",
+            "Revisa el contenido de IA, acepta, edita o dicta el tuyo",
+            "Haz clic en \"Guardar\" - tu curso se crea con un Código de Acceso único"
+          ]
+        },
+        "joinCodes": {
+          "title": "Entendiendo los Códigos de Acceso",
+          "steps": [
+            "Cada curso tiene un Código de Acceso único (ej., \"ABC123\")",
+            "Encuéntralo en tu tarjeta de curso o página de detalles del curso",
+            "Comparte este código por correo, LMS o en clase",
+            "Los estudiantes ingresan el código en su página de Cursos para inscribirse"
+          ]
+        },
+        "generating": {
+          "title": "Generar Planes de Sesión con IA",
+          "steps": [
+            "Abre la página de detalles de tu curso",
+            "Haz clic en el botón \"Generar Planes\"",
+            "La IA analiza tu programa y crea planes de sesión estructurados",
+            "Cada plan incluye: temas, objetivos, preguntas de discusión, casos de estudio"
+          ]
+        }
+      },
+      "sessions": {
+        "creating": {
+          "title": "Crear Sesiones con IA",
+          "steps": [
+            "Ve a la página de Sesiones → pestaña Crear",
+            "Ingresa el título de la sesión (tema) y fecha",
+            "Para descripción: Di \"generar\" para plan de sesión con IA con preguntas y caso de estudio",
+            "Revisa y acepta el contenido generado"
+          ]
+        },
+        "lifecycle": {
+          "title": "Ciclo de Vida de la Sesión",
+          "steps": [
+            "Borrador: Estado inicial, aún en preparación",
+            "Programada: Lista para comenzar, esperando hora de inicio",
+            "En Vivo: Actualmente activa - los estudiantes pueden participar en el Foro",
+            "Completada: La sesión ha terminado, lista para generar reporte"
+          ]
+        },
+        "running": {
+          "title": "Ejecutar una Sesión en Vivo",
+          "steps": [
+            "Ve a la página de Sesiones y selecciona tu sesión",
+            "Haz clic en \"Iniciar Sesión\" para cambiar el estado a En Vivo",
+            "Los estudiantes ahora pueden ver y publicar en el Foro para esta sesión",
+            "Abre Consola → Copiloto para asistencia de enseñanza con IA",
+            "Monitorea el Foro para publicaciones y preguntas de estudiantes",
+            "Cuando termines, haz clic en \"Terminar Sesión\" para marcar como Completada"
+          ]
+        }
+      },
+      "forum": {
+        "running": {
+          "title": "Ejecutar Discusiones",
+          "steps": [
+            "Selecciona tu curso del menú desplegable en la parte superior",
+            "Selecciona una sesión En Vivo (las discusiones solo funcionan en sesiones En Vivo)",
+            "Publica casos de estudio o preguntas de discusión para iniciar la conversación",
+            "Los estudiantes responderán a tus preguntas y se responderán entre ellos"
+          ]
+        },
+        "moderation": {
+          "title": "Herramientas de Moderación",
+          "steps": [
+            "Fijar publicaciones: Haz clic en el icono de pin en publicaciones importantes para mantenerlas arriba",
+            "Agregar etiquetas: Categoriza publicaciones (Pregunta, Respuesta, Insight, Punto Clave)",
+            "Las etiquetas ayudan a los estudiantes a encontrar contenido importante rápidamente",
+            "Todas las publicaciones se guardan para generar reportes después"
+          ]
+        }
+      },
+      "console": {
+        "copilot": {
+          "title": "Usar Copiloto IA",
+          "steps": [
+            "Ve a Consola → pestaña Copiloto",
+            "Selecciona una sesión En Vivo del menú desplegable",
+            "Haz clic en \"Iniciar Copiloto\" para comenzar el monitoreo con IA",
+            "La IA analiza las publicaciones de estudiantes cada 90 segundos y proporciona:",
+            "• Resumen continuo de la discusión",
+            "• Principales puntos de confusión o conceptos erróneos detectados",
+            "• Sugerencias de preguntas para re-enganchar a los estudiantes",
+            "• Recomendaciones de encuestas basadas en temas de discusión",
+            "Haz clic en \"Detener Copiloto\" cuando termine la sesión"
+          ]
+        },
+        "polls": {
+          "title": "Crear Encuestas",
+          "steps": [
+            "Ve a Consola → pestaña Encuestas",
+            "Haz clic en el botón \"Crear Encuesta\"",
+            "Ingresa tu pregunta y 2-4 opciones de respuesta",
+            "Publica la encuesta - se vuelve visible para los estudiantes inmediatamente",
+            "Mira los resultados actualizarse en tiempo real mientras los estudiantes votan",
+            "Usa los resultados de la encuesta para guiar la dirección de la discusión"
+          ]
+        },
+        "roster": {
+          "title": "Subir Lista Masiva",
+          "steps": [
+            "Ve a Consola → pestaña Subir Lista",
+            "Selecciona el curso donde quieres inscribir estudiantes",
+            "Prepara un archivo CSV con dos columnas: email, nombre",
+            "Sube el archivo - los estudiantes se inscriben automáticamente",
+            "Se crean nuevas cuentas para estudiantes que aún no están registrados"
+          ]
+        }
+      },
+      "reports": {
+        "generating": {
+          "title": "Generar Reportes de Sesión",
+          "steps": [
+            "Ve a la página de Reportes después de que una sesión esté Completada",
+            "Selecciona la sesión que quieres analizar",
+            "Haz clic en el botón \"Generar Reporte\"",
+            "La IA procesa todas las publicaciones y produce un análisis completo"
+          ]
+        },
+        "includes": {
+          "title": "Qué Incluyen los Reportes",
+          "steps": [
+            "Resumen: Temas clave, alineación con objetivos de aprendizaje, conceptos erróneos",
+            "Participación: Quién publicó, quién no, tasa de participación",
+            "Calificación: Respuestas de estudiantes calificadas por IA (0-100) con retroalimentación",
+            "Usa estos insights para identificar estudiantes con dificultades y mejorar la enseñanza"
+          ]
+        }
+      }
+    },
+    "student": {
+      "title": "Bienvenido, Estudiante",
+      "subtitle": "Guía para participar en tus cursos",
+      "courses": {
+        "joining": {
+          "title": "Unirse a un Curso",
+          "steps": [
+            "Obtén el Código de Acceso de tu instructor (ej., por correo o en clase)",
+            "Ve a la página de Cursos",
+            "Haz clic en el botón \"Unirse a Curso\"",
+            "Ingresa el Código de Acceso exactamente como te lo dieron",
+            "Haz clic en \"Unirse\" - ¡ya estás inscrito!",
+            "El curso aparecerá en tu lista de cursos inmediatamente"
+          ]
+        },
+        "viewing": {
+          "title": "Ver Tus Cursos",
+          "steps": [
+            "Todos los cursos en los que estás inscrito aparecen en la página de Cursos",
+            "Haz clic en cualquier curso para ver sus detalles",
+            "Ve la descripción del curso, objetivos y programa",
+            "Accede a sesiones y foro desde la página del curso"
+          ]
+        }
+      },
+      "sessions": {
+        "understanding": {
+          "title": "Entendiendo las Sesiones",
+          "steps": [
+            "Cada curso tiene múltiples sesiones (como reuniones de clase)",
+            "Las sesiones muestran: Tema, objetivos de aprendizaje y preguntas de discusión",
+            "Mira el estado de la sesión para saber qué está pasando:",
+            "• Programada: Sesión próxima, aún no activa",
+            "• En Vivo: Sucediendo ahora - ¡ve al Foro a participar!",
+            "• Completada: Sesión terminada, revisa Reportes para resumen"
+          ]
+        },
+        "participating": {
+          "title": "Participar en Sesiones en Vivo",
+          "steps": [
+            "Cuando una sesión está En Vivo, ve a la página del Foro",
+            "Selecciona el curso y la sesión En Vivo",
+            "Lee el caso de estudio o pregunta de discusión",
+            "Publica tus pensamientos y responde a tus compañeros",
+            "Tu participación es rastreada y puede ser calificada"
+          ]
+        }
+      },
+      "forum": {
+        "participating": {
+          "title": "Participar en Discusiones",
+          "steps": [
+            "Selecciona tu curso del menú desplegable en la parte superior",
+            "Selecciona la sesión En Vivo para ver la discusión",
+            "Lee el caso de estudio o pregunta publicada por tu instructor",
+            "Haz clic en \"Nueva Publicación\" para compartir tu respuesta",
+            "Sé reflexivo - tus publicaciones pueden ser calificadas por IA en los reportes"
+          ]
+        },
+        "engaging": {
+          "title": "Interactuar con Compañeros",
+          "steps": [
+            "Lee las publicaciones de tus compañeros",
+            "Haz clic en \"Responder\" para responder a la publicación de alguien",
+            "Construye sobre las ideas de otros o disiente respetuosamente",
+            "Busca publicaciones fijadas - contienen información importante",
+            "Publicaciones con etiquetas (Pregunta, Punto Clave, etc.) destacan contenido importante"
+          ]
+        },
+        "polls": {
+          "title": "Votar en Encuestas",
+          "steps": [
+            "Durante sesiones En Vivo, tu instructor puede crear encuestas",
+            "Las encuestas aparecen en el Foro o como notificaciones",
+            "Haz clic en una encuesta para ver la pregunta y opciones",
+            "Selecciona tu respuesta y envía",
+            "Algunas encuestas muestran resultados inmediatamente, otras después de cerrar la votación"
+          ]
+        }
+      },
+      "reports": {
+        "viewing": {
+          "title": "Ver Reportes de Sesión",
+          "steps": [
+            "Después de que una sesión esté Completada, ve a la página de Reportes",
+            "Selecciona la sesión para ver su reporte",
+            "Los reportes incluyen resúmenes de temas clave de discusión",
+            "Ve los puntos principales y de aprendizaje",
+            "Revisa cualquier concepto erróneo que se haya aclarado"
+          ]
+        }
+      },
+      "instructor": {
+        "requesting": {
+          "title": "Solicitar Acceso de Instructor",
+          "steps": [
+            "¿Quieres crear tus propios cursos? Puedes solicitar acceso de instructor",
+            "Ve a la página de Cursos → pestaña Ser Instructor",
+            "Haz clic en el botón \"Solicitar Acceso de Instructor\"",
+            "Tu solicitud se envía a los administradores para revisión",
+            "Una vez aprobado, puedes crear y gestionar tus propios cursos",
+            "Aún podrás participar como estudiante en otros cursos"
+          ]
+        }
+      }
+    }
   }
 }

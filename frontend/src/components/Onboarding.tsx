@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
+import { useLanguage } from '@/lib/i18n-provider';
 
 interface OnboardingProps {
   role: 'admin' | 'instructor' | 'student';
@@ -12,494 +14,178 @@ interface OnboardingProps {
 
 interface TabContent {
   id: string;
-  label: string;
+  labelKey: string;
   icon: string;
   sections: {
-    title: string;
-    steps: string[];
+    titleKey: string;
+    stepsKey: string;
   }[];
 }
 
-// Admin-specific tabs
+// Tab structure (keys only, content comes from translations)
 const adminTabs: TabContent[] = [
   {
     id: 'courses',
-    label: 'Courses',
+    labelKey: 'onboarding.tabs.courses',
     icon: '📚',
     sections: [
-      {
-        title: 'Creating a Course',
-        steps: [
-          'Click "Create Course" on the Courses page',
-          'Enter course name - this is required',
-          'For syllabus: Say "generate" for AI to create a full syllabus (8-12 weeks)',
-          'For objectives: Say "generate" for AI to create learning objectives (5-7 items)',
-          'Review AI-generated content, accept, edit, or dictate your own',
-          'Click "Save" - your course is created with a unique Join Code',
-          'Share the Join Code with students for self-enrollment',
-        ],
-      },
-      {
-        title: 'Enrolling Students',
-        steps: [
-          'Option A: Share the Join Code - students enter it on their Courses page',
-          'Option B: Go to Console → Roster Upload → Upload a CSV file (columns: email, name)',
-          'Option C: Click "Manage Enrollment" on any course to add students individually',
-        ],
-      },
-      {
-        title: 'Generating AI Session Plans',
-        steps: [
-          'Open your course details page',
-          'Click "Generate Plans" button',
-          'AI will analyze your syllabus and create structured session plans',
-          'Review and edit the generated plans as needed',
-          'Sessions will appear on the Sessions page',
-        ],
-      },
+      { titleKey: 'onboarding.admin.courses.creating.title', stepsKey: 'onboarding.admin.courses.creating.steps' },
+      { titleKey: 'onboarding.admin.courses.enrolling.title', stepsKey: 'onboarding.admin.courses.enrolling.steps' },
+      { titleKey: 'onboarding.admin.courses.generating.title', stepsKey: 'onboarding.admin.courses.generating.steps' },
     ],
   },
   {
     id: 'sessions',
-    label: 'Sessions',
+    labelKey: 'onboarding.tabs.sessions',
     icon: '🎯',
     sections: [
-      {
-        title: 'Creating Sessions with AI',
-        steps: [
-          'Go to Sessions page → Create tab',
-          'Enter session title (topic) and date',
-          'For description: Say "generate" for AI session plan',
-          'AI creates discussion prompts and case studies based on topic',
-          'Review and accept, or edit as needed',
-        ],
-      },
-      {
-        title: 'Session Lifecycle',
-        steps: [
-          'Draft: Initial state, still being prepared',
-          'Scheduled: Ready to go, waiting for start time',
-          'Live: Currently active - students can participate',
-          'Completed: Session has ended, ready for reports',
-        ],
-      },
-      {
-        title: 'Running a Live Session',
-        steps: [
-          'Select your session and click "Start Session" (Go Live)',
-          'Students can now post in the Forum',
-          'Use AI Copilot in Console for real-time suggestions',
-          'Ask "How\'s the class doing?" for status updates',
-          'When finished, click "End Session" to complete',
-        ],
-      },
+      { titleKey: 'onboarding.admin.sessions.creating.title', stepsKey: 'onboarding.admin.sessions.creating.steps' },
+      { titleKey: 'onboarding.admin.sessions.lifecycle.title', stepsKey: 'onboarding.admin.sessions.lifecycle.steps' },
+      { titleKey: 'onboarding.admin.sessions.running.title', stepsKey: 'onboarding.admin.sessions.running.steps' },
     ],
   },
   {
     id: 'forum',
-    label: 'Forum',
+    labelKey: 'onboarding.tabs.forum',
     icon: '💬',
     sections: [
-      {
-        title: 'Managing Discussions',
-        steps: [
-          'Select a course from the dropdown at the top',
-          'Select a session (must be Live for active discussion)',
-          'Post case studies or discussion prompts for students',
-          'View all student posts and replies in real-time',
-        ],
-      },
-      {
-        title: 'Moderation Tools',
-        steps: [
-          'Pin posts: Click the pin icon to keep important posts at the top',
-          'Add labels: Categorize posts as Question, Answer, Insight, etc.',
-          'Monitor participation: See which students are engaging',
-        ],
-      },
+      { titleKey: 'onboarding.admin.forum.managing.title', stepsKey: 'onboarding.admin.forum.managing.steps' },
+      { titleKey: 'onboarding.admin.forum.moderation.title', stepsKey: 'onboarding.admin.forum.moderation.steps' },
     ],
   },
   {
     id: 'console',
-    label: 'Console',
+    labelKey: 'onboarding.tabs.console',
     icon: '⚙️',
     sections: [
-      {
-        title: 'Managing Instructor Requests (Admin Only)',
-        steps: [
-          'Go to Console → Instructor Requests tab',
-          'View all pending requests from students who want instructor access',
-          'Review each request - see the user\'s name and email',
-          'Click "Approve" to grant instructor privileges',
-          'Click "Reject" to deny the request',
-          'Approved users can immediately create their own courses',
-        ],
-      },
-      {
-        title: 'Bulk Roster Upload (Admin Only)',
-        steps: [
-          'Go to Console → Roster Upload tab',
-          'Select the course you want to enroll students in',
-          'Prepare a CSV file with columns: email, name',
-          'Upload the CSV file',
-          'Students will be enrolled automatically (accounts created if needed)',
-        ],
-      },
-      {
-        title: 'Using AI Copilot',
-        steps: [
-          'Go to Console → Copilot tab',
-          'Select a Live session from the dropdown',
-          'Click "Start Copilot" to begin AI monitoring',
-          'Every 90 seconds, receive: discussion summary, confusion points, suggested prompts, poll ideas',
-          'Use suggestions to guide your teaching in real-time',
-          'Click "Stop Copilot" when the session ends',
-        ],
-      },
-      {
-        title: 'Creating Polls',
-        steps: [
-          'Go to Console → Polls tab',
-          'Click "Create Poll" button',
-          'Enter your question and answer options',
-          'Publish the poll - students can vote immediately',
-          'View results in real-time as votes come in',
-        ],
-      },
+      { titleKey: 'onboarding.admin.console.requests.title', stepsKey: 'onboarding.admin.console.requests.steps' },
+      { titleKey: 'onboarding.admin.console.roster.title', stepsKey: 'onboarding.admin.console.roster.steps' },
+      { titleKey: 'onboarding.admin.console.copilot.title', stepsKey: 'onboarding.admin.console.copilot.steps' },
+      { titleKey: 'onboarding.admin.console.polls.title', stepsKey: 'onboarding.admin.console.polls.steps' },
     ],
   },
   {
     id: 'reports',
-    label: 'Reports',
+    labelKey: 'onboarding.tabs.reports',
     icon: '📊',
     sections: [
-      {
-        title: 'Generating Session Reports',
-        steps: [
-          'Go to Reports page',
-          'Select a completed session',
-          'Click "Generate Report" - AI analyzes all discussion posts',
-          'Report includes: themes, participation metrics, AI-scored answers, misconceptions',
-          'Use insights to improve future sessions',
-        ],
-      },
+      { titleKey: 'onboarding.admin.reports.generating.title', stepsKey: 'onboarding.admin.reports.generating.steps' },
     ],
   },
 ];
 
-// Instructor-specific tabs (similar to admin but without instructor request management)
 const instructorTabs: TabContent[] = [
   {
     id: 'courses',
-    label: 'Courses',
+    labelKey: 'onboarding.tabs.courses',
     icon: '📚',
     sections: [
-      {
-        title: 'Creating a Course with AI',
-        steps: [
-          'Click "Create Course" on the Courses page',
-          'Enter course name - this is required',
-          'For syllabus: Say "generate" for AI to create a full syllabus (8-12 weeks)',
-          'For objectives: Say "generate" for AI to create learning objectives (5-7 items)',
-          'Review AI content, accept, edit, or dictate your own',
-          'Click "Save" - your course is created with a unique Join Code',
-        ],
-      },
-      {
-        title: 'Understanding Join Codes',
-        steps: [
-          'Every course has a unique Join Code (e.g., "ABC123")',
-          'Find it on your course card or course detail page',
-          'Share this code via email, LMS, or in class',
-          'Students enter the code on their Courses page to enroll',
-        ],
-      },
-      {
-        title: 'Generating AI Session Plans',
-        steps: [
-          'Open your course details page',
-          'Click "Generate Plans" button',
-          'AI analyzes your syllabus and creates structured session plans',
-          'Each plan includes: topics, objectives, discussion prompts, case studies',
-        ],
-      },
+      { titleKey: 'onboarding.instructor.courses.creating.title', stepsKey: 'onboarding.instructor.courses.creating.steps' },
+      { titleKey: 'onboarding.instructor.courses.joinCodes.title', stepsKey: 'onboarding.instructor.courses.joinCodes.steps' },
+      { titleKey: 'onboarding.instructor.courses.generating.title', stepsKey: 'onboarding.instructor.courses.generating.steps' },
     ],
   },
   {
     id: 'sessions',
-    label: 'Sessions',
+    labelKey: 'onboarding.tabs.sessions',
     icon: '🎯',
     sections: [
-      {
-        title: 'Creating Sessions with AI',
-        steps: [
-          'Go to Sessions page → Create tab',
-          'Enter session title (topic) and date',
-          'For description: Say "generate" for AI session plan with prompts and case study',
-          'Review and accept the generated content',
-        ],
-      },
-      {
-        title: 'Session Lifecycle',
-        steps: [
-          'Draft: Initial state, still being prepared',
-          'Scheduled: Ready to go, waiting for start time',
-          'Live: Currently active - students can participate in Forum',
-          'Completed: Session has ended, ready for report generation',
-        ],
-      },
-      {
-        title: 'Running a Live Session',
-        steps: [
-          'Go to Sessions page and select your session',
-          'Click "Start Session" to change status to Live',
-          'Students can now see and post in the Forum for this session',
-          'Open Console → Copilot for AI-powered teaching assistance',
-          'Monitor the Forum for student posts and questions',
-          'When finished, click "End Session" to mark as Completed',
-        ],
-      },
+      { titleKey: 'onboarding.instructor.sessions.creating.title', stepsKey: 'onboarding.instructor.sessions.creating.steps' },
+      { titleKey: 'onboarding.instructor.sessions.lifecycle.title', stepsKey: 'onboarding.instructor.sessions.lifecycle.steps' },
+      { titleKey: 'onboarding.instructor.sessions.running.title', stepsKey: 'onboarding.instructor.sessions.running.steps' },
     ],
   },
   {
     id: 'forum',
-    label: 'Forum',
+    labelKey: 'onboarding.tabs.forum',
     icon: '💬',
     sections: [
-      {
-        title: 'Running Discussions',
-        steps: [
-          'Select your course from the dropdown at the top',
-          'Select a Live session (discussions only work in Live sessions)',
-          'Post case studies or discussion prompts to start the conversation',
-          'Students will respond to your prompts and reply to each other',
-        ],
-      },
-      {
-        title: 'Moderation Tools',
-        steps: [
-          'Pin posts: Click the pin icon on important posts to keep them at top',
-          'Add labels: Categorize posts (Question, Answer, Insight, Key Point)',
-          'Labels help students find important content quickly',
-          'All posts are saved for report generation later',
-        ],
-      },
+      { titleKey: 'onboarding.instructor.forum.running.title', stepsKey: 'onboarding.instructor.forum.running.steps' },
+      { titleKey: 'onboarding.instructor.forum.moderation.title', stepsKey: 'onboarding.instructor.forum.moderation.steps' },
     ],
   },
   {
     id: 'console',
-    label: 'Console',
+    labelKey: 'onboarding.tabs.console',
     icon: '⚙️',
     sections: [
-      {
-        title: 'Using AI Copilot',
-        steps: [
-          'Go to Console → Copilot tab',
-          'Select a Live session from the dropdown',
-          'Click "Start Copilot" to begin AI monitoring',
-          'AI analyzes student posts every 90 seconds and provides:',
-          '• Rolling summary of the discussion',
-          '• Top confusion points or misconceptions detected',
-          '• Suggested prompts to re-engage students',
-          '• Poll recommendations based on discussion themes',
-          'Click "Stop Copilot" when session ends',
-        ],
-      },
-      {
-        title: 'Creating Polls',
-        steps: [
-          'Go to Console → Polls tab',
-          'Click "Create Poll" button',
-          'Enter your question and 2-4 answer options',
-          'Publish the poll - it becomes visible to students immediately',
-          'Watch results update in real-time as students vote',
-          'Use poll results to guide discussion direction',
-        ],
-      },
-      {
-        title: 'Bulk Roster Upload',
-        steps: [
-          'Go to Console → Roster Upload tab',
-          'Select the course you want to enroll students in',
-          'Prepare a CSV file with two columns: email, name',
-          'Upload the file - students are enrolled automatically',
-          'New accounts are created for students not yet registered',
-        ],
-      },
+      { titleKey: 'onboarding.instructor.console.copilot.title', stepsKey: 'onboarding.instructor.console.copilot.steps' },
+      { titleKey: 'onboarding.instructor.console.polls.title', stepsKey: 'onboarding.instructor.console.polls.steps' },
+      { titleKey: 'onboarding.instructor.console.roster.title', stepsKey: 'onboarding.instructor.console.roster.steps' },
     ],
   },
   {
     id: 'reports',
-    label: 'Reports',
+    labelKey: 'onboarding.tabs.reports',
     icon: '📊',
     sections: [
-      {
-        title: 'Generating Session Reports',
-        steps: [
-          'Go to Reports page after a session is Completed',
-          'Select the session you want to analyze',
-          'Click "Generate Report" button',
-          'AI processes all posts and produces comprehensive analysis',
-        ],
-      },
-      {
-        title: 'What Reports Include',
-        steps: [
-          'Summary: Key themes, learning objective alignment, misconceptions',
-          'Participation: Who posted, who didn\'t, participation rate',
-          'Scoring: AI-graded student answers (0-100) with feedback',
-          'Use these insights to identify struggling students and improve teaching',
-        ],
-      },
+      { titleKey: 'onboarding.instructor.reports.generating.title', stepsKey: 'onboarding.instructor.reports.generating.steps' },
+      { titleKey: 'onboarding.instructor.reports.includes.title', stepsKey: 'onboarding.instructor.reports.includes.steps' },
     ],
   },
 ];
 
-// Student-specific tabs
 const studentTabs: TabContent[] = [
   {
     id: 'courses',
-    label: 'Courses',
+    labelKey: 'onboarding.tabs.courses',
     icon: '📚',
     sections: [
-      {
-        title: 'Joining a Course',
-        steps: [
-          'Get the Join Code from your instructor (e.g., via email or in class)',
-          'Go to the Courses page',
-          'Click the "Join Course" button',
-          'Enter the Join Code exactly as provided',
-          'Click "Join" - you\'re now enrolled!',
-          'The course will appear in your course list immediately',
-        ],
-      },
-      {
-        title: 'Viewing Your Courses',
-        steps: [
-          'All courses you\'re enrolled in appear on the Courses page',
-          'Click on any course to see its details',
-          'View course description, objectives, and syllabus',
-          'Access sessions and forum from the course page',
-        ],
-      },
+      { titleKey: 'onboarding.student.courses.joining.title', stepsKey: 'onboarding.student.courses.joining.steps' },
+      { titleKey: 'onboarding.student.courses.viewing.title', stepsKey: 'onboarding.student.courses.viewing.steps' },
     ],
   },
   {
     id: 'sessions',
-    label: 'Sessions',
+    labelKey: 'onboarding.tabs.sessions',
     icon: '🎯',
     sections: [
-      {
-        title: 'Understanding Sessions',
-        steps: [
-          'Each course has multiple sessions (like class meetings)',
-          'Sessions show: Topic, learning objectives, and discussion prompts',
-          'Look for session status to know what\'s happening:',
-          '• Scheduled: Upcoming session, not yet active',
-          '• Live: Happening now - go to Forum to participate!',
-          '• Completed: Session ended, check Reports for summary',
-        ],
-      },
-      {
-        title: 'Participating in Live Sessions',
-        steps: [
-          'When a session is Live, go to the Forum page',
-          'Select the course and Live session',
-          'Read the case study or discussion prompt',
-          'Post your thoughts and respond to classmates',
-          'Your participation is tracked and may be graded',
-        ],
-      },
+      { titleKey: 'onboarding.student.sessions.understanding.title', stepsKey: 'onboarding.student.sessions.understanding.steps' },
+      { titleKey: 'onboarding.student.sessions.participating.title', stepsKey: 'onboarding.student.sessions.participating.steps' },
     ],
   },
   {
     id: 'forum',
-    label: 'Forum',
+    labelKey: 'onboarding.tabs.forum',
     icon: '💬',
     sections: [
-      {
-        title: 'Participating in Discussions',
-        steps: [
-          'Select your course from the dropdown at the top',
-          'Select the Live session to see the discussion',
-          'Read the case study or prompt posted by your instructor',
-          'Click "New Post" to share your response',
-          'Be thoughtful - your posts may be AI-scored in reports',
-        ],
-      },
-      {
-        title: 'Engaging with Classmates',
-        steps: [
-          'Read posts from your classmates',
-          'Click "Reply" to respond to someone\'s post',
-          'Build on others\' ideas or respectfully disagree',
-          'Look for pinned posts - they contain important information',
-          'Posts with labels (Question, Key Point, etc.) highlight important content',
-        ],
-      },
-      {
-        title: 'Voting on Polls',
-        steps: [
-          'During Live sessions, your instructor may create polls',
-          'Polls appear in the Forum or as notifications',
-          'Click on a poll to see the question and options',
-          'Select your answer and submit',
-          'Some polls show results immediately, others after voting closes',
-        ],
-      },
+      { titleKey: 'onboarding.student.forum.participating.title', stepsKey: 'onboarding.student.forum.participating.steps' },
+      { titleKey: 'onboarding.student.forum.engaging.title', stepsKey: 'onboarding.student.forum.engaging.steps' },
+      { titleKey: 'onboarding.student.forum.polls.title', stepsKey: 'onboarding.student.forum.polls.steps' },
     ],
   },
   {
     id: 'reports',
-    label: 'Reports',
+    labelKey: 'onboarding.tabs.reports',
     icon: '📊',
     sections: [
-      {
-        title: 'Viewing Session Reports',
-        steps: [
-          'After a session is Completed, go to Reports page',
-          'Select the session to view its report',
-          'Reports include summaries of key discussion themes',
-          'See main takeaways and learning points',
-          'Review any misconceptions that were clarified',
-        ],
-      },
+      { titleKey: 'onboarding.student.reports.viewing.title', stepsKey: 'onboarding.student.reports.viewing.steps' },
     ],
   },
   {
     id: 'instructor',
-    label: 'Become Instructor',
+    labelKey: 'onboarding.tabs.becomeInstructor',
     icon: '🎓',
     sections: [
-      {
-        title: 'Requesting Instructor Access',
-        steps: [
-          'Want to create your own courses? You can request instructor access',
-          'Go to your Profile (click your name in the top right)',
-          'Click "Request Instructor Access" button',
-          'Your request is sent to administrators for review',
-          'Once approved, you can create and manage your own courses',
-          'You\'ll still be able to participate as a student in other courses',
-        ],
-      },
+      { titleKey: 'onboarding.student.instructor.requesting.title', stepsKey: 'onboarding.student.instructor.requesting.steps' },
     ],
   },
 ];
 
 const roleConfig = {
   admin: {
-    title: 'Welcome, Administrator',
-    subtitle: 'Complete guide to managing AristAI',
+    titleKey: 'onboarding.admin.title',
+    subtitleKey: 'onboarding.admin.subtitle',
     tabs: adminTabs,
   },
   instructor: {
-    title: 'Welcome, Instructor',
-    subtitle: 'Your AI-powered teaching assistant guide',
+    titleKey: 'onboarding.instructor.title',
+    subtitleKey: 'onboarding.instructor.subtitle',
     tabs: instructorTabs,
   },
   student: {
-    title: 'Welcome, Student',
-    subtitle: 'Guide to participating in your courses',
+    titleKey: 'onboarding.student.title',
+    subtitleKey: 'onboarding.student.subtitle',
     tabs: studentTabs,
   },
 };
@@ -508,6 +194,7 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
   const config = roleConfig[role];
   const [isVisible, setIsVisible] = useState(true);
   const [activeTab, setActiveTab] = useState(config.tabs[0].id);
+  const t = useTranslations();
 
   const handleComplete = () => {
     setIsVisible(false);
@@ -515,6 +202,19 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
   };
 
   const activeTabContent = config.tabs.find((tab) => tab.id === activeTab);
+
+  // Helper to get steps array from translation
+  const getSteps = (stepsKey: string): string[] => {
+    try {
+      const raw = t.raw(stepsKey);
+      if (Array.isArray(raw)) {
+        return raw;
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  };
 
   return (
     <div
@@ -528,11 +228,11 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
           {/* Header */}
           <div className="text-center py-6 px-8 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-              {config.title}
+              {t(config.titleKey)}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400">{config.subtitle}</p>
+            <p className="text-gray-600 dark:text-gray-400">{t(config.subtitleKey)}</p>
             <p className="text-primary-600 dark:text-primary-400 text-sm mt-1">
-              Hello, {userName}!
+              {t('onboarding.hello', { name: userName })}
             </p>
           </div>
 
@@ -550,7 +250,7 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
                 )}
               >
                 <span>{tab.icon}</span>
-                <span>{tab.label}</span>
+                <span>{t(tab.labelKey)}</span>
               </button>
             ))}
           </div>
@@ -559,26 +259,29 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
           <div className="flex-1 overflow-y-auto p-6">
             {activeTabContent && (
               <div className="space-y-6">
-                {activeTabContent.sections.map((section, sectionIndex) => (
-                  <div key={sectionIndex}>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                      {section.title}
-                    </h3>
-                    <ol className="space-y-2">
-                      {section.steps.map((step, stepIndex) => (
-                        <li
-                          key={stepIndex}
-                          className="flex gap-3 text-gray-700 dark:text-gray-300"
-                        >
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400 text-sm flex items-center justify-center font-medium">
-                            {stepIndex + 1}
-                          </span>
-                          <span className="pt-0.5">{step}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                ))}
+                {activeTabContent.sections.map((section, sectionIndex) => {
+                  const steps = getSteps(section.stepsKey);
+                  return (
+                    <div key={sectionIndex}>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                        {t(section.titleKey)}
+                      </h3>
+                      <ol className="space-y-2">
+                        {steps.map((step, stepIndex) => (
+                          <li
+                            key={stepIndex}
+                            className="flex gap-3 text-gray-700 dark:text-gray-300"
+                          >
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400 text-sm flex items-center justify-center font-medium">
+                              {stepIndex + 1}
+                            </span>
+                            <span className="pt-0.5">{step}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -587,14 +290,14 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
           <div className="border-t border-gray-200 dark:border-gray-700 px-8 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
               <p className="text-gray-500 dark:text-gray-500 text-sm">
-                Access this guide anytime from the user menu → View Voice Guide
+                {t('onboarding.accessAnytime')}
               </p>
               <Button
                 onClick={handleComplete}
                 className="px-6 py-2 bg-primary-600 hover:bg-primary-700"
                 data-voice-id="got-it-platform-guide"
               >
-                I Got It!
+                {t('onboarding.gotIt')}
               </Button>
             </div>
           </div>

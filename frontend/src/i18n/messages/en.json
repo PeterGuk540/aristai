@@ -260,7 +260,8 @@
     "profile": "Profile",
     "settings": "Settings",
     "account": "Account",
-    "signOut": "Sign Out"
+    "signOut": "Sign Out",
+    "platformInstructions": "Platform Instructions"
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",
@@ -268,5 +269,500 @@
     "unauthorized": "Unauthorized",
     "forbidden": "Access denied",
     "serverError": "Server error. Please try again later."
+  },
+  "voiceGuide": {
+    "subtitle": "Complete list of voice commands for AristAI",
+    "gotIt": "Got It!",
+    "aiInsights": "New! AI Insights:",
+    "tipClassStatus": "Ask \"How's the class doing?\" for a quick status during live sessions",
+    "tipWhoNeedsHelp": "Ask \"Who needs help?\" to identify struggling or silent students",
+    "tipCopilotSuggestions": "Ask \"What did copilot suggest?\" for teaching recommendations",
+    "tipSpecificStudent": "Say \"How is [student name] doing?\" to check on specific students",
+    "categories": {
+      "navigation": "Navigation",
+      "courses": "Courses Page",
+      "sessions": "Sessions Page",
+      "materials": "Materials",
+      "forum": "Forum Page",
+      "console": "Console Page",
+      "reports": "Reports Page",
+      "aiGeneration": "AI Content Generation",
+      "intelligence": "AI Insights",
+      "dropdowns": "Dropdown Selection",
+      "forms": "Form Filling",
+      "theme": "Theme & Account"
+    },
+    "descriptions": {
+      "navigation": "Navigate between pages",
+      "courses": "Course management commands",
+      "sessions": "Session management commands",
+      "materials": "View course materials and files",
+      "forum": "Forum and discussion commands",
+      "console": "Console and copilot commands",
+      "reports": "Report commands",
+      "aiGeneration": "Let AI help create course content",
+      "intelligence": "Ask questions and get intelligent summaries",
+      "dropdowns": "Select items from dropdowns",
+      "forms": "Fill out forms by voice",
+      "theme": "Theme and account commands"
+    },
+    "commands": {
+      "goToCourses": "Navigate to the Courses page",
+      "goToSessions": "Navigate to the Sessions page",
+      "goToForum": "Navigate to the Forum page",
+      "goToConsole": "Navigate to the Console page (instructors only)",
+      "goToReports": "Navigate to the Reports page",
+      "createCourse": "Start the course creation form (voice will guide you through fields)",
+      "generate": "When asked for syllabus or objectives, say \"generate\" for AI assistance",
+      "acceptGenerated": "Accept the AI-generated content",
+      "declineGenerated": "Decline AI content and enter manually",
+      "selectFirstCourse": "Select the first course in the list",
+      "manageStatus": "Switch to the manage status tab",
+      "viewMaterials": "Switch to the Materials tab to view/download course files",
+      "goLive": "Set the session status to Live",
+      "setToDraft": "Set the session status to Draft",
+      "completeSession": "Set the session status to Completed",
+      "scheduleSession": "Set the session status to Scheduled",
+      "showCourseFiles": "View uploaded course documents and readings",
+      "goToCases": "Switch to the Cases tab",
+      "goToDiscussion": "Switch to the Discussion tab",
+      "postToDiscussion": "Start creating a new discussion post",
+      "postCase": "Start creating a new case study",
+      "goToCopilot": "Switch to the AI Copilot tab",
+      "startCopilot": "Start the AI Copilot monitoring",
+      "stopCopilot": "Stop the AI Copilot monitoring",
+      "refreshInterventions": "Refresh the copilot suggestions",
+      "createPoll": "Start creating a new poll",
+      "refreshReport": "Refresh the current report",
+      "regenerateReport": "Regenerate the AI report",
+      "generateContent": "When filling forms, say \"generate\" to have AI create content for you",
+      "acceptAIContent": "Accept the AI-generated content and continue",
+      "declineAIContent": "Decline AI content and enter manually or edit the generated text",
+      "classStatus": "Get a quick summary of participation, engagement, and copilot insights",
+      "whoNeedsHelp": "Identify students who haven't participated or are struggling",
+      "misconceptions": "Review misconceptions identified in reports or by copilot",
+      "studentScores": "Get score statistics from the session report",
+      "summarizeDiscussion": "Get a summary of what students are discussing",
+      "selectFirst": "Select the first item",
+      "selectSecond": "Select the second item",
+      "selectByName": "Select item by name",
+      "cancel": "Cancel the current selection",
+      "skip": "Skip the current field",
+      "dictateAnswer": "Dictate text for the current form field",
+      "confirm": "Confirm or agree to a prompt",
+      "decline": "Decline or disagree",
+      "finishAdding": "Stop adding more items (e.g., poll options)",
+      "submit": "Submit the current form",
+      "darkMode": "Switch to dark theme",
+      "lightMode": "Switch to light theme",
+      "openMenu": "Open the user dropdown menu",
+      "viewVoiceGuide": "Open this voice command guide",
+      "signOut": "Sign out of the application",
+      "gotIt": "Close popup windows like this guide"
+    }
+  },
+  "onboarding": {
+    "hello": "Hello, {name}!",
+    "accessAnytime": "Access this guide anytime from the user menu → Platform Instructions",
+    "gotIt": "I Got It!",
+    "tabs": {
+      "courses": "Courses",
+      "sessions": "Sessions",
+      "forum": "Forum",
+      "console": "Console",
+      "reports": "Reports",
+      "becomeInstructor": "Become Instructor"
+    },
+    "admin": {
+      "title": "Welcome, Administrator",
+      "subtitle": "Complete guide to managing AristAI",
+      "courses": {
+        "creating": {
+          "title": "Creating a Course",
+          "steps": [
+            "Click \"Create Course\" on the Courses page",
+            "Enter course name - this is required",
+            "For syllabus: Say \"generate\" for AI to create a full syllabus (8-12 weeks)",
+            "For objectives: Say \"generate\" for AI to create learning objectives (5-7 items)",
+            "Review AI-generated content, accept, edit, or dictate your own",
+            "Click \"Save\" - your course is created with a unique Join Code",
+            "Share the Join Code with students for self-enrollment"
+          ]
+        },
+        "enrolling": {
+          "title": "Enrolling Students",
+          "steps": [
+            "Option A: Share the Join Code - students enter it on their Courses page",
+            "Option B: Go to Console → Roster Upload → Upload a CSV file (columns: email, name)",
+            "Option C: Click \"Manage Enrollment\" on any course to add students individually"
+          ]
+        },
+        "generating": {
+          "title": "Generating AI Session Plans",
+          "steps": [
+            "Open your course details page",
+            "Click \"Generate Plans\" button",
+            "AI will analyze your syllabus and create structured session plans",
+            "Review and edit the generated plans as needed",
+            "Sessions will appear on the Sessions page"
+          ]
+        }
+      },
+      "sessions": {
+        "creating": {
+          "title": "Creating Sessions with AI",
+          "steps": [
+            "Go to Sessions page → Create tab",
+            "Enter session title (topic) and date",
+            "For description: Say \"generate\" for AI session plan",
+            "AI creates discussion prompts and case studies based on topic",
+            "Review and accept, or edit as needed"
+          ]
+        },
+        "lifecycle": {
+          "title": "Session Lifecycle",
+          "steps": [
+            "Draft: Initial state, still being prepared",
+            "Scheduled: Ready to go, waiting for start time",
+            "Live: Currently active - students can participate",
+            "Completed: Session has ended, ready for reports"
+          ]
+        },
+        "running": {
+          "title": "Running a Live Session",
+          "steps": [
+            "Select your session and click \"Start Session\" (Go Live)",
+            "Students can now post in the Forum",
+            "Use AI Copilot in Console for real-time suggestions",
+            "Ask \"How's the class doing?\" for status updates",
+            "When finished, click \"End Session\" to complete"
+          ]
+        }
+      },
+      "forum": {
+        "managing": {
+          "title": "Managing Discussions",
+          "steps": [
+            "Select a course from the dropdown at the top",
+            "Select a session (must be Live for active discussion)",
+            "Post case studies or discussion prompts for students",
+            "View all student posts and replies in real-time"
+          ]
+        },
+        "moderation": {
+          "title": "Moderation Tools",
+          "steps": [
+            "Pin posts: Click the pin icon to keep important posts at the top",
+            "Add labels: Categorize posts as Question, Answer, Insight, etc.",
+            "Monitor participation: See which students are engaging"
+          ]
+        }
+      },
+      "console": {
+        "requests": {
+          "title": "Managing Instructor Requests (Admin Only)",
+          "steps": [
+            "Go to Console → Instructor Requests tab",
+            "View all pending requests from students who want instructor access",
+            "Review each request - see the user's name and email",
+            "Click \"Approve\" to grant instructor privileges",
+            "Click \"Reject\" to deny the request",
+            "Approved users can immediately create their own courses"
+          ]
+        },
+        "roster": {
+          "title": "Bulk Roster Upload (Admin Only)",
+          "steps": [
+            "Go to Console → Roster Upload tab",
+            "Select the course you want to enroll students in",
+            "Prepare a CSV file with columns: email, name",
+            "Upload the CSV file",
+            "Students will be enrolled automatically (accounts created if needed)"
+          ]
+        },
+        "copilot": {
+          "title": "Using AI Copilot",
+          "steps": [
+            "Go to Console → Copilot tab",
+            "Select a Live session from the dropdown",
+            "Click \"Start Copilot\" to begin AI monitoring",
+            "Every 90 seconds, receive: discussion summary, confusion points, suggested prompts, poll ideas",
+            "Use suggestions to guide your teaching in real-time",
+            "Click \"Stop Copilot\" when the session ends"
+          ]
+        },
+        "polls": {
+          "title": "Creating Polls",
+          "steps": [
+            "Go to Console → Polls tab",
+            "Click \"Create Poll\" button",
+            "Enter your question and answer options",
+            "Publish the poll - students can vote immediately",
+            "View results in real-time as votes come in"
+          ]
+        }
+      },
+      "reports": {
+        "generating": {
+          "title": "Generating Session Reports",
+          "steps": [
+            "Go to Reports page",
+            "Select a completed session",
+            "Click \"Generate Report\" - AI analyzes all discussion posts",
+            "Report includes: themes, participation metrics, AI-scored answers, misconceptions",
+            "Use insights to improve future sessions"
+          ]
+        }
+      }
+    },
+    "instructor": {
+      "title": "Welcome, Instructor",
+      "subtitle": "Your AI-powered teaching assistant guide",
+      "courses": {
+        "creating": {
+          "title": "Creating a Course with AI",
+          "steps": [
+            "Click \"Create Course\" on the Courses page",
+            "Enter course name - this is required",
+            "For syllabus: Say \"generate\" for AI to create a full syllabus (8-12 weeks)",
+            "For objectives: Say \"generate\" for AI to create learning objectives (5-7 items)",
+            "Review AI content, accept, edit, or dictate your own",
+            "Click \"Save\" - your course is created with a unique Join Code"
+          ]
+        },
+        "joinCodes": {
+          "title": "Understanding Join Codes",
+          "steps": [
+            "Every course has a unique Join Code (e.g., \"ABC123\")",
+            "Find it on your course card or course detail page",
+            "Share this code via email, LMS, or in class",
+            "Students enter the code on their Courses page to enroll"
+          ]
+        },
+        "generating": {
+          "title": "Generating AI Session Plans",
+          "steps": [
+            "Open your course details page",
+            "Click \"Generate Plans\" button",
+            "AI analyzes your syllabus and creates structured session plans",
+            "Each plan includes: topics, objectives, discussion prompts, case studies"
+          ]
+        }
+      },
+      "sessions": {
+        "creating": {
+          "title": "Creating Sessions with AI",
+          "steps": [
+            "Go to Sessions page → Create tab",
+            "Enter session title (topic) and date",
+            "For description: Say \"generate\" for AI session plan with prompts and case study",
+            "Review and accept the generated content"
+          ]
+        },
+        "lifecycle": {
+          "title": "Session Lifecycle",
+          "steps": [
+            "Draft: Initial state, still being prepared",
+            "Scheduled: Ready to go, waiting for start time",
+            "Live: Currently active - students can participate in Forum",
+            "Completed: Session has ended, ready for report generation"
+          ]
+        },
+        "running": {
+          "title": "Running a Live Session",
+          "steps": [
+            "Go to Sessions page and select your session",
+            "Click \"Start Session\" to change status to Live",
+            "Students can now see and post in the Forum for this session",
+            "Open Console → Copilot for AI-powered teaching assistance",
+            "Monitor the Forum for student posts and questions",
+            "When finished, click \"End Session\" to mark as Completed"
+          ]
+        }
+      },
+      "forum": {
+        "running": {
+          "title": "Running Discussions",
+          "steps": [
+            "Select your course from the dropdown at the top",
+            "Select a Live session (discussions only work in Live sessions)",
+            "Post case studies or discussion prompts to start the conversation",
+            "Students will respond to your prompts and reply to each other"
+          ]
+        },
+        "moderation": {
+          "title": "Moderation Tools",
+          "steps": [
+            "Pin posts: Click the pin icon on important posts to keep them at top",
+            "Add labels: Categorize posts (Question, Answer, Insight, Key Point)",
+            "Labels help students find important content quickly",
+            "All posts are saved for report generation later"
+          ]
+        }
+      },
+      "console": {
+        "copilot": {
+          "title": "Using AI Copilot",
+          "steps": [
+            "Go to Console → Copilot tab",
+            "Select a Live session from the dropdown",
+            "Click \"Start Copilot\" to begin AI monitoring",
+            "AI analyzes student posts every 90 seconds and provides:",
+            "• Rolling summary of the discussion",
+            "• Top confusion points or misconceptions detected",
+            "• Suggested prompts to re-engage students",
+            "• Poll recommendations based on discussion themes",
+            "Click \"Stop Copilot\" when session ends"
+          ]
+        },
+        "polls": {
+          "title": "Creating Polls",
+          "steps": [
+            "Go to Console → Polls tab",
+            "Click \"Create Poll\" button",
+            "Enter your question and 2-4 answer options",
+            "Publish the poll - it becomes visible to students immediately",
+            "Watch results update in real-time as students vote",
+            "Use poll results to guide discussion direction"
+          ]
+        },
+        "roster": {
+          "title": "Bulk Roster Upload",
+          "steps": [
+            "Go to Console → Roster Upload tab",
+            "Select the course you want to enroll students in",
+            "Prepare a CSV file with two columns: email, name",
+            "Upload the file - students are enrolled automatically",
+            "New accounts are created for students not yet registered"
+          ]
+        }
+      },
+      "reports": {
+        "generating": {
+          "title": "Generating Session Reports",
+          "steps": [
+            "Go to Reports page after a session is Completed",
+            "Select the session you want to analyze",
+            "Click \"Generate Report\" button",
+            "AI processes all posts and produces comprehensive analysis"
+          ]
+        },
+        "includes": {
+          "title": "What Reports Include",
+          "steps": [
+            "Summary: Key themes, learning objective alignment, misconceptions",
+            "Participation: Who posted, who didn't, participation rate",
+            "Scoring: AI-graded student answers (0-100) with feedback",
+            "Use these insights to identify struggling students and improve teaching"
+          ]
+        }
+      }
+    },
+    "student": {
+      "title": "Welcome, Student",
+      "subtitle": "Guide to participating in your courses",
+      "courses": {
+        "joining": {
+          "title": "Joining a Course",
+          "steps": [
+            "Get the Join Code from your instructor (e.g., via email or in class)",
+            "Go to the Courses page",
+            "Click the \"Join Course\" button",
+            "Enter the Join Code exactly as provided",
+            "Click \"Join\" - you're now enrolled!",
+            "The course will appear in your course list immediately"
+          ]
+        },
+        "viewing": {
+          "title": "Viewing Your Courses",
+          "steps": [
+            "All courses you're enrolled in appear on the Courses page",
+            "Click on any course to see its details",
+            "View course description, objectives, and syllabus",
+            "Access sessions and forum from the course page"
+          ]
+        }
+      },
+      "sessions": {
+        "understanding": {
+          "title": "Understanding Sessions",
+          "steps": [
+            "Each course has multiple sessions (like class meetings)",
+            "Sessions show: Topic, learning objectives, and discussion prompts",
+            "Look for session status to know what's happening:",
+            "• Scheduled: Upcoming session, not yet active",
+            "• Live: Happening now - go to Forum to participate!",
+            "• Completed: Session ended, check Reports for summary"
+          ]
+        },
+        "participating": {
+          "title": "Participating in Live Sessions",
+          "steps": [
+            "When a session is Live, go to the Forum page",
+            "Select the course and Live session",
+            "Read the case study or discussion prompt",
+            "Post your thoughts and respond to classmates",
+            "Your participation is tracked and may be graded"
+          ]
+        }
+      },
+      "forum": {
+        "participating": {
+          "title": "Participating in Discussions",
+          "steps": [
+            "Select your course from the dropdown at the top",
+            "Select the Live session to see the discussion",
+            "Read the case study or prompt posted by your instructor",
+            "Click \"New Post\" to share your response",
+            "Be thoughtful - your posts may be AI-scored in reports"
+          ]
+        },
+        "engaging": {
+          "title": "Engaging with Classmates",
+          "steps": [
+            "Read posts from your classmates",
+            "Click \"Reply\" to respond to someone's post",
+            "Build on others' ideas or respectfully disagree",
+            "Look for pinned posts - they contain important information",
+            "Posts with labels (Question, Key Point, etc.) highlight important content"
+          ]
+        },
+        "polls": {
+          "title": "Voting on Polls",
+          "steps": [
+            "During Live sessions, your instructor may create polls",
+            "Polls appear in the Forum or as notifications",
+            "Click on a poll to see the question and options",
+            "Select your answer and submit",
+            "Some polls show results immediately, others after voting closes"
+          ]
+        }
+      },
+      "reports": {
+        "viewing": {
+          "title": "Viewing Session Reports",
+          "steps": [
+            "After a session is Completed, go to Reports page",
+            "Select the session to view its report",
+            "Reports include summaries of key discussion themes",
+            "See main takeaways and learning points",
+            "Review any misconceptions that were clarified"
+          ]
+        }
+      },
+      "instructor": {
+        "requesting": {
+          "title": "Requesting Instructor Access",
+          "steps": [
+            "Want to create your own courses? You can request instructor access",
+            "Go to the Courses page → Become Instructor tab",
+            "Click \"Request Instructor Access\" button",
+            "Your request is sent to administrators for review",
+            "Once approved, you can create and manage your own courses",
+            "You'll still be able to participate as a student in other courses"
+          ]
+        }
+      }
+    }
   }
 }

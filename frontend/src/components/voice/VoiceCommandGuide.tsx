@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Mic, Navigation, Settings, FileText, MessageSquare, BarChart, Users, Play, CheckCircle, Moon, LogOut, Brain, HelpCircle } from 'lucide-react';
+import { X, Mic, Navigation, Settings, FileText, MessageSquare, BarChart, Users, Play, CheckCircle, Moon, LogOut, Brain, HelpCircle, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
+import { useLanguage } from '@/lib/i18n-provider';
 
 interface VoiceCommandGuideProps {
   onClose: () => void;
@@ -10,178 +12,482 @@ interface VoiceCommandGuideProps {
 
 interface CommandCategory {
   id: string;
-  label: string;
+  labelKey: string;
   icon: React.ElementType;
-  description: string;
+  descriptionKey: string;
   commands: {
-    phrase: string;
-    alternatives?: string[];
-    description: string;
+    phraseEn: string;
+    phraseEs: string;
+    alternativesEn?: string[];
+    alternativesEs?: string[];
+    descriptionKey: string;
   }[];
 }
 
 const commandCategories: CommandCategory[] = [
   {
     id: 'navigation',
-    label: 'Navigation',
+    labelKey: 'voiceGuide.categories.navigation',
     icon: Navigation,
-    description: 'Navigate between pages',
+    descriptionKey: 'voiceGuide.descriptions.navigation',
     commands: [
-      { phrase: '"Go to courses"', alternatives: ['"Open courses"', '"Courses page"'], description: 'Navigate to the Courses page' },
-      { phrase: '"Go to sessions"', alternatives: ['"Open sessions"', '"Sessions page"'], description: 'Navigate to the Sessions page' },
-      { phrase: '"Go to forum"', alternatives: ['"Open forum"', '"Forum page"'], description: 'Navigate to the Forum page' },
-      { phrase: '"Go to console"', alternatives: ['"Open console"', '"Console page"'], description: 'Navigate to the Console page (instructors only)' },
-      { phrase: '"Go to reports"', alternatives: ['"Open reports"', '"Reports page"'], description: 'Navigate to the Reports page' },
+      {
+        phraseEn: '"Go to courses"',
+        phraseEs: '"Ir a cursos"',
+        alternativesEn: ['"Open courses"', '"Courses page"'],
+        alternativesEs: ['"Abrir cursos"', '"Mostrar mis cursos"'],
+        descriptionKey: 'voiceGuide.commands.goToCourses'
+      },
+      {
+        phraseEn: '"Go to sessions"',
+        phraseEs: '"Ir a sesiones"',
+        alternativesEn: ['"Open sessions"', '"Sessions page"'],
+        alternativesEs: ['"Abrir sesiones"', '"Mostrar sesiones"'],
+        descriptionKey: 'voiceGuide.commands.goToSessions'
+      },
+      {
+        phraseEn: '"Go to forum"',
+        phraseEs: '"Ir al foro"',
+        alternativesEn: ['"Open forum"', '"Forum page"'],
+        alternativesEs: ['"Abrir el foro"', '"Ver las discusiones"'],
+        descriptionKey: 'voiceGuide.commands.goToForum'
+      },
+      {
+        phraseEn: '"Go to console"',
+        phraseEs: '"Ir a la consola"',
+        alternativesEn: ['"Open console"', '"Console page"'],
+        alternativesEs: ['"Abrir la consola"', '"Quiero usar la consola"'],
+        descriptionKey: 'voiceGuide.commands.goToConsole'
+      },
+      {
+        phraseEn: '"Go to reports"',
+        phraseEs: '"Ir a reportes"',
+        alternativesEn: ['"Open reports"', '"Reports page"'],
+        alternativesEs: ['"Abrir reportes"', '"Ver los informes"'],
+        descriptionKey: 'voiceGuide.commands.goToReports'
+      },
     ],
   },
   {
     id: 'courses',
-    label: 'Courses Page',
+    labelKey: 'voiceGuide.categories.courses',
     icon: FileText,
-    description: 'Course management commands',
+    descriptionKey: 'voiceGuide.descriptions.courses',
     commands: [
-      { phrase: '"Create a course"', alternatives: ['"New course"', '"Make a course"'], description: 'Start the course creation form (voice will guide you through fields)' },
-      { phrase: '"Generate"', alternatives: ['"Generate syllabus"', '"AI help"'], description: 'When asked for syllabus or objectives, say "generate" for AI assistance' },
-      { phrase: '"Yes" / "Use it"', alternatives: ['"Looks good"', '"Accept"'], description: 'Accept the AI-generated content' },
-      { phrase: '"No" / "Edit"', alternatives: ['"Let me edit"', '"I\'ll dictate"'], description: 'Decline AI content and enter manually' },
-      { phrase: '"Select first course"', alternatives: ['"Choose first course"', '"Open first course"'], description: 'Select the first course in the list' },
-      { phrase: '"Select [course name]"', alternatives: ['"Open [course name]"', '"Choose [course name]"'], description: 'Select a specific course by name' },
+      {
+        phraseEn: '"Create a course"',
+        phraseEs: '"Crear un curso"',
+        alternativesEn: ['"New course"', '"Make a course"'],
+        alternativesEs: ['"Nuevo curso"', '"Hacer un curso"'],
+        descriptionKey: 'voiceGuide.commands.createCourse'
+      },
+      {
+        phraseEn: '"Generate"',
+        phraseEs: '"Generar"',
+        alternativesEn: ['"Generate syllabus"', '"AI help"'],
+        alternativesEs: ['"Generar programa"', '"Ayuda de IA"'],
+        descriptionKey: 'voiceGuide.commands.generate'
+      },
+      {
+        phraseEn: '"Yes" / "Use it"',
+        phraseEs: '"Sí" / "Usar esto"',
+        alternativesEn: ['"Looks good"', '"Accept"'],
+        alternativesEs: ['"Se ve bien"', '"Aceptar"'],
+        descriptionKey: 'voiceGuide.commands.acceptGenerated'
+      },
+      {
+        phraseEn: '"No" / "Edit"',
+        phraseEs: '"No" / "Editar"',
+        alternativesEn: ['"Let me edit"', '"I\'ll dictate"'],
+        alternativesEs: ['"Déjame editar"', '"Voy a dictar"'],
+        descriptionKey: 'voiceGuide.commands.declineGenerated'
+      },
+      {
+        phraseEn: '"Select first course"',
+        phraseEs: '"Seleccionar primer curso"',
+        alternativesEn: ['"Choose first course"', '"Open first course"'],
+        alternativesEs: ['"Elegir primer curso"', '"Abrir primer curso"'],
+        descriptionKey: 'voiceGuide.commands.selectFirstCourse'
+      },
     ],
   },
   {
     id: 'sessions',
-    label: 'Sessions Page',
+    labelKey: 'voiceGuide.categories.sessions',
     icon: Play,
-    description: 'Session management commands',
+    descriptionKey: 'voiceGuide.descriptions.sessions',
     commands: [
-      { phrase: '"Go to manage status tab"', alternatives: ['"Manage status"', '"Status tab"'], description: 'Switch to the manage status tab' },
-      { phrase: '"Go to create tab"', alternatives: ['"Create session tab"', '"New session"'], description: 'Switch to the create session tab' },
-      { phrase: '"View materials"', alternatives: ['"Show materials"', '"Open materials"', '"Course materials"'], description: 'Switch to the Materials tab to view/download course files' },
-      { phrase: '"Generate"', alternatives: ['"Generate session plan"', '"AI help"'], description: 'When asked for description, say "generate" for AI session plan with prompts and case study' },
-      { phrase: '"Select course"', alternatives: ['"Choose course"', '"Pick a course"'], description: 'Open the course dropdown' },
-      { phrase: '"Select first"', alternatives: ['"Choose first"', '"First option"'], description: 'Select the first item in a dropdown' },
-      { phrase: '"Select [name]"', alternatives: ['"Choose [name]"'], description: 'Select a specific item by name' },
-      { phrase: '"Go live"', alternatives: ['"Start session"', '"Make it live"', '"Launch session"'], description: 'Set the session status to Live' },
-      { phrase: '"Set to draft"', alternatives: ['"Make it draft"', '"Revert to draft"'], description: 'Set the session status to Draft' },
-      { phrase: '"Complete"', alternatives: ['"End session"', '"Finish session"', '"Mark complete"'], description: 'Set the session status to Completed' },
-      { phrase: '"Schedule"', alternatives: ['"Schedule session"', '"Set to scheduled"'], description: 'Set the session status to Scheduled' },
+      {
+        phraseEn: '"Go to manage status tab"',
+        phraseEs: '"Ir a pestaña de estado"',
+        alternativesEn: ['"Manage status"', '"Status tab"'],
+        alternativesEs: ['"Gestionar estado"', '"Pestaña de estado"'],
+        descriptionKey: 'voiceGuide.commands.manageStatus'
+      },
+      {
+        phraseEn: '"View materials"',
+        phraseEs: '"Ver materiales"',
+        alternativesEn: ['"Show materials"', '"Open materials"', '"Course materials"'],
+        alternativesEs: ['"Mostrar materiales"', '"Abrir materiales"', '"Materiales del curso"'],
+        descriptionKey: 'voiceGuide.commands.viewMaterials'
+      },
+      {
+        phraseEn: '"Go live"',
+        phraseEs: '"Iniciar en vivo"',
+        alternativesEn: ['"Start session"', '"Make it live"', '"Launch session"'],
+        alternativesEs: ['"Comenzar sesión"', '"Poner en vivo"', '"Activar sesión"'],
+        descriptionKey: 'voiceGuide.commands.goLive'
+      },
+      {
+        phraseEn: '"Set to draft"',
+        phraseEs: '"Poner en borrador"',
+        alternativesEn: ['"Make it draft"', '"Revert to draft"'],
+        alternativesEs: ['"Cambiar a borrador"', '"Volver a borrador"'],
+        descriptionKey: 'voiceGuide.commands.setToDraft'
+      },
+      {
+        phraseEn: '"Complete"',
+        phraseEs: '"Completar"',
+        alternativesEn: ['"End session"', '"Finish session"', '"Mark complete"'],
+        alternativesEs: ['"Terminar sesión"', '"Finalizar sesión"', '"Marcar completada"'],
+        descriptionKey: 'voiceGuide.commands.completeSession'
+      },
+      {
+        phraseEn: '"Schedule"',
+        phraseEs: '"Programar"',
+        alternativesEn: ['"Schedule session"', '"Set to scheduled"'],
+        alternativesEs: ['"Programar sesión"', '"Agendar sesión"'],
+        descriptionKey: 'voiceGuide.commands.scheduleSession'
+      },
+    ],
+  },
+  {
+    id: 'materials',
+    labelKey: 'voiceGuide.categories.materials',
+    icon: FolderOpen,
+    descriptionKey: 'voiceGuide.descriptions.materials',
+    commands: [
+      {
+        phraseEn: '"View materials"',
+        phraseEs: '"Ver materiales"',
+        alternativesEn: ['"Show materials"', '"Open materials"'],
+        alternativesEs: ['"Mostrar materiales"', '"Abrir materiales"'],
+        descriptionKey: 'voiceGuide.commands.viewMaterials'
+      },
+      {
+        phraseEn: '"Show course files"',
+        phraseEs: '"Mostrar archivos del curso"',
+        alternativesEn: ['"View documents"', '"Course readings"'],
+        alternativesEs: ['"Ver documentos"', '"Lecturas del curso"'],
+        descriptionKey: 'voiceGuide.commands.showCourseFiles'
+      },
     ],
   },
   {
     id: 'forum',
-    label: 'Forum Page',
+    labelKey: 'voiceGuide.categories.forum',
     icon: MessageSquare,
-    description: 'Forum and discussion commands',
+    descriptionKey: 'voiceGuide.descriptions.forum',
     commands: [
-      { phrase: '"Go to cases tab"', alternatives: ['"Cases"', '"Case studies"'], description: 'Switch to the Cases tab' },
-      { phrase: '"Go to discussion tab"', alternatives: ['"Discussion"', '"Discussions"'], description: 'Switch to the Discussion tab' },
-      { phrase: '"Select course"', alternatives: ['"Choose course"'], description: 'Open the course dropdown' },
-      { phrase: '"Select session"', alternatives: ['"Choose session"'], description: 'Open the session dropdown' },
-      { phrase: '"Select live session"', alternatives: ['"Choose live session"', '"Active session"'], description: 'Select only live sessions from dropdown' },
-      { phrase: '"Post to discussion"', alternatives: ['"New post"', '"Create post"'], description: 'Start creating a new discussion post' },
-      { phrase: '"Post a case"', alternatives: ['"Create case study"', '"New case"'], description: 'Start creating a new case study' },
+      {
+        phraseEn: '"Go to cases tab"',
+        phraseEs: '"Ir a pestaña de casos"',
+        alternativesEn: ['"Cases"', '"Case studies"'],
+        alternativesEs: ['"Casos"', '"Casos de estudio"'],
+        descriptionKey: 'voiceGuide.commands.goToCases'
+      },
+      {
+        phraseEn: '"Go to discussion tab"',
+        phraseEs: '"Ir a discusión"',
+        alternativesEn: ['"Discussion"', '"Discussions"'],
+        alternativesEs: ['"Discusiones"', '"Ver discusión"'],
+        descriptionKey: 'voiceGuide.commands.goToDiscussion'
+      },
+      {
+        phraseEn: '"Post to discussion"',
+        phraseEs: '"Publicar en discusión"',
+        alternativesEn: ['"New post"', '"Create post"'],
+        alternativesEs: ['"Nueva publicación"', '"Crear publicación"'],
+        descriptionKey: 'voiceGuide.commands.postToDiscussion'
+      },
+      {
+        phraseEn: '"Post a case"',
+        phraseEs: '"Publicar un caso"',
+        alternativesEn: ['"Create case study"', '"New case"'],
+        alternativesEs: ['"Crear caso de estudio"', '"Nuevo caso"'],
+        descriptionKey: 'voiceGuide.commands.postCase'
+      },
     ],
   },
   {
     id: 'console',
-    label: 'Console Page',
+    labelKey: 'voiceGuide.categories.console',
     icon: Settings,
-    description: 'Console and copilot commands',
+    descriptionKey: 'voiceGuide.descriptions.console',
     commands: [
-      { phrase: '"Go to copilot tab"', alternatives: ['"AI copilot"', '"Copilot"'], description: 'Switch to the AI Copilot tab' },
-      { phrase: '"Go to polls tab"', alternatives: ['"Polls"', '"Poll tab"'], description: 'Switch to the Polls tab' },
-      { phrase: '"Go to cases tab"', alternatives: ['"Post case"', '"Cases"'], description: 'Switch to the Post Case tab' },
-      { phrase: '"Go to requests tab"', alternatives: ['"Instructor requests"', '"Requests"'], description: 'Switch to the Instructor Requests tab' },
-      { phrase: '"Go to roster tab"', alternatives: ['"Roster"', '"Student roster"'], description: 'Switch to the Roster tab' },
-      { phrase: '"Start copilot"', alternatives: ['"Activate copilot"', '"Turn on copilot"'], description: 'Start the AI Copilot monitoring' },
-      { phrase: '"Stop copilot"', alternatives: ['"Deactivate copilot"', '"Turn off copilot"'], description: 'Stop the AI Copilot monitoring' },
-      { phrase: '"Refresh interventions"', alternatives: ['"Update interventions"', '"Get interventions"'], description: 'Refresh the copilot suggestions' },
-      { phrase: '"Create a poll"', alternatives: ['"New poll"', '"Make a poll"'], description: 'Start creating a new poll' },
+      {
+        phraseEn: '"Go to copilot tab"',
+        phraseEs: '"Ir a copilot"',
+        alternativesEn: ['"AI copilot"', '"Copilot"'],
+        alternativesEs: ['"Copilot IA"', '"Asistente"'],
+        descriptionKey: 'voiceGuide.commands.goToCopilot'
+      },
+      {
+        phraseEn: '"Start copilot"',
+        phraseEs: '"Iniciar copilot"',
+        alternativesEn: ['"Activate copilot"', '"Turn on copilot"'],
+        alternativesEs: ['"Activar copilot"', '"Encender copilot"'],
+        descriptionKey: 'voiceGuide.commands.startCopilot'
+      },
+      {
+        phraseEn: '"Stop copilot"',
+        phraseEs: '"Detener copilot"',
+        alternativesEn: ['"Deactivate copilot"', '"Turn off copilot"'],
+        alternativesEs: ['"Desactivar copilot"', '"Apagar copilot"'],
+        descriptionKey: 'voiceGuide.commands.stopCopilot'
+      },
+      {
+        phraseEn: '"Refresh interventions"',
+        phraseEs: '"Actualizar intervenciones"',
+        alternativesEn: ['"Update interventions"', '"Get interventions"'],
+        alternativesEs: ['"Refrescar intervenciones"', '"Ver intervenciones"'],
+        descriptionKey: 'voiceGuide.commands.refreshInterventions'
+      },
+      {
+        phraseEn: '"Create a poll"',
+        phraseEs: '"Crear una encuesta"',
+        alternativesEn: ['"New poll"', '"Make a poll"'],
+        alternativesEs: ['"Nueva encuesta"', '"Hacer una pregunta"'],
+        descriptionKey: 'voiceGuide.commands.createPoll'
+      },
     ],
   },
   {
     id: 'reports',
-    label: 'Reports Page',
+    labelKey: 'voiceGuide.categories.reports',
     icon: BarChart,
-    description: 'Report commands',
+    descriptionKey: 'voiceGuide.descriptions.reports',
     commands: [
-      { phrase: '"Select course"', alternatives: ['"Choose course"'], description: 'Open the course dropdown' },
-      { phrase: '"Select session"', alternatives: ['"Choose session"'], description: 'Open the session dropdown' },
-      { phrase: '"Refresh report"', alternatives: ['"Reload report"', '"Update report"'], description: 'Refresh the current report' },
-      { phrase: '"Regenerate report"', alternatives: ['"Generate new report"', '"Rebuild report"'], description: 'Regenerate the AI report' },
+      {
+        phraseEn: '"Refresh report"',
+        phraseEs: '"Actualizar reporte"',
+        alternativesEn: ['"Reload report"', '"Update report"'],
+        alternativesEs: ['"Refrescar reporte"', '"Recargar informe"'],
+        descriptionKey: 'voiceGuide.commands.refreshReport'
+      },
+      {
+        phraseEn: '"Regenerate report"',
+        phraseEs: '"Regenerar reporte"',
+        alternativesEn: ['"Generate new report"', '"Rebuild report"'],
+        alternativesEs: ['"Generar nuevo reporte"', '"Crear nuevo informe"'],
+        descriptionKey: 'voiceGuide.commands.regenerateReport'
+      },
     ],
   },
   {
     id: 'ai-generation',
-    label: 'AI Content Generation',
+    labelKey: 'voiceGuide.categories.aiGeneration',
     icon: Brain,
-    description: 'Let AI help create course content',
+    descriptionKey: 'voiceGuide.descriptions.aiGeneration',
     commands: [
-      { phrase: '"Generate"', alternatives: ['"Generate syllabus"', '"AI help"', '"Create for me"'], description: 'When filling forms, say "generate" to have AI create content for you' },
-      { phrase: '"Yes, use it"', alternatives: ['"Looks good"', '"Accept"', '"Use this"'], description: 'Accept the AI-generated content and continue' },
-      { phrase: '"No, let me edit"', alternatives: ['"I\'ll dictate"', '"Manual"'], description: 'Decline AI content and enter manually or edit the generated text' },
-      { phrase: 'During Course Creation:', description: 'AI can generate syllabus (8-12 weeks) and learning objectives (5-7 items)' },
-      { phrase: 'During Session Creation:', description: 'AI can generate session plans with discussion prompts and case studies' },
+      {
+        phraseEn: '"Generate"',
+        phraseEs: '"Generar"',
+        alternativesEn: ['"Generate syllabus"', '"AI help"', '"Create for me"'],
+        alternativesEs: ['"Generar programa"', '"Ayuda de IA"', '"Crear para mí"'],
+        descriptionKey: 'voiceGuide.commands.generateContent'
+      },
+      {
+        phraseEn: '"Yes, use it"',
+        phraseEs: '"Sí, usar esto"',
+        alternativesEn: ['"Looks good"', '"Accept"', '"Use this"'],
+        alternativesEs: ['"Se ve bien"', '"Aceptar"', '"Usar"'],
+        descriptionKey: 'voiceGuide.commands.acceptAIContent'
+      },
+      {
+        phraseEn: '"No, let me edit"',
+        phraseEs: '"No, déjame editar"',
+        alternativesEn: ['"I\'ll dictate"', '"Manual"'],
+        alternativesEs: ['"Voy a dictar"', '"Manual"'],
+        descriptionKey: 'voiceGuide.commands.declineAIContent'
+      },
     ],
   },
   {
     id: 'intelligence',
-    label: 'AI Insights',
+    labelKey: 'voiceGuide.categories.intelligence',
     icon: HelpCircle,
-    description: 'Ask questions and get intelligent summaries',
+    descriptionKey: 'voiceGuide.descriptions.intelligence',
     commands: [
-      { phrase: '"How\'s the class doing?"', alternatives: ['"Class status"', '"Quick update"', '"Session overview"'], description: 'Get a quick summary of participation, engagement, and copilot insights' },
-      { phrase: '"Who needs help?"', alternatives: ['"Struggling students"', '"Who\'s behind?"'], description: 'Identify students who haven\'t participated or are struggling' },
-      { phrase: '"What were the misconceptions?"', alternatives: ['"Common mistakes"', '"What did students get wrong?"'], description: 'Review misconceptions identified in reports or by copilot' },
-      { phrase: '"How did students score?"', alternatives: ['"Student scores"', '"Class performance"'], description: 'Get score statistics from the session report' },
-      { phrase: '"How was participation?"', alternatives: ['"Participation rate"', '"Who participated?"'], description: 'Get detailed participation statistics' },
-      { phrase: '"Read the latest posts"', alternatives: ['"What did students post?"', '"Recent activity"'], description: 'Have the assistant read recent discussion posts aloud' },
-      { phrase: '"What did copilot suggest?"', alternatives: ['"Copilot suggestions"', '"Teaching tips"'], description: 'Hear the latest copilot recommendations and insights' },
-      { phrase: '"Summarize the discussion"', alternatives: ['"Discussion summary"', '"Key themes"'], description: 'Get a summary of what students are discussing' },
-      { phrase: '"How is [name] doing?"', alternatives: ['"Check on [name]"', '"[name]\'s performance"'], description: 'Look up a specific student\'s participation and scores' },
+      {
+        phraseEn: '"How\'s the class doing?"',
+        phraseEs: '"¿Cómo va la clase?"',
+        alternativesEn: ['"Class status"', '"Quick update"', '"Session overview"'],
+        alternativesEs: ['"Estado de la clase"', '"Actualización rápida"', '"Resumen de sesión"'],
+        descriptionKey: 'voiceGuide.commands.classStatus'
+      },
+      {
+        phraseEn: '"Who needs help?"',
+        phraseEs: '"¿Quién necesita ayuda?"',
+        alternativesEn: ['"Struggling students"', '"Who\'s behind?"'],
+        alternativesEs: ['"Estudiantes con dificultades"', '"¿Quién está atrasado?"'],
+        descriptionKey: 'voiceGuide.commands.whoNeedsHelp'
+      },
+      {
+        phraseEn: '"What were the misconceptions?"',
+        phraseEs: '"¿Cuáles fueron los errores?"',
+        alternativesEn: ['"Common mistakes"', '"What did students get wrong?"'],
+        alternativesEs: ['"Errores comunes"', '"¿Qué respondieron mal?"'],
+        descriptionKey: 'voiceGuide.commands.misconceptions'
+      },
+      {
+        phraseEn: '"How did students score?"',
+        phraseEs: '"¿Cómo les fue a los estudiantes?"',
+        alternativesEn: ['"Student scores"', '"Class performance"'],
+        alternativesEs: ['"Puntuaciones"', '"Desempeño de la clase"'],
+        descriptionKey: 'voiceGuide.commands.studentScores'
+      },
+      {
+        phraseEn: '"Summarize the discussion"',
+        phraseEs: '"Resumir la discusión"',
+        alternativesEn: ['"Discussion summary"', '"Key themes"'],
+        alternativesEs: ['"Resumen de discusión"', '"Temas clave"'],
+        descriptionKey: 'voiceGuide.commands.summarizeDiscussion'
+      },
     ],
   },
   {
     id: 'dropdowns',
-    label: 'Dropdown Selection',
+    labelKey: 'voiceGuide.categories.dropdowns',
     icon: Users,
-    description: 'Select items from dropdowns',
+    descriptionKey: 'voiceGuide.descriptions.dropdowns',
     commands: [
-      { phrase: '"Select first"', alternatives: ['"First option"', '"Choose first"'], description: 'Select the first item' },
-      { phrase: '"Select second"', alternatives: ['"Second option"', '"Choose second"'], description: 'Select the second item' },
-      { phrase: '"Select [name]"', alternatives: ['"Choose [name]"'], description: 'Select item by name' },
-      { phrase: '"Cancel"', alternatives: ['"Never mind"', '"Go back"', '"Stop"'], description: 'Cancel the current selection' },
-      { phrase: '"Skip"', alternatives: ['"Next"', '"Pass"'], description: 'Skip the current field' },
+      {
+        phraseEn: '"Select first"',
+        phraseEs: '"Seleccionar primero"',
+        alternativesEn: ['"First option"', '"Choose first"'],
+        alternativesEs: ['"Primera opción"', '"Elegir primero"'],
+        descriptionKey: 'voiceGuide.commands.selectFirst'
+      },
+      {
+        phraseEn: '"Select second"',
+        phraseEs: '"Seleccionar segundo"',
+        alternativesEn: ['"Second option"', '"Choose second"'],
+        alternativesEs: ['"Segunda opción"', '"Elegir segundo"'],
+        descriptionKey: 'voiceGuide.commands.selectSecond'
+      },
+      {
+        phraseEn: '"Select [name]"',
+        phraseEs: '"Seleccionar [nombre]"',
+        alternativesEn: ['"Choose [name]"'],
+        alternativesEs: ['"Elegir [nombre]"'],
+        descriptionKey: 'voiceGuide.commands.selectByName'
+      },
+      {
+        phraseEn: '"Cancel"',
+        phraseEs: '"Cancelar"',
+        alternativesEn: ['"Never mind"', '"Go back"', '"Stop"'],
+        alternativesEs: ['"No importa"', '"Volver"', '"Detener"'],
+        descriptionKey: 'voiceGuide.commands.cancel'
+      },
+      {
+        phraseEn: '"Skip"',
+        phraseEs: '"Saltar"',
+        alternativesEn: ['"Next"', '"Pass"'],
+        alternativesEs: ['"Siguiente"', '"Pasar"'],
+        descriptionKey: 'voiceGuide.commands.skip'
+      },
     ],
   },
   {
     id: 'forms',
-    label: 'Form Filling',
+    labelKey: 'voiceGuide.categories.forms',
     icon: CheckCircle,
-    description: 'Fill out forms by voice',
+    descriptionKey: 'voiceGuide.descriptions.forms',
     commands: [
-      { phrase: '[Speak your answer]', description: 'Dictate text for the current form field' },
-      { phrase: '"Yes"', alternatives: ['"Yeah"', '"Sure"', '"Okay"'], description: 'Confirm or agree to a prompt' },
-      { phrase: '"No"', alternatives: ['"Nope"', '"No thanks"'], description: 'Decline or disagree' },
-      { phrase: '"That\'s enough"', alternatives: ['"Done"', '"Finish"', '"No more"'], description: 'Stop adding more items (e.g., poll options)' },
-      { phrase: '"Cancel"', alternatives: ['"Stop"', '"Abort"', '"Never mind"'], description: 'Cancel the current form' },
-      { phrase: '"Submit"', alternatives: ['"Confirm"', '"Send"'], description: 'Submit the current form' },
+      {
+        phraseEn: '[Speak your answer]',
+        phraseEs: '[Dicta tu respuesta]',
+        descriptionKey: 'voiceGuide.commands.dictateAnswer'
+      },
+      {
+        phraseEn: '"Yes"',
+        phraseEs: '"Sí"',
+        alternativesEn: ['"Yeah"', '"Sure"', '"Okay"'],
+        alternativesEs: ['"Claro"', '"Okay"', '"De acuerdo"'],
+        descriptionKey: 'voiceGuide.commands.confirm'
+      },
+      {
+        phraseEn: '"No"',
+        phraseEs: '"No"',
+        alternativesEn: ['"Nope"', '"No thanks"'],
+        alternativesEs: ['"No gracias"', '"Cancelar"'],
+        descriptionKey: 'voiceGuide.commands.decline'
+      },
+      {
+        phraseEn: '"That\'s enough"',
+        phraseEs: '"Es suficiente"',
+        alternativesEn: ['"Done"', '"Finish"', '"No more"'],
+        alternativesEs: ['"Listo"', '"Terminar"', '"No más"'],
+        descriptionKey: 'voiceGuide.commands.finishAdding'
+      },
+      {
+        phraseEn: '"Submit"',
+        phraseEs: '"Enviar"',
+        alternativesEn: ['"Confirm"', '"Send"'],
+        alternativesEs: ['"Confirmar"', '"Mandar"'],
+        descriptionKey: 'voiceGuide.commands.submit'
+      },
     ],
   },
   {
     id: 'theme',
-    label: 'Theme & Account',
+    labelKey: 'voiceGuide.categories.theme',
     icon: Moon,
-    description: 'Theme and account commands',
+    descriptionKey: 'voiceGuide.descriptions.theme',
     commands: [
-      { phrase: '"Dark mode"', alternatives: ['"Switch to dark"', '"Enable dark mode"'], description: 'Switch to dark theme' },
-      { phrase: '"Light mode"', alternatives: ['"Switch to light"', '"Enable light mode"'], description: 'Switch to light theme' },
-      { phrase: '"Toggle theme"', alternatives: ['"Change theme"', '"Switch theme"'], description: 'Toggle between light and dark' },
-      { phrase: '"Open menu"', alternatives: ['"Account menu"', '"My account"'], description: 'Open the user dropdown menu' },
-      { phrase: '"View voice guide"', alternatives: ['"Voice commands"', '"Show commands"'], description: 'Open this voice command guide' },
-      { phrase: '"Forum instructions"', alternatives: ['"Platform guide"', '"How to use"'], description: 'Open the platform instructions' },
-      { phrase: '"Sign out"', alternatives: ['"Log out"', '"Logout"'], description: 'Sign out of the application' },
-      { phrase: '"Got it"', alternatives: ['"Okay"', '"Done"', '"Close"'], description: 'Close popup windows like this guide' },
+      {
+        phraseEn: '"Dark mode"',
+        phraseEs: '"Modo oscuro"',
+        alternativesEn: ['"Switch to dark"', '"Enable dark mode"'],
+        alternativesEs: ['"Cambiar a oscuro"', '"Activar modo oscuro"'],
+        descriptionKey: 'voiceGuide.commands.darkMode'
+      },
+      {
+        phraseEn: '"Light mode"',
+        phraseEs: '"Modo claro"',
+        alternativesEn: ['"Switch to light"', '"Enable light mode"'],
+        alternativesEs: ['"Cambiar a claro"', '"Activar modo claro"'],
+        descriptionKey: 'voiceGuide.commands.lightMode'
+      },
+      {
+        phraseEn: '"Open menu"',
+        phraseEs: '"Abrir menú"',
+        alternativesEn: ['"Account menu"', '"My account"'],
+        alternativesEs: ['"Menú de cuenta"', '"Mi cuenta"'],
+        descriptionKey: 'voiceGuide.commands.openMenu'
+      },
+      {
+        phraseEn: '"View voice guide"',
+        phraseEs: '"Ver guía de voz"',
+        alternativesEn: ['"Voice commands"', '"Show commands"'],
+        alternativesEs: ['"Comandos de voz"', '"Mostrar comandos"'],
+        descriptionKey: 'voiceGuide.commands.viewVoiceGuide'
+      },
+      {
+        phraseEn: '"Sign out"',
+        phraseEs: '"Cerrar sesión"',
+        alternativesEn: ['"Log out"', '"Logout"'],
+        alternativesEs: ['"Salir"', '"Desconectar"'],
+        descriptionKey: 'voiceGuide.commands.signOut'
+      },
+      {
+        phraseEn: '"Got it"',
+        phraseEs: '"Entendido"',
+        alternativesEn: ['"Okay"', '"Done"', '"Close"'],
+        alternativesEs: ['"Okay"', '"Listo"', '"Cerrar"'],
+        descriptionKey: 'voiceGuide.commands.gotIt'
+      },
     ],
   },
 ];
@@ -189,6 +495,9 @@ const commandCategories: CommandCategory[] = [
 export function VoiceCommandGuide({ onClose }: VoiceCommandGuideProps) {
   const [activeCategory, setActiveCategory] = useState('navigation');
   const activeCommands = commandCategories.find(c => c.id === activeCategory);
+  const t = useTranslations();
+  const { locale } = useLanguage();
+  const isSpanish = locale === 'es';
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -201,10 +510,10 @@ export function VoiceCommandGuide({ onClose }: VoiceCommandGuideProps) {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Voice Command Guide
+                {t('voice.voiceGuide')}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Complete list of voice commands for AristAI
+                {t('voiceGuide.subtitle')}
               </p>
             </div>
           </div>
@@ -236,7 +545,7 @@ export function VoiceCommandGuide({ onClose }: VoiceCommandGuideProps) {
                     )}
                   >
                     <Icon className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">{category.label}</span>
+                    <span className="truncate">{t(category.labelKey)}</span>
                   </button>
                 );
               })}
@@ -249,36 +558,41 @@ export function VoiceCommandGuide({ onClose }: VoiceCommandGuideProps) {
               <div>
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {activeCommands.label}
+                    {t(activeCommands.labelKey)}
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {activeCommands.description}
+                    {t(activeCommands.descriptionKey)}
                   </p>
                 </div>
                 <div className="space-y-4">
-                  {activeCommands.commands.map((cmd, index) => (
-                    <div
-                      key={index}
-                      className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
-                    >
-                      <div className="flex flex-wrap items-start gap-2 mb-2">
-                        <code className="px-3 py-1 bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 rounded-md text-sm font-mono">
-                          {cmd.phrase}
-                        </code>
-                        {cmd.alternatives && cmd.alternatives.map((alt, altIndex) => (
-                          <code
-                            key={altIndex}
-                            className="px-2 py-1 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-md text-xs font-mono"
-                          >
-                            {alt}
+                  {activeCommands.commands.map((cmd, index) => {
+                    const phrase = isSpanish ? cmd.phraseEs : cmd.phraseEn;
+                    const alternatives = isSpanish ? cmd.alternativesEs : cmd.alternativesEn;
+
+                    return (
+                      <div
+                        key={index}
+                        className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600"
+                      >
+                        <div className="flex flex-wrap items-start gap-2 mb-2">
+                          <code className="px-3 py-1 bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 rounded-md text-sm font-mono">
+                            {phrase}
                           </code>
-                        ))}
+                          {alternatives && alternatives.map((alt, altIndex) => (
+                            <code
+                              key={altIndex}
+                              className="px-2 py-1 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-md text-xs font-mono"
+                            >
+                              {alt}
+                            </code>
+                          ))}
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {t(cmd.descriptionKey)}
+                        </p>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {cmd.description}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -288,19 +602,19 @@ export function VoiceCommandGuide({ onClose }: VoiceCommandGuideProps) {
         {/* Tips Footer */}
         <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border-t border-gray-200 dark:border-gray-700">
           <div className="text-sm">
-            <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">Tips:</p>
+            <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">{t('voice.tips')}:</p>
             <ul className="text-blue-700 dark:text-blue-300 space-y-1">
-              <li>- Speak naturally - the assistant understands conversational language</li>
-              <li>- Wait for the assistant to finish speaking before giving the next command</li>
-              <li>- Say "cancel" or "stop" to abort any ongoing operation</li>
-              <li>- The voice controller is at the bottom-right corner of the screen</li>
+              <li>- {t('voice.tipNatural')}</li>
+              <li>- {t('voice.tipWait')}</li>
+              <li>- {t('voice.tipCancel')}</li>
+              <li>- {t('voice.tipLocation')}</li>
             </ul>
-            <p className="font-medium text-blue-900 dark:text-blue-100 mt-3 mb-1">New! AI Insights:</p>
+            <p className="font-medium text-blue-900 dark:text-blue-100 mt-3 mb-1">{t('voiceGuide.aiInsights')}:</p>
             <ul className="text-blue-700 dark:text-blue-300 space-y-1">
-              <li>- Ask "How's the class doing?" for a quick status during live sessions</li>
-              <li>- Ask "Who needs help?" to identify struggling or silent students</li>
-              <li>- Ask "What did copilot suggest?" for teaching recommendations</li>
-              <li>- Say "How is [student name] doing?" to check on specific students</li>
+              <li>- {t('voiceGuide.tipClassStatus')}</li>
+              <li>- {t('voiceGuide.tipWhoNeedsHelp')}</li>
+              <li>- {t('voiceGuide.tipCopilotSuggestions')}</li>
+              <li>- {t('voiceGuide.tipSpecificStudent')}</li>
             </ul>
           </div>
         </div>
@@ -312,7 +626,7 @@ export function VoiceCommandGuide({ onClose }: VoiceCommandGuideProps) {
             className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
             data-voice-id="got-it-voice-guide"
           >
-            Got It!
+            {t('voiceGuide.gotIt')}
           </button>
         </div>
       </div>

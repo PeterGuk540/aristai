@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { User, LogOut, Settings, ChevronDown, HelpCircle, Mic, BookOpen } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 
 interface UserMenuProps {
   onShowGuide?: () => void;
@@ -14,6 +15,7 @@ export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
   const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const t = useTranslations();
 
   // Close menu on outside click
   useEffect(() => {
@@ -135,7 +137,7 @@ export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
               data-voice-id="view-voice-guide"
             >
               <Mic className="h-4 w-4" />
-              Voice Commands
+              {t('voice.voiceCommands')}
             </button>
 
             <button
@@ -153,7 +155,7 @@ export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
               data-voice-id="forum-instructions"
             >
               <BookOpen className="h-4 w-4" />
-              Platform Instructions
+              {t('user.platformInstructions')}
             </button>
 
             <button
@@ -172,7 +174,7 @@ export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
               data-voice-id="open-profile"
             >
               <Settings className="h-4 w-4" />
-              Profile
+              {t('user.profile')}
             </button>
 
             <button
@@ -190,7 +192,7 @@ export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
               data-voice-id="sign-out"
             >
               <LogOut className="h-4 w-4" />
-              Sign out
+              {t('user.signOut')}
             </button>
           </div>
         </div>

@@ -76,6 +76,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const previousUserIdRef = useRef<number | null>(null); // Track user ID for logout detection
   const messageCountRef = useRef(0); // Track message count for session refresh
   const isRefreshingRef = useRef(false); // Track if this is a silent refresh (skip greeting)
+  const lastUserMessageIdRef = useRef<string | null>(null); // Track last user message for transcript updates
+  const pendingTranscriptRef = useRef<string | null>(null); // Track pending transcript to avoid duplicate processing
 
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = 10;
@@ -288,26 +290,40 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         },
         onMessage: ({ source, message }: { source: "user" | "ai"; message: string }) => {
           console.log('💬 Message received:', { source, message });
-          
+
           // Emit events for debugging
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('voice-message', {
               detail: `[${new Date().toISOString()}] ${source}: ${message}`
             }));
           }
-          
+
           if (source === 'user') {
-            // Add user message (this should be the transcribed speech)
-            addUserMessage(message);
+            // ElevenLabs sends interim transcripts as user speaks, then final transcript
+            // We UPDATE the last user message instead of adding new ones for each interim
             console.log('🎤 User speech transcribed:', message);
-            
+
             // Emit transcription event
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('voice-transcription', {
                 detail: `[${new Date().toISOString()}] Transcription: ${message}`
               }));
             }
-            handleTranscript(message);
+
+            // Update or add user message (handles interim transcripts)
+            updateOrAddUserMessage(message);
+
+            // Store pending transcript - will be processed after a brief delay
+            // This prevents processing interim transcripts
+            pendingTranscriptRef.current = message;
+
+            // Debounce: Wait 500ms after last transcript update before processing
+            // This ensures we process the final transcript, not interim ones
+            setTimeout(() => {
+              if (pendingTranscriptRef.current === message && !isProcessingTranscriptRef.current) {
+                handleTranscript(message);
+              }
+            }, 500);
           } else if (source === 'ai') {
             // ElevenLabs agent responses are not used as final product output.
             console.log('🤖 Ignoring ElevenLabs agent response:', message);
@@ -457,12 +473,71 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         addAssistantMessage(response.message);
         speakViaElevenLabs(response.message);
       }
+
+      // Finalize the user message (update context, check refresh threshold)
+      finalizeUserMessage(transcript);
     } catch (error) {
       console.error('❌ MCP voice converse failed:', error);
       setError('Unable to reach MCP service. Please try again.');
     } finally {
       isProcessingTranscriptRef.current = false;
+      pendingTranscriptRef.current = null;
     }
+  };
+
+  // Update the last user message or add a new one
+  // This handles ElevenLabs' interim transcripts - updating the message as user speaks
+  const updateOrAddUserMessage = (content: string) => {
+    setMessages(prev => {
+      // Check if the last message is from the user and was added recently (within 3 seconds)
+      const lastMessage = prev[prev.length - 1];
+      const isRecentUserMessage = lastMessage?.role === 'user' &&
+        (Date.now() - lastMessage.timestamp.getTime()) < 3000;
+
+      if (isRecentUserMessage && lastUserMessageIdRef.current === lastMessage.id) {
+        // Update the existing user message with new transcript
+        console.log('📝 Updating existing user message with transcript:', content);
+        return prev.map(msg =>
+          msg.id === lastMessage.id ? { ...msg, content } : msg
+        );
+      } else {
+        // Add a new user message
+        const newMessage: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          content,
+          timestamp: new Date(),
+        };
+        lastUserMessageIdRef.current = newMessage.id;
+        console.log('📝 Adding new user message:', content);
+        return [...prev, newMessage];
+      }
+    });
+  };
+
+  // Finalize user message - called after transcript is processed
+  const finalizeUserMessage = (content: string) => {
+    // Update context (keep last 20 entries to prevent memory buildup)
+    conversationContextRef.current.push(`User: ${content}`);
+    if (conversationContextRef.current.length > 20) {
+      conversationContextRef.current = conversationContextRef.current.slice(-20);
+    }
+
+    // Increment message count and check for refresh threshold
+    messageCountRef.current += 1;
+    console.log(`📊 Message count: ${messageCountRef.current}/${MAX_MESSAGES_BEFORE_REFRESH}`);
+
+    if (messageCountRef.current >= MAX_MESSAGES_BEFORE_REFRESH) {
+      // Trigger silent refresh after current processing completes
+      setTimeout(() => {
+        if (!isProcessingTranscriptRef.current && !isRefreshingRef.current) {
+          silentRefresh();
+        }
+      }, 1000);
+    }
+
+    // Reset the last user message tracking so next speech creates a new message
+    lastUserMessageIdRef.current = null;
   };
 
   const addUserMessage = (content: string) => {

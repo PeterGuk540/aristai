@@ -96,6 +96,8 @@ class QueryType(str, Enum):
     GET_COURSE_ANALYTICS = "get_course_analytics"
     GET_TIMER_STATUS = "get_timer_status"
     GET_AI_DRAFTS = "get_ai_drafts"
+    # Open-ended questions that require LLM reasoning
+    OPEN_QUESTION = "open_question"
 
 
 class CreateType(str, Enum):
@@ -239,7 +241,8 @@ Actions: class_status, who_needs_help, get_scores, get_participation, get_miscon
          get_engagement_heatmap, get_disengaged_students, get_facilitation_suggestions,
          suggest_next_student, get_poll_suggestions, list_templates, get_student_progress,
          get_class_progress, get_breakout_groups, get_preclass_status, get_session_summary,
-         get_unresolved_topics, compare_sessions, get_course_analytics, get_timer_status, get_ai_drafts
+         get_unresolved_topics, compare_sessions, get_course_analytics, get_timer_status, get_ai_drafts,
+         open_question
 
 Examples:
 - "how's the class doing?" / "como va la clase?"
@@ -257,6 +260,15 @@ Examples:
 - "show me my templates" / "mostrar mis plantillas"
 - "did students complete the pre-reading?" / "completaron los estudiantes la lectura?"
 - "what topics need follow-up?" / "que temas necesitan seguimiento?"
+
+For questions about the platform, features, capabilities, or general knowledge that don't fit
+into specific data queries above, use action "open_question":
+- "what features did you add?" / "que funciones agregaste?"
+- "what can you do?" / "que puedes hacer?"
+- "tell me about the new updates" / "cuentame sobre las nuevas actualizaciones"
+- "how does the heatmap work?" / "como funciona el mapa de calor?"
+- "what is this platform for?" / "para que es esta plataforma?"
+- "can you explain the analytics?" / "puedes explicar las analiticas?"
 
 ### CREATE (category: "create")
 Create new content like courses, sessions, polls.
@@ -642,6 +654,8 @@ INTENT_TO_LEGACY_ACTION = {
     "get_course_analytics": "get_course_analytics",
     "get_timer_status": "get_timer_status",
     "get_ai_drafts": "get_ai_drafts",
+    # Open-ended questions
+    "open_question": "open_question",
 
     # Create mappings
     "create_course": "create_course",

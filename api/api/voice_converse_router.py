@@ -3872,6 +3872,10 @@ async def execute_action(
                 ]
             }
 
+        # === OPEN-ENDED QUESTIONS (LLM-based) ===
+        if action == 'open_question':
+            return await _handle_open_question(transcript or "", current_page)
+
         # === COURSE ACTIONS ===
         if action == 'list_courses':
             return _execute_tool(db, 'list_courses', {"skip": 0, "limit": 100})
@@ -5160,6 +5164,109 @@ def execute_plan_steps(steps: List[Dict[str, Any]], db: Session) -> tuple[list[d
     return results, summary
 
 
+# ============================================================================
+# OPEN QUESTION HANDLER - LLM-based responses for open-ended questions
+# ============================================================================
+
+OPEN_QUESTION_PROMPT = """You are AristAI, an intelligent voice assistant for an educational platform.
+You help instructors manage their courses, sessions, students, and classroom activities.
+
+The user asked an open-ended question. Provide a helpful, concise answer suitable for text-to-speech playback.
+Keep responses under 3 sentences for most questions. Be conversational and friendly.
+
+PLATFORM CAPABILITIES (mention these when relevant):
+- Navigation: Navigate to any page (courses, sessions, forum, console, reports)
+- Course Management: Create courses with AI-generated plans, manage enrollments
+- Session Management: Create sessions, go live, track participation
+- Live Class Tools: Real-time engagement heatmap, session timers, breakout groups
+- Copilot: AI teaching assistant that monitors discussions and provides suggestions
+- Facilitation: AI suggestions for who to call on next, poll suggestions
+- Forum: Discussion posts, pinning, summarizing discussions
+- Reports: Participation analytics, scoring, session comparison
+- Student Progress: Track individual and class-level progress over time
+- AI Draft Responses: Generate draft responses to student questions
+- Post-Class: Session summaries, unresolved topic tracking
+
+RECENT FEATURE ENHANCEMENTS (if asked about new features or updates):
+- Real-time engagement heatmap showing student participation at a glance
+- Session timer for timed activities
+- Breakout groups for collaborative learning
+- Facilitation suggestions for who to call on next
+- Poll suggestions based on discussion topics
+- Student progress tracking across sessions
+- AI-generated draft responses for student questions
+- Pre-class readiness insights
+- Post-class session summaries
+- Course analytics and session comparison
+
+RULES:
+1. Be concise - answers should be speakable in under 15 seconds
+2. Be helpful and informative
+3. Don't mention specific vendor names (ElevenLabs, OpenAI, etc.)
+4. If you don't know something specific, offer related helpful information
+5. Suggest related actions the user could take
+
+Current page: {current_page}
+User question: "{question}"
+
+Provide a helpful response:"""
+
+
+async def _handle_open_question(question: str, current_page: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Handle open-ended questions using LLM to generate contextual responses.
+    This enables the voice assistant to answer questions about features,
+    capabilities, and general inquiries that don't map to specific actions.
+    """
+    from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics
+
+    llm, model_name = get_llm_with_tracking()
+
+    if not llm:
+        return {
+            "message": "I'm having trouble accessing my knowledge base right now. "
+                       "You can ask me to navigate to any page, list your courses, "
+                       "or help with specific tasks like creating sessions or polls.",
+            "action": "open_question",
+        }
+
+    prompt = OPEN_QUESTION_PROMPT.format(
+        current_page=current_page or "unknown",
+        question=question,
+    )
+
+    try:
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
+
+        if response.success and response.content:
+            # Clean up the response for TTS
+            answer = response.content.strip()
+            # Remove any markdown formatting
+            answer = answer.replace("**", "").replace("*", "").replace("`", "")
+            # Limit length for TTS
+            if len(answer) > 500:
+                # Find a good breakpoint
+                sentences = answer.split(". ")
+                answer = ". ".join(sentences[:3]) + "."
+
+            return {
+                "message": answer,
+                "action": "open_question",
+            }
+        else:
+            return {
+                "message": "I couldn't process that question. Could you try rephrasing it?",
+                "action": "open_question",
+            }
+    except Exception as e:
+        print(f"Error in _handle_open_question: {e}")
+        return {
+            "message": "I encountered an error while processing your question. "
+                       "Please try asking again or ask about a specific feature.",
+            "action": "open_question",
+        }
+
+
 def get_page_suggestions(path: str) -> List[str]:
     """Get contextual suggestions for a page"""
     suggestions = {
@@ -5187,6 +5294,7 @@ def get_action_suggestions(action: str) -> List[str]:
         # Context/status suggestions
         'get_status': ["Show my courses", "Go to forum", "Start copilot"],
         'get_help': ["Show my courses", "Go to forum", "Create poll"],
+        'open_question': ["Tell me more", "Show me an example", "What else can you do?"],
         # Course suggestions
         'list_courses': ["Open a course", "Create new course", "View sessions"],
         'create_course': ["Add syllabus", "Set objectives", "Add students"],

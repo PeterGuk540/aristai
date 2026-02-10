@@ -54,7 +54,7 @@ const panelConfigs: PanelConfig[] = [
 ];
 
 export function InstructorDashboard({ sessionId, courseId, instructorId, sessionStatus }: InstructorDashboardProps) {
-  const [expandedPanels, setExpandedPanels] = useState<Set<PanelId>>(new Set(['engagement', 'timer']));
+  const [expandedPanels, setExpandedPanels] = useState<Set<PanelId>>(() => new Set<PanelId>(['engagement', 'timer']));
   const [focusedPanel, setFocusedPanel] = useState<PanelId | null>(null);
 
   const togglePanel = (panelId: PanelId) => {

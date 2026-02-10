@@ -116,6 +116,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
               <button
                 onClick={handleCreateGroups}
                 disabled={creating}
+                data-voice-id="create-breakout-groups"
                 className="flex-1 bg-primary-600 text-white py-2 px-4 rounded hover:bg-primary-700 disabled:opacity-50"
               >
                 {creating ? 'Creating...' : 'Create Groups'}
@@ -135,6 +136,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
     return (
       <button
         onClick={() => setShowCreateForm(true)}
+        data-voice-id="open-breakout-form"
         className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition w-full justify-center"
       >
         <Plus className="w-5 h-5" />
@@ -161,6 +163,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
           </button>
           <button
             onClick={handleDissolveGroups}
+            data-voice-id="dissolve-breakout-groups"
             className="p-1 hover:bg-red-100 rounded"
             title="Dissolve Groups"
           >

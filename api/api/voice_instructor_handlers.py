@@ -297,8 +297,8 @@ def handle_instructor_feature(
             "message": sanitize_speech(message),
             "data": result,
             "ui_actions": [
-                {"type": "ui.showBreakoutGroups", "payload": result},
-                {"type": "ui.toast", "payload": {"message": f"{num_groups} groups created", "type": "success"}}
+                {"type": "ui.navigate", "payload": {"path": "/console"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
             ]
         }
 
@@ -340,7 +340,9 @@ def handle_instructor_feature(
         return {
             "message": sanitize_speech(message),
             "ui_actions": [
-                {"type": "ui.toast", "payload": {"message": "Groups dissolved", "type": "info"}}
+                {"type": "ui.navigate", "payload": {"path": "/console"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+                {"type": "ui.clickButton", "payload": {"target": "dissolve-breakout-groups", "buttonLabel": "Dissolve Groups"}}
             ]
         }
 
@@ -436,16 +438,13 @@ def handle_instructor_feature(
         if not session_id:
             return {"message": sanitize_speech("Please select a session first.")}
 
-        # In production, this would trigger an email send
-        result = features.generate_session_summary_email(db, session_id)
-        if "error" in result:
-            return {"message": sanitize_speech(result["error"])}
-
-        message = "Session summary has been prepared. Email sending would be triggered here."
+        # Navigate to sessions page and click the send summary button
+        message = "Sending the session summary to students now."
         return {
             "message": sanitize_speech(message),
             "ui_actions": [
-                {"type": "ui.toast", "payload": {"message": "Summary ready to send", "type": "success"}}
+                {"type": "ui.navigate", "payload": {"path": "/sessions"}},
+                {"type": "ui.clickButton", "payload": {"target": "send-summary-to-students", "buttonLabel": "Send Summary to Students"}}
             ]
         }
 
@@ -597,7 +596,9 @@ def handle_instructor_feature(
         return {
             "message": sanitize_speech("Timer paused."),
             "ui_actions": [
-                {"type": "ui.pauseTimer", "payload": {"timer_id": timer["id"]}}
+                {"type": "ui.navigate", "payload": {"path": "/console"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+                {"type": "ui.clickButton", "payload": {"target": "pause-timer", "buttonLabel": "Pause"}}
             ]
         }
 
@@ -618,7 +619,9 @@ def handle_instructor_feature(
         return {
             "message": sanitize_speech("Timer resumed."),
             "ui_actions": [
-                {"type": "ui.resumeTimer", "payload": {"timer_id": timer["id"]}}
+                {"type": "ui.navigate", "payload": {"path": "/console"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+                {"type": "ui.clickButton", "payload": {"target": "resume-timer", "buttonLabel": "Resume"}}
             ]
         }
 
@@ -637,7 +640,9 @@ def handle_instructor_feature(
         return {
             "message": sanitize_speech("Timer stopped."),
             "ui_actions": [
-                {"type": "ui.stopTimer", "payload": {"timer_id": timer["id"]}}
+                {"type": "ui.navigate", "payload": {"path": "/console"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+                {"type": "ui.clickButton", "payload": {"target": "stop-timer", "buttonLabel": "Stop"}}
             ]
         }
 

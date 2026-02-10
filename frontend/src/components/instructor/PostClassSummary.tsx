@@ -89,6 +89,7 @@ export function PostClassSummaryComponent({ sessionId, onSummarySent }: PostClas
           <button
             onClick={handleGenerateSummary}
             disabled={generating}
+            data-voice-id="generate-session-summary"
             className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
           >
             {generating ? 'Generating...' : 'Generate Summary'}
@@ -197,6 +198,7 @@ export function PostClassSummaryComponent({ sessionId, onSummarySent }: PostClas
           <button
             onClick={handleSendToStudents}
             disabled={sending}
+            data-voice-id="send-summary-to-students"
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
           >
             <Send className="w-4 h-4" />

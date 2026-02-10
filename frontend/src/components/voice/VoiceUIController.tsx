@@ -53,6 +53,9 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'createTab': '[data-voice-id="tab-create"]',
     'manageTab': '[data-voice-id="tab-manage"]',
     'sessionList': '[data-voice-id="session-list"]',
+    // Post-class summary buttons
+    'send-summary-to-students': '[data-voice-id="send-summary-to-students"]',
+    'generate-session-summary': '[data-voice-id="generate-session-summary"]',
   },
   // Forum page elements
   '/forum': {
@@ -89,8 +92,20 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'copilotTab': '[data-voice-id="tab-copilot"]',
     'pollsTab': '[data-voice-id="tab-polls"]',
     'casesTab': '[data-voice-id="tab-cases"]',
+    'toolsTab': '[data-voice-id="tab-tools"]',
+    'tools': '[data-voice-id="tab-tools"]',
     'requestsTab': '[data-voice-id="tab-requests"]',
     'rosterTab': '[data-voice-id="tab-roster"]',
+    // Instructor tools - Session Timer
+    'open-timer-form': '[data-voice-id="open-timer-form"]',
+    'start-session-timer': '[data-voice-id="start-session-timer"]',
+    'pause-timer': '[data-voice-id="pause-timer"]',
+    'resume-timer': '[data-voice-id="resume-timer"]',
+    'stop-timer': '[data-voice-id="stop-timer"]',
+    // Instructor tools - Breakout Groups
+    'open-breakout-form': '[data-voice-id="open-breakout-form"]',
+    'create-breakout-groups': '[data-voice-id="create-breakout-groups"]',
+    'dissolve-breakout-groups': '[data-voice-id="dissolve-breakout-groups"]',
     'rosterCourseDropdown': '[data-voice-id="roster-course"]',
     'uploadRosterButton': '[data-voice-id="upload-roster"]',
     // Session status management buttons

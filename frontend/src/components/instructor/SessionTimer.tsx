@@ -147,6 +147,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
             <div className="flex gap-2">
               <button
                 onClick={handleStartTimer}
+                data-voice-id="start-session-timer"
                 className="flex-1 bg-primary-600 text-white py-2 px-4 rounded hover:bg-primary-700"
               >
                 Start
@@ -166,6 +167,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
     return (
       <button
         onClick={() => setShowCreateForm(true)}
+        data-voice-id="open-timer-form"
         className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
       >
         <Timer className="w-5 h-5" />
@@ -191,6 +193,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
           {timer.is_paused ? (
             <button
               onClick={handleResume}
+              data-voice-id="resume-timer"
               className="p-1 hover:bg-gray-100 rounded"
               title="Resume"
             >
@@ -199,6 +202,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
           ) : (
             <button
               onClick={handlePause}
+              data-voice-id="pause-timer"
               className="p-1 hover:bg-gray-100 rounded"
               title="Pause"
             >
@@ -207,6 +211,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
           )}
           <button
             onClick={handleStop}
+            data-voice-id="stop-timer"
             className="p-1 hover:bg-gray-100 rounded"
             title="Stop"
           >

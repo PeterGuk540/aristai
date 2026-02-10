@@ -79,6 +79,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const isRefreshingRef = useRef(false); // Track if this is a silent refresh (skip greeting)
   const lastUserMessageIdRef = useRef<string | null>(null); // Track last user message for transcript updates
   const pendingTranscriptRef = useRef<string | null>(null); // Track pending transcript to avoid duplicate processing
+  const lastAgentResponseRef = useRef<string>(''); // Track last agent response to detect brief acknowledgments
 
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = 10;
@@ -332,8 +333,20 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // ElevenLabs agent responses - display what the agent speaks
             console.log('🤖 ElevenLabs agent response:', message);
 
-            // Display all agent responses in chatbox (Option A: agent is sole responder)
-            if (message && message.length > 5) {
+            // Track the agent's response
+            lastAgentResponseRef.current = message || '';
+
+            // Display agent responses in chatbox
+            // Skip brief acknowledgments - backend will provide the full response
+            const briefAcks = [
+              "i'm retrieving", "retrieving your", "let me get", "let me check",
+              "checking", "one moment", "just a moment", "getting that",
+              "fetching", "loading", "looking up", "i'll get",
+              "un momento", "buscando", "obteniendo"
+            ];
+            const isAck = message && briefAcks.some(ack => message.toLowerCase().includes(ack));
+
+            if (message && message.length > 5 && !isAck) {
               addAssistantMessage(message);
             }
           }
@@ -529,12 +542,33 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       // This handles: dropdown options, student data, query results, etc.
       // The ElevenLabs agent cannot know this data - only the backend can provide it
       if (isDataDrivenResponse(response) && response.message) {
-        console.log('📢 Data-driven response detected - speaking via backend');
-        addAssistantMessage(response.message);
-        speakViaElevenLabs(response.message);
+        // Check if the agent gave a brief acknowledgment or a full response
+        const agentResponse = lastAgentResponseRef.current.toLowerCase();
+        const briefAcks = [
+          "i'm retrieving", "retrieving your", "let me get", "let me check",
+          "checking", "one moment", "just a moment", "getting that",
+          "fetching", "loading", "looking up", "i'll get",
+          "un momento", "buscando", "obteniendo"
+        ];
+        const agentGaveAck = briefAcks.some(ack => agentResponse.includes(ack));
+        const agentGaveFullResponse = lastAgentResponseRef.current.length > 50 && !agentGaveAck;
+
+        if (agentGaveFullResponse) {
+          // Agent already gave a full response - don't speak backend data
+          // Just show it in the chatbox for reference
+          console.log('ℹ️ Agent gave full response - skipping backend speech');
+        } else {
+          // Agent gave brief ack or no response - speak the backend data
+          console.log('📢 Data-driven response - speaking via backend');
+          addAssistantMessage(response.message);
+          speakViaElevenLabs(response.message);
+        }
       } else {
         console.log('ℹ️ Agent handles response directly');
       }
+
+      // Reset agent response tracking
+      lastAgentResponseRef.current = '';
 
       // Finalize the user message (update context, check refresh threshold)
       finalizeUserMessage(transcript);

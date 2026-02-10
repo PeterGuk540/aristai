@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
-import { Course, Session, Report, ReportJSON } from '@/types';
+import { Course, Session, Report, ReportJSON, SessionComparison } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import {
@@ -36,8 +36,13 @@ import {
   TabsContent,
 } from '@/components/ui';
 
+// Instructor enhancement components
+import { StudentProgressComponent } from '@/components/instructor/StudentProgress';
+
 export default function ReportsPage() {
-  const { isInstructor, currentUser } = useUser();
+  const { isInstructor, isAdmin, currentUser } = useUser();
+  // Admins have same privileges as instructors
+  const hasInstructorPrivileges = isInstructor || isAdmin;
   const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -47,9 +52,14 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
+  // Analytics state
+  const [sessionComparisons, setSessionComparisons] = useState<SessionComparison[]>([]);
+  const [courseAnalytics, setCourseAnalytics] = useState<any>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
   const fetchCourses = async () => {
     try {
-      if (isInstructor) {
+      if (hasInstructorPrivileges) {
         const data = await api.getCourses();
         setCourses(data);
         if (data.length > 0 && !selectedCourseId) {
@@ -123,11 +133,30 @@ export default function ReportsPage() {
     }
   };
 
+  const fetchAnalytics = async () => {
+    if (!selectedCourseId) return;
+
+    setLoadingAnalytics(true);
+    try {
+      // Fetch session comparisons
+      const comparisons = await api.compareCourseSessions(selectedCourseId);
+      setSessionComparisons(comparisons.sessions || []);
+
+      // Fetch course analytics
+      const analytics = await api.getCourseAnalytics(selectedCourseId);
+      setCourseAnalytics(analytics);
+    } catch (error) {
+      console.error('Failed to fetch analytics:', error);
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
   useEffect(() => {
     if (currentUser) {
       fetchCourses();
     }
-  }, [currentUser, isInstructor]);
+  }, [currentUser, hasInstructorPrivileges]);
 
   useEffect(() => {
     if (selectedCourseId) {
@@ -816,7 +845,7 @@ export default function ReportsPage() {
           <CardContent className="py-8 text-center">
             <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
             <p className="text-gray-500 mb-4">{t('reports.noReport')}</p>
-            {isInstructor && (
+            {hasInstructorPrivileges && (
               <Button onClick={handleGenerateReport} disabled={generating} data-voice-id="generate-report">
                 <Sparkles className="h-4 w-4 mr-2" />
                 {generating ? t('common.loading') : t('reports.generateReport')}
@@ -843,7 +872,7 @@ export default function ReportsPage() {
                     <RefreshCw className="h-4 w-4 mr-2" />
                     {t('reports.refreshReport')}
                   </Button>
-                  {isInstructor && (
+                  {hasInstructorPrivileges && (
                     <Button onClick={handleGenerateReport} size="sm" disabled={generating} data-voice-id="regenerate-report">
                       <Sparkles className="h-4 w-4 mr-2" />
                       {t('reports.regenerateReport')}
@@ -854,18 +883,169 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          {/* Report Tabs - Different views for instructors vs students */}
-          {isInstructor ? (
+          {/* Report Tabs - Different views for instructors/admins vs students */}
+          {hasInstructorPrivileges ? (
             <Tabs defaultValue="summary">
               <TabsList>
                 <TabsTrigger value="summary">{t('reports.summary')}</TabsTrigger>
                 <TabsTrigger value="participation">{t('reports.participation')}</TabsTrigger>
                 <TabsTrigger value="scoring">{t('reports.answerScores')}</TabsTrigger>
+                <TabsTrigger value="analytics" onClick={fetchAnalytics}>
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  Analytics
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="summary">{renderSummary()}</TabsContent>
               <TabsContent value="participation">{renderParticipation()}</TabsContent>
               <TabsContent value="scoring">{renderScoring()}</TabsContent>
+              <TabsContent value="analytics">
+                {loadingAnalytics ? (
+                  <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Course Analytics Overview */}
+                    {courseAnalytics && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <BarChart3 className="h-5 w-5 text-purple-500" />
+                            Course Analytics
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="text-center p-3 bg-gray-50 rounded">
+                              <p className="text-2xl font-bold text-primary-600">
+                                {courseAnalytics.total_sessions || 0}
+                              </p>
+                              <p className="text-sm text-gray-500">Total Sessions</p>
+                            </div>
+                            <div className="text-center p-3 bg-gray-50 rounded">
+                              <p className="text-2xl font-bold text-green-600">
+                                {courseAnalytics.completed_sessions || 0}
+                              </p>
+                              <p className="text-sm text-gray-500">Completed</p>
+                            </div>
+                            <div className="text-center p-3 bg-gray-50 rounded">
+                              <p className="text-2xl font-bold text-blue-600">
+                                {courseAnalytics.overall_stats?.average_participation_rate?.toFixed(0) || 0}%
+                              </p>
+                              <p className="text-sm text-gray-500">Avg Participation</p>
+                            </div>
+                            <div className="text-center p-3 bg-gray-50 rounded">
+                              <p className="text-2xl font-bold text-yellow-600">
+                                {courseAnalytics.overall_stats?.average_posts_per_session?.toFixed(1) || 0}
+                              </p>
+                              <p className="text-sm text-gray-500">Avg Posts/Session</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Session Comparison */}
+                    {sessionComparisons.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <TrendingUp className="h-5 w-5 text-green-500" />
+                            Session Comparison
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left py-2 px-3">Session</th>
+                                  <th className="text-center py-2 px-3">Status</th>
+                                  <th className="text-center py-2 px-3">Posts</th>
+                                  <th className="text-center py-2 px-3">Participants</th>
+                                  <th className="text-center py-2 px-3">Rate</th>
+                                  <th className="text-center py-2 px-3">Polls</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {sessionComparisons.map((session) => (
+                                  <tr key={session.session_id} className="border-b hover:bg-gray-50">
+                                    <td className="py-2 px-3">
+                                      <div>
+                                        <p className="font-medium">{session.title}</p>
+                                        <p className="text-xs text-gray-500">{session.date}</p>
+                                      </div>
+                                    </td>
+                                    <td className="text-center py-2 px-3">
+                                      <Badge
+                                        variant={
+                                          session.status === 'completed' ? 'success' :
+                                          session.status === 'live' ? 'warning' : 'default'
+                                        }
+                                      >
+                                        {session.status}
+                                      </Badge>
+                                    </td>
+                                    <td className="text-center py-2 px-3 font-medium">
+                                      {session.total_posts}
+                                    </td>
+                                    <td className="text-center py-2 px-3">
+                                      {session.unique_participants}
+                                    </td>
+                                    <td className="text-center py-2 px-3">
+                                      <span className={
+                                        session.participation_rate >= 70 ? 'text-green-600' :
+                                        session.participation_rate >= 50 ? 'text-yellow-600' : 'text-red-600'
+                                      }>
+                                        {session.participation_rate?.toFixed(0)}%
+                                      </span>
+                                    </td>
+                                    <td className="text-center py-2 px-3">
+                                      {session.polls_count}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Student Progress */}
+                    {selectedCourseId && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Users className="h-5 w-5 text-blue-500" />
+                            Student Progress
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <StudentProgressComponent courseId={selectedCourseId} />
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Voice Command Hints */}
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <h3 className="font-medium mb-3">Quick Voice Commands</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          'Compare the last 5 sessions',
+                          'Show course analytics',
+                          'How has Maria been doing?',
+                          'Who\'s improving?',
+                          'Which students need help?'
+                        ].map((cmd) => (
+                          <span key={cmd} className="px-3 py-1 text-sm bg-white dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 border">
+                            "{cmd}"
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
             </Tabs>
           ) : (
             /* Student view: Only scoring, best practice, what they did well, gaps */

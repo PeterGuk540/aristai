@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText } from 'lucide-react';
+import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText, BookOpen, Copy, LayoutTemplate } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, Session, SessionStatus } from '@/types';
@@ -24,6 +24,11 @@ import {
 } from '@/components/ui';
 import MaterialsManager from '@/components/materials/MaterialsManager';
 
+// Instructor enhancement components
+import { PreClassInsightsComponent } from '@/components/instructor/PreClassInsights';
+import { PostClassSummaryComponent } from '@/components/instructor/PostClassSummary';
+import { StudentProgressComponent } from '@/components/instructor/StudentProgress';
+
 const statusIcons: Record<SessionStatus, any> = {
   draft: FileEdit,
   scheduled: Clock,
@@ -32,7 +37,9 @@ const statusIcons: Record<SessionStatus, any> = {
 };
 
 export default function SessionsPage() {
-  const { isInstructor, currentUser } = useUser();
+  const { isInstructor, isAdmin, currentUser } = useUser();
+  // Admins have same privileges as instructors
+  const hasInstructorPrivileges = isInstructor || isAdmin;
   const searchParams = useSearchParams();
   const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -74,7 +81,7 @@ export default function SessionsPage() {
 
   const fetchCourses = async () => {
     try {
-      if (isInstructor) {
+      if (hasInstructorPrivileges) {
         const data = await api.getCourses();
         setCourses(data);
         if (data.length > 0 && !selectedCourseId) {
@@ -116,7 +123,7 @@ export default function SessionsPage() {
     if (currentUser) {
       fetchCourses();
     }
-  }, [currentUser, isInstructor]);
+  }, [currentUser, hasInstructorPrivileges]);
 
   useEffect(() => {
     if (selectedCourseId) {
@@ -278,8 +285,14 @@ export default function SessionsPage() {
               <FileText className="w-4 h-4 mr-1" />
               {t('sessions.materials')}
             </TabsTrigger>
-            {isInstructor && <TabsTrigger value="create">{t('sessions.createSession')}</TabsTrigger>}
-            {isInstructor && <TabsTrigger value="manage">{t('sessions.manageStatus')}</TabsTrigger>}
+            {hasInstructorPrivileges && <TabsTrigger value="create">{t('sessions.createSession')}</TabsTrigger>}
+            {hasInstructorPrivileges && <TabsTrigger value="manage">{t('sessions.manageStatus')}</TabsTrigger>}
+            {hasInstructorPrivileges && (
+              <TabsTrigger value="insights">
+                <BookOpen className="w-4 h-4 mr-1" />
+                Insights
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="sessions">
@@ -386,7 +399,7 @@ export default function SessionsPage() {
               {/* Course-wide materials */}
               <MaterialsManager
                 courseId={selectedCourseId}
-                isInstructor={isInstructor}
+                isInstructor={hasInstructorPrivileges}
                 userId={currentUser?.id}
               />
 
@@ -399,7 +412,7 @@ export default function SessionsPage() {
                   <MaterialsManager
                     courseId={selectedCourseId}
                     sessionId={selectedSession.id}
-                    isInstructor={isInstructor}
+                    isInstructor={hasInstructorPrivileges}
                     userId={currentUser?.id}
                   />
                 </div>
@@ -407,7 +420,7 @@ export default function SessionsPage() {
             </div>
           </TabsContent>
 
-          {isInstructor && (
+          {hasInstructorPrivileges && (
             <TabsContent value="create">
               <Card>
                 <CardHeader>
@@ -432,7 +445,7 @@ export default function SessionsPage() {
             </TabsContent>
           )}
 
-          {isInstructor && (
+          {hasInstructorPrivileges && (
             <TabsContent value="manage">
               <Card>
                 <CardHeader>
@@ -506,6 +519,104 @@ export default function SessionsPage() {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+          )}
+
+          {hasInstructorPrivileges && (
+            <TabsContent value="insights">
+              <div className="space-y-6">
+                {selectedSession ? (
+                  <>
+                    {/* Pre-Class / Post-Class based on session status */}
+                    {(selectedSession.status === 'draft' || selectedSession.status === 'scheduled') && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <BookOpen className="h-5 w-5 text-blue-500" />
+                            Pre-Class Insights
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <PreClassInsightsComponent sessionId={selectedSession.id} />
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {selectedSession.status === 'completed' && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-green-500" />
+                            Session Summary
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <PostClassSummaryComponent sessionId={selectedSession.id} />
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {selectedSession.status === 'live' && (
+                      <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg text-center">
+                        <Play className="h-8 w-8 mx-auto mb-2 text-yellow-600" />
+                        <p className="text-yellow-800 dark:text-yellow-200">
+                          Session is currently live. Use the <strong>Console</strong> page for real-time instructor tools.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3"
+                          onClick={() => window.location.href = '/console'}
+                        >
+                          Go to Console
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Student Progress - always visible */}
+                    {selectedCourseId && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Calendar className="h-5 w-5 text-purple-500" />
+                            Student Progress
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <StudentProgressComponent courseId={selectedCourseId} />
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Voice Command Hints */}
+                    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <h3 className="font-medium mb-3">Quick Voice Commands</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          'Pre-class completion status',
+                          'Who didn\'t do the homework?',
+                          'Generate session summary',
+                          'Send summary to students',
+                          'How has Maria been doing?',
+                          'Save this as a template',
+                          'Clone this session'
+                        ].map((cmd) => (
+                          <span key={cmd} className="px-3 py-1 text-sm bg-white dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 border">
+                            "{cmd}"
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <Card>
+                    <CardContent className="py-8 text-center text-gray-500">
+                      <BookOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                      <p>Select a session to view insights</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </TabsContent>
           )}
         </Tabs>

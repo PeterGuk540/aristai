@@ -510,6 +510,9 @@ export const api = {
       body: JSON.stringify({ session_ids: sessionIds }),
     }),
 
+  compareCourseSessions: (courseId: number) =>
+    fetchApi<any>(`/instructor/analytics/compare/course/${courseId}`),
+
   getCourseAnalytics: (courseId: number) =>
     fetchApi<any>(`/instructor/analytics/course/${courseId}`),
 

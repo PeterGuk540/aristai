@@ -940,6 +940,17 @@ def compare_sessions(db: Session, session_ids: List[int]) -> Dict[str, Any]:
     }
 
 
+def compare_course_sessions(db: Session, course_id: int) -> Dict[str, Any]:
+    """Compare all sessions in a course."""
+    sessions = db.query(SessionModel).filter(SessionModel.course_id == course_id).order_by(SessionModel.created_at.desc()).all()
+    session_ids = [s.id for s in sessions]
+
+    if not session_ids:
+        return {"course_id": course_id, "sessions": [], "message": "No sessions found"}
+
+    return compare_sessions(db, session_ids)
+
+
 def get_course_analytics(db: Session, course_id: int) -> Dict[str, Any]:
     """Get comprehensive analytics for a course."""
     sessions = db.query(SessionModel).filter(SessionModel.course_id == course_id).all()

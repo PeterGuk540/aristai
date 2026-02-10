@@ -334,6 +334,12 @@ async def compare_sessions(request: CompareSessionsRequest, db: Session = Depend
     return features.compare_sessions(db, request.session_ids)
 
 
+@router.get("/analytics/compare/course/{course_id}")
+async def compare_course_sessions(course_id: int, db: Session = Depends(get_db)):
+    """Compare all sessions in a course."""
+    return features.compare_course_sessions(db, course_id)
+
+
 @router.get("/analytics/course/{course_id}")
 async def get_course_analytics(course_id: int, db: Session = Depends(get_db)):
     """Get comprehensive analytics for a course."""

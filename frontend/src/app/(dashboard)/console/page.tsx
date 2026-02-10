@@ -17,6 +17,9 @@ import {
   Clock,
   Upload,
   FileSpreadsheet,
+  Activity,
+  Timer,
+  Users,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
@@ -38,6 +41,13 @@ import {
   TabsTrigger,
   TabsContent,
 } from '@/components/ui';
+
+// Instructor enhancement components
+import { EngagementHeatmapComponent } from '@/components/instructor/EngagementHeatmap';
+import { SessionTimerComponent } from '@/components/instructor/SessionTimer';
+import { FacilitationPanel } from '@/components/instructor/FacilitationPanel';
+import { BreakoutGroupsComponent } from '@/components/instructor/BreakoutGroups';
+import { AIResponseDraftsComponent } from '@/components/instructor/AIResponseDrafts';
 
 export default function ConsolePage() {
   const { isInstructor, isAdmin, currentUser } = useUser();
@@ -101,6 +111,17 @@ export default function ConsolePage() {
         'instructorrequests': 'requests',
         'roster': 'roster',
         'rosterupload': 'roster',
+        // Instructor enhancement tabs
+        'tools': 'tools',
+        'instructortools': 'tools',
+        'engagement': 'tools',
+        'heatmap': 'tools',
+        'timer': 'tools',
+        'facilitation': 'tools',
+        'breakout': 'tools',
+        'breakoutgroups': 'tools',
+        'groups': 'tools',
+        'aidrafts': 'tools',
       };
 
       const targetTab = tabMap[normalizedTab] || normalizedTab;
@@ -521,7 +542,8 @@ export default function ConsolePage() {
     );
   };
 
-  if (!isInstructor) {
+  // Both instructors and admins can access the console
+  if (!isInstructor && !isAdmin) {
     return (
       <div className="p-6">
         <Card>
@@ -585,6 +607,10 @@ export default function ConsolePage() {
           </TabsTrigger>
           <TabsTrigger value="cases" disabled={!selectedSessionId}>
             {t('console.postCase')}
+          </TabsTrigger>
+          <TabsTrigger value="tools" disabled={!selectedSessionId}>
+            <Activity className="h-4 w-4 mr-1" />
+            Instructor Tools
           </TabsTrigger>
           {isAdmin && (
             <TabsTrigger value="requests">
@@ -845,6 +871,124 @@ export default function ConsolePage() {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="tools">
+          <div className="space-y-6">
+            {/* Real-time Instructor Enhancement Tools */}
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Engagement Heatmap */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5 text-green-500" />
+                    Engagement Heatmap
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedSessionId ? (
+                    <EngagementHeatmapComponent sessionId={selectedSessionId} />
+                  ) : (
+                    <p className="text-gray-500">Select a session to view engagement.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Session Timer */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Timer className="h-5 w-5 text-blue-500" />
+                    Session Timer
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedSessionId ? (
+                    <SessionTimerComponent sessionId={selectedSessionId} />
+                  ) : (
+                    <p className="text-gray-500">Select a session to use the timer.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Facilitation Suggestions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lightbulb className="h-5 w-5 text-yellow-500" />
+                    Facilitation Suggestions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedSessionId ? (
+                    <FacilitationPanel sessionId={selectedSessionId} />
+                  ) : (
+                    <p className="text-gray-500">Select a session to get suggestions.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Breakout Groups */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-purple-500" />
+                    Breakout Groups
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedSessionId ? (
+                    <BreakoutGroupsComponent sessionId={selectedSessionId} />
+                  ) : (
+                    <p className="text-gray-500">Select a session to manage groups.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* AI Response Drafts - Full width */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-primary-500" />
+                  AI Response Drafts
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {selectedSessionId && currentUser?.id ? (
+                  <AIResponseDraftsComponent
+                    sessionId={selectedSessionId}
+                    instructorId={currentUser.id}
+                  />
+                ) : (
+                  <p className="text-gray-500">Select a session to view AI drafts.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Voice Command Hints */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <h3 className="font-medium mb-3 flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Quick Voice Commands
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  'Show engagement heatmap',
+                  'Who\'s not participating?',
+                  'Start a 5 minute timer',
+                  'Split into 4 groups',
+                  'Who should I call on next?',
+                  'Suggest a poll',
+                  'Show AI drafts'
+                ].map((cmd) => (
+                  <span key={cmd} className="px-3 py-1 text-sm bg-white dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 border">
+                    "{cmd}"
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="requests">

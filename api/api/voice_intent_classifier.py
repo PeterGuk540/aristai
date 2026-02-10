@@ -625,6 +625,24 @@ INTENT_TO_LEGACY_ACTION = {
     "student_lookup": "student_lookup",
     "view_course_details": "view_course_details",
 
+    # Instructor Enhancement Feature Query mappings
+    "get_engagement_heatmap": "get_engagement_heatmap",
+    "get_disengaged_students": "get_disengaged_students",
+    "get_facilitation_suggestions": "get_facilitation_suggestions",
+    "suggest_next_student": "suggest_next_student",
+    "get_poll_suggestions": "get_poll_suggestions",
+    "list_templates": "list_templates",
+    "get_student_progress": "get_student_progress",
+    "get_class_progress": "get_class_progress",
+    "get_breakout_groups": "get_breakout_groups",
+    "get_preclass_status": "get_preclass_status",
+    "get_session_summary": "get_session_summary",
+    "get_unresolved_topics": "get_unresolved_topics",
+    "compare_sessions": "compare_sessions",
+    "get_course_analytics": "get_course_analytics",
+    "get_timer_status": "get_timer_status",
+    "get_ai_drafts": "get_ai_drafts",
+
     # Create mappings
     "create_course": "create_course",
     "create_session": "create_session",
@@ -647,6 +665,20 @@ INTENT_TO_LEGACY_ACTION = {
     "open_user_menu": "open_user_menu",
     "undo_action": "undo_action",
     "clear_context": "clear_context",
+
+    # Instructor Enhancement Feature Control mappings
+    "start_timer": "start_timer",
+    "pause_timer": "pause_timer",
+    "resume_timer": "resume_timer",
+    "stop_timer": "stop_timer",
+    "create_breakout_groups": "create_breakout_groups",
+    "dissolve_breakout_groups": "dissolve_breakout_groups",
+    "save_template": "save_template",
+    "clone_session": "clone_session",
+    "generate_ai_draft": "generate_ai_draft",
+    "approve_ai_draft": "approve_ai_draft",
+    "reject_ai_draft": "reject_ai_draft",
+    "send_session_summary": "send_session_summary",
 }
 
 # Navigation targets

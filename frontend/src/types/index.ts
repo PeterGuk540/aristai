@@ -404,6 +404,49 @@ export interface SessionComparison {
   avg_posts_per_student: number;
 }
 
+// Post-Class Summary
+export interface PostClassSummary {
+  session_id: number;
+  summary_text: string;
+  key_topics: string[];
+  follow_up_items: string[];
+  participation_stats: {
+    total_posts: number;
+    unique_participants: number;
+    avg_engagement: number;
+  };
+  generated_at: string;
+}
+
+// Pre-Class Insights
+export interface PreClassInsights {
+  session_id: number;
+  total_students: number;
+  completed_count: number;
+  partial_count: number;
+  not_started_count: number;
+  checkpoints: {
+    id: number;
+    title: string;
+    completed_count: number;
+    total_count: number;
+  }[];
+  students_not_started: {
+    user_id: number;
+    name: string;
+  }[];
+}
+
+// Student Lookup
+export interface StudentLookup {
+  user_id: number;
+  name: string;
+  email: string;
+  total_posts: number;
+  average_engagement: number;
+  sessions_attended: number;
+}
+
 // API Response types
 export interface TaskResponse {
   task_id: string;

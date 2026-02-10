@@ -29,6 +29,7 @@ import { AIResponseDraftsComponent } from './AIResponseDrafts';
 interface InstructorDashboardProps {
   sessionId: number;
   courseId: number;
+  instructorId: number;
   sessionStatus: 'before' | 'live' | 'ended';
 }
 
@@ -52,7 +53,7 @@ const panelConfigs: PanelConfig[] = [
   { id: 'postclass', title: 'Session Summary', icon: FileText, showWhen: ['ended'] },
 ];
 
-export function InstructorDashboard({ sessionId, courseId, sessionStatus }: InstructorDashboardProps) {
+export function InstructorDashboard({ sessionId, courseId, instructorId, sessionStatus }: InstructorDashboardProps) {
   const [expandedPanels, setExpandedPanels] = useState<Set<PanelId>>(new Set(['engagement', 'timer']));
   const [focusedPanel, setFocusedPanel] = useState<PanelId | null>(null);
 
@@ -87,7 +88,7 @@ export function InstructorDashboard({ sessionId, courseId, sessionStatus }: Inst
       case 'postclass':
         return <PostClassSummaryComponent sessionId={sessionId} />;
       case 'ai':
-        return <AIResponseDraftsComponent sessionId={sessionId} />;
+        return <AIResponseDraftsComponent sessionId={sessionId} instructorId={instructorId} />;
       default:
         return null;
     }

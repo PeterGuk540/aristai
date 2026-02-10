@@ -426,3 +426,16 @@ async def reject_ai_draft(draft_id: int, instructor_id: int, db: Session = Depen
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+class AIEditRequest(BaseModel):
+    edited_content: str
+
+
+@router.put("/ai/edit/{draft_id}")
+async def edit_ai_draft(draft_id: int, request: AIEditRequest, db: Session = Depends(get_db)):
+    """Edit an AI draft content."""
+    result = features.edit_ai_draft(db, draft_id, request.edited_content)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result

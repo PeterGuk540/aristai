@@ -1245,3 +1245,22 @@ def reject_ai_draft(db: Session, draft_id: int, instructor_id: int) -> Dict[str,
     db.commit()
 
     return {"draft_id": draft_id, "status": "rejected"}
+
+
+def edit_ai_draft(db: Session, draft_id: int, edited_content: str) -> Dict[str, Any]:
+    """Edit an AI draft content without approving/rejecting it."""
+    draft = db.query(AIResponseDraft).filter(AIResponseDraft.id == draft_id).first()
+    if not draft:
+        return {"error": "Draft not found"}
+
+    draft.draft_content = edited_content
+    draft.instructor_edits = edited_content
+    draft.status = "edited"
+
+    db.commit()
+
+    return {
+        "draft_id": draft_id,
+        "status": "edited",
+        "edited_content": edited_content,
+    }

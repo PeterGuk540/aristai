@@ -545,6 +545,12 @@ export const api = {
 
   rejectAIDraft: (draftId: number, instructorId: number) =>
     fetchApi<any>(`/instructor/ai/reject/${draftId}?instructor_id=${instructorId}`, { method: 'POST' }),
+
+  editAIDraft: (draftId: number, editedContent: string) =>
+    fetchApi<any>(`/instructor/ai/edit/${draftId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ edited_content: editedContent }),
+    }),
 };
 
 export { ApiError };

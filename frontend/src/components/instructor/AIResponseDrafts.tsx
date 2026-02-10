@@ -8,6 +8,7 @@ import type { AIResponseDraft } from '@/types';
 
 interface AIResponseDraftsProps {
   sessionId: number;
+  instructorId: number;
   autoRefresh?: boolean;
   refreshInterval?: number;
   onDraftActioned?: () => void;
@@ -15,6 +16,7 @@ interface AIResponseDraftsProps {
 
 export function AIResponseDraftsComponent({
   sessionId,
+  instructorId,
   autoRefresh = true,
   refreshInterval = 30000,
   onDraftActioned
@@ -49,7 +51,7 @@ export function AIResponseDraftsComponent({
 
   const handleApprove = async (draftId: number) => {
     try {
-      await api.approveAIDraft(draftId);
+      await api.approveAIDraft(draftId, instructorId);
       setDrafts(drafts.filter(d => d.id !== draftId));
       onDraftActioned?.();
     } catch (err) {
@@ -59,7 +61,7 @@ export function AIResponseDraftsComponent({
 
   const handleReject = async (draftId: number) => {
     try {
-      await api.rejectAIDraft(draftId);
+      await api.rejectAIDraft(draftId, instructorId);
       setDrafts(drafts.filter(d => d.id !== draftId));
       onDraftActioned?.();
     } catch (err) {

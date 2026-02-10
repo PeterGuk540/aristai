@@ -357,6 +357,215 @@ const commandCategories: CommandCategory[] = [
     ],
   },
   {
+    id: 'engagement',
+    labelKey: 'voiceGuide.categories.engagement',
+    icon: Users,
+    descriptionKey: 'voiceGuide.descriptions.engagement',
+    commands: [
+      {
+        phraseEn: '"Show engagement heatmap"',
+        phraseEs: '"Mostrar mapa de participación"',
+        alternativesEn: ['"Student activity"', '"Participation levels"'],
+        alternativesEs: ['"Actividad de estudiantes"', '"Niveles de participación"'],
+        descriptionKey: 'voiceGuide.commands.engagementHeatmap'
+      },
+      {
+        phraseEn: '"Who\'s not participating?"',
+        phraseEs: '"¿Quiénes no están participando?"',
+        alternativesEn: ['"Disengaged students"', '"Who needs attention?"'],
+        alternativesEs: ['"Estudiantes desconectados"', '"¿Quién necesita atención?"'],
+        descriptionKey: 'voiceGuide.commands.disengagedStudents'
+      },
+      {
+        phraseEn: '"Who should I call on?"',
+        phraseEs: '"¿A quién debería llamar?"',
+        alternativesEn: ['"Suggest someone"', '"Call on next"'],
+        alternativesEs: ['"Sugerir a alguien"', '"Llamar al siguiente"'],
+        descriptionKey: 'voiceGuide.commands.callOnStudent'
+      },
+      {
+        phraseEn: '"Give me facilitation suggestions"',
+        phraseEs: '"Dame sugerencias de facilitación"',
+        alternativesEn: ['"How to improve discussion?"', '"Teaching tips"'],
+        alternativesEs: ['"¿Cómo mejorar la discusión?"', '"Consejos de enseñanza"'],
+        descriptionKey: 'voiceGuide.commands.facilitationSuggestions'
+      },
+    ],
+  },
+  {
+    id: 'timer',
+    labelKey: 'voiceGuide.categories.timer',
+    icon: Play,
+    descriptionKey: 'voiceGuide.descriptions.timer',
+    commands: [
+      {
+        phraseEn: '"Start a 5 minute timer"',
+        phraseEs: '"Iniciar temporizador de 5 minutos"',
+        alternativesEn: ['"Set timer for 5 minutes"', '"5 minute countdown"'],
+        alternativesEs: ['"Poner temporizador de 5 minutos"', '"Cuenta regresiva de 5 minutos"'],
+        descriptionKey: 'voiceGuide.commands.startTimer'
+      },
+      {
+        phraseEn: '"How much time is left?"',
+        phraseEs: '"¿Cuánto tiempo queda?"',
+        alternativesEn: ['"Timer status"', '"Time remaining"'],
+        alternativesEs: ['"Estado del temporizador"', '"Tiempo restante"'],
+        descriptionKey: 'voiceGuide.commands.timeLeft'
+      },
+      {
+        phraseEn: '"Pause the timer"',
+        phraseEs: '"Pausar el temporizador"',
+        alternativesEn: ['"Hold timer"', '"Freeze timer"'],
+        alternativesEs: ['"Detener temporizador"', '"Congelar temporizador"'],
+        descriptionKey: 'voiceGuide.commands.pauseTimer'
+      },
+      {
+        phraseEn: '"Resume the timer"',
+        phraseEs: '"Reanudar el temporizador"',
+        alternativesEn: ['"Continue timer"', '"Unpause"'],
+        alternativesEs: ['"Continuar temporizador"', '"Despausar"'],
+        descriptionKey: 'voiceGuide.commands.resumeTimer'
+      },
+      {
+        phraseEn: '"Stop the timer"',
+        phraseEs: '"Detener el temporizador"',
+        alternativesEn: ['"Cancel timer"', '"End timer"'],
+        alternativesEs: ['"Cancelar temporizador"', '"Terminar temporizador"'],
+        descriptionKey: 'voiceGuide.commands.stopTimer'
+      },
+    ],
+  },
+  {
+    id: 'breakoutGroups',
+    labelKey: 'voiceGuide.categories.breakoutGroups',
+    icon: Users,
+    descriptionKey: 'voiceGuide.descriptions.breakoutGroups',
+    commands: [
+      {
+        phraseEn: '"Split into 4 groups"',
+        phraseEs: '"Dividir en 4 grupos"',
+        alternativesEn: ['"Create 4 breakout groups"', '"Make 4 teams"'],
+        alternativesEs: ['"Crear 4 grupos de trabajo"', '"Hacer 4 equipos"'],
+        descriptionKey: 'voiceGuide.commands.createBreakoutGroups'
+      },
+      {
+        phraseEn: '"Show breakout groups"',
+        phraseEs: '"Mostrar grupos"',
+        alternativesEn: ['"View groups"', '"List groups"'],
+        alternativesEs: ['"Ver grupos"', '"Listar grupos"'],
+        descriptionKey: 'voiceGuide.commands.showBreakoutGroups'
+      },
+      {
+        phraseEn: '"Dissolve the groups"',
+        phraseEs: '"Disolver los grupos"',
+        alternativesEn: ['"End breakout"', '"Remove groups"'],
+        alternativesEs: ['"Terminar grupos"', '"Eliminar grupos"'],
+        descriptionKey: 'voiceGuide.commands.dissolveBreakoutGroups'
+      },
+    ],
+  },
+  {
+    id: 'templates',
+    labelKey: 'voiceGuide.categories.templates',
+    icon: FileText,
+    descriptionKey: 'voiceGuide.descriptions.templates',
+    commands: [
+      {
+        phraseEn: '"Save this as a template"',
+        phraseEs: '"Guardar como plantilla"',
+        alternativesEn: ['"Create template"', '"Save template"'],
+        alternativesEs: ['"Crear plantilla"', '"Guardar plantilla"'],
+        descriptionKey: 'voiceGuide.commands.saveTemplate'
+      },
+      {
+        phraseEn: '"Clone this session"',
+        phraseEs: '"Clonar esta sesión"',
+        alternativesEn: ['"Duplicate session"', '"Copy session"'],
+        alternativesEs: ['"Duplicar sesión"', '"Copiar sesión"'],
+        descriptionKey: 'voiceGuide.commands.cloneSession'
+      },
+      {
+        phraseEn: '"Show my templates"',
+        phraseEs: '"Mostrar mis plantillas"',
+        alternativesEn: ['"List templates"', '"View templates"'],
+        alternativesEs: ['"Listar plantillas"', '"Ver plantillas"'],
+        descriptionKey: 'voiceGuide.commands.showTemplates'
+      },
+    ],
+  },
+  {
+    id: 'prePostClass',
+    labelKey: 'voiceGuide.categories.prePostClass',
+    icon: FileText,
+    descriptionKey: 'voiceGuide.descriptions.prePostClass',
+    commands: [
+      {
+        phraseEn: '"Pre-class completion status"',
+        phraseEs: '"Estado de preparación pre-clase"',
+        alternativesEn: ['"Did students prepare?"', '"Who completed homework?"'],
+        alternativesEs: ['"¿Se prepararon los estudiantes?"', '"¿Quién completó la tarea?"'],
+        descriptionKey: 'voiceGuide.commands.preClassStatus'
+      },
+      {
+        phraseEn: '"Generate session summary"',
+        phraseEs: '"Generar resumen de la sesión"',
+        alternativesEn: ['"Create recap"', '"Summarize session"'],
+        alternativesEs: ['"Crear recapitulación"', '"Resumir sesión"'],
+        descriptionKey: 'voiceGuide.commands.generateSummary'
+      },
+      {
+        phraseEn: '"Send summary to students"',
+        phraseEs: '"Enviar resumen a los estudiantes"',
+        alternativesEn: ['"Email summary"', '"Share recap"'],
+        alternativesEs: ['"Enviar resumen por correo"', '"Compartir recapitulación"'],
+        descriptionKey: 'voiceGuide.commands.sendSummary'
+      },
+      {
+        phraseEn: '"What topics need follow-up?"',
+        phraseEs: '"¿Qué temas necesitan seguimiento?"',
+        alternativesEn: ['"Unresolved topics"', '"What wasn\'t covered?"'],
+        alternativesEs: ['"Temas sin resolver"', '"¿Qué no se cubrió?"'],
+        descriptionKey: 'voiceGuide.commands.followUpTopics'
+      },
+    ],
+  },
+  {
+    id: 'aiAssistant',
+    labelKey: 'voiceGuide.categories.aiAssistant',
+    icon: Brain,
+    descriptionKey: 'voiceGuide.descriptions.aiAssistant',
+    commands: [
+      {
+        phraseEn: '"Show pending AI drafts"',
+        phraseEs: '"Mostrar borradores de IA pendientes"',
+        alternativesEn: ['"AI responses"', '"Draft responses"'],
+        alternativesEs: ['"Respuestas de IA"', '"Borradores de respuestas"'],
+        descriptionKey: 'voiceGuide.commands.showAIDrafts'
+      },
+      {
+        phraseEn: '"Approve the AI draft"',
+        phraseEs: '"Aprobar el borrador de IA"',
+        alternativesEn: ['"Accept draft"', '"Post AI response"'],
+        alternativesEs: ['"Aceptar borrador"', '"Publicar respuesta de IA"'],
+        descriptionKey: 'voiceGuide.commands.approveAIDraft'
+      },
+      {
+        phraseEn: '"Reject the AI draft"',
+        phraseEs: '"Rechazar el borrador de IA"',
+        alternativesEn: ['"Decline draft"', '"Don\'t use this"'],
+        alternativesEs: ['"Declinar borrador"', '"No usar esto"'],
+        descriptionKey: 'voiceGuide.commands.rejectAIDraft'
+      },
+      {
+        phraseEn: '"Suggest a poll"',
+        phraseEs: '"Sugerir una encuesta"',
+        alternativesEn: ['"What poll should I run?"', '"Poll ideas"'],
+        alternativesEs: ['"¿Qué encuesta debería hacer?"', '"Ideas de encuestas"'],
+        descriptionKey: 'voiceGuide.commands.suggestPoll'
+      },
+    ],
+  },
+  {
     id: 'dropdowns',
     labelKey: 'voiceGuide.categories.dropdowns',
     icon: Users,

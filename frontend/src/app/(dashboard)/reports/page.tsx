@@ -885,12 +885,16 @@ export default function ReportsPage() {
 
           {/* Report Tabs - Different views for instructors/admins vs students */}
           {hasInstructorPrivileges ? (
-            <Tabs defaultValue="summary">
+            <Tabs defaultValue="summary" onValueChange={(value) => {
+              if (value === 'analytics') {
+                fetchAnalytics();
+              }
+            }}>
               <TabsList>
                 <TabsTrigger value="summary">{t('reports.summary')}</TabsTrigger>
                 <TabsTrigger value="participation">{t('reports.participation')}</TabsTrigger>
                 <TabsTrigger value="scoring">{t('reports.answerScores')}</TabsTrigger>
-                <TabsTrigger value="analytics" onClick={fetchAnalytics}>
+                <TabsTrigger value="analytics">
                   <TrendingUp className="h-4 w-4 mr-1" />
                   Analytics
                 </TabsTrigger>

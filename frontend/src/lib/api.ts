@@ -484,9 +484,21 @@ export const api = {
   getPreclassStatus: (sessionId: number) =>
     fetchApi<any>(`/instructor/preclass/status/${sessionId}`),
 
+  getPreClassInsights: (sessionId: number) =>
+    fetchApi<any>(`/instructor/preclass/status/${sessionId}`),
+
   // Post-Class Follow-ups
   getSessionSummary: (sessionId: number) =>
     fetchApi<any>(`/instructor/postclass/summary/${sessionId}`),
+
+  getPostClassSummary: (sessionId: number) =>
+    fetchApi<any>(`/instructor/postclass/summary/${sessionId}`),
+
+  generateSessionSummary: (sessionId: number) =>
+    fetchApi<any>(`/instructor/postclass/generate-summary/${sessionId}`, { method: 'POST' }),
+
+  sendSummaryToStudents: (sessionId: number) =>
+    fetchApi<any>(`/instructor/postclass/send-summary/${sessionId}`, { method: 'POST' }),
 
   getUnresolvedTopics: (sessionId: number) =>
     fetchApi<any>(`/instructor/postclass/unresolved/${sessionId}`),

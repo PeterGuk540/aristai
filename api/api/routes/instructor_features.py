@@ -306,6 +306,24 @@ async def get_unresolved_topics(session_id: int, db: Session = Depends(get_db)):
     return result
 
 
+@router.post("/postclass/generate-summary/{session_id}")
+async def generate_session_summary(session_id: int, db: Session = Depends(get_db)):
+    """Generate a new session summary."""
+    result = features.generate_session_summary_email(db, session_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post("/postclass/send-summary/{session_id}")
+async def send_summary_to_students(session_id: int, db: Session = Depends(get_db)):
+    """Send the session summary to all enrolled students."""
+    result = features.send_summary_to_students(db, session_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
 # =============================================================================
 # 9. COMPARATIVE ANALYTICS ENDPOINTS
 # =============================================================================

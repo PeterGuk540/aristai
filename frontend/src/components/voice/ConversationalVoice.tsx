@@ -44,7 +44,8 @@ interface ConversationalVoiceProps {
   className?: string;
 }
 
-const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
+// MCP_RESPONSE_PREFIX removed - not needed with Option A architecture
+// ElevenLabs agent handles all responses, backend only executes UI actions
 
 export function ConversationalVoice(props: ConversationalVoiceProps) {
   const {
@@ -303,12 +304,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // We UPDATE the last user message instead of adding new ones for each interim
             console.log('🎤 User message received:', message);
 
-            // Skip messages that are our own MCP_RESPONSE injections echoed back
-            // These are sent via sendUserMessage() and echoed back as "user" messages
-            if (/^MCP_RESPONSE:/i.test(message)) {
-              console.log('⏭️ Skipping echoed MCP_RESPONSE message');
-              return;
-            }
+            // Note: MCP_RESPONSE injection removed with Option A architecture
+            // All responses come from ElevenLabs agent directly
 
             // Emit transcription event
             if (typeof window !== 'undefined') {
@@ -335,25 +332,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // ElevenLabs agent responses - display what the agent speaks
             console.log('🤖 ElevenLabs agent response:', message);
 
-            // Strip MCP_RESPONSE: prefix if present (agent should strip it but sometimes doesn't)
-            let cleanMessage = message;
-            const mcpPrefixPattern = /^MCP_RESPONSE:\s*/i;
-            if (mcpPrefixPattern.test(message)) {
-              cleanMessage = message.replace(mcpPrefixPattern, '').trim();
-              console.log('🔧 Stripped MCP_RESPONSE prefix from agent message');
-            }
-
-            // Skip brief acknowledgments - these are just filler while waiting for backend
-            const briefAcknowledgments = ['got it', 'one moment', 'sure', 'entendido', 'un momento', 'claro'];
-            const isAcknowledgment = briefAcknowledgments.some(ack =>
-              cleanMessage.toLowerCase().trim() === ack ||
-              cleanMessage.toLowerCase().trim() === ack + '.'
-            );
-
-            if (!isAcknowledgment && cleanMessage.length > 5) {
-              // Display the agent's spoken response in the chatbox
-              console.log('🤖 Displaying agent response in chatbox');
-              addAssistantMessage(cleanMessage);
+            // Display all agent responses in chatbox (Option A: agent is sole responder)
+            if (message && message.length > 5) {
+              addAssistantMessage(message);
             }
           }
         },
@@ -447,67 +428,10 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     return [...uiActionsFromResults, ...actionFromResponse];
   };
 
-  const speakViaElevenLabs = (text: string) => {
-    if (!text || !conversationRef.current) {
-      return;
-    }
-    try {
-      // Send with MCP_RESPONSE prefix - agent should strip this and just speak the content
-      // If agent fails to strip it, the onMessage handler will clean it up for display
-      conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
-    } catch (error) {
-      console.error('❌ Failed to send message to ElevenLabs:', error);
-    }
-  };
-
-  // Check if transcript is a general question that the ElevenLabs agent handles directly
-  // These don't need backend processing - the agent answers from its prompt knowledge
-  // IMPORTANT: Keep this broad to avoid double responses from both agent and backend
-  const isGeneralQuestion = (text: string): boolean => {
-    const lowerText = text.toLowerCase().trim();
-
-    // ACTION keywords that require backend processing - if any of these appear, it's NOT a general question
-    const actionKeywords = [
-      /\b(go to|take me|navigate|open|show me the|switch to)\b/i,  // Navigation
-      /\b(create|start|begin|make|generate|add)\b/i,  // Creation actions
-      /\b(enroll|assign|remove|delete|end|stop)\b/i,  // Management actions
-      /\b(copilot|poll|report|heatmap|timer|breakout)\b/i,  // Specific tools
-      /\b(session|course|forum|console|reports)\s+(page|tab)?$/i,  // Page navigation at end
-    ];
-
-    // If it contains action keywords, it needs backend processing
-    if (actionKeywords.some(pattern => pattern.test(lowerText))) {
-      return false;  // Not a general question - needs backend
-    }
-
-    // General questions about capabilities, features, help, greetings
-    // These are answered by ElevenLabs agent directly from its prompt
-    const generalPatterns = [
-      // Capability questions
-      /what.*(can|could).*(you|do)/i,
-      /what.*(you|can).*(do|help)/i,
-      /(can|could) you.*(help|do|assist)/i,
-      /how.*(can|could) you.*(help|assist)/i,
-      // Feature questions
-      /(what|tell me|explain|describe).*(feature|capabilit|platform)/i,
-      /(what('s| is)|tell me).*(new|recent|added)/i,
-      // How does it work
-      /how.*(does|do).*(this|it|work)/i,
-      // Greetings
-      /^(hello|hi|hey|good\s*(morning|afternoon|evening)|hola|buenos|buenas)/i,
-      // Thanks
-      /^(thank|thanks|gracias)/i,
-      // Identity
-      /(who|what) are you/i,
-      /introduce yourself/i,
-      // Simple help
-      /^(help|ayuda|ayudame)$/i,
-      // Generic questions that don't specify an action
-      /^(what|how|tell me|explain)/i,
-    ];
-
-    return generalPatterns.some(pattern => pattern.test(lowerText));
-  };
+  // NOTE: speakViaElevenLabs removed - we use Option A architecture:
+  // - ElevenLabs agent is the ONLY responder (handles ALL conversation)
+  // - Backend ONLY executes UI actions (navigation, tab switching, etc.)
+  // - This eliminates double responses
 
   const handleTranscript = async (transcript: string) => {
     if (!transcript || isProcessingTranscriptRef.current) {
@@ -515,18 +439,12 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     }
 
     isProcessingTranscriptRef.current = true;
-    console.log('🎯 Processing transcript:', transcript);
+    console.log('🎯 Processing transcript for UI actions:', transcript);
 
-    // Check if this is a general question the ElevenLabs agent handles directly
-    if (isGeneralQuestion(transcript)) {
-      console.log('💬 General question detected - ElevenLabs agent will handle directly');
-      // Don't send to backend - agent answers from its own knowledge
-      // Just finalize the user message for context tracking
-      finalizeUserMessage(transcript);
-      isProcessingTranscriptRef.current = false;
-      pendingTranscriptRef.current = null;
-      return;
-    }
+    // Option A Architecture:
+    // - ElevenLabs agent handles ALL conversation responses
+    // - Backend ONLY executes UI actions (no spoken response)
+    // - This ensures ONE response per user message
 
     try {
       const currentPage = typeof window !== 'undefined' ? window.location.pathname : undefined;
@@ -540,7 +458,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
       console.log('📦 Backend response:', JSON.stringify(response, null, 2));
 
-      // Extract and execute UI actions IMMEDIATELY
+      // Extract and execute UI actions ONLY - no spoken response
       const uiActions = extractUiActions(response.results, response.action);
       console.log('🎬 UI Actions to execute:', uiActions);
 
@@ -555,22 +473,19 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           }
         });
       } else {
-        console.log('⚠️ No UI actions to execute');
+        console.log('ℹ️ No UI actions needed - agent handles response');
       }
 
-      // Show message and speak via ElevenLabs
-      if (response.message) {
-        // Don't add to chatbox here - the agent's spoken response will be captured
-        // in the onMessage handler and displayed there
-        // Just send the message to ElevenLabs to speak
-        speakViaElevenLabs(response.message);
-      }
+      // NOTE: We do NOT call speakViaElevenLabs() here
+      // The ElevenLabs agent already responded to the user's speech
+      // Backend only executes UI actions silently
 
       // Finalize the user message (update context, check refresh threshold)
       finalizeUserMessage(transcript);
     } catch (error) {
-      console.error('❌ MCP voice converse failed:', error);
-      setError('Unable to reach MCP service. Please try again.');
+      console.error('❌ Backend call failed:', error);
+      // Don't show error to user - agent already responded
+      // UI actions just won't execute
     } finally {
       isProcessingTranscriptRef.current = false;
       pendingTranscriptRef.current = null;

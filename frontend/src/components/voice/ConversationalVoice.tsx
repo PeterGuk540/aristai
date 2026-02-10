@@ -78,7 +78,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const isRefreshingRef = useRef(false); // Track if this is a silent refresh (skip greeting)
   const lastUserMessageIdRef = useRef<string | null>(null); // Track last user message for transcript updates
   const pendingTranscriptRef = useRef<string | null>(null); // Track pending transcript to avoid duplicate processing
-  const agentRespondedDirectlyRef = useRef<boolean>(false); // Track if agent responded directly (not via MCP_RESPONSE)
 
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = 10;
@@ -311,9 +310,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
               return;
             }
 
-            // Reset agent direct response flag for new user input
-            agentRespondedDirectlyRef.current = false;
-
             // Emit transcription event
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('voice-transcription', {
@@ -336,11 +332,10 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
               }
             }, 500);
           } else if (source === 'ai') {
-            // ElevenLabs agent responses - check if agent is responding directly
+            // ElevenLabs agent responses - display what the agent speaks
             console.log('🤖 ElevenLabs agent response:', message);
 
-            // Strip MCP_RESPONSE: prefix if present (agent should do this but sometimes doesn't)
-            // Handle variations: "MCP_RESPONSE:", "MCP_RESPONSE: ", "mcp_response:", etc.
+            // Strip MCP_RESPONSE: prefix if present (agent should strip it but sometimes doesn't)
             let cleanMessage = message;
             const mcpPrefixPattern = /^MCP_RESPONSE:\s*/i;
             if (mcpPrefixPattern.test(message)) {
@@ -348,18 +343,16 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
               console.log('🔧 Stripped MCP_RESPONSE prefix from agent message');
             }
 
-            // Check if this is a brief acknowledgment (agent waiting for MCP_RESPONSE)
+            // Skip brief acknowledgments - these are just filler while waiting for backend
             const briefAcknowledgments = ['got it', 'one moment', 'sure', 'entendido', 'un momento', 'claro'];
             const isAcknowledgment = briefAcknowledgments.some(ack =>
               cleanMessage.toLowerCase().trim() === ack ||
               cleanMessage.toLowerCase().trim() === ack + '.'
             );
 
-            if (!isAcknowledgment && cleanMessage.length > 20) {
-              // Agent responded directly (not via MCP_RESPONSE relay pattern)
-              // This happens for questions like "what can you do?" that agent answers itself
-              console.log('🤖 Agent responded directly - showing in chatbox');
-              agentRespondedDirectlyRef.current = true;
+            if (!isAcknowledgment && cleanMessage.length > 5) {
+              // Display the agent's spoken response in the chatbox
+              console.log('🤖 Displaying agent response in chatbox');
               addAssistantMessage(cleanMessage);
             }
           }
@@ -506,16 +499,11 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       }
 
       // Show message and speak via ElevenLabs
-      // Skip if agent already responded directly (e.g., for "what can you do?" questions)
       if (response.message) {
-        if (agentRespondedDirectlyRef.current) {
-          // Agent already responded - don't duplicate in chatbox or speak again
-          console.log('⏭️ Skipping backend response - agent already responded directly');
-        } else {
-          // Normal flow - show backend response and speak it
-          addAssistantMessage(response.message);
-          speakViaElevenLabs(response.message);
-        }
+        // Don't add to chatbox here - the agent's spoken response will be captured
+        // in the onMessage handler and displayed there
+        // Just send the message to ElevenLabs to speak
+        speakViaElevenLabs(response.message);
       }
 
       // Finalize the user message (update context, check refresh threshold)
@@ -526,7 +514,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     } finally {
       isProcessingTranscriptRef.current = false;
       pendingTranscriptRef.current = null;
-      agentRespondedDirectlyRef.current = false; // Reset for next interaction
     }
   };
 

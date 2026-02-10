@@ -305,23 +305,36 @@ Respond with only the JSON object, no additional text.
 class VoiceIntentClassifier:
     """LLM-based intent classifier for voice commands"""
 
-    def __init__(self, model_name: str = "claude-3-5-haiku-20241022"):
+    def __init__(self):
         """
         Initialize the classifier.
-
-        Args:
-            model_name: The LLM model to use. Default is Haiku for speed/cost.
-                       Use "claude-sonnet-4-20250514" for more complex understanding.
+        Uses the LLM configured in get_llm_with_tracking() (gpt-4o-mini or claude-3-haiku).
         """
-        self.model_name = model_name
         self._llm = None
+        self._model_name = None
+
+    def _ensure_llm(self):
+        """Lazy-load the LLM"""
+        if self._llm is None:
+            llm_result = get_llm_with_tracking()
+            if llm_result[0] is None:
+                logger.error("[IntentClassifier] No LLM available - check API keys")
+                return False
+            self._llm, self._model_name = llm_result
+            logger.info(f"[IntentClassifier] Initialized with model: {self._model_name}")
+        return True
 
     @property
     def llm(self):
-        """Lazy-load the LLM"""
-        if self._llm is None:
-            self._llm = get_llm_with_tracking(self.model_name)
+        """Get the LLM instance"""
+        self._ensure_llm()
         return self._llm
+
+    @property
+    def model_name(self):
+        """Get the model name"""
+        self._ensure_llm()
+        return self._model_name or "unknown"
 
     def classify(
         self,
@@ -338,6 +351,13 @@ class VoiceIntentClassifier:
         Returns:
             ClassifiedIntent with the detected intent and parameters
         """
+        logger.info(f"[IntentClassifier] Classifying input: '{user_input}'")
+
+        # Ensure LLM is available
+        if not self._ensure_llm():
+            logger.error("[IntentClassifier] No LLM available, returning fallback")
+            return self._fallback_intent(user_input)
+
         # Format page context for the prompt
         if page_context:
             context_str = json.dumps(page_context.model_dump(exclude_none=True), indent=2)
@@ -352,23 +372,30 @@ class VoiceIntentClassifier:
 
         try:
             # Invoke the LLM
-            response = invoke_llm_with_metrics(self.llm, prompt, self.model_name)
+            logger.info(f"[IntentClassifier] Invoking LLM with model: {self.model_name}")
+            response = invoke_llm_with_metrics(self._llm, prompt, self.model_name)
 
             if not response.success:
-                logger.warning(f"LLM intent classification failed: {response.error}")
+                logger.warning(f"[IntentClassifier] LLM call failed: {response.metrics.error_message}")
                 return self._fallback_intent(user_input)
+
+            logger.info(f"[IntentClassifier] LLM response (first 500 chars): {response.content[:500] if response.content else 'None'}")
 
             # Parse the JSON response
             parsed = parse_json_response(response.content or "")
             if not parsed:
-                logger.warning(f"Failed to parse intent classification response: {response.content}")
+                logger.warning(f"[IntentClassifier] Failed to parse JSON from response: {response.content}")
                 return self._fallback_intent(user_input)
 
+            logger.info(f"[IntentClassifier] Parsed intent: category={parsed.get('category')}, action={parsed.get('action')}, confidence={parsed.get('confidence')}")
+
             # Build the ClassifiedIntent from parsed response
-            return self._build_intent(parsed, user_input)
+            intent = self._build_intent(parsed, user_input)
+            logger.info(f"[IntentClassifier] Final intent: {intent.category.value}/{intent.action} (confidence: {intent.confidence})")
+            return intent
 
         except Exception as e:
-            logger.error(f"Intent classification error: {e}")
+            logger.error(f"[IntentClassifier] Exception during classification: {e}", exc_info=True)
             return self._fallback_intent(user_input)
 
     def _build_intent(self, parsed: Dict[str, Any], original_text: str) -> ClassifiedIntent:

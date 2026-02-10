@@ -460,6 +460,26 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     }
   };
 
+  // Check if transcript is a general question that the ElevenLabs agent handles directly
+  // These don't need backend processing - the agent answers from its prompt knowledge
+  const isGeneralQuestion = (text: string): boolean => {
+    const lowerText = text.toLowerCase().trim();
+
+    // General questions about capabilities, features, help
+    const generalPatterns = [
+      /^(what|tell me|can you|could you|do you).*(can you do|you do|help|assist|capable)/i,
+      /^(what|tell me about|explain|describe).*(features?|capabilities|platform|aristai)/i,
+      /^(how|what).*(does|do).*(this|it|the platform|aristai).*(work|do)/i,
+      /^(hello|hi|hey|good morning|good afternoon|hola|buenos)/i,
+      /^(thank|thanks|gracias)/i,
+      /^(what('s| is) new|new features?|recent updates?|added recently)/i,
+      /^(who are you|what are you|introduce yourself)/i,
+      /^(help|ayuda|ayudame)$/i,
+    ];
+
+    return generalPatterns.some(pattern => pattern.test(lowerText));
+  };
+
   const handleTranscript = async (transcript: string) => {
     if (!transcript || isProcessingTranscriptRef.current) {
       return;
@@ -467,6 +487,17 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
     isProcessingTranscriptRef.current = true;
     console.log('🎯 Processing transcript:', transcript);
+
+    // Check if this is a general question the ElevenLabs agent handles directly
+    if (isGeneralQuestion(transcript)) {
+      console.log('💬 General question detected - ElevenLabs agent will handle directly');
+      // Don't send to backend - agent answers from its own knowledge
+      // Just finalize the user message for context tracking
+      finalizeUserMessage(transcript);
+      isProcessingTranscriptRef.current = false;
+      pendingTranscriptRef.current = null;
+      return;
+    }
 
     try {
       const currentPage = typeof window !== 'undefined' ? window.location.pathname : undefined;

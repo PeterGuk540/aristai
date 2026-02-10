@@ -1074,16 +1074,30 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
         # Extract tab name - order matters (longer phrases first)
         # Includes both English and Spanish tab keywords
         tab_keywords = {
-            # English keywords -> tab value
+            # Multi-word phrases first (longer phrases before shorter)
             'case studies': 'cases',
             'case-studies': 'cases',
             'ai copilot': 'copilot',
             'ai assistant': 'copilot',
+            'answer scores': 'scoring',
+            'answer-scores': 'scoring',
+            'instructor tools': 'tools',
+            'instructor-tools': 'tools',
+            'instructor requests': 'requests',
+            'instructor-requests': 'requests',
+            'manage status': 'manage',
+            'manage-status': 'manage',
+            'session insights': 'insights',
+            'session-insights': 'insights',
+            'view sessions': 'sessions',
+            'view courses': 'courses',
             # Spanish keywords -> tab value (non-accented: discusion, participacion, etc.)
             'estudios de caso': 'cases',
             'casos de estudio': 'cases',
             'asistente de ia': 'copilot',
             'asistente ia': 'copilot',
+            'herramientas del instructor': 'tools',
+            'solicitudes del instructor': 'requests',
             'discusion': 'discussion',
             'participacion': 'participation',
             'puntuacion': 'scoring',
@@ -1092,10 +1106,13 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'encuestas': 'polls',
             'solicitudes': 'requests',
             'lista': 'roster',
-            # Simple English keywords
+            'analiticas': 'analytics',
+            'materiales': 'materials',
+            # Simple English keywords (single words)
             'summary': 'summary',
             'participation': 'participation',
             'scoring': 'scoring',
+            'analytics': 'analytics',
             'enrollment': 'enrollment',
             'create': 'create',
             'manage': 'manage',
@@ -1108,6 +1125,9 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'poll': 'polls',
             'requests': 'requests',
             'roster': 'roster',
+            'tools': 'tools',
+            'insights': 'insights',
+            'materials': 'materials',
             'my-performance': 'myperformance',
             'best-practice': 'bestpractice',
         }

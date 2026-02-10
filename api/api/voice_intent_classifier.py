@@ -214,56 +214,81 @@ The user may speak in English or Spanish. Both languages should be understood eq
 ## Available Actions by Category:
 
 ### NAVIGATE (category: "navigate")
-Go to different PAGES in the application. Only these pages exist:
+Go to different PAGES in the application. ONLY these 8 pages exist:
 Actions: courses, sessions, forum, console, reports, dashboard, profile, voice_guide
 
-IMPORTANT: Features like engagement heatmap, breakout groups, timers, facilitation suggestions, etc.
-are NOT separate pages - they are features within existing pages. Do NOT navigate to them.
-Use QUERY category for those features instead.
+CRITICAL: The ONLY valid navigation targets are: courses, sessions, forum, console, reports, dashboard, profile, voice_guide
+ANYTHING ELSE is NOT a page - it's either a TAB (use UI_ACTION with switch_tab) or a FEATURE (use QUERY).
 
-Examples (any phrasing):
-- "go to courses" / "show me my courses" / "I want to see the course page" / "llevame a los cursos"
-- "open the forum" / "take me to discussions" / "ir al foro"
-- "navigate to reports" / "show analytics" / "ver reportes"
-- "go to console" / "open the console page" / "ir a la consola"
+TABS ARE NOT PAGES! These are tabs within pages, use UI_ACTION category with action=switch_tab:
+- enrollment, create, join, manage, insights, materials → TABS, not pages
+- summary, participation, scoring, analytics → TABS on reports page, not pages
+- copilot, polls, cases, tools, requests, roster, discussion → TABS, not pages
 
-NOT navigation (these are QUERY actions, not pages):
-- "show me the engagement heatmap" → use get_engagement_heatmap (QUERY)
-- "take me to breakout groups" → use get_breakout_groups (QUERY)
-- "open the timer" → use get_timer_status (QUERY)
+Examples of NAVIGATE (going to a whole page):
+- "go to courses" / "show me my courses" / "llevame a los cursos" → navigate to courses
+- "open the forum" / "ir al foro" → navigate to forum
+- "navigate to reports" / "ver reportes" → navigate to reports
+- "go to console" / "ir a la consola" → navigate to console
+
+Examples that are NOT navigation (use UI_ACTION or QUERY instead):
+- "take me to enrollment" → UI_ACTION switch_tab with tab_name="enrollment"
+- "go to the analytics tab" → UI_ACTION switch_tab with tab_name="analytics"
+- "show me participation" → UI_ACTION switch_tab with tab_name="participation"
+- "open the scoring tab" → UI_ACTION switch_tab with tab_name="scoring"
+- "show me the engagement heatmap" → QUERY get_engagement_heatmap
+- "take me to breakout groups" → QUERY get_breakout_groups
 
 ### UI_ACTION (category: "ui_action")
 Interact with UI elements like tabs, buttons, forms.
 Actions: switch_tab, click_button, select_dropdown, expand_dropdown, fill_input, close_modal
 
-IMPORTANT: When extracting tab_name for switch_tab, use the EXACT tab value, not the spoken name:
-- Console page tabs: copilot, polls, cases, tools, requests, roster
-- Forum page tabs: cases, discussion
-- Courses page tabs: courses, create, enrollment, join
-- Sessions page tabs: sessions, create, manage, insights
-- Reports page tabs: summary, participation, scoring, analytics
+CRITICAL: When the user wants to go to a TAB (not a page), use category=ui_action with action=switch_tab.
+Use "take me to X", "go to X", "open X", "show X" with tabs → switch_tab (NOT navigate!)
 
-Tab name mapping (use the value after the arrow):
-- "post a case" / "cases" / "case study" → cases
-- "discussion" / "post" / "posts" → discussion
+Available tabs by page (use EXACT tab_name value):
+- Console page: copilot, polls, cases, tools, requests, roster
+- Forum page: cases, discussion
+- Courses page: courses, create, enrollment, join, instructor
+- Sessions page: sessions, materials, create, manage, insights
+- Reports page: summary, participation, scoring, analytics
+
+Tab name mapping (spoken phrase → tab_name value):
+- "post a case" / "cases" / "case study" / "case studies" → cases
+- "discussion" / "post" / "posts" / "forum discussion" → discussion
 - "copilot" / "AI copilot" / "assistant" → copilot
 - "polls" / "polling" / "create poll" → polls
 - "instructor tools" / "tools" / "features" → tools
-- "requests" / "instructor requests" → requests
+- "requests" / "instructor requests" / "student requests" → requests
 - "roster" / "student roster" / "class list" → roster
-- "enrollment" / "enroll" / "students" → enrollment
-- "insights" / "session insights" / "analytics" → insights
+- "enrollment" / "enroll" / "manage enrollment" / "students" → enrollment
+- "insights" / "session insights" → insights
+- "materials" / "session materials" / "class materials" → materials
 - "summary" / "report summary" → summary
-- "participation" / "engagement" → participation
-- "scoring" / "scores" / "grades" → scoring
+- "participation" / "engagement" / "participation tab" → participation
+- "scoring" / "scores" / "grades" / "answer scores" → scoring
+- "analytics" / "analytics tab" / "data analytics" → analytics
+- "manage" / "manage status" / "session status" → manage
+- "create" / "create new" → create
 
-Examples:
+Examples of switch_tab (use category=ui_action, action=switch_tab):
 - "go to the discussion tab" → switch_tab with tab_name="discussion"
+- "take me to enrollment" → switch_tab with tab_name="enrollment"
+- "open the analytics tab" → switch_tab with tab_name="analytics"
+- "show me participation" → switch_tab with tab_name="participation"
 - "switch to post a case" → switch_tab with tab_name="cases"
 - "open the polls tab" → switch_tab with tab_name="polls"
 - "show instructor tools" → switch_tab with tab_name="tools"
+- "go to scoring" → switch_tab with tab_name="scoring"
+- "take me to answer scores" → switch_tab with tab_name="scoring"
+
+Examples of click_button:
 - "click submit" / "press the create button" / "presionar enviar"
+
+Examples of select_dropdown:
 - "select the first course" / "choose the second option" / "seleccionar el primero"
+
+Examples of fill_input:
 - "the title is Introduction to AI" / "set the description to..." / "el titulo es..."
 
 ### QUERY (category: "query")
@@ -765,14 +790,34 @@ def intent_to_legacy_format(intent: ClassifiedIntent) -> Dict[str, Any]:
     }
 
     if intent.category == IntentCategory.NAVIGATE:
-        result["type"] = "navigate"
         # Get navigation path from action or parameters
         if intent.action in NAVIGATION_TARGETS:
+            result["type"] = "navigate"
             result["value"] = INTENT_TO_LEGACY_ACTION.get(intent.action, f"/{intent.action}")
-        elif intent.parameters.target_page:
+        elif intent.parameters.target_page and intent.parameters.target_page.lstrip('/') in NAVIGATION_TARGETS:
+            result["type"] = "navigate"
             result["value"] = intent.parameters.target_page
         else:
-            result["value"] = f"/{intent.action}"
+            # Safety check: If the action is not a valid page, it might be a tab
+            # Common tab names that might be mistaken for pages
+            TAB_NAMES = {
+                'enrollment', 'create', 'join', 'manage', 'insights', 'materials',
+                'summary', 'participation', 'scoring', 'analytics',
+                'copilot', 'polls', 'cases', 'tools', 'requests', 'roster', 'discussion',
+                'instructor', 'switch_tab'
+            }
+            action_lower = intent.action.lower() if intent.action else ''
+            if action_lower in TAB_NAMES or (intent.parameters.tab_name):
+                # This is actually a tab switch, not navigation
+                logger.warning(f"Correcting misclassified navigation to tab switch: {intent.action}")
+                result["type"] = "action"
+                result["value"] = "ui_switch_tab"
+                result["parameters"]["tabName"] = intent.parameters.tab_name or action_lower
+            else:
+                # Unknown navigation target - default to dashboard
+                logger.warning(f"Unknown navigation target: {intent.action}, defaulting to dashboard")
+                result["type"] = "navigate"
+                result["value"] = "/dashboard"
 
     elif intent.category == IntentCategory.UI_ACTION:
         result["type"] = "action"

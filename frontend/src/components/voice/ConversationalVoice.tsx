@@ -349,19 +349,28 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // ElevenLabs agent responses - check if agent is responding directly
             console.log('🤖 ElevenLabs agent response:', message);
 
+            // Strip MCP_RESPONSE: prefix if present (agent should do this but sometimes doesn't)
+            // Handle variations: "MCP_RESPONSE:", "MCP_RESPONSE: ", "mcp_response:", etc.
+            let cleanMessage = message;
+            const mcpPrefixPattern = /^MCP_RESPONSE:\s*/i;
+            if (mcpPrefixPattern.test(message)) {
+              cleanMessage = message.replace(mcpPrefixPattern, '').trim();
+              console.log('🔧 Stripped MCP_RESPONSE prefix from agent message');
+            }
+
             // Check if this is a brief acknowledgment (agent waiting for MCP_RESPONSE)
             const briefAcknowledgments = ['got it', 'one moment', 'sure', 'entendido', 'un momento', 'claro'];
             const isAcknowledgment = briefAcknowledgments.some(ack =>
-              message.toLowerCase().trim() === ack ||
-              message.toLowerCase().trim() === ack + '.'
+              cleanMessage.toLowerCase().trim() === ack ||
+              cleanMessage.toLowerCase().trim() === ack + '.'
             );
 
-            if (!isAcknowledgment && message.length > 20) {
+            if (!isAcknowledgment && cleanMessage.length > 20) {
               // Agent responded directly (not via MCP_RESPONSE relay pattern)
               // This happens for questions like "what can you do?" that agent answers itself
               console.log('🤖 Agent responded directly - showing in chatbox');
               agentRespondedDirectlyRef.current = true;
-              addAssistantMessage(message);
+              addAssistantMessage(cleanMessage);
             }
           }
         },
@@ -460,9 +469,11 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       return;
     }
     try {
+      // Send with MCP_RESPONSE prefix - agent should strip this and just speak the content
+      // If agent fails to strip it, the onMessage handler will clean it up for display
       conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
     } catch (error) {
-      console.error('❌ Failed to send MCP message to ElevenLabs:', error);
+      console.error('❌ Failed to send message to ElevenLabs:', error);
     }
   };
 

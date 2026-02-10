@@ -304,6 +304,23 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // We UPDATE the last user message instead of adding new ones for each interim
             console.log('🎤 User speech transcribed:', message);
 
+            // FILTER: Skip messages that look like agent prompts/clarifications
+            // These sometimes get incorrectly labeled as "user" messages
+            const agentLikePatterns = [
+              /^could you (please )?(specify|clarify|tell me|explain)/i,
+              /^what (would you like|do you want|features|are you)/i,
+              /^i('m| am) (here to|ready to|listening|your)/i,
+              /^how can i (help|assist)/i,
+              /^please (specify|clarify|tell me)/i,
+              /^which (one|option|feature)/i,
+            ];
+
+            const looksLikeAgentMessage = agentLikePatterns.some(pattern => pattern.test(message.trim()));
+            if (looksLikeAgentMessage) {
+              console.log('⚠️ Filtering out agent-like message incorrectly labeled as user:', message);
+              return; // Skip this message entirely
+            }
+
             // Reset agent direct response flag for new user input
             agentRespondedDirectlyRef.current = false;
 

@@ -59,6 +59,9 @@ from api.api.voice_intent_classifier import (
     PageContext,
 )
 
+# Instructor enhancement features voice handlers
+from api.api.voice_instructor_handlers import handle_instructor_feature
+
 # Initialize context store for voice memory
 context_store = ContextStore()
 
@@ -3533,6 +3536,28 @@ async def execute_action(
     # Use LLM-extracted parameters if available, otherwise fall back to regex extraction
     llm_params = llm_params or {}
     try:
+        # === INSTRUCTOR ENHANCEMENT FEATURES ===
+        # Try to handle instructor-specific voice commands first
+        # Resolve session and course IDs from context
+        session_id = None
+        course_id = None
+        if user_id:
+            ctx = context_store.get_context(user_id)
+            session_id = ctx.get("active_session_id") if ctx else None
+            course_id = ctx.get("active_course_id") if ctx else None
+
+        instructor_result = handle_instructor_feature(
+            action=action,
+            user_id=user_id,
+            session_id=session_id,
+            course_id=course_id,
+            transcript=transcript or "",
+            db=db,
+            llm_params=llm_params,
+        )
+        if instructor_result is not None:
+            return instructor_result
+
         # === UNIVERSAL UI ELEMENT INTERACTIONS ===
         # All UI actions now use universal handlers that work across all pages
 

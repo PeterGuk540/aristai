@@ -262,6 +262,145 @@ export interface ReportJSON {
 
 // Legacy voice types removed - using ElevenLabs Agent now
 
+// =============================================================================
+// INSTRUCTOR ENHANCEMENT FEATURE TYPES
+// =============================================================================
+
+// Engagement Heatmap
+export type EngagementLevel = 'highly_active' | 'active' | 'idle' | 'disengaged' | 'not_joined';
+
+export interface StudentEngagement {
+  user_id: number;
+  name: string;
+  email: string;
+  engagement_level: EngagementLevel;
+  post_count: number;
+  reply_count: number;
+  last_activity: string | null;
+  joined_at: string | null;
+}
+
+export interface EngagementHeatmap {
+  session_id: number;
+  total_students: number;
+  engagement_summary: Record<EngagementLevel, number>;
+  students: StudentEngagement[];
+  timestamp: string;
+}
+
+// Smart Facilitation
+export interface FacilitationSuggestion {
+  type: 'reengagement' | 'call_on_student' | 'address_questions';
+  priority: 'high' | 'medium' | 'low';
+  message: string;
+  students?: Array<{ user_id: number; name: string; post_count: number }>;
+  post_ids?: number[];
+}
+
+export interface FacilitationSuggestions {
+  session_id: number;
+  discussion_momentum: 'stalling' | 'active';
+  posts_per_minute: number;
+  suggestions: FacilitationSuggestion[];
+  low_participation_count: number;
+}
+
+// Session Templates
+export interface SessionTemplate {
+  id: number;
+  name: string;
+  description?: string;
+  category?: string;
+  use_count: number;
+  created_at: string;
+}
+
+// Breakout Groups
+export interface BreakoutGroupMember {
+  user_id: number;
+  name: string;
+}
+
+export interface BreakoutGroup {
+  id: number;
+  name: string;
+  topic?: string;
+  member_count: number;
+  members: BreakoutGroupMember[];
+  post_count: number;
+}
+
+// Student Progress
+export interface StudentProgress {
+  user_id: number;
+  user_name: string;
+  total_sessions: number;
+  total_posts: number;
+  total_quality_posts: number;
+  participation_trend: 'improving' | 'stable' | 'declining' | 'insufficient_data';
+  sessions: Array<{
+    session_id: number;
+    session_title: string;
+    session_date: string;
+    post_count: number;
+    quality_posts: number;
+  }>;
+}
+
+// Pre-Class Checkpoints
+export interface PreClassCheckpoint {
+  checkpoint_id: number;
+  title: string;
+  type: string;
+  completion_rate: number;
+  completed_count: number;
+  incomplete_count: number;
+  completed_students: Array<{ user_id: number; name: string }>;
+  incomplete_students: Array<{ user_id: number; name: string }>;
+}
+
+// Session Timer
+export interface SessionTimer {
+  id: number;
+  label: string;
+  duration_seconds: number;
+  remaining_seconds: number;
+  is_paused: boolean;
+  is_expired: boolean;
+}
+
+// AI Response Draft
+export interface AIResponseDraft {
+  draft_id: number;
+  post_id: number;
+  student_name: string;
+  question: string;
+  draft_response: string;
+  confidence: number;
+  created_at: string;
+}
+
+// Poll Suggestion
+export interface PollSuggestion {
+  type: 'opinion_poll' | 'comprehension_check' | 'concept_check';
+  question: string;
+  options: string[];
+  context: string;
+}
+
+// Session Comparison
+export interface SessionComparison {
+  session_id: number;
+  title: string;
+  date: string;
+  status: string;
+  total_posts: number;
+  unique_participants: number;
+  participation_rate: number;
+  polls_count: number;
+  avg_posts_per_student: number;
+}
+
 // API Response types
 export interface TaskResponse {
   task_id: string;

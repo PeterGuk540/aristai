@@ -9,6 +9,17 @@ from api.models.report import Report
 from api.models.enrollment import Enrollment
 from api.models.voice_audit import VoiceAudit
 from api.models.course_material import CourseMaterial
+from api.models.engagement import (
+    StudentEngagement,
+    EngagementLevel,
+    SessionTimer,
+    BreakoutGroup,
+    BreakoutGroupMember,
+    SessionTemplate,
+    PreClassCheckpoint,
+    CheckpointCompletion,
+    AIResponseDraft,
+)
 
 __all__ = [
     "User",
@@ -24,4 +35,14 @@ __all__ = [
     "Enrollment",
     "VoiceAudit",
     "CourseMaterial",
+    # New engagement models
+    "StudentEngagement",
+    "EngagementLevel",
+    "SessionTimer",
+    "BreakoutGroup",
+    "BreakoutGroupMember",
+    "SessionTemplate",
+    "PreClassCheckpoint",
+    "CheckpointCompletion",
+    "AIResponseDraft",
 ]

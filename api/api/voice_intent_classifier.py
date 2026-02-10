@@ -79,6 +79,23 @@ class QueryType(str, Enum):
     GET_CONTEXT = "get_context"
     STUDENT_LOOKUP = "student_lookup"
     VIEW_COURSE_DETAILS = "view_course_details"
+    # New instructor feature queries
+    GET_ENGAGEMENT_HEATMAP = "get_engagement_heatmap"
+    GET_DISENGAGED_STUDENTS = "get_disengaged_students"
+    GET_FACILITATION_SUGGESTIONS = "get_facilitation_suggestions"
+    SUGGEST_NEXT_STUDENT = "suggest_next_student"
+    GET_POLL_SUGGESTIONS = "get_poll_suggestions"
+    LIST_TEMPLATES = "list_templates"
+    GET_STUDENT_PROGRESS = "get_student_progress"
+    GET_CLASS_PROGRESS = "get_class_progress"
+    GET_BREAKOUT_GROUPS = "get_breakout_groups"
+    GET_PRECLASS_STATUS = "get_preclass_status"
+    GET_SESSION_SUMMARY = "get_session_summary"
+    GET_UNRESOLVED_TOPICS = "get_unresolved_topics"
+    COMPARE_SESSIONS = "compare_sessions"
+    GET_COURSE_ANALYTICS = "get_course_analytics"
+    GET_TIMER_STATUS = "get_timer_status"
+    GET_AI_DRAFTS = "get_ai_drafts"
 
 
 class CreateType(str, Enum):
@@ -106,6 +123,19 @@ class ControlType(str, Enum):
     OPEN_USER_MENU = "open_user_menu"
     UNDO_ACTION = "undo_action"
     CLEAR_CONTEXT = "clear_context"
+    # New instructor feature controls
+    START_TIMER = "start_timer"
+    PAUSE_TIMER = "pause_timer"
+    RESUME_TIMER = "resume_timer"
+    STOP_TIMER = "stop_timer"
+    CREATE_BREAKOUT_GROUPS = "create_breakout_groups"
+    DISSOLVE_BREAKOUT_GROUPS = "dissolve_breakout_groups"
+    SAVE_TEMPLATE = "save_template"
+    CLONE_SESSION = "clone_session"
+    GENERATE_AI_DRAFT = "generate_ai_draft"
+    APPROVE_AI_DRAFT = "approve_ai_draft"
+    REJECT_AI_DRAFT = "reject_ai_draft"
+    SEND_SESSION_SUMMARY = "send_session_summary"
 
 
 class ConfirmationType(str, Enum):
@@ -205,7 +235,11 @@ Ask for information about the class, students, or system.
 Actions: class_status, who_needs_help, get_scores, get_participation, get_misconceptions,
          get_interventions, copilot_suggestions, list_courses, list_sessions, list_enrollments,
          view_posts, pinned_posts, summarize_discussion, student_questions, read_posts,
-         get_status, get_help, get_context, student_lookup, view_course_details
+         get_status, get_help, get_context, student_lookup, view_course_details,
+         get_engagement_heatmap, get_disengaged_students, get_facilitation_suggestions,
+         suggest_next_student, get_poll_suggestions, list_templates, get_student_progress,
+         get_class_progress, get_breakout_groups, get_preclass_status, get_session_summary,
+         get_unresolved_topics, compare_sessions, get_course_analytics, get_timer_status, get_ai_drafts
 
 Examples:
 - "how's the class doing?" / "como va la clase?"
@@ -213,6 +247,16 @@ Examples:
 - "what are the scores?" / "cuales son los puntajes?"
 - "how's Maria doing?" / "como esta Juan?"
 - "what did the copilot suggest?" / "que sugiere el copilot?"
+- "show me the engagement heatmap" / "mostrar el mapa de participacion"
+- "who's not participating?" / "quienes no estan participando?"
+- "who should I call on next?" / "a quien deberia llamar?"
+- "suggest a poll" / "sugerir una encuesta"
+- "how much time is left?" / "cuanto tiempo queda?"
+- "how has Maria been doing this semester?" / "como le ha ido a Maria este semestre?"
+- "compare the last three sessions" / "comparar las ultimas tres sesiones"
+- "show me my templates" / "mostrar mis plantillas"
+- "did students complete the pre-reading?" / "completaron los estudiantes la lectura?"
+- "what topics need follow-up?" / "que temas necesitan seguimiento?"
 
 ### CREATE (category: "create")
 Create new content like courses, sessions, polls.
@@ -229,13 +273,24 @@ Examples:
 Control application features and session state.
 Actions: start_copilot, stop_copilot, toggle_theme, go_live, end_session,
          set_session_draft, set_session_completed, refresh_report, sign_out,
-         open_user_menu, undo_action, clear_context
+         open_user_menu, undo_action, clear_context, start_timer, pause_timer,
+         resume_timer, stop_timer, create_breakout_groups, dissolve_breakout_groups,
+         save_template, clone_session, generate_ai_draft, approve_ai_draft, reject_ai_draft,
+         send_session_summary
 
 Examples:
 - "start the copilot" / "iniciar el copilot"
 - "go live" / "make the session live" / "poner en vivo"
 - "toggle dark mode" / "cambiar tema"
 - "sign me out" / "cerrar sesion"
+- "start a 5 minute timer" / "iniciar un temporizador de 5 minutos"
+- "pause the timer" / "pausar el temporizador"
+- "split into 4 groups" / "dividir en 4 grupos"
+- "dissolve the groups" / "disolver los grupos"
+- "save this as a template" / "guardar como plantilla"
+- "clone this session" / "clonar esta sesion"
+- "draft a response to that question" / "escribir una respuesta a esa pregunta"
+- "send the session summary to students" / "enviar el resumen a los estudiantes"
 
 ### CONFIRM (category: "confirm")
 User is confirming or denying a pending action.

@@ -388,6 +388,163 @@ export const api = {
 
   getMaterialDownloadUrl: (courseId: number, materialId: number) =>
     `${API_PROXY_BASE}/courses/${courseId}/materials/${materialId}/download`,
+
+  // =============================================================================
+  // INSTRUCTOR ENHANCEMENT FEATURES
+  // =============================================================================
+
+  // Engagement Heatmap
+  getEngagementHeatmap: (sessionId: number) =>
+    fetchApi<any>(`/instructor/engagement/heatmap/${sessionId}`),
+
+  getDisengagedStudents: (sessionId: number) =>
+    fetchApi<any>(`/instructor/engagement/needs-attention/${sessionId}`),
+
+  // Smart Facilitation
+  getFacilitationSuggestions: (sessionId: number) =>
+    fetchApi<any>(`/instructor/facilitation/suggestions/${sessionId}`),
+
+  suggestNextStudent: (sessionId: number) =>
+    fetchApi<any>(`/instructor/facilitation/next-student/${sessionId}`),
+
+  // Quick Polls
+  getPollSuggestions: (sessionId: number) =>
+    fetchApi<any>(`/instructor/polls/suggestions/${sessionId}`),
+
+  createQuickPoll: (sessionId: number, question: string, options: string[]) =>
+    fetchApi<any>('/instructor/polls/quick-create', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, question, options }),
+    }),
+
+  // Session Templates
+  getTemplates: (userId?: number, category?: string) => {
+    const params = new URLSearchParams();
+    if (userId) params.append('user_id', String(userId));
+    if (category) params.append('category', category);
+    return fetchApi<any>(`/instructor/templates?${params.toString()}`);
+  },
+
+  saveAsTemplate: (sessionId: number, templateName: string, userId: number, description?: string, category?: string) =>
+    fetchApi<any>('/instructor/templates/save', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: sessionId,
+        template_name: templateName,
+        user_id: userId,
+        description,
+        category,
+      }),
+    }),
+
+  createFromTemplate: (templateId: number, courseId: number, title: string) =>
+    fetchApi<any>('/instructor/templates/create-session', {
+      method: 'POST',
+      body: JSON.stringify({ template_id: templateId, course_id: courseId, title }),
+    }),
+
+  cloneSession: (sessionId: number, newTitle: string, courseId?: number) =>
+    fetchApi<any>('/instructor/sessions/clone', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, new_title: newTitle, course_id: courseId }),
+    }),
+
+  // Student Progress
+  getStudentProgress: (userId: number, courseId?: number) =>
+    fetchApi<any>(`/instructor/progress/student/${userId}${courseId ? `?course_id=${courseId}` : ''}`),
+
+  getClassProgress: (courseId: number) =>
+    fetchApi<any>(`/instructor/progress/class/${courseId}`),
+
+  // Breakout Groups
+  createBreakoutGroups: (sessionId: number, numGroups: number, assignment: string = 'random') =>
+    fetchApi<any>('/instructor/breakout/create', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, num_groups: numGroups, assignment }),
+    }),
+
+  getBreakoutGroups: (sessionId: number) =>
+    fetchApi<any>(`/instructor/breakout/${sessionId}`),
+
+  dissolveBreakoutGroups: (sessionId: number) =>
+    fetchApi<any>(`/instructor/breakout/${sessionId}`, { method: 'DELETE' }),
+
+  // Pre-Class Insights
+  createPreclassCheckpoint: (sessionId: number, title: string, description?: string, checkpointType: string = 'reading') =>
+    fetchApi<any>('/instructor/preclass/checkpoint', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: sessionId,
+        title,
+        description,
+        checkpoint_type: checkpointType,
+      }),
+    }),
+
+  getPreclassStatus: (sessionId: number) =>
+    fetchApi<any>(`/instructor/preclass/status/${sessionId}`),
+
+  // Post-Class Follow-ups
+  getSessionSummary: (sessionId: number) =>
+    fetchApi<any>(`/instructor/postclass/summary/${sessionId}`),
+
+  getUnresolvedTopics: (sessionId: number) =>
+    fetchApi<any>(`/instructor/postclass/unresolved/${sessionId}`),
+
+  // Comparative Analytics
+  compareSessions: (sessionIds: number[]) =>
+    fetchApi<any>('/instructor/analytics/compare', {
+      method: 'POST',
+      body: JSON.stringify({ session_ids: sessionIds }),
+    }),
+
+  getCourseAnalytics: (courseId: number) =>
+    fetchApi<any>(`/instructor/analytics/course/${courseId}`),
+
+  // Timer
+  startTimer: (sessionId: number, durationSeconds: number, label: string = 'Discussion') =>
+    fetchApi<any>('/instructor/timer/start', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, duration_seconds: durationSeconds, label }),
+    }),
+
+  getTimerStatus: (sessionId: number) =>
+    fetchApi<any>(`/instructor/timer/status/${sessionId}`),
+
+  pauseTimer: (timerId: number) =>
+    fetchApi<any>(`/instructor/timer/${timerId}/pause`, { method: 'POST' }),
+
+  resumeTimer: (timerId: number) =>
+    fetchApi<any>(`/instructor/timer/${timerId}/resume`, { method: 'POST' }),
+
+  stopTimer: (timerId: number) =>
+    fetchApi<any>(`/instructor/timer/${timerId}/stop`, { method: 'POST' }),
+
+  // Student Lookup
+  lookupStudent: (userId: number, sessionId?: number) =>
+    fetchApi<any>(`/instructor/student/${userId}${sessionId ? `?session_id=${sessionId}` : ''}`),
+
+  searchStudents: (query: string, courseId?: number) =>
+    fetchApi<any>('/instructor/student/search', {
+      method: 'POST',
+      body: JSON.stringify({ query, course_id: courseId }),
+    }),
+
+  // AI Teaching Assistant
+  generateAIDraft: (postId: number, sessionId: number) =>
+    fetchApi<any>(`/instructor/ai/generate-draft/${postId}?session_id=${sessionId}`, { method: 'POST' }),
+
+  getPendingAIDrafts: (sessionId: number) =>
+    fetchApi<any>(`/instructor/ai/pending-drafts/${sessionId}`),
+
+  approveAIDraft: (draftId: number, instructorId: number, editedContent?: string) =>
+    fetchApi<any>('/instructor/ai/approve', {
+      method: 'POST',
+      body: JSON.stringify({ draft_id: draftId, instructor_id: instructorId, edited_content: editedContent }),
+    }),
+
+  rejectAIDraft: (draftId: number, instructorId: number) =>
+    fetchApi<any>(`/instructor/ai/reject/${draftId}?instructor_id=${instructorId}`, { method: 'POST' }),
 };
 
 export { ApiError };

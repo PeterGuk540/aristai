@@ -1,0 +1,10 @@
+// Export all instructor enhancement components
+export { EngagementHeatmapComponent } from './EngagementHeatmap';
+export { SessionTimerComponent } from './SessionTimer';
+export { FacilitationPanel } from './FacilitationPanel';
+export { BreakoutGroupsComponent } from './BreakoutGroups';
+export { StudentProgressComponent } from './StudentProgress';
+export { PreClassInsightsComponent } from './PreClassInsights';
+export { PostClassSummaryComponent } from './PostClassSummary';
+export { AIResponseDraftsComponent } from './AIResponseDrafts';
+export { InstructorDashboard } from './InstructorDashboard';

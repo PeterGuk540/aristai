@@ -371,12 +371,15 @@ export interface SessionTimer {
 
 // AI Response Draft
 export interface AIResponseDraft {
-  draft_id: number;
+  id: number;
+  draft_id?: number; // Alias for backwards compatibility
   post_id: number;
   student_name: string;
-  question: string;
+  original_question: string;
+  question?: string; // Alias for backwards compatibility
   draft_response: string;
   confidence: number;
+  status: string;
   created_at: string;
 }
 

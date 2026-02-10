@@ -1181,12 +1181,15 @@ def get_pending_ai_drafts(db: Session, session_id: int) -> Dict[str, Any]:
         user = db.query(User).filter(User.id == post.user_id).first() if post else None
 
         result.append({
-            "draft_id": draft.id,
+            "id": draft.id,
+            "draft_id": draft.id,  # Alias for backwards compatibility
             "post_id": draft.post_id,
             "student_name": user.name if user else "Unknown",
-            "question": post.content[:150] if post else "",
+            "original_question": post.content[:150] if post else "",
+            "question": post.content[:150] if post else "",  # Alias for backwards compatibility
             "draft_response": draft.draft_content,
             "confidence": draft.confidence_score,
+            "status": draft.status,
             "created_at": draft.created_at.isoformat(),
         })
 

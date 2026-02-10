@@ -682,43 +682,75 @@ export const VoiceUIController = () => {
 
   /**
    * UNIVERSAL tab switch - works for ANY tab on any page
-   * Finds tabs by: data-voice-id, text content, role="tab", or button text
+   * Finds tabs by: value attribute (Radix), data-voice-id, text content, role="tab"
+   *
+   * IMPORTANT: The tabName from backend should be the actual tab value (e.g., "cases", "discussion")
+   * not the display text (e.g., "Post a Case", "Discussion (5)")
    */
   const handleSwitchTab = useCallback((event: CustomEvent) => {
     const { target, tabName } = event.detail || {};
     console.log('🎤 VoiceUI: switchTab', { target, tabName });
 
     const searchName = tabName || target || '';
-    const searchNameLower = searchName.toLowerCase().replace(/-/g, ' ').replace(/tab|panel|section/g, '').trim();
+    const searchNameLower = searchName.toLowerCase().replace(/-/g, '').replace(/tab|panel|section/g, '').trim();
 
     // First try the voice-select-tab custom event (supported by many pages)
     window.dispatchEvent(new CustomEvent('voice-select-tab', {
-      detail: { tab: searchNameLower.replace(/\s+/g, '') }
+      detail: { tab: searchNameLower }
     }));
 
-    // Try to find by data-voice-id first
-    let element = findElement(target);
+    let element: HTMLElement | null = null;
 
-    // UNIVERSAL: Search for tab by text content across multiple selector patterns
+    // 1. Try to find by data-voice-id first (most specific)
+    element = findElement(target);
+
+    // 2. Try to find Radix TabsTrigger by value attribute (exact match)
+    if (!element) {
+      // Radix UI tabs have a data-state and value attribute
+      const radixTabs = document.querySelectorAll('[data-radix-collection-item]');
+      for (const tab of radixTabs) {
+        const tabValue = tab.getAttribute('value')?.toLowerCase() || '';
+        if (tabValue === searchNameLower) {
+          element = tab as HTMLElement;
+          console.log('🎤 VoiceUI: Found tab by value attribute:', tabValue);
+          break;
+        }
+      }
+    }
+
+    // 3. Try to find by role="tab" with aria-controls matching
+    if (!element) {
+      const roleTabs = document.querySelectorAll('[role="tab"]');
+      for (const tab of roleTabs) {
+        const ariaControls = tab.getAttribute('aria-controls')?.toLowerCase() || '';
+        const tabId = tab.getAttribute('id')?.toLowerCase() || '';
+        if (ariaControls.includes(searchNameLower) || tabId.includes(searchNameLower)) {
+          element = tab as HTMLElement;
+          console.log('🎤 VoiceUI: Found tab by aria-controls:', ariaControls);
+          break;
+        }
+      }
+    }
+
+    // 4. Try to find by partial text content match (fallback)
     if (!element) {
       const tabSelectors = [
         '[role="tab"]',
-        '[data-voice-id^="tab-"]',
         '[data-radix-collection-item]',
-        '.tab-button',
         'button[class*="tab"]',
-        'button',  // fallback to any button
       ];
 
       for (const selector of tabSelectors) {
         const tabs = Array.from(document.querySelectorAll(selector));
         for (const tab of tabs) {
-          const tabText = tab.textContent?.toLowerCase().trim() || '';
+          const tabText = tab.textContent?.toLowerCase().replace(/\(\d+\)/g, '').trim() || '';
           const voiceId = tab.getAttribute('data-voice-id')?.toLowerCase() || '';
-          // Match if tab text contains search term or vice versa
-          if (tabText.includes(searchNameLower) || searchNameLower.includes(tabText) ||
-              voiceId.includes(searchNameLower) || tabText === searchNameLower) {
+          // Match if tab text starts with or equals search term
+          if (tabText === searchNameLower ||
+              tabText.startsWith(searchNameLower) ||
+              voiceId.includes(searchNameLower)) {
             element = tab as HTMLElement;
+            console.log('🎤 VoiceUI: Found tab by text content:', tabText);
             break;
           }
         }
@@ -731,6 +763,7 @@ export const VoiceUIController = () => {
       const isDisabled = element.hasAttribute('disabled') ||
                          element.getAttribute('aria-disabled') === 'true' ||
                          element.classList.contains('disabled') ||
+                         element.hasAttribute('data-disabled') ||
                          (element as HTMLButtonElement).disabled;
 
       if (isDisabled) {
@@ -743,9 +776,16 @@ export const VoiceUIController = () => {
       }
 
       element.click();
-      console.log('🎤 VoiceUI: Switched to tab:', searchName);
+      console.log('🎤 VoiceUI: Switched to tab:', searchName, element);
     } else {
       console.warn('🎤 VoiceUI: Tab not found:', searchName);
+      // List available tabs for debugging
+      const availableTabs = Array.from(document.querySelectorAll('[data-radix-collection-item], [role="tab"]'));
+      console.log('🎤 VoiceUI: Available tabs:', availableTabs.map(t => ({
+        value: t.getAttribute('value'),
+        text: t.textContent?.trim().substring(0, 30),
+        voiceId: t.getAttribute('data-voice-id'),
+      })));
     }
   }, [findElement]);
 

@@ -48,7 +48,12 @@ def handle_instructor_feature(
     # =========================================================================
     if action == 'get_engagement_heatmap':
         if not session_id:
-            return {"message": sanitize_speech("Please select a live session first to view engagement.")}
+            return {
+                "message": sanitize_speech("Please select a live session first to view engagement. Let me take you to the console."),
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": "/console"}},
+                ]
+            }
 
         result = features.get_engagement_heatmap(db, session_id)
         if "error" in result:
@@ -62,13 +67,15 @@ def handle_instructor_feature(
         idle = summary.get("idle", 0)
         disengaged = summary.get("disengaged", 0)
 
-        message = f"Engagement overview: {highly_active + active} students are active, {idle} are idle, and {disengaged} appear disengaged out of {total} total."
+        message = f"Taking you to the engagement heatmap. {highly_active + active} students are active, {idle} are idle, and {disengaged} appear disengaged out of {total} total."
 
         return {
             "message": sanitize_speech(message),
             "data": result,
             "ui_actions": [
-                {"type": "ui.showEngagementHeatmap", "payload": result}
+                {"type": "ui.navigate", "payload": {"path": "/console"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+                {"type": "ui.showEngagementHeatmap", "payload": result},
             ]
         }
 
@@ -101,7 +108,12 @@ def handle_instructor_feature(
     # =========================================================================
     if action == 'get_facilitation_suggestions':
         if not session_id:
-            return {"message": sanitize_speech("Please select a live session first.")}
+            return {
+                "message": sanitize_speech("Please select a live session first. Let me take you to the console."),
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": "/console"}},
+                ]
+            }
 
         result = features.get_facilitation_suggestions(db, session_id)
         if "error" in result:
@@ -111,14 +123,18 @@ def handle_instructor_feature(
         momentum = result.get("discussion_momentum", "unknown")
 
         if not suggestions:
-            message = f"Discussion is {momentum}. No specific suggestions at this time."
+            message = f"Taking you to the Instructor Tools. Discussion is {momentum}. No specific suggestions at this time."
         else:
             top_suggestion = suggestions[0]
-            message = f"Discussion is {momentum}. {top_suggestion.get('message', '')}"
+            message = f"Taking you to the Instructor Tools. Discussion is {momentum}. {top_suggestion.get('message', '')}"
 
         return {
             "message": sanitize_speech(message),
             "data": result,
+            "ui_actions": [
+                {"type": "ui.navigate", "payload": {"path": "/console"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+            ]
         }
 
     if action == 'suggest_next_student':
@@ -288,19 +304,31 @@ def handle_instructor_feature(
 
     if action == 'get_breakout_groups':
         if not session_id:
-            return {"message": sanitize_speech("Please select a session first.")}
+            return {
+                "message": sanitize_speech("Please select a session first. Let me take you to the console."),
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": "/console"}},
+                ]
+            }
 
         result = features.get_breakout_groups(db, session_id)
         groups = result.get("groups", [])
 
         if not groups:
-            message = "No active breakout groups in this session."
+            message = "Taking you to the Instructor Tools. No active breakout groups in this session yet."
         else:
-            message = f"There are {len(groups)} active breakout groups."
+            message = f"Taking you to the Instructor Tools. There are {len(groups)} active breakout groups."
             for g in groups[:3]:
                 message += f" {g['name']} has {g['member_count']} members with {g['post_count']} posts."
 
-        return {"message": sanitize_speech(message), "data": result}
+        return {
+            "message": sanitize_speech(message),
+            "data": result,
+            "ui_actions": [
+                {"type": "ui.navigate", "payload": {"path": "/console"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+            ]
+        }
 
     if action == 'dissolve_breakout_groups':
         if not session_id:
@@ -321,7 +349,12 @@ def handle_instructor_feature(
     # =========================================================================
     if action == 'get_preclass_status':
         if not session_id:
-            return {"message": sanitize_speech("Please select a session first.")}
+            return {
+                "message": sanitize_speech("Please select a session first. Let me take you to the sessions page."),
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": "/sessions"}},
+                ]
+            }
 
         result = features.get_preclass_completion_status(db, session_id)
         if "error" in result:
@@ -331,21 +364,33 @@ def handle_instructor_feature(
         checkpoints = result.get("checkpoints", [])
 
         if not checkpoints:
-            message = "No pre-class checkpoints are set for this session."
+            message = "Taking you to the Session Insights. No pre-class checkpoints are set for this session."
         else:
-            message = f"Overall pre-class completion rate is {rate:.0f}%."
+            message = f"Taking you to the Session Insights. Overall pre-class completion rate is {rate:.0f}%."
             if rate < 70:
                 incomplete = sum(c.get("incomplete_count", 0) for c in checkpoints)
                 message += f" {incomplete} students haven't completed their preparation."
 
-        return {"message": sanitize_speech(message), "data": result}
+        return {
+            "message": sanitize_speech(message),
+            "data": result,
+            "ui_actions": [
+                {"type": "ui.navigate", "payload": {"path": "/sessions"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "insights", "target": "tab-insights"}},
+            ]
+        }
 
     # =========================================================================
     # POST-CLASS FOLLOW-UPS
     # =========================================================================
     if action == 'get_session_summary':
         if not session_id:
-            return {"message": sanitize_speech("Please select a session first.")}
+            return {
+                "message": sanitize_speech("Please select a session first. Let me take you to the sessions page."),
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": "/sessions"}},
+                ]
+            }
 
         result = features.generate_session_summary_email(db, session_id)
         if "error" in result:
@@ -356,12 +401,14 @@ def handle_instructor_feature(
         posts = stats.get("total_posts", 0)
         polls = stats.get("polls_conducted", 0)
 
-        message = f"Session summary ready. {posts} posts and {polls} polls. Would you like me to send it to students?"
+        message = f"Taking you to the Session Insights. Summary ready with {posts} posts and {polls} polls. Would you like me to send it to students?"
 
         return {
             "message": sanitize_speech(message),
             "data": result,
             "ui_actions": [
+                {"type": "ui.navigate", "payload": {"path": "/sessions"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "insights", "target": "tab-insights"}},
                 {"type": "ui.showSessionSummary", "payload": email}
             ]
         }
@@ -407,7 +454,12 @@ def handle_instructor_feature(
     # =========================================================================
     if action == 'compare_sessions':
         if not course_id:
-            return {"message": sanitize_speech("Please select a course first.")}
+            return {
+                "message": sanitize_speech("Please select a course first. Let me take you to the reports page."),
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": "/reports"}},
+                ]
+            }
 
         # Get recent sessions for comparison
         from api.models.session import Session as SessionModel
@@ -424,19 +476,26 @@ def handle_instructor_feature(
         avg_posts = result.get("average_posts", 0)
         avg_participation = result.get("average_participation_rate", 0)
 
-        message = f"Comparing {len(session_ids)} sessions. Average posts: {avg_posts:.0f}, average participation: {avg_participation:.0f}%."
+        message = f"Taking you to the Analytics. Comparing {len(session_ids)} sessions. Average posts: {avg_posts:.0f}, average participation: {avg_participation:.0f}%."
 
         return {
             "message": sanitize_speech(message),
             "data": result,
             "ui_actions": [
+                {"type": "ui.navigate", "payload": {"path": "/reports"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "analytics", "target": "tab-analytics"}},
                 {"type": "ui.showSessionComparison", "payload": result}
             ]
         }
 
     if action == 'get_course_analytics':
         if not course_id:
-            return {"message": sanitize_speech("Please select a course first.")}
+            return {
+                "message": sanitize_speech("Please select a course first. Let me take you to the reports page."),
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": "/reports"}},
+                ]
+            }
 
         result = features.get_course_analytics(db, course_id)
         if "error" in result:
@@ -446,9 +505,16 @@ def handle_instructor_feature(
         total = result.get("total_sessions", 0)
         completed = result.get("completed_sessions", 0)
 
-        message = f"Course has {total} sessions, {completed} completed. Average participation: {stats.get('average_participation_rate', 0):.0f}%."
+        message = f"Taking you to the Analytics. Course has {total} sessions, {completed} completed. Average participation: {stats.get('average_participation_rate', 0):.0f}%."
 
-        return {"message": sanitize_speech(message), "data": result}
+        return {
+            "message": sanitize_speech(message),
+            "data": result,
+            "ui_actions": [
+                {"type": "ui.navigate", "payload": {"path": "/reports"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "analytics", "target": "tab-analytics"}},
+            ]
+        }
 
     # =========================================================================
     # TIMER CONTROL
@@ -481,26 +547,38 @@ def handle_instructor_feature(
 
     if action == 'get_timer_status':
         if not session_id:
-            return {"message": sanitize_speech("Please select a session first.")}
+            return {
+                "message": sanitize_speech("Please select a session first. Let me take you to the console."),
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": "/console"}},
+                ]
+            }
 
         result = features.get_timer_status(db, session_id)
         timer = result.get("active_timer")
 
         if not timer:
-            message = "No active timer."
+            message = "Taking you to the Instructor Tools. No active timer currently."
         else:
             remaining = timer.get("remaining_seconds", 0)
             minutes = remaining // 60
             seconds = remaining % 60
 
             if timer.get("is_expired"):
-                message = "Timer has expired."
+                message = "Taking you to the Instructor Tools. Timer has expired."
             elif timer.get("is_paused"):
-                message = f"Timer is paused with {minutes}:{seconds:02d} remaining."
+                message = f"Taking you to the Instructor Tools. Timer is paused with {minutes}:{seconds:02d} remaining."
             else:
-                message = f"{minutes}:{seconds:02d} remaining on the {timer.get('label', 'timer')}."
+                message = f"Taking you to the Instructor Tools. {minutes}:{seconds:02d} remaining on the {timer.get('label', 'timer')}."
 
-        return {"message": sanitize_speech(message), "data": result}
+        return {
+            "message": sanitize_speech(message),
+            "data": result,
+            "ui_actions": [
+                {"type": "ui.navigate", "payload": {"path": "/console"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+            ]
+        }
 
     if action == 'pause_timer':
         if not session_id:

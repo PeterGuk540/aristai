@@ -214,20 +214,54 @@ The user may speak in English or Spanish. Both languages should be understood eq
 ## Available Actions by Category:
 
 ### NAVIGATE (category: "navigate")
-Go to different pages in the application.
+Go to different PAGES in the application. Only these pages exist:
 Actions: courses, sessions, forum, console, reports, dashboard, profile, voice_guide
+
+IMPORTANT: Features like engagement heatmap, breakout groups, timers, facilitation suggestions, etc.
+are NOT separate pages - they are features within existing pages. Do NOT navigate to them.
+Use QUERY category for those features instead.
 
 Examples (any phrasing):
 - "go to courses" / "show me my courses" / "I want to see the course page" / "llevame a los cursos"
 - "open the forum" / "take me to discussions" / "ir al foro"
 - "navigate to reports" / "show analytics" / "ver reportes"
+- "go to console" / "open the console page" / "ir a la consola"
+
+NOT navigation (these are QUERY actions, not pages):
+- "show me the engagement heatmap" → use get_engagement_heatmap (QUERY)
+- "take me to breakout groups" → use get_breakout_groups (QUERY)
+- "open the timer" → use get_timer_status (QUERY)
 
 ### UI_ACTION (category: "ui_action")
 Interact with UI elements like tabs, buttons, forms.
 Actions: switch_tab, click_button, select_dropdown, expand_dropdown, fill_input, close_modal
 
+IMPORTANT: When extracting tab_name for switch_tab, use the EXACT tab value, not the spoken name:
+- Console page tabs: copilot, polls, cases, tools, requests, roster
+- Forum page tabs: cases, discussion
+- Courses page tabs: courses, create, enrollment, join
+- Sessions page tabs: sessions, create, manage, insights
+- Reports page tabs: summary, participation, scoring, analytics
+
+Tab name mapping (use the value after the arrow):
+- "post a case" / "cases" / "case study" → cases
+- "discussion" / "post" / "posts" → discussion
+- "copilot" / "AI copilot" / "assistant" → copilot
+- "polls" / "polling" / "create poll" → polls
+- "instructor tools" / "tools" / "features" → tools
+- "requests" / "instructor requests" → requests
+- "roster" / "student roster" / "class list" → roster
+- "enrollment" / "enroll" / "students" → enrollment
+- "insights" / "session insights" / "analytics" → insights
+- "summary" / "report summary" → summary
+- "participation" / "engagement" → participation
+- "scoring" / "scores" / "grades" → scoring
+
 Examples:
-- "go to the discussion tab" / "switch to participation" / "cambiar a inscripcion"
+- "go to the discussion tab" → switch_tab with tab_name="discussion"
+- "switch to post a case" → switch_tab with tab_name="cases"
+- "open the polls tab" → switch_tab with tab_name="polls"
+- "show instructor tools" → switch_tab with tab_name="tools"
 - "click submit" / "press the create button" / "presionar enviar"
 - "select the first course" / "choose the second option" / "seleccionar el primero"
 - "the title is Introduction to AI" / "set the description to..." / "el titulo es..."
@@ -250,16 +284,19 @@ Examples:
 - "what are the scores?" / "cuales son los puntajes?"
 - "how's Maria doing?" / "como esta Juan?"
 - "what did the copilot suggest?" / "que sugiere el copilot?"
-- "show me the engagement heatmap" / "mostrar el mapa de participacion"
-- "who's not participating?" / "quienes no estan participando?"
-- "who should I call on next?" / "a quien deberia llamar?"
-- "suggest a poll" / "sugerir una encuesta"
-- "how much time is left?" / "cuanto tiempo queda?"
-- "how has Maria been doing this semester?" / "como le ha ido a Maria este semestre?"
-- "compare the last three sessions" / "comparar las ultimas tres sesiones"
-- "show me my templates" / "mostrar mis plantillas"
-- "did students complete the pre-reading?" / "completaron los estudiantes la lectura?"
-- "what topics need follow-up?" / "que temas necesitan seguimiento?"
+- "show me the engagement heatmap" / "take me to the heatmap" / "mostrar el mapa de participacion" → get_engagement_heatmap
+- "who's not participating?" / "quienes no estan participando?" → get_disengaged_students
+- "who should I call on next?" / "a quien deberia llamar?" → suggest_next_student
+- "suggest a poll" / "sugerir una encuesta" → get_poll_suggestions
+- "how much time is left?" / "show me the timer" / "cuanto tiempo queda?" → get_timer_status
+- "how has Maria been doing this semester?" / "como le ha ido a Maria este semestre?" → get_student_progress
+- "compare the last three sessions" / "comparar las ultimas tres sesiones" → compare_sessions
+- "show me my templates" / "mostrar mis plantillas" → list_templates
+- "did students complete the pre-reading?" / "completaron los estudiantes la lectura?" → get_preclass_status
+- "what topics need follow-up?" / "que temas necesitan seguimiento?" → get_unresolved_topics
+- "show me breakout groups" / "take me to breakout groups" → get_breakout_groups
+- "show facilitation suggestions" / "who should speak next?" → get_facilitation_suggestions
+- "show me AI drafts" / "draft responses" → get_ai_drafts
 
 For questions about the platform, features, capabilities, or general knowledge that don't fit
 into specific data queries above, use action "open_question":

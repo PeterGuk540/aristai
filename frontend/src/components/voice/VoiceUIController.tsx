@@ -707,7 +707,7 @@ export const VoiceUIController = () => {
     // 2. Try to find Radix TabsTrigger by value attribute (exact match)
     if (!element) {
       // Radix UI tabs have a data-state and value attribute
-      const radixTabs = document.querySelectorAll('[data-radix-collection-item]');
+      const radixTabs = Array.from(document.querySelectorAll('[data-radix-collection-item]'));
       for (const tab of radixTabs) {
         const tabValue = tab.getAttribute('value')?.toLowerCase() || '';
         if (tabValue === searchNameLower) {
@@ -720,7 +720,7 @@ export const VoiceUIController = () => {
 
     // 3. Try to find by role="tab" with aria-controls matching
     if (!element) {
-      const roleTabs = document.querySelectorAll('[role="tab"]');
+      const roleTabs = Array.from(document.querySelectorAll('[role="tab"]'));
       for (const tab of roleTabs) {
         const ariaControls = tab.getAttribute('aria-controls')?.toLowerCase() || '';
         const tabId = tab.getAttribute('id')?.toLowerCase() || '';

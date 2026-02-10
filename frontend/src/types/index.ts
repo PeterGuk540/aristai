@@ -347,6 +347,20 @@ export interface StudentProgress {
   }>;
 }
 
+// Class-level progress summary
+export interface ClassProgress {
+  course_id: number;
+  total_students: number;
+  on_track_count: number;
+  needs_attention_count: number;
+  students_needing_attention: Array<{
+    user_id: number;
+    name: string;
+    sessions_attended: number;
+    trend: 'improving' | 'stable' | 'declining';
+  }>;
+}
+
 // Pre-Class Checkpoints
 export interface PreClassCheckpoint {
   checkpoint_id: number;

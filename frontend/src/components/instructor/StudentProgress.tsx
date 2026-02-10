@@ -4,14 +4,14 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown, Minus, User, BarChart3, Search } from 'lucide-react';
-import type { StudentProgress, StudentLookup } from '@/types';
+import type { ClassProgress, StudentLookup } from '@/types';
 
 interface StudentProgressProps {
   courseId: number;
 }
 
 export function StudentProgressComponent({ courseId }: StudentProgressProps) {
-  const [progress, setProgress] = useState<StudentProgress | null>(null);
+  const [progress, setProgress] = useState<ClassProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');

@@ -78,6 +78,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const isRefreshingRef = useRef(false); // Track if this is a silent refresh (skip greeting)
   const lastUserMessageIdRef = useRef<string | null>(null); // Track last user message for transcript updates
   const pendingTranscriptRef = useRef<string | null>(null); // Track pending transcript to avoid duplicate processing
+  const agentRespondedDirectlyRef = useRef<boolean>(false); // Track if agent responded directly (not via MCP_RESPONSE)
 
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = 10;
@@ -303,6 +304,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // We UPDATE the last user message instead of adding new ones for each interim
             console.log('🎤 User speech transcribed:', message);
 
+            // Reset agent direct response flag for new user input
+            agentRespondedDirectlyRef.current = false;
+
             // Emit transcription event
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('voice-transcription', {
@@ -325,8 +329,23 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
               }
             }, 500);
           } else if (source === 'ai') {
-            // ElevenLabs agent responses are not used as final product output.
-            console.log('🤖 Ignoring ElevenLabs agent response:', message);
+            // ElevenLabs agent responses - check if agent is responding directly
+            console.log('🤖 ElevenLabs agent response:', message);
+
+            // Check if this is a brief acknowledgment (agent waiting for MCP_RESPONSE)
+            const briefAcknowledgments = ['got it', 'one moment', 'sure', 'entendido', 'un momento', 'claro'];
+            const isAcknowledgment = briefAcknowledgments.some(ack =>
+              message.toLowerCase().trim() === ack ||
+              message.toLowerCase().trim() === ack + '.'
+            );
+
+            if (!isAcknowledgment && message.length > 20) {
+              // Agent responded directly (not via MCP_RESPONSE relay pattern)
+              // This happens for questions like "what can you do?" that agent answers itself
+              console.log('🤖 Agent responded directly - showing in chatbox');
+              agentRespondedDirectlyRef.current = true;
+              addAssistantMessage(message);
+            }
           }
         },
         
@@ -469,9 +488,16 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       }
 
       // Show message and speak via ElevenLabs
+      // Skip if agent already responded directly (e.g., for "what can you do?" questions)
       if (response.message) {
-        addAssistantMessage(response.message);
-        speakViaElevenLabs(response.message);
+        if (agentRespondedDirectlyRef.current) {
+          // Agent already responded - don't duplicate in chatbox or speak again
+          console.log('⏭️ Skipping backend response - agent already responded directly');
+        } else {
+          // Normal flow - show backend response and speak it
+          addAssistantMessage(response.message);
+          speakViaElevenLabs(response.message);
+        }
       }
 
       // Finalize the user message (update context, check refresh threshold)
@@ -482,6 +508,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     } finally {
       isProcessingTranscriptRef.current = false;
       pendingTranscriptRef.current = null;
+      agentRespondedDirectlyRef.current = false; // Reset for next interaction
     }
   };
 

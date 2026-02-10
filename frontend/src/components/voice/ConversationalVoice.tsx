@@ -410,8 +410,17 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     }
   };
 
-  const extractUiActions = (results: any[] | undefined, action?: { type?: string; target?: string }): UiAction[] => {
-    const uiActionsFromResults = (results ?? []).flatMap((result) => {
+  const extractUiActions = (response: any): UiAction[] => {
+    const allActions: UiAction[] = [];
+
+    // 1. Extract from top-level ui_actions (from instructor handlers)
+    if (Array.isArray(response?.ui_actions)) {
+      allActions.push(...response.ui_actions);
+    }
+
+    // 2. Extract from results array
+    const results = response?.results ?? [];
+    const uiActionsFromResults = results.flatMap((result: any) => {
       if (!result) return [];
       const direct = result.ui_actions ?? result.result?.ui_actions;
       if (Array.isArray(direct)) {
@@ -419,13 +428,15 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       }
       return [];
     });
+    allActions.push(...uiActionsFromResults);
 
-    const actionFromResponse: UiAction[] = [];
+    // 3. Extract from action field (navigate actions)
+    const action = response?.action;
     if (action?.type === 'navigate' && action?.target) {
-      actionFromResponse.push({ type: 'ui.navigate', payload: { path: action.target } });
+      allActions.push({ type: 'ui.navigate', payload: { path: action.target } });
     }
 
-    return [...uiActionsFromResults, ...actionFromResponse];
+    return allActions;
   };
 
   // NOTE: speakViaElevenLabs removed - we use Option A architecture:
@@ -459,7 +470,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       console.log('📦 Backend response:', JSON.stringify(response, null, 2));
 
       // Extract and execute UI actions ONLY - no spoken response
-      const uiActions = extractUiActions(response.results, response.action);
+      // Pass the full response to extract from top-level ui_actions, results, and action
+      const uiActions = extractUiActions(response);
       console.log('🎬 UI Actions to execute:', uiActions);
 
       if (uiActions.length > 0) {

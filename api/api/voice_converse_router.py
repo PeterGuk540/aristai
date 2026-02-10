@@ -49,11 +49,32 @@ from mcp_server.server import TOOL_REGISTRY
 from workflows.voice_orchestrator import run_voice_orchestrator, generate_summary
 from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics, parse_json_response
 
+# LLM-based intent classification (natural language understanding)
+from api.api.voice_intent_classifier import (
+    classify_intent,
+    intent_to_legacy_format,
+    build_page_context,
+    fast_confirmation_check,
+    IntentCategory,
+    PageContext,
+)
+
 # Initialize context store for voice memory
 context_store = ContextStore()
 
 # Initialize conversation state manager for conversational flows
 conversation_manager = VoiceConversationManager()
+
+# ============================================================================
+# CONFIGURATION: LLM-based Intent Detection
+# ============================================================================
+# Set to True to enable LLM-first intent detection (natural language understanding)
+# Set to False to use legacy regex-based pattern matching (faster but less flexible)
+USE_LLM_INTENT_DETECTION = True
+
+# Confidence threshold for LLM intent detection
+# If confidence is below this, ask for clarification
+LLM_INTENT_CONFIDENCE_THRESHOLD = 0.6
 
 # Import your existing dependencies
 # from .auth import get_current_user
@@ -2861,90 +2882,146 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 suggestions=["Skip", "Cancel form"],
             )
 
-    # 1. Check for navigation intent first (fast regex - instant)
-    nav_path = detect_navigation_intent(transcript)
-    if nav_path:
-        message = sanitize_speech(generate_conversational_response('navigate', nav_path))
-        # Include ui_actions for navigation so frontend executes the navigation
-        return ConverseResponse(
-            message=message,
-            action=ActionResponse(type='navigate', target=nav_path),
-            results=[{
-                "ui_actions": [
-                    {"type": "ui.navigate", "payload": {"path": nav_path}},
-                    {"type": "ui.toast", "payload": {"message": f"Navigating to {nav_path}", "type": "info"}},
-                ]
-            }],
-            suggestions=get_page_suggestions(nav_path)
-        )
+    # =========================================================================
+    # INTENT DETECTION: LLM-first or Regex-based (configurable)
+    # =========================================================================
 
-    # 2. Check for action intent via regex BEFORE expensive LLM call (fast - instant)
-    action = detect_action_intent(transcript)
-    if action:
-        result = await execute_action(action, request.user_id, request.current_page, db, transcript)
-        # Wrap result in a list if it's not already (ConverseResponse.results expects List)
-        results_list = [result] if result and not isinstance(result, list) else result
-        return ConverseResponse(
-            message=sanitize_speech(generate_conversational_response(
-                'execute',
-                action,
-                results=result,  # Pass original for response generation
-                context=request.context,
-                current_page=request.current_page,
-            )),
-            action=ActionResponse(type='execute', executed=True),
-            results=results_list,  # Pass list for Pydantic validation
-            suggestions=get_action_suggestions(action),
-        )
+    if USE_LLM_INTENT_DETECTION:
+        # =====================================================================
+        # LLM-FIRST INTENT DETECTION (Natural Language Understanding)
+        # =====================================================================
+        # This approach understands user intent regardless of exact phrasing.
+        # "I want to go to the course page" works just as well as "go to courses"
 
-    # 3. FAST MODE: Skip slow LLM orchestrator for instant response
-    # The regex patterns above should handle 95%+ of commands
-    # Only use LLM for truly complex multi-step requests (disabled by default for speed)
-    USE_LLM_ORCHESTRATOR = False  # Set to True if you need complex multi-step planning
-
-    if USE_LLM_ORCHESTRATOR:
-        plan_result = run_voice_orchestrator(
-            transcript,
-            context=request.context,
+        # Build page context for smarter decisions
+        page_context = build_page_context(
             current_page=request.current_page,
+            # TODO: Pass available tabs, buttons from frontend for even smarter detection
         )
-        plan = plan_result.get("plan") if plan_result else None
-        if plan and plan.get("steps"):
-            steps = plan.get("steps", [])
-            required_confirmations = set(plan.get("required_confirmations") or [])
-            write_steps = [
-                step
-                for step in steps
-                if step.get("mode") == "write" or step.get("tool_name") in required_confirmations
-            ]
 
-            if write_steps and not is_confirmation(transcript):
-                pending_results = [
-                    {
-                        "tool": step.get("tool_name"),
-                        "status": "pending_confirmation",
-                        "args": step.get("args", {}),
-                    }
-                    for step in write_steps
-                ]
-                return ConverseResponse(
-                    message=sanitize_speech(build_confirmation_message(write_steps)),
-                    action=ActionResponse(type="execute", executed=False),
-                    results=pending_results,
-                    suggestions=["Yes, proceed", "No, cancel"],
-                )
+        # Classify intent using LLM (fast confirmations checked first via regex)
+        intent = classify_intent(transcript, page_context, use_fast_confirm=True)
 
-            # Execute and use fast template summary (no LLM call)
-            results, summary = execute_plan_steps(steps, db)
+        # Convert to legacy format for compatibility with existing action execution
+        intent_result = intent_to_legacy_format(intent)
+
+        # Handle low confidence - ask for clarification
+        if intent.confidence < LLM_INTENT_CONFIDENCE_THRESHOLD or intent.clarification_needed:
+            clarification_msg = intent.clarification_message or "I'm not quite sure what you'd like to do. Could you please rephrase that?"
             return ConverseResponse(
-                message=sanitize_speech(summary),
-                action=ActionResponse(type='execute', executed=True),
-                results=results,
-                suggestions=["Anything else I can help with?"],
+                message=sanitize_speech(clarification_msg),
+                action=ActionResponse(type='info'),
+                suggestions=get_page_suggestions(request.current_page),
             )
 
-    # 4. No clear intent - provide helpful fallback instantly (no LLM call)
-    fallback_message = generate_fallback_response(transcript, request.context, request.current_page)
+        # Handle navigation intent
+        if intent_result["type"] == "navigate":
+            nav_path = intent_result["value"]
+            message = sanitize_speech(generate_conversational_response('navigate', nav_path))
+            return ConverseResponse(
+                message=message,
+                action=ActionResponse(type='navigate', target=nav_path),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": nav_path}},
+                        {"type": "ui.toast", "payload": {"message": f"Navigating to {nav_path}", "type": "info"}},
+                    ]
+                }],
+                suggestions=get_page_suggestions(nav_path)
+            )
+
+        # Handle action intent (UI actions, queries, creates, controls)
+        if intent_result["type"] == "action":
+            action = intent_result["value"]
+            # Pass extracted parameters to execute_action via transcript context
+            # The LLM has already extracted tab names, button names, etc.
+            result = await execute_action(action, request.user_id, request.current_page, db, transcript, intent_result.get("parameters"))
+            results_list = [result] if result and not isinstance(result, list) else result
+            return ConverseResponse(
+                message=sanitize_speech(generate_conversational_response(
+                    'execute',
+                    action,
+                    results=result,
+                    context=request.context,
+                    current_page=request.current_page,
+                )),
+                action=ActionResponse(type='execute', executed=True),
+                results=results_list,
+                suggestions=get_action_suggestions(action),
+            )
+
+        # Handle confirmation intent (yes/no/cancel/skip)
+        # This is typically handled by conversation state handlers above,
+        # but if we reach here, provide a helpful response
+        if intent_result["type"] == "confirm":
+            confirm_type = intent_result["value"]
+            if confirm_type == "yes":
+                return ConverseResponse(
+                    message=sanitize_speech("I'm ready to help. What would you like me to confirm?"),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page),
+                )
+            elif confirm_type in ["no", "cancel"]:
+                return ConverseResponse(
+                    message=sanitize_speech("Okay, cancelled. What else can I help you with?"),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page),
+                )
+
+        # Handle dictation intent
+        if intent_result["type"] == "dictate":
+            # User is providing content - this should be handled by conversation state
+            return ConverseResponse(
+                message=sanitize_speech("I heard your input. Please start a form or select an input field first."),
+                action=ActionResponse(type='info'),
+                suggestions=["Create course", "Create session", "Post to forum"],
+            )
+
+        # Fallback for unclear intent
+        fallback_message = generate_fallback_response(transcript, request.context, request.current_page)
+
+    else:
+        # =====================================================================
+        # LEGACY REGEX-BASED INTENT DETECTION (Fast but rigid)
+        # =====================================================================
+        # This approach uses pattern matching - fast but requires exact phrasing.
+
+        # 1. Check for navigation intent first (fast regex - instant)
+        nav_path = detect_navigation_intent(transcript)
+        if nav_path:
+            message = sanitize_speech(generate_conversational_response('navigate', nav_path))
+            return ConverseResponse(
+                message=message,
+                action=ActionResponse(type='navigate', target=nav_path),
+                results=[{
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": nav_path}},
+                        {"type": "ui.toast", "payload": {"message": f"Navigating to {nav_path}", "type": "info"}},
+                    ]
+                }],
+                suggestions=get_page_suggestions(nav_path)
+            )
+
+        # 2. Check for action intent via regex
+        action = detect_action_intent(transcript)
+        if action:
+            result = await execute_action(action, request.user_id, request.current_page, db, transcript)
+            results_list = [result] if result and not isinstance(result, list) else result
+            return ConverseResponse(
+                message=sanitize_speech(generate_conversational_response(
+                    'execute',
+                    action,
+                    results=result,
+                    context=request.context,
+                    current_page=request.current_page,
+                )),
+                action=ActionResponse(type='execute', executed=True),
+                results=results_list,
+                suggestions=get_action_suggestions(action),
+            )
+
+        # 3. No clear intent - provide helpful fallback
+        fallback_message = generate_fallback_response(transcript, request.context, request.current_page)
 
     # Get page-specific suggestions instead of generic ones
     page_suggestions = get_page_suggestions(request.current_page)
@@ -3440,8 +3517,21 @@ async def execute_action(
     current_page: Optional[str],
     db: Session,
     transcript: Optional[str] = None,
+    llm_params: Optional[Dict[str, Any]] = None,
 ) -> Optional[Any]:
-    """Execute an MCP tool and return results, including UI actions for frontend."""
+    """Execute an MCP tool and return results, including UI actions for frontend.
+
+    Args:
+        action: The action to execute (e.g., 'ui_switch_tab', 'create_course')
+        user_id: The user ID making the request
+        current_page: The current page path
+        db: Database session
+        transcript: The original voice transcript
+        llm_params: Optional parameters extracted by the LLM intent classifier
+                   (e.g., tabName, buttonName, selectionIndex, inputValue)
+    """
+    # Use LLM-extracted parameters if available, otherwise fall back to regex extraction
+    llm_params = llm_params or {}
     try:
         # === UNIVERSAL UI ELEMENT INTERACTIONS ===
         # All UI actions now use universal handlers that work across all pages
@@ -3546,8 +3636,12 @@ async def execute_action(
         # === UNIVERSAL TAB SWITCHING ===
         # The ui_switch_tab action now works universally for any tab name
         if action == 'ui_switch_tab':
-            tab_info = _extract_tab_info(transcript or "")
-            tab_name = tab_info.get("tabName", "")
+            # Use LLM-extracted tab name if available, otherwise fall back to regex
+            if llm_params.get("tabName"):
+                tab_name = llm_params["tabName"]
+            else:
+                tab_info = _extract_tab_info(transcript or "")
+                tab_name = tab_info.get("tabName", "")
 
             # Special handling for forum discussion tab - offer to help post
             if current_page and '/forum' in current_page and tab_name == 'discussion':
@@ -3606,7 +3700,23 @@ async def execute_action(
 
         # === UNIVERSAL DROPDOWN SELECTION ===
         if action == 'ui_select_dropdown':
-            selection_info = _extract_dropdown_selection(transcript or "")
+            # Use LLM-extracted selection info if available
+            if llm_params.get("selectionIndex") is not None or llm_params.get("selectionValue") or llm_params.get("ordinal"):
+                selection_info = {}
+                if llm_params.get("selectionIndex") is not None:
+                    selection_info["optionIndex"] = llm_params["selectionIndex"]
+                    selection_info["optionName"] = llm_params.get("ordinal", f"option {llm_params['selectionIndex'] + 1}")
+                elif llm_params.get("selectionValue"):
+                    selection_info["optionName"] = llm_params["selectionValue"]
+                elif llm_params.get("ordinal"):
+                    # Map ordinal to index
+                    ordinal_map = {"first": 0, "second": 1, "third": 2, "fourth": 3, "last": -1,
+                                  "primero": 0, "segundo": 1, "tercero": 2, "cuarto": 3, "ultimo": -1}
+                    ordinal = llm_params["ordinal"].lower()
+                    selection_info["optionIndex"] = ordinal_map.get(ordinal, 0)
+                    selection_info["optionName"] = ordinal
+            else:
+                selection_info = _extract_dropdown_selection(transcript or "")
             return {
                 "action": "select_dropdown",
                 "message": f"Selecting {selection_info.get('optionName', 'option')}",
@@ -3628,8 +3738,12 @@ async def execute_action(
                 button_target = conv_context.pending_action_data.get("voice_id")
                 form_name = conv_context.pending_action_data.get("form_name", "")
                 button_label = form_name.replace("_", " ").title() if form_name else "Submit"
+            # Use LLM-extracted button name if available
+            elif llm_params.get("buttonName"):
+                button_target = llm_params["buttonName"]
+                button_label = llm_params["buttonName"]
             else:
-                # Extract from transcript
+                # Extract from transcript using regex
                 button_info = _extract_button_info(transcript or "")
                 button_target = button_info.get("target")
                 button_label = button_info.get("label", "button")

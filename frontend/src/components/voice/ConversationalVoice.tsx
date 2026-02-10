@@ -462,19 +462,48 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
   // Check if transcript is a general question that the ElevenLabs agent handles directly
   // These don't need backend processing - the agent answers from its prompt knowledge
+  // IMPORTANT: Keep this broad to avoid double responses from both agent and backend
   const isGeneralQuestion = (text: string): boolean => {
     const lowerText = text.toLowerCase().trim();
 
-    // General questions about capabilities, features, help
+    // ACTION keywords that require backend processing - if any of these appear, it's NOT a general question
+    const actionKeywords = [
+      /\b(go to|take me|navigate|open|show me the|switch to)\b/i,  // Navigation
+      /\b(create|start|begin|make|generate|add)\b/i,  // Creation actions
+      /\b(enroll|assign|remove|delete|end|stop)\b/i,  // Management actions
+      /\b(copilot|poll|report|heatmap|timer|breakout)\b/i,  // Specific tools
+      /\b(session|course|forum|console|reports)\s+(page|tab)?$/i,  // Page navigation at end
+    ];
+
+    // If it contains action keywords, it needs backend processing
+    if (actionKeywords.some(pattern => pattern.test(lowerText))) {
+      return false;  // Not a general question - needs backend
+    }
+
+    // General questions about capabilities, features, help, greetings
+    // These are answered by ElevenLabs agent directly from its prompt
     const generalPatterns = [
-      /^(what|tell me|can you|could you|do you).*(can you do|you do|help|assist|capable)/i,
-      /^(what|tell me about|explain|describe).*(features?|capabilities|platform|aristai)/i,
-      /^(how|what).*(does|do).*(this|it|the platform|aristai).*(work|do)/i,
-      /^(hello|hi|hey|good morning|good afternoon|hola|buenos)/i,
+      // Capability questions
+      /what.*(can|could).*(you|do)/i,
+      /what.*(you|can).*(do|help)/i,
+      /(can|could) you.*(help|do|assist)/i,
+      /how.*(can|could) you.*(help|assist)/i,
+      // Feature questions
+      /(what|tell me|explain|describe).*(feature|capabilit|platform)/i,
+      /(what('s| is)|tell me).*(new|recent|added)/i,
+      // How does it work
+      /how.*(does|do).*(this|it|work)/i,
+      // Greetings
+      /^(hello|hi|hey|good\s*(morning|afternoon|evening)|hola|buenos|buenas)/i,
+      // Thanks
       /^(thank|thanks|gracias)/i,
-      /^(what('s| is) new|new features?|recent updates?|added recently)/i,
-      /^(who are you|what are you|introduce yourself)/i,
+      // Identity
+      /(who|what) are you/i,
+      /introduce yourself/i,
+      // Simple help
       /^(help|ayuda|ayudame)$/i,
+      // Generic questions that don't specify an action
+      /^(what|how|tell me|explain)/i,
     ];
 
     return generalPatterns.some(pattern => pattern.test(lowerText));

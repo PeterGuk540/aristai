@@ -41,7 +41,7 @@ export function StudentProgressComponent({ courseId }: StudentProgressProps) {
 
     setSearching(true);
     try {
-      const results = await api.lookupStudent(courseId, searchQuery);
+      const results = await api.searchStudents(searchQuery, courseId);
       setSearchResults(results.matches || []);
     } catch (err) {
       console.error('Error searching students:', err);

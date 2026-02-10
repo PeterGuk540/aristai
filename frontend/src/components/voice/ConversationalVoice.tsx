@@ -439,10 +439,47 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     return allActions;
   };
 
-  // NOTE: speakViaElevenLabs removed - we use Option A architecture:
-  // - ElevenLabs agent is the ONLY responder (handles ALL conversation)
-  // - Backend ONLY executes UI actions (navigation, tab switching, etc.)
-  // - This eliminates double responses
+  // MCP Response prefix for data-driven responses
+  const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
+
+  // Speak data-driven content via ElevenLabs agent
+  // Used when backend provides dynamic content (dropdown options, student data, etc.)
+  const speakViaElevenLabs = (text: string) => {
+    if (!text || !conversationRef.current) {
+      return;
+    }
+    try {
+      console.log('🔊 Speaking via ElevenLabs:', text.substring(0, 100) + '...');
+      conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
+    } catch (error) {
+      console.error('❌ Failed to send MCP message to ElevenLabs:', error);
+    }
+  };
+
+  // Check if a response contains data that must be spoken by backend
+  // These are dynamic responses that the ElevenLabs agent cannot know
+  const isDataDrivenResponse = (response: any): boolean => {
+    // Check for dropdown options (listing courses, sessions)
+    if (response?.options && Array.isArray(response.options) && response.options.length > 0) {
+      return true;
+    }
+    // Check for conversation state that requires verbal interaction
+    if (response?.conversation_state === 'dropdown_selection') {
+      return true;
+    }
+    // Check for data queries that return specific info
+    if (response?.data && response?.message) {
+      return true;
+    }
+    // Check for results with specific data
+    const results = response?.results ?? [];
+    for (const result of results) {
+      if (result?.options || result?.data || result?.students || result?.courses || result?.sessions) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   const handleTranscript = async (transcript: string) => {
     if (!transcript || isProcessingTranscriptRef.current) {
@@ -485,12 +522,19 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           }
         });
       } else {
-        console.log('ℹ️ No UI actions needed - agent handles response');
+        console.log('ℹ️ No UI actions needed');
       }
 
-      // NOTE: We do NOT call speakViaElevenLabs() here
-      // The ElevenLabs agent already responded to the user's speech
-      // Backend only executes UI actions silently
+      // Check if backend returned data-driven content that must be spoken
+      // This handles: dropdown options, student data, query results, etc.
+      // The ElevenLabs agent cannot know this data - only the backend can provide it
+      if (isDataDrivenResponse(response) && response.message) {
+        console.log('📢 Data-driven response detected - speaking via backend');
+        addAssistantMessage(response.message);
+        speakViaElevenLabs(response.message);
+      } else {
+        console.log('ℹ️ Agent handles response directly');
+      }
 
       // Finalize the user message (update context, check refresh threshold)
       finalizeUserMessage(transcript);

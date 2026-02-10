@@ -285,8 +285,17 @@ Examples of switch_tab (use category=ui_action, action=switch_tab):
 Examples of click_button:
 - "click submit" / "press the create button" / "presionar enviar"
 
-Examples of select_dropdown:
-- "select the first course" / "choose the second option" / "seleccionar el primero"
+Examples of expand_dropdown (open dropdown and list options):
+- "select a course" / "select the course" → expand_dropdown (opens dropdown, lists options)
+- "show me my courses" / "what courses do I have" → expand_dropdown
+- "open the course dropdown" / "show course options" → expand_dropdown
+- "select a session" / "choose a session" → expand_dropdown
+- "what sessions are available" → expand_dropdown
+
+Examples of select_dropdown (pick a specific option from open dropdown):
+- "select the first one" / "choose the second option" → select_dropdown
+- "pick the third course" / "use the last one" → select_dropdown
+- "seleccionar el primero" / "el segundo" → select_dropdown
 
 Examples of fill_input:
 - "the title is Introduction to AI" / "set the description to..." / "el titulo es..."

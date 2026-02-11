@@ -801,16 +801,18 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('reports.title')}</h1>
-          <p className="text-gray-600">{t('reports.subtitle')}</p>
+          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">{t('reports.title')}</h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('reports.subtitle')}</p>
         </div>
       </div>
 
       {/* Course & Session Selector */}
-      <div className="grid md:grid-cols-2 gap-4 mb-6">
+      <Card variant="default" padding="md">
+        <div className="grid md:grid-cols-2 gap-4">
         <Select
           label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
@@ -839,29 +841,42 @@ export default function ReportsPage() {
             </option>
           ))}
         </Select>
-      </div>
+        </div>
+      </Card>
 
       {!selectedSessionId ? (
-        <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p>{t('reports.generateFirst')}</p>
-          </CardContent>
+        <Card variant="default" padding="lg">
+          <div className="text-center py-8">
+            <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+              <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+            </div>
+            <p className="text-neutral-600 dark:text-neutral-400">{t('reports.generateFirst')}</p>
+          </div>
         </Card>
       ) : loading ? (
-        <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
+        <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-full border-4 border-primary-100 dark:border-primary-900"></div>
+              <div className="absolute top-0 left-0 w-10 h-10 rounded-full border-4 border-primary-600 border-t-transparent animate-spin"></div>
+            </div>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('common.loading')}</p>
+          </div>
+        </div>
       ) : !report ? (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p className="text-gray-500 mb-4">{t('reports.noReport')}</p>
+        <Card variant="default" padding="lg">
+          <div className="text-center py-8">
+            <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+              <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+            </div>
+            <p className="text-neutral-600 dark:text-neutral-400 mb-4">{t('reports.noReport')}</p>
             {hasInstructorPrivileges && (
               <Button onClick={handleGenerateReport} disabled={generating} data-voice-id="generate-report">
                 <Sparkles className="h-4 w-4 mr-2" />
                 {generating ? t('common.loading') : t('reports.generateReport')}
               </Button>
             )}
-          </CardContent>
+          </div>
         </Card>
       ) : (
         <div>

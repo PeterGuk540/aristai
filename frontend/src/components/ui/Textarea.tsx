@@ -4,30 +4,61 @@ import { TextareaHTMLAttributes, forwardRef } from 'react';
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   error?: string;
+  hint?: string;
+  variant?: 'default' | 'filled';
+  resize?: 'none' | 'vertical' | 'horizontal' | 'both';
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, label, error, ...props }, ref) => (
+  ({ className, label, error, hint, variant = 'default', resize = 'vertical', ...props }, ref) => (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
           {label}
         </label>
       )}
       <textarea
         ref={ref}
         className={cn(
-          'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm',
-          'focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500',
-          'disabled:bg-gray-50 disabled:text-gray-500',
-          'placeholder:text-gray-400',
-          'resize-none',
-          error && 'border-red-500 focus:border-red-500 focus:ring-red-500',
+          // Base styles
+          'w-full rounded-lg px-4 py-3 transition-all duration-200',
+          'text-neutral-900 dark:text-neutral-100 text-sm',
+          'placeholder:text-neutral-400 dark:placeholder:text-neutral-500',
+          'focus:outline-none focus:ring-2 focus:ring-offset-0',
+          'disabled:opacity-50 disabled:cursor-not-allowed',
+          // Variant styles
+          {
+            // Default - bordered
+            'bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 focus:border-primary-500 focus:ring-primary-500/20':
+              variant === 'default' && !error,
+            // Filled - subtle background
+            'bg-neutral-100 dark:bg-neutral-800 border border-transparent focus:border-primary-500 focus:ring-primary-500/20 focus:bg-white dark:focus:bg-neutral-900':
+              variant === 'filled' && !error,
+          },
+          // Error state
+          error && 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20 bg-danger-50/50 dark:bg-danger-900/10',
+          // Resize styles
+          {
+            'resize-none': resize === 'none',
+            'resize-y': resize === 'vertical',
+            'resize-x': resize === 'horizontal',
+            'resize': resize === 'both',
+          },
           className
         )}
         {...props}
       />
-      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {hint && !error && (
+        <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">{hint}</p>
+      )}
+      {error && (
+        <p className="mt-1.5 text-sm text-danger-600 dark:text-danger-400 flex items-center gap-1">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          {error}
+        </p>
+      )}
     </div>
   )
 );

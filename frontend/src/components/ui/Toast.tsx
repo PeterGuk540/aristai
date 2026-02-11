@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 export type ToastType = 'info' | 'success' | 'error' | 'warning';
 
@@ -80,7 +81,7 @@ interface ToastContainerProps {
 
 function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-3 pointer-events-none">
       {toasts.map(toast => (
         <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
       ))}
@@ -94,37 +95,57 @@ interface ToastItemProps {
 }
 
 function ToastItem({ toast, onRemove }: ToastItemProps) {
-  const typeStyles: Record<ToastType, string> = {
-    info: 'bg-blue-600 text-white',
-    success: 'bg-green-600 text-white',
-    error: 'bg-red-600 text-white',
-    warning: 'bg-yellow-500 text-black',
+  const typeConfig: Record<ToastType, { bg: string; border: string; icon: typeof Info; iconColor: string }> = {
+    info: {
+      bg: 'bg-white dark:bg-neutral-800',
+      border: 'border-primary-200 dark:border-primary-800',
+      icon: Info,
+      iconColor: 'text-primary-500',
+    },
+    success: {
+      bg: 'bg-white dark:bg-neutral-800',
+      border: 'border-success-200 dark:border-success-800',
+      icon: CheckCircle,
+      iconColor: 'text-success-500',
+    },
+    error: {
+      bg: 'bg-white dark:bg-neutral-800',
+      border: 'border-danger-200 dark:border-danger-800',
+      icon: XCircle,
+      iconColor: 'text-danger-500',
+    },
+    warning: {
+      bg: 'bg-white dark:bg-neutral-800',
+      border: 'border-warning-200 dark:border-warning-800',
+      icon: AlertTriangle,
+      iconColor: 'text-warning-500',
+    },
   };
 
-  const typeIcons: Record<ToastType, string> = {
-    info: 'ℹ️',
-    success: '✓',
-    error: '✕',
-    warning: '⚠',
-  };
+  const config = typeConfig[toast.type];
+  const Icon = config.icon;
 
   return (
     <div
       className={cn(
-        'pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg',
-        'animate-in slide-in-from-right-full duration-300',
-        'min-w-[280px] max-w-[400px]',
-        typeStyles[toast.type]
+        'pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-xl',
+        'shadow-soft-md border',
+        'animate-slide-up',
+        'min-w-[320px] max-w-[420px]',
+        config.bg,
+        config.border
       )}
     >
-      <span className="text-lg flex-shrink-0">{typeIcons[toast.type]}</span>
-      <span className="flex-1 text-sm font-medium">{toast.message}</span>
+      <Icon className={cn('h-5 w-5 flex-shrink-0 mt-0.5', config.iconColor)} />
+      <span className="flex-1 text-sm font-medium text-neutral-700 dark:text-neutral-200">
+        {toast.message}
+      </span>
       <button
         onClick={() => onRemove(toast.id)}
-        className="flex-shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+        className="flex-shrink-0 p-1 rounded-lg text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
         aria-label="Dismiss"
       >
-        ✕
+        <X className="h-4 w-4" />
       </button>
     </div>
   );

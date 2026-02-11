@@ -558,28 +558,32 @@ export default function ConsolePage() {
   // Both instructors and admins can access the console
   if (!isInstructor && !isAdmin) {
     return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            <Bot className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p>{t('errors.forbidden')}</p>
-          </CardContent>
+      <div className="space-y-6">
+        <Card variant="default" padding="lg">
+          <div className="text-center py-8">
+            <div className="p-4 rounded-2xl bg-danger-50 dark:bg-danger-900/30 w-fit mx-auto mb-4">
+              <Bot className="h-10 w-10 text-danger-600 dark:text-danger-400" />
+            </div>
+            <p className="text-neutral-600 dark:text-neutral-400">{t('errors.forbidden')}</p>
+          </div>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('console.title')}</h1>
-          <p className="text-gray-600">{t('console.subtitle')}</p>
+          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">{t('console.title')}</h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('console.subtitle')}</p>
         </div>
       </div>
 
       {/* Course & Session Selector */}
-      <div className="grid md:grid-cols-2 gap-4 mb-6">
+      <Card variant="default" padding="md">
+        <div className="grid md:grid-cols-2 gap-4">
         <Select
           label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
@@ -608,7 +612,8 @@ export default function ConsolePage() {
             </option>
           ))}
         </Select>
-      </div>
+        </div>
+      </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -642,10 +647,14 @@ export default function ConsolePage() {
         </TabsList>
 
         {!selectedSessionId && (
-          <div className="mt-4 mb-4 p-4 bg-gray-50 rounded-lg text-center text-gray-600">
-            <Bot className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-            <p className="text-sm">Select a live session above to use AI Copilot, Polls, and Post Case features.</p>
-          </div>
+          <Card variant="ghost" padding="md" className="mt-4 mb-4">
+            <div className="text-center py-4">
+              <div className="p-3 rounded-xl bg-primary-100 dark:bg-primary-900/50 w-fit mx-auto mb-3">
+                <Bot className="h-8 w-8 text-primary-600 dark:text-primary-400" />
+              </div>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">Select a live session above to use AI Copilot, Polls, and Post Case features.</p>
+            </div>
+          </Card>
         )}
 
         <TabsContent value="copilot">

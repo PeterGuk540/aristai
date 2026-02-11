@@ -23,6 +23,7 @@ import {
   Card,
   CardHeader,
   CardTitle,
+  CardDescription,
   CardContent,
   Select,
   Textarea,
@@ -74,12 +75,8 @@ export default function ForumPage() {
   useEffect(() => {
     const handleVoiceTabSwitch = (event: CustomEvent) => {
       const { tabName, target } = event.detail || {};
-      console.log('🎤 Forum: Voice tab switch received:', { tabName, target });
-
-      // Normalize the tab name
       let normalizedTab = (tabName || '').toLowerCase().replace(/\s+/g, '');
 
-      // Map common names to tab values
       const tabMap: Record<string, string> = {
         'cases': 'cases',
         'case': 'cases',
@@ -92,11 +89,9 @@ export default function ForumPage() {
       };
 
       const targetTab = tabMap[normalizedTab] || normalizedTab;
-      console.log('🎤 Forum: Switching to tab:', targetTab);
       setActiveTab(targetTab);
     };
 
-    // Listen for both event types
     window.addEventListener('ui.switchTab', handleVoiceTabSwitch as EventListener);
     window.addEventListener('voice-select-tab', handleVoiceTabSwitch as EventListener);
 
@@ -111,21 +106,18 @@ export default function ForumPage() {
       if (!user) return;
 
       if (user.is_admin) {
-        // Admin sees all courses
         const data = await api.getCourses(user.id);
         setCourses(data);
         if (data.length > 0 && !selectedCourseId) {
           setSelectedCourseId(data[0].id);
         }
       } else if (isInstructor) {
-        // Instructors see only their own courses
         const data = await api.getCourses(user.id);
         setCourses(data);
         if (data.length > 0 && !selectedCourseId) {
           setSelectedCourseId(data[0].id);
         }
       } else {
-        // Students only see courses they're enrolled in
         const enrolledCourses = await api.getUserEnrolledCourses(user.id);
         const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));
         const fullCourses = await Promise.all(coursePromises);
@@ -142,7 +134,6 @@ export default function ForumPage() {
   const fetchSessions = async (courseId: number) => {
     try {
       const data = await api.getCourseSessions(courseId);
-      // Filter to only live sessions for forum
       const liveSessions = data.filter((s: Session) => s.status === 'live');
       setSessions(liveSessions);
       if (liveSessions.length > 0) {
@@ -165,7 +156,6 @@ export default function ForumPage() {
         api.getSessionPosts(selectedSessionId),
       ]);
       setCases(casesData);
-      // Organize posts into threads
       const organized = organizePostsIntoThreads(postsData);
       setPosts(organized);
     } catch (error) {
@@ -193,17 +183,14 @@ export default function ForumPage() {
     }
   }, [selectedSessionId, fetchForumData]);
 
-  // Organize flat posts into threaded structure
   const organizePostsIntoThreads = (flatPosts: Post[]): PostWithReplies[] => {
     const postMap = new Map<number, PostWithReplies>();
     const rootPosts: PostWithReplies[] = [];
 
-    // First pass: create map
     flatPosts.forEach((post) => {
       postMap.set(post.id, { ...post, replies: [] });
     });
 
-    // Second pass: organize into threads
     flatPosts.forEach((post) => {
       const postWithReplies = postMap.get(post.id)!;
       if (post.parent_post_id) {
@@ -219,7 +206,6 @@ export default function ForumPage() {
       }
     });
 
-    // Sort by created_at descending
     return rootPosts.sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
@@ -329,42 +315,46 @@ export default function ForumPage() {
     return (
       <div
         key={post.id}
-        className={`${depth > 0 ? 'ml-6 border-l-2 border-gray-200 pl-4' : ''}`}
+        className={`${depth > 0 ? 'ml-6 border-l-2 border-neutral-200 dark:border-neutral-700 pl-4' : ''}`}
       >
         <div
-          className={`p-4 rounded-lg ${
-            post.pinned ? 'bg-yellow-50 border border-yellow-200' : 'bg-white border'
-          } ${depth === 0 ? 'mb-4' : 'mt-3'}`}
+          className={`p-4 rounded-xl ${
+            post.pinned
+              ? 'bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-800'
+              : 'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700'
+          } ${depth === 0 ? 'mb-4' : 'mt-3'} shadow-soft`}
         >
           {/* Post Header */}
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-gray-400" />
-              <span className="text-sm font-medium text-gray-700">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+                <User className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-sm font-medium text-neutral-900 dark:text-white">
                 User #{post.user_id}
               </span>
-              <Clock className="h-3 w-3 text-gray-400 ml-2" />
-              <span className="text-xs text-gray-500">
+              <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+                <Clock className="h-3 w-3" />
                 {formatTimestamp(post.created_at)}
               </span>
               {post.pinned && (
-                <Badge variant="warning" className="ml-2">
+                <Badge variant="accent" size="sm">
                   <Pin className="h-3 w-3 mr-1" />
                   Pinned
                 </Badge>
               )}
             </div>
-            <span className="text-xs text-gray-400">#{post.id}</span>
+            <span className="text-xs text-neutral-400 dark:text-neutral-500">#{post.id}</span>
           </div>
 
           {/* Post Content */}
-          <p className="text-gray-800 whitespace-pre-wrap mb-3">{post.content}</p>
+          <p className="text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap mb-3 leading-relaxed">{post.content}</p>
 
           {/* Labels */}
           {post.labels_json && post.labels_json.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3">
+            <div className="flex flex-wrap gap-1.5 mb-3">
               {post.labels_json.map((label) => (
-                <Badge key={label} variant="info">
+                <Badge key={label} variant="info" size="sm">
                   {label}
                 </Badge>
               ))}
@@ -372,7 +362,7 @@ export default function ForumPage() {
           )}
 
           {/* Actions */}
-          <div className="flex items-center gap-2 pt-2 border-t">
+          <div className="flex items-center gap-2 pt-3 border-t border-neutral-100 dark:border-neutral-700">
             {hasReplies && (
               <Button variant="ghost" size="sm" onClick={() => toggleExpand(post.id)}>
                 {isExpanded ? (
@@ -409,13 +399,13 @@ export default function ForumPage() {
                     <Tag className="h-4 w-4 mr-1" />
                     Label
                   </Button>
-                  <div className="absolute left-0 top-full mt-1 bg-white border rounded-lg shadow-lg p-2 hidden group-hover:block z-10 min-w-[150px]">
+                  <div className="absolute left-0 top-full mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-soft-md p-2 hidden group-hover:block z-10 min-w-[150px]">
                     {LABEL_OPTIONS.map((label) => (
                       <button
                         key={label}
                         onClick={() => handleLabelPost(post.id, label)}
-                        className={`w-full text-left px-3 py-1.5 rounded text-sm hover:bg-gray-100 ${
-                          post.labels_json?.includes(label) ? 'bg-blue-50 text-blue-700' : ''
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors ${
+                          post.labels_json?.includes(label) ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' : ''
                         }`}
                       >
                         {label}
@@ -429,14 +419,14 @@ export default function ForumPage() {
 
           {/* Reply Form */}
           {isReplying && (
-            <div className="mt-3 pt-3 border-t">
+            <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-700">
               <Textarea
                 placeholder="Write your reply..."
                 rows={2}
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
               />
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 mt-3">
                 <Button
                   size="sm"
                   onClick={() => handleReply(post.id)}
@@ -474,11 +464,12 @@ export default function ForumPage() {
   const regularPosts = posts.filter((p) => !p.pinned);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('forum.title')}</h1>
-          <p className="text-gray-600">{t('forum.subtitle')}</p>
+          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">{t('forum.title')}</h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('forum.subtitle')}</p>
         </div>
         <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId} data-voice-id="refresh">
           <RefreshCw className="h-4 w-4 mr-2" />
@@ -487,75 +478,86 @@ export default function ForumPage() {
       </div>
 
       {/* Course & Session Selector */}
-      <div className="grid md:grid-cols-2 gap-4 mb-6">
-        <Select
-          label={t('courses.selectCourse')}
-          value={selectedCourseId?.toString() || ''}
-          onChange={(e) => setSelectedCourseId(Number(e.target.value))}
-          data-voice-id="select-course"
-        >
-          <option value="">Select a course...</option>
-          {courses.map((course) => (
-            <option key={course.id} value={course.id}>
-              {course.title}
-            </option>
-          ))}
-        </Select>
+      <Card variant="default" padding="md">
+        <div className="grid md:grid-cols-2 gap-4">
+          <Select
+            label={t('courses.selectCourse')}
+            value={selectedCourseId?.toString() || ''}
+            onChange={(e) => setSelectedCourseId(Number(e.target.value))}
+            data-voice-id="select-course"
+          >
+            <option value="">Select a course...</option>
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.title}
+              </option>
+            ))}
+          </Select>
 
-        <Select
-          label="Select Live Session"
-          value={selectedSessionId?.toString() || ''}
-          onChange={(e) => setSelectedSessionId(Number(e.target.value))}
-          disabled={!selectedCourseId}
-          data-voice-id="select-session"
-        >
-          <option value="">Select a session...</option>
-          {sessions.map((session) => (
-            <option key={session.id} value={session.id}>
-              {session.title} (ID: {session.id})
-            </option>
-          ))}
-        </Select>
-      </div>
+          <Select
+            label="Select Live Session"
+            value={selectedSessionId?.toString() || ''}
+            onChange={(e) => setSelectedSessionId(Number(e.target.value))}
+            disabled={!selectedCourseId}
+            data-voice-id="select-session"
+          >
+            <option value="">Select a session...</option>
+            {sessions.map((session) => (
+              <option key={session.id} value={session.id}>
+                {session.title} (ID: {session.id})
+              </option>
+            ))}
+          </Select>
+        </div>
+      </Card>
 
       {!selectedSessionId ? (
-        <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p>Select a live session to view the discussion forum.</p>
+        <Card variant="default" padding="lg">
+          <div className="text-center py-8">
+            <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+              <MessageSquare className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+            </div>
+            <p className="text-neutral-600 dark:text-neutral-400">Select a live session to view the discussion forum.</p>
             {selectedCourseId && sessions.length === 0 && (
-              <p className="text-sm mt-2">No live sessions available for this course.</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-500 mt-2">No live sessions available for this course.</p>
             )}
-          </CardContent>
+          </div>
         </Card>
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="cases">{t('forum.cases')}</TabsTrigger>
-            <TabsTrigger value="discussion">{t('forum.discussion')} ({posts.length})</TabsTrigger>
+            <TabsTrigger value="discussion">
+              {t('forum.discussion')}
+              <Badge variant="primary" size="sm" className="ml-2">{posts.length}</Badge>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="cases">
             {cases.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-gray-500">
-                  <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>No case studies posted for this session yet.</p>
-                </CardContent>
+              <Card variant="default" padding="lg">
+                <div className="text-center py-8">
+                  <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                    <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+                  </div>
+                  <p className="text-neutral-600 dark:text-neutral-400">No case studies posted for this session yet.</p>
+                </div>
               </Card>
             ) : (
               <div className="space-y-4">
                 {cases.map((caseItem) => (
-                  <Card key={caseItem.id}>
+                  <Card key={caseItem.id} variant="default">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5 text-primary-600" />
+                        <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
+                          <FileText className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                        </div>
                         Case Study #{caseItem.id}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-gray-800 whitespace-pre-wrap">{caseItem.prompt}</p>
-                      <p className="text-xs text-gray-500 mt-4">
+                      <p className="text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap leading-relaxed">{caseItem.prompt}</p>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-4">
                         Posted: {formatTimestamp(caseItem.created_at)}
                       </p>
                     </CardContent>
@@ -567,13 +569,26 @@ export default function ForumPage() {
 
           <TabsContent value="discussion">
             {loading ? (
-              <div className="text-center py-8 text-gray-500">Loading discussion...</div>
+              <div className="flex items-center justify-center py-12">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-full border-4 border-primary-100 dark:border-primary-900"></div>
+                    <div className="absolute top-0 left-0 w-10 h-10 rounded-full border-4 border-primary-600 border-t-transparent animate-spin"></div>
+                  </div>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading discussion...</p>
+                </div>
+              </div>
             ) : (
               <div className="space-y-6">
                 {/* New Post Form */}
-                <Card>
+                <Card variant="default">
                   <CardHeader>
-                    <CardTitle className="text-base">Post to Discussion</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-accent-100 dark:bg-accent-900/50">
+                        <Send className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                      </div>
+                      Post to Discussion
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Textarea
@@ -599,8 +614,8 @@ export default function ForumPage() {
                 {/* Pinned Posts */}
                 {pinnedPosts.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                      <Pin className="h-4 w-4" />
+                    <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3 flex items-center gap-2">
+                      <Pin className="h-4 w-4 text-accent-500" />
                       Pinned Posts
                     </h3>
                     {pinnedPosts.map((post) => renderPost(post))}
@@ -611,16 +626,18 @@ export default function ForumPage() {
                 {regularPosts.length > 0 ? (
                   <div>
                     {pinnedPosts.length > 0 && (
-                      <h3 className="text-sm font-medium text-gray-700 mb-3">All Posts</h3>
+                      <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">All Posts</h3>
                     )}
                     {regularPosts.map((post) => renderPost(post))}
                   </div>
                 ) : pinnedPosts.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-8 text-center text-gray-500">
-                      <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                      <p>No posts yet. Be the first to contribute!</p>
-                    </CardContent>
+                  <Card variant="default" padding="lg">
+                    <div className="text-center py-8">
+                      <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                        <MessageSquare className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+                      </div>
+                      <p className="text-neutral-600 dark:text-neutral-400">No posts yet. Be the first to contribute!</p>
+                    </div>
                   </Card>
                 ) : null}
               </div>

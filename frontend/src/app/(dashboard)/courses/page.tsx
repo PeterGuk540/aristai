@@ -13,7 +13,9 @@ import {
   Card,
   CardHeader,
   CardTitle,
+  CardDescription,
   CardContent,
+  CardFooter,
   Input,
   Textarea,
   Select,
@@ -21,6 +23,7 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
+  Badge,
 } from '@/components/ui';
 
 export default function CoursesPage() {
@@ -116,23 +119,19 @@ export default function CoursesPage() {
       setLoading(true);
 
       if (currentUser?.is_admin) {
-        // Admin sees all courses
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
         if (data.length > 0 && !selectedCourseId) {
           setSelectedCourseId(data[0].id);
         }
       } else if (isInstructor && currentUser) {
-        // Instructors see only their own courses
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
         if (data.length > 0 && !selectedCourseId) {
           setSelectedCourseId(data[0].id);
         }
       } else if (currentUser) {
-        // Students only see enrolled courses
         const enrolledCourses = await api.getUserEnrolledCourses(currentUser.id);
-        // enrolledCourses returns {course_id, course_title, ...}, we need to fetch full course details
         const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));
         const fullCourses = await Promise.all(coursePromises);
         setCourses(fullCourses);
@@ -169,7 +168,6 @@ export default function CoursesPage() {
     }
   }, [selectedCourseId]);
 
-  // Auto-extract learning objectives from syllabus text
   const extractObjectivesFromSyllabus = useCallback(async (syllabusText: string) => {
     if (!syllabusText || syllabusText.length < 50) return;
 
@@ -177,13 +175,11 @@ export default function CoursesPage() {
     try {
       const result = await api.extractLearningObjectives(syllabusText);
       if (result.success && result.objectives.length > 0) {
-        // Join objectives with newlines for the textarea
         setObjectives(result.objectives.join('\n'));
         setObjectivesExtracted(true);
       }
     } catch (error) {
       console.error('Failed to extract objectives:', error);
-      // Don't show error to user - objectives extraction is optional
     } finally {
       setExtractingObjectives(false);
     }
@@ -204,7 +200,6 @@ export default function CoursesPage() {
       setSyllabus(result.extracted_text);
       setSyllabusUploadError(null);
 
-      // Auto-extract learning objectives from the uploaded syllabus
       if (result.extracted_text && result.extracted_text.length >= 50) {
         extractObjectivesFromSyllabus(result.extracted_text);
       }
@@ -228,13 +223,11 @@ export default function CoursesPage() {
     }
   };
 
-  // Handle syllabus text paste/change - extract objectives when user finishes typing
   const handleSyllabusTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setSyllabus(e.target.value);
     setObjectivesExtracted(false);
   };
 
-  // Extract objectives when user leaves the syllabus field (blur event)
   const handleSyllabusBlur = () => {
     if (syllabus && syllabus.length >= 100 && !objectivesExtracted && !objectives.trim()) {
       extractObjectivesFromSyllabus(syllabus);
@@ -258,7 +251,6 @@ export default function CoursesPage() {
         created_by: currentUser?.id,
       });
 
-      // If a syllabus file was uploaded, save it to the course materials
       if (syllabusFile && course.id) {
         try {
           await api.uploadSyllabus(syllabusFile, {
@@ -267,7 +259,6 @@ export default function CoursesPage() {
           });
         } catch (err) {
           console.error('Failed to save syllabus to materials:', err);
-          // Don't fail the whole operation if this fails
         }
       }
 
@@ -493,11 +484,12 @@ export default function CoursesPage() {
   }, [availableStudents, studentSearchQuery]);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('courses.title')}</h1>
-          <p className="text-gray-600">{t('courses.subtitle')}</p>
+          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">{t('courses.title')}</h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('courses.subtitle')}</p>
         </div>
         <Button onClick={fetchCourses} variant="outline" size="sm">
           <RefreshCw className="h-4 w-4 mr-2" />
@@ -516,74 +508,116 @@ export default function CoursesPage() {
 
         <TabsContent value="courses">
           {loading ? (
-            <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-full border-4 border-primary-100 dark:border-primary-900"></div>
+                  <div className="absolute top-0 left-0 w-10 h-10 rounded-full border-4 border-primary-600 border-t-transparent animate-spin"></div>
+                </div>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('common.loading')}</p>
+              </div>
+            </div>
           ) : courses.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-gray-500">
-                <BookOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+            <Card variant="default" padding="lg">
+              <div className="text-center py-8">
+                <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                  <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+                </div>
                 {isInstructor ? (
-                  <p>{t('courses.noCourses')}</p>
+                  <p className="text-neutral-600 dark:text-neutral-400">{t('courses.noCourses')}</p>
                 ) : (
                   <div>
-                    <p className="mb-2">{t('courses.noEnrolledCourses')}</p>
-                    <p className="text-sm">{t('courses.useJoinCode')}</p>
+                    <p className="text-neutral-700 dark:text-neutral-300 font-medium mb-1">{t('courses.noEnrolledCourses')}</p>
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('courses.useJoinCode')}</p>
                   </div>
                 )}
-              </CardContent>
+              </div>
             </Card>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid gap-5">
               {courses.map((course) => (
-                <Card key={course.id}>
+                <Card key={course.id} variant="default" hover className="overflow-hidden">
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="flex items-center gap-2">
-                        <BookOpen className="h-5 w-5 text-primary-600" />
-                        {course.title}
-                      </CardTitle>
-                      <span className="text-sm text-gray-500">ID: {course.id}</span>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-primary-100 dark:bg-primary-900/50">
+                          <BookOpen className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                        </div>
+                        <div>
+                          <CardTitle>{course.title}</CardTitle>
+                          <CardDescription>Course ID: {course.id}</CardDescription>
+                        </div>
+                      </div>
+                      {canEditCourse(course) && (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleStartEdit(course)}
+                            title={t('common.edit')}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteCourse(course.id)}
+                            disabled={deleting === course.id}
+                            title={t('common.delete')}
+                            className="text-danger-600 hover:text-danger-700 hover:bg-danger-50 dark:text-danger-400 dark:hover:bg-danger-900/20"
+                          >
+                            {deleting === course.id ? (
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid md:grid-cols-2 gap-4">
+                    <div className="grid md:grid-cols-2 gap-6">
                       <div>
-                        <h4 className="font-medium text-gray-900 mb-2">{t('courses.syllabus')}</h4>
-                        <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                        <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">{t('courses.syllabus')}</h4>
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap leading-relaxed">
                           {truncate(course.syllabus_text || t('courses.syllabus'), 300)}
                         </p>
                       </div>
                       <div>
-                        <h4 className="font-medium text-gray-900 mb-2">{t('courses.learningObjectives')}</h4>
+                        <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">{t('courses.learningObjectives')}</h4>
                         {course.objectives_json && course.objectives_json.length > 0 ? (
-                          <ul className="text-sm text-gray-600 space-y-1">
+                          <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1.5">
                             {course.objectives_json.slice(0, 5).map((obj, i) => (
                               <li key={i} className="flex items-start gap-2">
-                                <span className="text-primary-600">•</span>
-                                {obj}
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
+                                <span>{obj}</span>
                               </li>
                             ))}
                             {course.objectives_json.length > 5 && (
-                              <li className="text-gray-400">
+                              <li className="text-neutral-400 dark:text-neutral-500 text-xs">
                                 ...and {course.objectives_json.length - 5} more
                               </li>
                             )}
                           </ul>
                         ) : (
-                          <p className="text-sm text-gray-400">No objectives defined</p>
+                          <p className="text-sm text-neutral-400 dark:text-neutral-500 italic">No objectives defined</p>
                         )}
                       </div>
                     </div>
                     {isInstructor && course.join_code && (
-                      <div className="mt-4 pt-4 border-t border-gray-100">
+                      <div className="mt-5 pt-5 border-t border-neutral-200 dark:border-neutral-700">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Key className="h-4 w-4 text-gray-400" />
-                            <span className="text-sm text-gray-600">{t('courses.joinCode')}:</span>
-                            <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono font-bold text-primary-600">
+                          <div className="flex items-center gap-3">
+                            <div className="p-1.5 rounded-lg bg-accent-100 dark:bg-accent-900/50">
+                              <Key className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                            </div>
+                            <span className="text-sm text-neutral-600 dark:text-neutral-400">{t('courses.joinCode')}:</span>
+                            <code className="bg-neutral-100 dark:bg-neutral-700 px-3 py-1 rounded-lg text-sm font-mono font-bold text-primary-600 dark:text-primary-400">
                               {course.join_code}
                             </code>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
                             <Button
                               size="sm"
                               variant="ghost"
@@ -591,7 +625,7 @@ export default function CoursesPage() {
                               title="Copy join code"
                             >
                               {copiedCourseId === course.id ? (
-                                <Check className="h-4 w-4 text-green-600" />
+                                <Check className="h-4 w-4 text-success-600" />
                               ) : (
                                 <Copy className="h-4 w-4" />
                               )}
@@ -609,57 +643,29 @@ export default function CoursesPage() {
                         </div>
                       </div>
                     )}
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                      <span className="text-xs text-gray-500">
-                        Created: {formatTimestamp(course.created_at)}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {canEditCourse(course) && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleStartEdit(course)}
-                              title={t('common.edit')}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteCourse(course.id)}
-                              disabled={deleting === course.id}
-                              title={t('common.delete')}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              {deleting === course.id ? (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </>
-                        )}
-                        {isInstructor && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              try {
-                                await api.generatePlans(course.id);
-                                alert('Plan generation started!');
-                              } catch (error) {
-                                alert('Failed to start plan generation');
-                              }
-                            }}
-                          >
-                            <Sparkles className="h-4 w-4 mr-2" />
-                            {t('courses.generatePlans')}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
                   </CardContent>
+                  <CardFooter className="flex items-center justify-between">
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                      Created: {formatTimestamp(course.created_at)}
+                    </span>
+                    {isInstructor && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          try {
+                            await api.generatePlans(course.id);
+                            alert('Plan generation started!');
+                          } catch (error) {
+                            alert('Failed to start plan generation');
+                          }
+                        }}
+                      >
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        {t('courses.generatePlans')}
+                      </Button>
+                    )}
+                  </CardFooter>
                 </Card>
               ))}
             </div>
@@ -668,11 +674,17 @@ export default function CoursesPage() {
 
         {isInstructor && (
           <TabsContent value="create">
-            <Card>
+            <Card variant="default">
               <CardHeader>
-                <CardTitle>{t('courses.createNew')}</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
+                    <Plus className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                  </div>
+                  {t('courses.createNew')}
+                </CardTitle>
+                <CardDescription>Set up a new course with syllabus and learning objectives</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-5">
                 <Input
                   label={t('courses.courseTitle')}
                   placeholder={t('courses.courseTitlePlaceholder')}
@@ -682,16 +694,16 @@ export default function CoursesPage() {
                 />
 
                 {/* Syllabus Input - Toggle between Upload and Paste */}
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">{t('courses.syllabus')}</label>
-                  <div className="flex gap-2 mb-2">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">{t('courses.syllabus')}</label>
+                  <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setSyllabusInputMode('paste')}
-                      className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all ${
                         syllabusInputMode === 'paste'
-                          ? 'bg-primary-100 text-primary-700 border border-primary-300'
-                          : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                          ? 'bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 font-medium'
+                          : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-600'
                       }`}
                     >
                       <FileText className="h-4 w-4" />
@@ -700,10 +712,10 @@ export default function CoursesPage() {
                     <button
                       type="button"
                       onClick={() => setSyllabusInputMode('upload')}
-                      className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all ${
                         syllabusInputMode === 'upload'
-                          ? 'bg-primary-100 text-primary-700 border border-primary-300'
-                          : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                          ? 'bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 font-medium'
+                          : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-600'
                       }`}
                     >
                       <Upload className="h-4 w-4" />
@@ -734,86 +746,92 @@ export default function CoursesPage() {
                       {!syllabusFile ? (
                         <div
                           onClick={() => syllabusFileInputRef.current?.click()}
-                          className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors"
+                          className="border-2 border-dashed border-neutral-300 dark:border-neutral-600 rounded-xl p-8 text-center cursor-pointer hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all"
                         >
-                          <Upload className="h-10 w-10 mx-auto text-gray-400 mb-3" />
-                          <p className="text-sm text-gray-600 mb-1">
+                          <div className="p-3 rounded-xl bg-neutral-100 dark:bg-neutral-700 w-fit mx-auto mb-3">
+                            <Upload className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
+                          </div>
+                          <p className="text-sm text-neutral-600 dark:text-neutral-400 font-medium mb-1">
                             {t('courses.uploadSyllabus')}
                           </p>
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs text-neutral-400 dark:text-neutral-500">
                             {t('courses.supportedFormats')}
                           </p>
                         </div>
                       ) : (
-                        <div className="border border-gray-200 rounded-lg p-4">
+                        <Card variant="outlined" padding="md">
                           <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <FileText className="h-5 w-5 text-primary-500" />
-                              <span className="text-sm font-medium text-gray-700">
-                                {syllabusFile.name}
-                              </span>
-                              <span className="text-xs text-gray-400">
-                                ({(syllabusFile.size / 1024).toFixed(1)} KB)
-                              </span>
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-primary-100 dark:bg-primary-900/50">
+                                <FileText className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                              </div>
+                              <div>
+                                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                  {syllabusFile.name}
+                                </span>
+                                <span className="text-xs text-neutral-400 dark:text-neutral-500 ml-2">
+                                  ({(syllabusFile.size / 1024).toFixed(1)} KB)
+                                </span>
+                              </div>
                             </div>
                             <button
                               type="button"
                               onClick={handleRemoveSyllabusFile}
-                              className="p-1 rounded hover:bg-gray-100"
+                              className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
                               title="Remove file"
                             >
-                              <X className="h-4 w-4 text-gray-500" />
+                              <X className="h-4 w-4 text-neutral-500" />
                             </button>
                           </div>
 
                           {uploadingSyllabus && (
-                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <div className="flex items-center gap-2 text-sm text-primary-600 dark:text-primary-400">
                               <RefreshCw className="h-4 w-4 animate-spin" />
                               Extracting text from file...
                             </div>
                           )}
 
                           {syllabusUploadError && (
-                            <div className="text-sm text-red-600 bg-red-50 p-2 rounded">
+                            <div className="text-sm text-danger-600 dark:text-danger-400 bg-danger-50 dark:bg-danger-900/20 p-3 rounded-lg">
                               {syllabusUploadError}
                             </div>
                           )}
 
                           {syllabus && !uploadingSyllabus && (
-                            <div className="mt-2">
-                              <p className="text-xs text-gray-500 mb-1">{t('courses.extractedTextPreview')}</p>
-                              <div className="bg-gray-50 rounded p-2 max-h-32 overflow-y-auto">
-                                <p className="text-xs text-gray-600 whitespace-pre-wrap">
+                            <div className="mt-3">
+                              <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2 font-medium">{t('courses.extractedTextPreview')}</p>
+                              <div className="bg-neutral-50 dark:bg-neutral-800 rounded-lg p-3 max-h-32 overflow-y-auto">
+                                <p className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap">
                                   {syllabus.length > 500 ? syllabus.substring(0, 500) + '...' : syllabus}
                                 </p>
                               </div>
-                              <p className="text-xs text-gray-400 mt-1">
+                              <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-2">
                                 {t('courses.charactersExtracted', { count: syllabus.length.toLocaleString() })}
                               </p>
                             </div>
                           )}
-                        </div>
+                        </Card>
                       )}
                     </div>
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                       {t('courses.learningObjectives')} {t('courses.onePerLine')}
                     </label>
                     {extractingObjectives && (
-                      <span className="flex items-center gap-1 text-xs text-primary-600">
-                        <RefreshCw className="h-3 w-3 animate-spin" />
-                        Extracting objectives from syllabus...
-                      </span>
+                      <Badge variant="primary" size="sm">
+                        <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                        Extracting...
+                      </Badge>
                     )}
                     {objectivesExtracted && !extractingObjectives && (
-                      <span className="flex items-center gap-1 text-xs text-green-600">
-                        <CheckCircle className="h-3 w-3" />
-                        Auto-extracted from syllabus
-                      </span>
+                      <Badge variant="success" size="sm">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Auto-extracted
+                      </Badge>
                     )}
                   </div>
                   <Textarea
@@ -832,15 +850,14 @@ export default function CoursesPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => extractObjectivesFromSyllabus(syllabus)}
-                      className="text-xs"
                     >
-                      <Sparkles className="h-3 w-3 mr-1" />
+                      <Sparkles className="h-4 w-4 mr-2" />
                       Extract objectives from syllabus
                     </Button>
                   )}
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 pt-2">
                   <Button
                     onClick={() => handleCreateCourse(false)}
                     disabled={creating || !title.trim()}
@@ -853,6 +870,7 @@ export default function CoursesPage() {
                   <Button
                     onClick={() => handleCreateCourse(true)}
                     disabled={creating || !title.trim()}
+                    variant="accent"
                     data-voice-id="create-course-with-plans"
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
@@ -866,12 +884,15 @@ export default function CoursesPage() {
 
         {isInstructor && (
           <TabsContent value="enrollment">
-            <Card>
+            <Card variant="default">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+                  <div className="p-1.5 rounded-lg bg-success-100 dark:bg-success-900/50">
+                    <Users className="h-4 w-4 text-success-600 dark:text-success-400" />
+                  </div>
                   {t('courses.enrollmentManagement')}
                 </CardTitle>
+                <CardDescription>Manage student enrollments for your courses</CardDescription>
               </CardHeader>
               <CardContent>
                 <Select
@@ -895,37 +916,41 @@ export default function CoursesPage() {
                 {selectedCourseId && (
                   <div className="mt-6 grid md:grid-cols-2 gap-6">
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-3">
-                        {t('courses.enrolledStudents')} ({enrolledStudents.length})
+                      <h4 className="font-semibold text-neutral-700 dark:text-neutral-300 mb-3 flex items-center gap-2">
+                        <Badge variant="success" size="sm">{enrolledStudents.length}</Badge>
+                        {t('courses.enrolledStudents')}
                       </h4>
                       {enrolledStudents.length > 0 ? (
                         <ul className="space-y-2 max-h-96 overflow-y-auto">
                           {enrolledStudents.map((student) => (
                             <li
                               key={student.user_id}
-                              className="flex items-center gap-2 text-sm text-gray-700 bg-green-50 px-3 py-2 rounded"
+                              className="flex items-center gap-3 text-sm bg-success-50 dark:bg-success-900/20 px-4 py-3 rounded-xl border border-success-200 dark:border-success-800"
                             >
-                              <Users className="h-4 w-4 text-green-600" />
+                              <div className="w-8 h-8 rounded-full bg-success-200 dark:bg-success-800 flex items-center justify-center">
+                                <Users className="h-4 w-4 text-success-700 dark:text-success-300" />
+                              </div>
                               <div>
-                                <div className="font-medium">{student.name}</div>
-                                <div className="text-xs text-gray-500">{student.email}</div>
+                                <div className="font-medium text-neutral-900 dark:text-white">{student.name}</div>
+                                <div className="text-xs text-neutral-500 dark:text-neutral-400">{student.email}</div>
                               </div>
                             </li>
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-sm text-gray-500">{t('courses.noStudentsEnrolled')}</p>
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 italic">{t('courses.noStudentsEnrolled')}</p>
                       )}
                     </div>
 
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-3">
-                        {t('courses.availableStudents')} ({availableStudents.length})
+                      <h4 className="font-semibold text-neutral-700 dark:text-neutral-300 mb-3 flex items-center gap-2">
+                        <Badge variant="default" size="sm">{availableStudents.length}</Badge>
+                        {t('courses.availableStudents')}
                       </h4>
                       {availableStudents.length > 0 ? (
                         <div className="space-y-3">
                           <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-400" />
                             <Input
                               placeholder={t('courses.searchStudents')}
                               value={studentSearchQuery}
@@ -934,29 +959,29 @@ export default function CoursesPage() {
                             />
                           </div>
 
-                          <div className="border rounded-lg max-h-64 overflow-y-auto">
-                            <div className="sticky top-0 bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
+                          <Card variant="outlined" padding="none" className="max-h-64 overflow-y-auto">
+                            <div className="sticky top-0 bg-neutral-50 dark:bg-neutral-800 px-4 py-3 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between">
                               <label className="flex items-center gap-2 text-sm cursor-pointer">
                                 <input
                                   type="checkbox"
                                   checked={selectedStudentIds.size === filteredAvailableStudents.length && filteredAvailableStudents.length > 0}
                                   onChange={toggleSelectAll}
-                                  className="rounded border-gray-300"
+                                  className="rounded border-neutral-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
                                 />
-                                Select All ({filteredAvailableStudents.length})
+                                <span className="text-neutral-700 dark:text-neutral-300">Select All ({filteredAvailableStudents.length})</span>
                               </label>
                               {selectedStudentIds.size > 0 && (
-                                <span className="text-xs text-primary-600 font-medium">
+                                <Badge variant="primary" size="sm">
                                   {selectedStudentIds.size} selected
-                                </span>
+                                </Badge>
                               )}
                             </div>
                             {filteredAvailableStudents.length > 0 ? (
-                              <ul className="divide-y" data-voice-id="student-pool">
+                              <ul className="divide-y divide-neutral-200 dark:divide-neutral-700" data-voice-id="student-pool">
                                 {filteredAvailableStudents.map((student) => (
                                   <li
                                     key={student.id}
-                                    className="px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                    className="px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 cursor-pointer transition-colors"
                                     data-voice-item={student.name}
                                     onClick={() => toggleStudentSelection(student.id)}
                                   >
@@ -965,20 +990,20 @@ export default function CoursesPage() {
                                         type="checkbox"
                                         checked={selectedStudentIds.has(student.id)}
                                         onChange={() => toggleStudentSelection(student.id)}
-                                        className="rounded border-gray-300"
+                                        className="rounded border-neutral-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
                                       />
                                       <div>
-                                        <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                                        <div className="text-xs text-gray-500">{student.email}</div>
+                                        <div className="text-sm font-medium text-neutral-900 dark:text-white">{student.name}</div>
+                                        <div className="text-xs text-neutral-500 dark:text-neutral-400">{student.email}</div>
                                       </div>
                                     </label>
                                   </li>
                                 ))}
                               </ul>
                             ) : (
-                              <p className="text-sm text-gray-500 p-3">No students match your search.</p>
+                              <p className="text-sm text-neutral-500 dark:text-neutral-400 p-4">No students match your search.</p>
                             )}
-                          </div>
+                          </Card>
 
                           <div className="flex gap-2">
                             <Button
@@ -1001,7 +1026,7 @@ export default function CoursesPage() {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 italic">
                           {allStudents.length === 0
                             ? 'No students in the system yet. Students can sign up and will appear here.'
                             : 'All students are already enrolled in this course.'}
@@ -1017,15 +1042,18 @@ export default function CoursesPage() {
 
         {!isInstructor && (
           <TabsContent value="join">
-            <Card>
+            <Card variant="default">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Key className="h-5 w-5" />
+                  <div className="p-1.5 rounded-lg bg-accent-100 dark:bg-accent-900/50">
+                    <Key className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                  </div>
                   {t('courses.joinCourse')}
                 </CardTitle>
+                <CardDescription>Enter a join code provided by your instructor</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
                   {t('courses.useJoinCode')}
                 </p>
                 <div className="flex gap-3 max-w-md">
@@ -1055,50 +1083,50 @@ export default function CoursesPage() {
 
         {!isInstructor && (
           <TabsContent value="instructor">
-            <Card>
+            <Card variant="default">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <GraduationCap className="h-5 w-5" />
+                  <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
+                    <GraduationCap className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                  </div>
                   {t('courses.requestInstructorAccess')}
                 </CardTitle>
+                <CardDescription>Request instructor privileges to create and manage courses</CardDescription>
               </CardHeader>
               <CardContent>
                 {currentUser?.instructor_request_status === 'pending' ? (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-yellow-800 mb-2">
+                  <Card variant="ghost" padding="md" className="bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800">
+                    <div className="flex items-center gap-3 text-warning-800 dark:text-warning-200">
                       <Clock className="h-5 w-5" />
                       <span className="font-medium">{t('courses.instructorRequestPending')}</span>
                     </div>
-                  </div>
+                  </Card>
                 ) : currentUser?.instructor_request_status === 'rejected' ? (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-red-800 mb-2">
-                      <span className="font-medium">{t('courses.instructorRequestRejected')}</span>
-                    </div>
+                  <div className="space-y-4">
+                    <Card variant="ghost" padding="md" className="bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800">
+                      <span className="font-medium text-danger-800 dark:text-danger-200">{t('courses.instructorRequestRejected')}</span>
+                    </Card>
                     <Button
                       onClick={handleRequestInstructor}
                       disabled={requestingInstructor}
                       variant="outline"
-                      className="mt-4"
                     >
                       <GraduationCap className="h-4 w-4 mr-2" />
                       {t('courses.requestInstructorAccess')}
                     </Button>
                   </div>
                 ) : (
-                  <div>
-                    <Button
-                      onClick={handleRequestInstructor}
-                      disabled={requestingInstructor}
-                    >
-                      {requestingInstructor ? (
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <GraduationCap className="h-4 w-4 mr-2" />
-                      )}
-                      {t('courses.requestInstructorAccess')}
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={handleRequestInstructor}
+                    disabled={requestingInstructor}
+                  >
+                    {requestingInstructor ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <GraduationCap className="h-4 w-4 mr-2" />
+                    )}
+                    {t('courses.requestInstructorAccess')}
+                  </Button>
                 )}
               </CardContent>
             </Card>
@@ -1108,65 +1136,66 @@ export default function CoursesPage() {
 
       {/* Edit Course Modal */}
       {editingCourse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/60 backdrop-blur-sm">
+          <Card variant="elevated" className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
+                    <Edit2 className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                  </div>
                   {t('courses.editCourse')}
-                </h2>
+                </CardTitle>
                 <button
                   onClick={handleCancelEdit}
-                  className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-5 w-5 text-neutral-500" />
                 </button>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <Input
+                label={t('courses.courseTitle')}
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
 
-              <div className="space-y-4">
-                <Input
-                  label={t('courses.courseTitle')}
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                />
+              <Textarea
+                label={t('courses.syllabus')}
+                rows={6}
+                value={editSyllabus}
+                onChange={(e) => setEditSyllabus(e.target.value)}
+              />
 
-                <Textarea
-                  label={t('courses.syllabus')}
-                  rows={6}
-                  value={editSyllabus}
-                  onChange={(e) => setEditSyllabus(e.target.value)}
-                />
-
-                <Textarea
-                  label={`${t('courses.learningObjectives')} ${t('courses.onePerLine')}`}
-                  rows={4}
-                  value={editObjectives}
-                  onChange={(e) => setEditObjectives(e.target.value)}
-                />
-
-                <div className="flex justify-end gap-3 pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancelEdit}
-                    disabled={saving}
-                  >
-                    {t('common.cancel')}
-                  </Button>
-                  <Button
-                    onClick={handleSaveEdit}
-                    disabled={saving || !editTitle.trim()}
-                  >
-                    {saving ? (
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Check className="h-4 w-4 mr-2" />
-                    )}
-                    {t('common.save')}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
+              <Textarea
+                label={`${t('courses.learningObjectives')} ${t('courses.onePerLine')}`}
+                rows={4}
+                value={editObjectives}
+                onChange={(e) => setEditObjectives(e.target.value)}
+              />
+            </CardContent>
+            <CardFooter className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={handleCancelEdit}
+                disabled={saving}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={saving || !editTitle.trim()}
+              >
+                {saving ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4 mr-2" />
+                )}
+                {t('common.save')}
+              </Button>
+            </CardFooter>
+          </Card>
         </div>
       )}
     </div>

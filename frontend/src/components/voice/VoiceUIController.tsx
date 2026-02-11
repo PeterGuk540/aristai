@@ -379,6 +379,81 @@ export const VoiceUIController = () => {
   }, []);
 
   /**
+   * Set select value using React-compatible approach
+   * React controlled components need special handling to trigger state updates
+   */
+  const setSelectValueReactCompatible = useCallback((select: HTMLSelectElement, newValue: string) => {
+    // Focus first to ensure React is tracking this element
+    select.focus();
+
+    // Get the native value setter for HTMLSelectElement
+    const nativeSelectValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLSelectElement.prototype,
+      'value'
+    )?.set;
+
+    if (nativeSelectValueSetter) {
+      nativeSelectValueSetter.call(select, newValue);
+    } else {
+      select.value = newValue;
+    }
+
+    // React 16+ uses a tracker on the DOM node to detect value changes
+    // We need to update this tracker for React to pick up our change
+    const tracker = (select as any)._valueTracker;
+    if (tracker) {
+      tracker.setValue('__voice_trigger__'); // Set to something different so React sees a change
+    }
+
+    // Dispatch change event - this should now be picked up by React
+    const changeEvent = new Event('change', { bubbles: true });
+    select.dispatchEvent(changeEvent);
+
+    // Also dispatch input event for good measure
+    const inputEvent = new Event('input', { bubbles: true });
+    select.dispatchEvent(inputEvent);
+
+    console.log('🎤 VoiceUI: Set select value (React-compatible):', newValue);
+  }, []);
+
+  const handleSelectOnElement = useCallback((select: HTMLSelectElement, value?: string, optionName?: string, optionIndex?: number) => {
+    const options = getDropdownOptions(select);
+
+    // If a specific value is provided, use it directly
+    if (value !== undefined && value !== null) {
+      setSelectValueReactCompatible(select, String(value));
+      console.log('🎤 VoiceUI: Selected by value:', value);
+      return;
+    }
+
+    // If an option index is provided (0-based, or -1 for last)
+    if (optionIndex !== undefined && optionIndex !== null) {
+      const actualIndex = optionIndex === -1 ? options.length - 1 : optionIndex;
+      if (actualIndex >= 0 && actualIndex < options.length) {
+        setSelectValueReactCompatible(select, options[actualIndex].value);
+        console.log('🎤 VoiceUI: Selected by index:', actualIndex, options[actualIndex].text);
+        return;
+      }
+    }
+
+    // If an option name is provided, find best match
+    if (optionName) {
+      const match = findBestOption(options, optionName);
+      if (match) {
+        setSelectValueReactCompatible(select, match.value);
+        console.log('🎤 VoiceUI: Selected by name:', match.text);
+        return;
+      }
+    }
+
+    // Default to first non-empty option
+    if (options.length > 0) {
+      setSelectValueReactCompatible(select, options[0].value);
+      console.log('🎤 VoiceUI: Selected first option:', options[0].text);
+    }
+  }, [getDropdownOptions, findBestOption, setSelectValueReactCompatible]);
+
+  /**
    * UNIVERSAL dropdown selection - works for ANY dropdown on any page
    * Finds by: data-voice-id, label text, name, or first visible dropdown
    */
@@ -425,48 +500,7 @@ export const VoiceUIController = () => {
     } else {
       console.warn('🎤 VoiceUI: No dropdown found');
     }
-  }, [findElement]);
-
-  const handleSelectOnElement = useCallback((select: HTMLSelectElement, value?: string, optionName?: string, optionIndex?: number) => {
-    const options = getDropdownOptions(select);
-
-    // If a specific value is provided, use it directly
-    if (value !== undefined && value !== null) {
-      select.value = String(value);
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      console.log('🎤 VoiceUI: Selected by value:', value);
-      return;
-    }
-
-    // If an option index is provided (0-based, or -1 for last)
-    if (optionIndex !== undefined && optionIndex !== null) {
-      const actualIndex = optionIndex === -1 ? options.length - 1 : optionIndex;
-      if (actualIndex >= 0 && actualIndex < options.length) {
-        select.value = options[actualIndex].value;
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-        console.log('🎤 VoiceUI: Selected by index:', actualIndex, options[actualIndex].text);
-        return;
-      }
-    }
-
-    // If an option name is provided, find best match
-    if (optionName) {
-      const match = findBestOption(options, optionName);
-      if (match) {
-        select.value = match.value;
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-        console.log('🎤 VoiceUI: Selected by name:', match.text);
-        return;
-      }
-    }
-
-    // Default to first non-empty option
-    if (options.length > 0) {
-      select.value = options[0].value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      console.log('🎤 VoiceUI: Selected first option:', options[0].text);
-    }
-  }, [getDropdownOptions, findBestOption]);
+  }, [findElement, handleSelectOnElement]);
 
   /**
    * Handle button click

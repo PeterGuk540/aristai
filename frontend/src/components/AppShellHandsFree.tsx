@@ -320,7 +320,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
           <ConversationalVoice
             onNavigate={handleVoiceNavigate}
             onActiveChange={setVoiceActive}
-            autoStart={true}
+            autoStart={false}
             greeting={`Welcome back, ${currentUser?.name.split(' ')[0]}! How can I help you today?`}
           />
         </>

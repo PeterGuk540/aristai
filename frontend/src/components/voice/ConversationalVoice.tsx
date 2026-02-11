@@ -96,16 +96,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     };
   }, []);
 
-  // Auto-start connection for instructors
-  useEffect(() => {
-    if (autoStart && isInstructor && currentUser && state === 'initializing' && !isInitializingRef.current) {
-      isInitializingRef.current = true;
-      const timer = setTimeout(() => {
-        initializeConversation();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [autoStart, isInstructor, currentUser, state]);
+  // Auto-start removed - user must click Start button manually
+  // This prevents unwanted auto-starting and flipping behavior
 
   const cleanup = async () => {
     if (conversationRef.current) {
@@ -241,17 +233,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           conversationRef.current = null;
           onActiveChange?.(false);
 
-          // Auto-reconnect ONLY if it was NOT user-initiated (e.g., network drop)
-          // Use our own flag because SDK may not always pass reason correctly
-          if (!userInitiatedDisconnectRef.current && autoStart) {
-            console.log('🔄 Attempting auto-reconnect in 2 seconds...');
-            setTimeout(() => {
-              if (!conversationRef.current && !isInitializingRef.current && !userInitiatedDisconnectRef.current) {
-                console.log('🔄 Auto-reconnecting...');
-                initializeConversation();
-              }
-            }, 2000);
-          }
+          // REMOVED auto-reconnect - user must manually click Start button
+          // This prevents the flipping back and forth issue
         },
         onStatusChange: ({ status }: { status: string }) => {
           console.log('📊 Status changed:', status);

@@ -185,8 +185,8 @@ export default function ReportsPage() {
     if (!reportJson?.participation) {
       return (
         <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <CardContent className="py-8 text-center text-neutral-500">
+            <Users className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
             <p>Participation data not available.</p>
           </CardContent>
         </Card>
@@ -205,7 +205,7 @@ export default function ReportsPage() {
               <div className="text-center">
                 <Users className="h-8 w-8 mx-auto text-blue-500 mb-2" />
                 <p className="text-2xl font-bold">{participation.total_enrolled_students}</p>
-                <p className="text-sm text-gray-500">Enrolled Students</p>
+                <p className="text-sm text-neutral-500">Enrolled Students</p>
               </div>
             </CardContent>
           </Card>
@@ -215,7 +215,7 @@ export default function ReportsPage() {
               <div className="text-center">
                 <CheckCircle className="h-8 w-8 mx-auto text-green-500 mb-2" />
                 <p className="text-2xl font-bold">{participation.participation_count}</p>
-                <p className="text-sm text-gray-500">Participated</p>
+                <p className="text-sm text-neutral-500">Participated</p>
               </div>
             </CardContent>
           </Card>
@@ -225,7 +225,7 @@ export default function ReportsPage() {
               <div className="text-center">
                 <BarChart3 className="h-8 w-8 mx-auto text-purple-500 mb-2" />
                 <p className="text-2xl font-bold">{rate.toFixed(1)}%</p>
-                <p className="text-sm text-gray-500">Participation Rate</p>
+                <p className="text-sm text-neutral-500">Participation Rate</p>
               </div>
             </CardContent>
           </Card>
@@ -248,7 +248,7 @@ export default function ReportsPage() {
                       key={student.user_id}
                       className="flex items-center justify-between bg-green-50 px-3 py-2 rounded"
                     >
-                      <span className="text-sm text-gray-700">{student.name}</span>
+                      <span className="text-sm text-neutral-700">{student.name}</span>
                       <Badge variant="success">{student.post_count} posts</Badge>
                     </div>
                   ))}
@@ -275,7 +275,7 @@ export default function ReportsPage() {
                       key={student.user_id}
                       className="flex items-center bg-red-50 px-3 py-2 rounded"
                     >
-                      <span className="text-sm text-gray-700">{student.name}</span>
+                      <span className="text-sm text-neutral-700">{student.name}</span>
                     </div>
                   ))}
                 </div>
@@ -290,8 +290,8 @@ export default function ReportsPage() {
     if (!reportJson?.answer_scores) {
       return (
         <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            <Award className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <CardContent className="py-8 text-center text-neutral-500">
+            <Award className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
             <p>Scoring data not available.</p>
           </CardContent>
         </Card>
@@ -312,7 +312,7 @@ export default function ReportsPage() {
                   <p className="text-2xl font-bold">
                     {answer_scores.class_statistics.average_score.toFixed(1)}
                   </p>
-                  <p className="text-sm text-gray-500">Average Score</p>
+                  <p className="text-sm text-neutral-500">Average Score</p>
                 </div>
               </CardContent>
             </Card>
@@ -324,7 +324,7 @@ export default function ReportsPage() {
                   <p className="text-2xl font-bold">
                     {answer_scores.class_statistics.highest_score.toFixed(1)}
                   </p>
-                  <p className="text-sm text-gray-500">Highest Score</p>
+                  <p className="text-sm text-neutral-500">Highest Score</p>
                 </div>
               </CardContent>
             </Card>
@@ -336,7 +336,7 @@ export default function ReportsPage() {
                   <p className="text-2xl font-bold">
                     {answer_scores.class_statistics.lowest_score.toFixed(1)}
                   </p>
-                  <p className="text-sm text-gray-500">Lowest Score</p>
+                  <p className="text-sm text-neutral-500">Lowest Score</p>
                 </div>
               </CardContent>
             </Card>
@@ -419,7 +419,7 @@ export default function ReportsPage() {
                       </div>
 
                       {/* Score bar */}
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                      <div className="h-2 bg-neutral-200 rounded-full overflow-hidden mb-2">
                         <div
                           className={`h-full rounded-full ${
                             score.score >= 80
@@ -435,7 +435,7 @@ export default function ReportsPage() {
                       {score.key_points_covered && score.key_points_covered.length > 0 && (
                         <div className="text-sm mb-1">
                           <span className="text-green-600 font-medium">Covered: </span>
-                          <span className="text-gray-600">
+                          <span className="text-neutral-600">
                             {score.key_points_covered.join(', ')}
                           </span>
                         </div>
@@ -444,14 +444,14 @@ export default function ReportsPage() {
                       {score.missing_points && score.missing_points.length > 0 && (
                         <div className="text-sm mb-1">
                           <span className="text-red-600 font-medium">Missing: </span>
-                          <span className="text-gray-600">
+                          <span className="text-neutral-600">
                             {score.missing_points.join(', ')}
                           </span>
                         </div>
                       )}
 
                       {score.feedback && (
-                        <p className="text-sm text-gray-500 mt-2 italic">{score.feedback}</p>
+                        <p className="text-sm text-neutral-500 mt-2 italic">{score.feedback}</p>
                       )}
                     </div>
                   ))}
@@ -480,19 +480,19 @@ export default function ReportsPage() {
                   <p className="text-2xl font-bold text-primary-600">
                     {reportJson.summary.total_posts}
                   </p>
-                  <p className="text-sm text-gray-500">Total Posts</p>
+                  <p className="text-sm text-neutral-500">Total Posts</p>
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-blue-600">
                     {reportJson.summary.student_posts}
                   </p>
-                  <p className="text-sm text-gray-500">Student Posts</p>
+                  <p className="text-sm text-neutral-500">Student Posts</p>
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-green-600">
                     {reportJson.summary.instructor_posts}
                   </p>
-                  <p className="text-sm text-gray-500">Instructor Posts</p>
+                  <p className="text-sm text-neutral-500">Instructor Posts</p>
                 </div>
                 <div className="text-center">
                   <Badge
@@ -507,7 +507,7 @@ export default function ReportsPage() {
                   >
                     {reportJson.summary.discussion_quality}
                   </Badge>
-                  <p className="text-sm text-gray-500 mt-1">Quality</p>
+                  <p className="text-sm text-neutral-500 mt-1">Quality</p>
                 </div>
               </div>
             </CardContent>
@@ -523,10 +523,10 @@ export default function ReportsPage() {
             <CardContent>
               <div className="space-y-3">
                 {reportJson.theme_clusters.map((cluster, i) => (
-                  <div key={i} className="bg-gray-50 p-3 rounded-lg">
-                    <h4 className="font-medium text-gray-900">{cluster.theme}</h4>
-                    <p className="text-sm text-gray-600 mt-1">{cluster.description}</p>
-                    <p className="text-xs text-gray-400 mt-2">
+                  <div key={i} className="bg-neutral-50 p-3 rounded-lg">
+                    <h4 className="font-medium text-neutral-900">{cluster.theme}</h4>
+                    <p className="text-sm text-neutral-600 mt-1">{cluster.description}</p>
+                    <p className="text-xs text-neutral-400 mt-2">
                       {cluster.post_ids.length} related posts
                     </p>
                   </div>
@@ -550,7 +550,7 @@ export default function ReportsPage() {
                 <div className="space-y-3">
                   {reportJson.learning_objectives_alignment.map((obj, i) => (
                     <div key={i} className="border-l-4 border-primary-500 pl-3 py-1">
-                      <p className="font-medium text-gray-900">{obj.objective}</p>
+                      <p className="font-medium text-neutral-900">{obj.objective}</p>
                       <Badge
                         variant={
                           obj.coverage === 'Strong'
@@ -606,9 +606,9 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-gray-800">{reportJson.best_practice_answer.summary}</p>
+              <p className="text-neutral-800">{reportJson.best_practice_answer.summary}</p>
               {reportJson.best_practice_answer.detailed_explanation && (
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-neutral-600">
                   {reportJson.best_practice_answer.detailed_explanation}
                 </p>
               )}
@@ -636,8 +636,8 @@ export default function ReportsPage() {
     if (!reportJson?.answer_scores) {
       return (
         <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            <Award className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <CardContent className="py-8 text-center text-neutral-500">
+            <Award className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
             <p>Your performance data is not available yet.</p>
           </CardContent>
         </Card>
@@ -651,8 +651,8 @@ export default function ReportsPage() {
     if (studentScores.length === 0) {
       return (
         <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            <Award className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <CardContent className="py-8 text-center text-neutral-500">
+            <Award className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
             <p>No performance data found for this session.</p>
           </CardContent>
         </Card>
@@ -688,7 +688,7 @@ export default function ReportsPage() {
               </div>
 
               {/* Score bar */}
-              <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-3 bg-neutral-200 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full ${
                     score.score >= 80
@@ -750,8 +750,8 @@ export default function ReportsPage() {
     if (!reportJson?.best_practice_answer) {
       return (
         <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            <BookOpen className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+          <CardContent className="py-8 text-center text-neutral-500">
+            <BookOpen className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
             <p>Best practice answer is not available yet.</p>
           </CardContent>
         </Card>
@@ -771,19 +771,19 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="bg-yellow-50 p-4 rounded-lg">
-              <p className="text-gray-800 font-medium">{best_practice_answer.summary}</p>
+              <p className="text-neutral-800 font-medium">{best_practice_answer.summary}</p>
             </div>
 
             {best_practice_answer.detailed_explanation && (
               <div>
-                <h4 className="font-medium text-gray-700 mb-2">Detailed Explanation</h4>
-                <p className="text-gray-600">{best_practice_answer.detailed_explanation}</p>
+                <h4 className="font-medium text-neutral-700 mb-2">Detailed Explanation</h4>
+                <p className="text-neutral-600">{best_practice_answer.detailed_explanation}</p>
               </div>
             )}
 
             {best_practice_answer.key_concepts && best_practice_answer.key_concepts.length > 0 && (
               <div>
-                <h4 className="font-medium text-gray-700 mb-2">Key Concepts</h4>
+                <h4 className="font-medium text-neutral-700 mb-2">Key Concepts</h4>
                 <div className="flex flex-wrap gap-2">
                   {best_practice_answer.key_concepts.map((concept, i) => (
                     <Badge key={i} variant="info">
@@ -929,7 +929,7 @@ export default function ReportsPage() {
               <TabsContent value="scoring">{renderScoring()}</TabsContent>
               <TabsContent value="analytics">
                 {loadingAnalytics ? (
-                  <div className="text-center py-8 text-gray-500">{t('common.loading')}</div>
+                  <div className="text-center py-8 text-neutral-500">{t('common.loading')}</div>
                 ) : (
                   <div className="space-y-6">
                     {/* Course Analytics Overview */}
@@ -943,29 +943,29 @@ export default function ReportsPage() {
                         </CardHeader>
                         <CardContent>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="text-center p-3 bg-gray-50 rounded">
+                            <div className="text-center p-3 bg-neutral-50 rounded">
                               <p className="text-2xl font-bold text-primary-600">
                                 {courseAnalytics.total_sessions || 0}
                               </p>
-                              <p className="text-sm text-gray-500">Total Sessions</p>
+                              <p className="text-sm text-neutral-500">Total Sessions</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded">
+                            <div className="text-center p-3 bg-neutral-50 rounded">
                               <p className="text-2xl font-bold text-green-600">
                                 {courseAnalytics.completed_sessions || 0}
                               </p>
-                              <p className="text-sm text-gray-500">Completed</p>
+                              <p className="text-sm text-neutral-500">Completed</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded">
+                            <div className="text-center p-3 bg-neutral-50 rounded">
                               <p className="text-2xl font-bold text-blue-600">
                                 {courseAnalytics.overall_stats?.average_participation_rate?.toFixed(0) || 0}%
                               </p>
-                              <p className="text-sm text-gray-500">Avg Participation</p>
+                              <p className="text-sm text-neutral-500">Avg Participation</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded">
+                            <div className="text-center p-3 bg-neutral-50 rounded">
                               <p className="text-2xl font-bold text-yellow-600">
                                 {courseAnalytics.overall_stats?.average_posts_per_session?.toFixed(1) || 0}
                               </p>
-                              <p className="text-sm text-gray-500">Avg Posts/Session</p>
+                              <p className="text-sm text-neutral-500">Avg Posts/Session</p>
                             </div>
                           </div>
                         </CardContent>
@@ -996,11 +996,11 @@ export default function ReportsPage() {
                               </thead>
                               <tbody>
                                 {sessionComparisons.map((session) => (
-                                  <tr key={session.session_id} className="border-b hover:bg-gray-50">
+                                  <tr key={session.session_id} className="border-b hover:bg-neutral-50">
                                     <td className="py-2 px-3">
                                       <div>
                                         <p className="font-medium">{session.title}</p>
-                                        <p className="text-xs text-gray-500">{session.date}</p>
+                                        <p className="text-xs text-neutral-500">{session.date}</p>
                                       </div>
                                     </td>
                                     <td className="text-center py-2 px-3">
@@ -1055,7 +1055,7 @@ export default function ReportsPage() {
                     )}
 
                     {/* Voice Command Hints */}
-                    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                       <h3 className="font-medium mb-3">Quick Voice Commands</h3>
                       <div className="flex flex-wrap gap-2">
                         {[
@@ -1065,7 +1065,7 @@ export default function ReportsPage() {
                           'Who\'s improving?',
                           'Which students need help?'
                         ].map((cmd) => (
-                          <span key={cmd} className="px-3 py-1 text-sm bg-white dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 border">
+                          <span key={cmd} className="px-3 py-1 text-sm bg-white dark:bg-neutral-700 rounded-full text-neutral-600 dark:text-neutral-300 border">
                             "{cmd}"
                           </span>
                         ))}
@@ -1092,3 +1092,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+

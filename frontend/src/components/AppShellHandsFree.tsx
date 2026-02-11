@@ -33,7 +33,7 @@ import { cn } from '@/lib/utils';
 // Navigation items with optional instructor-only flag and enrollment requirement
 // Using translation keys instead of hardcoded names
 const allNavigation = [
-  { key: 'introduction', href: '/introduction', icon: HelpCircle, instructorOnly: false, requiresEnrollment: false },
+  { key: 'introduction', href: '/platform-guide', icon: HelpCircle, instructorOnly: false, requiresEnrollment: false },
   { key: 'courses', href: '/courses', icon: BookOpen, instructorOnly: false, requiresEnrollment: false },
   { key: 'sessions', href: '/sessions', icon: Calendar, instructorOnly: false, requiresEnrollment: true },
   { key: 'forum', href: '/forum', icon: MessageSquare, instructorOnly: false, requiresEnrollment: true },

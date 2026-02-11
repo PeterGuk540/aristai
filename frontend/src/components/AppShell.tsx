@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
 
 // Navigation items with optional instructor-only flag and enrollment requirement
 const allNavigation = [
-  { name: 'Introduction', href: '/introduction', icon: HelpCircle, instructorOnly: false, requiresEnrollment: false },
+  { name: 'Introduction', href: '/platform-guide', icon: HelpCircle, instructorOnly: false, requiresEnrollment: false },
   { name: 'Courses', href: '/courses', icon: BookOpen, instructorOnly: false, requiresEnrollment: false },
   { name: 'Sessions', href: '/sessions', icon: Calendar, instructorOnly: false, requiresEnrollment: true },
   { name: 'Forum', href: '/forum', icon: MessageSquare, instructorOnly: false, requiresEnrollment: true },

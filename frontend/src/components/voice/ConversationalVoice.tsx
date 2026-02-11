@@ -82,7 +82,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const lastAgentResponseRef = useRef<string>(''); // Track last agent response to detect brief acknowledgments
 
   // Session refresh threshold - restart to prevent context buildup slowdown
-  const MAX_MESSAGES_BEFORE_REFRESH = 10;
+  const MAX_MESSAGES_BEFORE_REFRESH = Number.MAX_SAFE_INTEGER;
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -953,3 +953,4 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     </div>
   );
 }
+

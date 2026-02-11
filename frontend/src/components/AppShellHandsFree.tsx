@@ -157,7 +157,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
   return (
     <ToastProvider>
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900">
+    <div className="min-h-screen bg-neutral-50/80 dark:bg-neutral-900">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -169,7 +169,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-neutral-800 border-r border-neutral-200 dark:border-neutral-700',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-white/95 dark:bg-neutral-800/95 border-r border-neutral-200 dark:border-neutral-700 backdrop-blur',
           'transform transition-transform duration-300 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
@@ -180,9 +180,9 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             <img
               src="/AristAI_logo.png"
               alt="AristAI"
-              className="h-8 w-8 object-contain"
+              className="h-7 w-7 object-contain"
             />
-            <span className="text-xl font-bold text-gray-900 dark:text-white">AristAI</span>
+            <span className="text-lg font-semibold text-neutral-900 dark:text-white tracking-tight">AristAI</span>
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -205,8 +205,8 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300'
-                    : 'text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-white'
+                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300'
+                    : 'text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-700/80 dark:hover:text-neutral-100'
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -217,14 +217,14 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         </nav>
 
         {/* Voice status indicator in sidebar */}
-        {(isInstructor || isAdmin) && onboardingComplete && (
+        {(isInstructor || isAdmin) && onboardingComplete && voiceConnected && (
           <div className="px-4 py-3 border-t border-neutral-200 dark:border-neutral-700">
             <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
               <div className={cn(
                 'w-2 h-2 rounded-full',
-                voiceConnected ? 'bg-green-500' : 'bg-neutral-400'
+                'bg-green-500'
               )} />
-              <span>Voice {voiceConnected ? 'Connected' : 'Ready'}</span>
+              <span>Voice Connected</span>
             </div>
           </div>
         )}
@@ -250,13 +250,13 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             <img
               src="/EPGUPP_logo_light.png"
               alt="Postgrado Universidad Politécnica"
-              className="h-14 object-contain dark:hidden"
+              className="h-11 object-contain dark:hidden"
             />
             {/* Dark mode logo (white on dark) */}
             <img
               src="/EPGUPP_logo_white.png"
               alt="Postgrado Universidad Politécnica"
-              className="h-14 object-contain hidden dark:block"
+              className="h-11 object-contain hidden dark:block"
             />
           </div>
 

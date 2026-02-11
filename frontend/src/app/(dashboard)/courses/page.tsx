@@ -34,8 +34,13 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
+  const normalizeTab = (tab: string | null | undefined) => {
+    if (tab === 'enrollment' || tab === 'instructor') return 'advanced';
+    return tab || 'courses';
+  };
+
   // Tab state - default from URL query param
-  const [activeTab, setActiveTab] = useState(searchParams?.get('tab') || 'courses');
+  const [activeTab, setActiveTab] = useState(normalizeTab(searchParams?.get('tab')));
 
   // Create course form
   const [title, setTitle] = useState('');
@@ -57,7 +62,7 @@ export default function CoursesPage() {
   const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
     const { tab } = event.detail || {};
     if (tab) {
-      setActiveTab(tab);
+      setActiveTab(tab === 'enrollment' || tab === 'instructor' ? 'advanced' : tab);
     }
   }, []);
 
@@ -73,7 +78,7 @@ export default function CoursesPage() {
   useEffect(() => {
     const tabFromUrl = searchParams?.get('tab');
     if (tabFromUrl) {
-      setActiveTab(tabFromUrl);
+      setActiveTab(normalizeTab(tabFromUrl));
     }
   }, [searchParams]);
 
@@ -483,8 +488,26 @@ export default function CoursesPage() {
     );
   }, [availableStudents, studentSearchQuery]);
 
+  const lastUpdatedLabel = useMemo(() => {
+    if (!courses.length) return 'No courses yet';
+    const newest = [...courses].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+    return `Last updated ${formatTimestamp(newest.created_at)}`;
+  }, [courses]);
+
+  const pendingActionCount = useMemo(() => {
+    if (loading) return 0;
+    let count = 0;
+    if (isInstructor && courses.length === 0) count += 1;
+    if (isInstructor && selectedCourseId && enrolledStudents.length === 0) count += 1;
+    if (!isInstructor && courses.length === 0) count += 1;
+    if (!isInstructor && currentUser?.instructor_request_status === 'rejected') count += 1;
+    return count;
+  }, [loading, isInstructor, courses.length, selectedCourseId, enrolledStudents.length, currentUser?.instructor_request_status]);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-6xl">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -497,13 +520,41 @@ export default function CoursesPage() {
         </Button>
       </div>
 
+      {/* Workspace Overview */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card variant="default" padding="sm">
+          <CardContent className="py-4">
+            <p className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Workspace</p>
+            <p className="mt-1 text-2xl font-semibold text-neutral-900 dark:text-white">{courses.length}</p>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              {isInstructor ? 'Courses you manage' : 'Courses you joined'}
+            </p>
+          </CardContent>
+        </Card>
+        <Card variant="default" padding="sm">
+          <CardContent className="py-4">
+            <p className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Pending Actions</p>
+            <p className="mt-1 text-2xl font-semibold text-neutral-900 dark:text-white">{pendingActionCount}</p>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              {pendingActionCount > 0 ? 'Tasks need attention' : 'No urgent tasks'}
+            </p>
+          </CardContent>
+        </Card>
+        <Card variant="default" padding="sm">
+          <CardContent className="py-4">
+            <p className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Recent Activity</p>
+            <p className="mt-1 text-sm font-medium text-neutral-900 dark:text-white">{lastUpdatedLabel}</p>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">Operational snapshot for this workspace</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="courses">{t('nav.courses')}</TabsTrigger>
+          <TabsTrigger value="courses">Overview</TabsTrigger>
           {isInstructor && <TabsTrigger value="create">{t('courses.createCourse')}</TabsTrigger>}
-          {isInstructor && <TabsTrigger value="enrollment">{t('courses.enrollment')}</TabsTrigger>}
           {!isInstructor && <TabsTrigger value="join">{t('courses.joinCourse')}</TabsTrigger>}
-          {!isInstructor && <TabsTrigger value="instructor">{t('courses.becomeInstructor')}</TabsTrigger>}
+          <TabsTrigger value="advanced">Advanced</TabsTrigger>
         </TabsList>
 
         <TabsContent value="courses">
@@ -883,7 +934,7 @@ export default function CoursesPage() {
         )}
 
         {isInstructor && (
-          <TabsContent value="enrollment">
+          <TabsContent value="advanced">
             <Card variant="default">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1082,7 +1133,7 @@ export default function CoursesPage() {
         )}
 
         {!isInstructor && (
-          <TabsContent value="instructor">
+          <TabsContent value="advanced">
             <Card variant="default">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

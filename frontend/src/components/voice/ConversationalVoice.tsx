@@ -142,6 +142,21 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     setError('');
 
     try {
+      // Request microphone permission FIRST before connecting
+      // This ensures the browser shows the permission dialog
+      console.log('🎤 Requesting microphone permission...');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Stop the stream immediately - ElevenLabs SDK will create its own
+        stream.getTracks().forEach(track => track.stop());
+        console.log('✅ Microphone permission granted');
+      } catch (micError: any) {
+        console.error('❌ Microphone permission denied:', micError);
+        setState('error');
+        setError('Microphone access is required for voice assistant. Please allow microphone access and try again.');
+        return;
+      }
+
       // Get signed URL from our backend
       console.log('🔑 Getting signed URL from backend...');
       // Use relative URL for all environments to leverage Next.js API routes

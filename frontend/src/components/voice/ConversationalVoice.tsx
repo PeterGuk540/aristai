@@ -57,8 +57,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const { currentUser, isInstructor } = useUser();
   const router = useRouter();
   
-  // Core state
-  const [state, setState] = useState<ConversationState>('initializing');
+  // Core state - start as 'disconnected' so user can click Start button
+  const [state, setState] = useState<ConversationState>('disconnected');
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);

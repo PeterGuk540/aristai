@@ -265,7 +265,7 @@ export default function SessionsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-6xl">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -303,7 +303,6 @@ export default function SessionsPage() {
             {hasInstructorPrivileges && <TabsTrigger value="manage">{t('sessions.manageStatus')}</TabsTrigger>}
             {hasInstructorPrivileges && (
               <TabsTrigger value="insights">
-                <BookOpen className="w-4 h-4 mr-1.5" />
                 Insights
               </TabsTrigger>
             )}
@@ -338,10 +337,8 @@ export default function SessionsPage() {
                 <div className="lg:col-span-1">
                   <Card variant="default">
                     <CardHeader>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Badge variant="primary" size="sm">{sessions.length}</Badge>
-                        Sessions
-                      </CardTitle>
+                      <CardTitle className="text-base">Sessions in this course</CardTitle>
+                      <CardDescription>{sessions.length} total sessions</CardDescription>
                     </CardHeader>
                     <CardContent className="p-0">
                       <div className="divide-y divide-neutral-200 dark:divide-neutral-700 max-h-[500px] overflow-auto">
@@ -421,7 +418,7 @@ export default function SessionsPage() {
               {selectedSession && selectedSession.plan_json?.is_materials_session !== true && (
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4">
-                    Materials for: {selectedSession.title}
+                    Session materials: {selectedSession.title}
                   </h3>
                   <MaterialsManager
                     courseId={selectedCourseId}
@@ -438,12 +435,8 @@ export default function SessionsPage() {
             <TabsContent value="create">
               <Card variant="default">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
-                      <Calendar className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                    </div>
-                    {t('sessions.createNew')}
-                  </CardTitle>
+                  <CardTitle>{t('sessions.createNew')}</CardTitle>
+                  <CardDescription>Add a new session title to your course plan.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Input
@@ -468,12 +461,8 @@ export default function SessionsPage() {
             <TabsContent value="manage">
               <Card variant="default">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
-                      <Clock className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                    </div>
-                    {t('sessions.statusControl')}
-                  </CardTitle>
+                  <CardTitle>{t('sessions.statusControl')}</CardTitle>
+                  <CardDescription>Update lifecycle state for the selected session.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {selectedSession ? (
@@ -547,12 +536,7 @@ export default function SessionsPage() {
                     {(selectedSession.status === 'draft' || selectedSession.status === 'scheduled') && (
                       <Card variant="default">
                         <CardHeader>
-                          <CardTitle className="flex items-center gap-2">
-                            <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
-                              <BookOpen className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                            </div>
-                            Pre-Class Insights
-                          </CardTitle>
+                          <CardTitle>Pre-Class Insights</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <PreClassInsightsComponent sessionId={selectedSession.id} />

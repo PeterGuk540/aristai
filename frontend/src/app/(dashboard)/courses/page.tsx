@@ -733,7 +733,7 @@ export default function CoursesPage() {
                   </div>
                   {t('courses.createNew')}
                 </CardTitle>
-                <CardDescription>Set up a new course with syllabus and learning objectives</CardDescription>
+                <CardDescription>Create course details and prepare your session structure.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 <Input
@@ -937,13 +937,8 @@ export default function CoursesPage() {
           <TabsContent value="advanced">
             <Card variant="default">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-success-100 dark:bg-success-900/50">
-                    <Users className="h-4 w-4 text-success-600 dark:text-success-400" />
-                  </div>
-                  {t('courses.enrollmentManagement')}
-                </CardTitle>
-                <CardDescription>Manage student enrollments for your courses</CardDescription>
+                <CardTitle>{t('courses.enrollmentManagement')}</CardTitle>
+                <CardDescription>Review enrollment and assign students in one place.</CardDescription>
               </CardHeader>
               <CardContent>
                 <Select
@@ -1095,13 +1090,8 @@ export default function CoursesPage() {
           <TabsContent value="join">
             <Card variant="default">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
-                    <Key className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                  </div>
-                  {t('courses.joinCourse')}
-                </CardTitle>
-                <CardDescription>Enter a join code provided by your instructor</CardDescription>
+                <CardTitle>{t('courses.joinCourse')}</CardTitle>
+                <CardDescription>Enter the course code shared by your instructor.</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
@@ -1136,13 +1126,8 @@ export default function CoursesPage() {
           <TabsContent value="advanced">
             <Card variant="default">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
-                    <GraduationCap className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                  </div>
-                  {t('courses.requestInstructorAccess')}
-                </CardTitle>
-                <CardDescription>Request instructor privileges to create and manage courses</CardDescription>
+                <CardTitle>{t('courses.requestInstructorAccess')}</CardTitle>
+                <CardDescription>Submit a request if you need course-authoring access.</CardDescription>
               </CardHeader>
               <CardContent>
                 {currentUser?.instructor_request_status === 'pending' ? (

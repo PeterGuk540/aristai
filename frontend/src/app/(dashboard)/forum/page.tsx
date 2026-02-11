@@ -464,7 +464,7 @@ export default function ForumPage() {
   const regularPosts = posts.filter((p) => !p.pinned);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-6xl">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -517,7 +517,7 @@ export default function ForumPage() {
             <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
               <MessageSquare className="h-10 w-10 text-primary-600 dark:text-primary-400" />
             </div>
-            <p className="text-neutral-600 dark:text-neutral-400">Select a live session to view the discussion forum.</p>
+            <p className="text-neutral-600 dark:text-neutral-400">Select a live session to open the discussion space.</p>
             {selectedCourseId && sessions.length === 0 && (
               <p className="text-sm text-neutral-500 dark:text-neutral-500 mt-2">No live sessions available for this course.</p>
             )}
@@ -540,7 +540,7 @@ export default function ForumPage() {
                   <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
                     <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
                   </div>
-                  <p className="text-neutral-600 dark:text-neutral-400">No case studies posted for this session yet.</p>
+                  <p className="text-neutral-600 dark:text-neutral-400">No case prompts have been posted for this session.</p>
                 </div>
               </Card>
             ) : (
@@ -548,12 +548,7 @@ export default function ForumPage() {
                 {cases.map((caseItem) => (
                   <Card key={caseItem.id} variant="default">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
-                          <FileText className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                        </div>
-                        Case Study #{caseItem.id}
-                      </CardTitle>
+                      <CardTitle>Case Prompt #{caseItem.id}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <p className="text-neutral-800 dark:text-neutral-200 whitespace-pre-wrap leading-relaxed">{caseItem.prompt}</p>
@@ -583,16 +578,11 @@ export default function ForumPage() {
                 {/* New Post Form */}
                 <Card variant="default">
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
-                        <Send className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                      </div>
-                      Post to Discussion
-                    </CardTitle>
+                    <CardTitle className="text-base">Write a discussion post</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Textarea
-                      placeholder="Share your thoughts or respond to the case study..."
+                      placeholder="Share your response, question, or reflection..."
                       rows={3}
                       value={newPostContent}
                       onChange={(e) => setNewPostContent(e.target.value)}
@@ -636,7 +626,7 @@ export default function ForumPage() {
                       <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
                         <MessageSquare className="h-10 w-10 text-primary-600 dark:text-primary-400" />
                       </div>
-                      <p className="text-neutral-600 dark:text-neutral-400">No posts yet. Be the first to contribute!</p>
+                      <p className="text-neutral-600 dark:text-neutral-400">No posts yet. Start the conversation.</p>
                     </div>
                   </Card>
                 ) : null}

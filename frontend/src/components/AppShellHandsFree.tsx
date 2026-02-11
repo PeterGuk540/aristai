@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
-  CircleHelp,
+  HelpCircle,
   BookOpen,
   Calendar,
   MessageSquare,
@@ -33,7 +33,7 @@ import { cn } from '@/lib/utils';
 // Navigation items with optional instructor-only flag and enrollment requirement
 // Using translation keys instead of hardcoded names
 const allNavigation = [
-  { key: 'introduction', href: '/introduction', icon: CircleHelp, instructorOnly: false, requiresEnrollment: false },
+  { key: 'introduction', href: '/introduction', icon: HelpCircle, instructorOnly: false, requiresEnrollment: false },
   { key: 'courses', href: '/courses', icon: BookOpen, instructorOnly: false, requiresEnrollment: false },
   { key: 'sessions', href: '/sessions', icon: Calendar, instructorOnly: false, requiresEnrollment: true },
   { key: 'forum', href: '/forum', icon: MessageSquare, instructorOnly: false, requiresEnrollment: true },

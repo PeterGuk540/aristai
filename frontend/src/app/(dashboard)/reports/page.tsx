@@ -412,7 +412,7 @@ export default function ReportsPage() {
                               ? 'success'
                               : score.score >= 60
                               ? 'warning'
-                              : 'error'
+                              : 'danger'
                           }
                         >
                           {score.score.toFixed(1)} / 100
@@ -680,7 +680,7 @@ export default function ReportsPage() {
                       ? 'success'
                       : score.score >= 60
                       ? 'warning'
-                      : 'error'
+                      : 'danger'
                   }
                   className="text-lg px-4 py-1"
                 >

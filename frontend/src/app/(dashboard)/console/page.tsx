@@ -449,7 +449,7 @@ export default function ConsolePage() {
                     <Badge
                       variant={
                         point.severity === 'high'
-                          ? 'error'
+                          ? 'danger'
                           : point.severity === 'medium'
                           ? 'warning'
                           : 'default'
@@ -634,7 +634,7 @@ export default function ConsolePage() {
             <TabsTrigger value="requests">
               {t('console.instructorRequests')}
               {instructorRequests.length > 0 && (
-                <Badge variant="error" className="ml-2">{instructorRequests.length}</Badge>
+                <Badge variant="danger" className="ml-2">{instructorRequests.length}</Badge>
               )}
             </TabsTrigger>
           )}

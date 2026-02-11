@@ -16,15 +16,21 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create engagement_level enum type
+    # Create engagement_level enum type (idempotent - check if exists first)
     engagement_level_enum = postgresql.ENUM(
         'highly_active', 'active', 'idle', 'disengaged', 'not_joined',
         name='engagement_level',
         create_type=False
     )
 
-    # Create the enum type first
-    op.execute("CREATE TYPE engagement_level AS ENUM ('highly_active', 'active', 'idle', 'disengaged', 'not_joined')")
+    # Create the enum type first (use DO block for idempotency)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE engagement_level AS ENUM ('highly_active', 'active', 'idle', 'disengaged', 'not_joined');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
 
     # 1. Student Engagements table
     op.create_table(
@@ -49,6 +55,8 @@ def upgrade() -> None:
     op.create_index('ix_student_engagements_id', 'student_engagements', ['id'], unique=False)
     op.create_index('ix_student_engagements_session_id', 'student_engagements', ['session_id'], unique=False)
     op.create_index('ix_student_engagements_user_id', 'student_engagements', ['user_id'], unique=False)
+    # Unique constraint: one engagement record per user per session
+    op.create_index('ix_student_engagements_session_user', 'student_engagements', ['session_id', 'user_id'], unique=True)
 
     # 2. Session Timers table
     op.create_table(
@@ -148,6 +156,8 @@ def upgrade() -> None:
     op.create_index('ix_checkpoint_completions_id', 'checkpoint_completions', ['id'], unique=False)
     op.create_index('ix_checkpoint_completions_checkpoint_id', 'checkpoint_completions', ['checkpoint_id'], unique=False)
     op.create_index('ix_checkpoint_completions_user_id', 'checkpoint_completions', ['user_id'], unique=False)
+    # Unique constraint: one completion per user per checkpoint
+    op.create_index('ix_checkpoint_completions_checkpoint_user', 'checkpoint_completions', ['checkpoint_id', 'user_id'], unique=True)
 
     # 8. AI Response Drafts table
     op.create_table(
@@ -179,6 +189,7 @@ def downgrade() -> None:
     op.drop_index('ix_ai_response_drafts_id', table_name='ai_response_drafts')
     op.drop_table('ai_response_drafts')
 
+    op.drop_index('ix_checkpoint_completions_checkpoint_user', table_name='checkpoint_completions')
     op.drop_index('ix_checkpoint_completions_user_id', table_name='checkpoint_completions')
     op.drop_index('ix_checkpoint_completions_checkpoint_id', table_name='checkpoint_completions')
     op.drop_index('ix_checkpoint_completions_id', table_name='checkpoint_completions')
@@ -204,6 +215,7 @@ def downgrade() -> None:
     op.drop_index('ix_session_timers_id', table_name='session_timers')
     op.drop_table('session_timers')
 
+    op.drop_index('ix_student_engagements_session_user', table_name='student_engagements')
     op.drop_index('ix_student_engagements_user_id', table_name='student_engagements')
     op.drop_index('ix_student_engagements_session_id', table_name='student_engagements')
     op.drop_index('ix_student_engagements_id', table_name='student_engagements')

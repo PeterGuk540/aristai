@@ -425,17 +425,48 @@ class ExtractObjectivesRequest(BaseModel):
     """Request for extracting learning objectives from syllabus text."""
     syllabus_text: str
 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "syllabus_text": "Course: Introduction to Machine Learning\n\nStudents will learn fundamental ML concepts including supervised learning, unsupervised learning, and neural networks..."
+            }
+        }
+
 
 class ExtractObjectivesResponse(BaseModel):
     """Response for learning objectives extraction."""
     objectives: List[str]
-    confidence: str
+    confidence: str  # "high", "medium", or "low"
     notes: Optional[str] = None
     success: bool
     error: Optional[str] = None
 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "objectives": [
+                    "Students will be able to explain the difference between supervised and unsupervised learning",
+                    "Students will demonstrate the ability to implement basic neural network architectures"
+                ],
+                "confidence": "high",
+                "notes": None,
+                "success": True,
+                "error": None
+            }
+        }
 
-@router.post("/extract-objectives", response_model=ExtractObjectivesResponse)
+
+@router.post(
+    "/extract-objectives",
+    response_model=ExtractObjectivesResponse,
+    summary="Extract Learning Objectives from Syllabus",
+    description="Uses AI to analyze syllabus text and extract key learning objectives automatically.",
+    responses={
+        200: {"description": "Successfully extracted objectives"},
+        400: {"description": "Invalid syllabus text (too short or empty)"},
+        500: {"description": "Internal error during extraction"},
+    }
+)
 async def extract_learning_objectives(request: ExtractObjectivesRequest):
     """
     Extract learning objectives from syllabus text using AI.
@@ -443,15 +474,48 @@ async def extract_learning_objectives(request: ExtractObjectivesRequest):
     - Analyzes syllabus content to identify key learning objectives
     - Returns 5-10 clear, measurable objectives
     - Uses LLM when available, falls back to pattern matching otherwise
+
+    **Input Validation:**
+    - Syllabus text must be at least 50 characters
+    - Maximum 15,000 characters will be processed (longer text is truncated)
+
+    **Response:**
+    - `objectives`: List of extracted learning objective strings
+    - `confidence`: "high" | "medium" | "low" indicating extraction quality
+    - `notes`: Additional context about the extraction
+    - `success`: Boolean indicating if extraction was successful
+    - `error`: Error message if extraction failed
     """
-    from api.services.learning_objectives_extractor import extract_learning_objectives as extract_objectives
+    import logging
+    logger = logging.getLogger(__name__)
 
-    result = extract_objectives(request.syllabus_text)
+    # Validate input
+    if not request.syllabus_text or len(request.syllabus_text.strip()) < 50:
+        return ExtractObjectivesResponse(
+            objectives=[],
+            confidence="low",
+            notes="Syllabus text is too short to extract meaningful objectives",
+            success=False,
+            error="Syllabus text must be at least 50 characters"
+        )
 
-    return ExtractObjectivesResponse(
-        objectives=result.get("objectives", []),
-        confidence=result.get("confidence", "low"),
-        notes=result.get("notes"),
-        success=result.get("success", False),
-        error=result.get("error"),
-    )
+    try:
+        from api.services.learning_objectives_extractor import extract_learning_objectives as extract_objectives
+        result = extract_objectives(request.syllabus_text)
+
+        return ExtractObjectivesResponse(
+            objectives=result.get("objectives", []),
+            confidence=result.get("confidence", "low"),
+            notes=result.get("notes"),
+            success=result.get("success", False),
+            error=result.get("error"),
+        )
+    except Exception as e:
+        logger.exception("Error extracting learning objectives")
+        return ExtractObjectivesResponse(
+            objectives=[],
+            confidence="low",
+            notes=None,
+            success=False,
+            error=f"Failed to extract objectives: {str(e)}"
+        )

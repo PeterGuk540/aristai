@@ -170,7 +170,7 @@ export default function CoursesPage() {
   }, [selectedCourseId]);
 
   // Auto-extract learning objectives from syllabus text
-  const extractObjectivesFromSyllabus = async (syllabusText: string) => {
+  const extractObjectivesFromSyllabus = useCallback(async (syllabusText: string) => {
     if (!syllabusText || syllabusText.length < 50) return;
 
     setExtractingObjectives(true);
@@ -187,7 +187,7 @@ export default function CoursesPage() {
     } finally {
       setExtractingObjectives(false);
     }
-  };
+  }, []);
 
   const handleSyllabusFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

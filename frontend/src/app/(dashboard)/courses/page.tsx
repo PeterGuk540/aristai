@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2 } from 'lucide-react';
+import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, EnrolledStudent, User } from '@/types';
@@ -45,6 +45,10 @@ export default function CoursesPage() {
   const [uploadingSyllabus, setUploadingSyllabus] = useState(false);
   const [syllabusUploadError, setSyllabusUploadError] = useState<string | null>(null);
   const syllabusFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-extract objectives state
+  const [extractingObjectives, setExtractingObjectives] = useState(false);
+  const [objectivesExtracted, setObjectivesExtracted] = useState(false);
 
   // Handle voice-triggered tab selection
   const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
@@ -165,6 +169,26 @@ export default function CoursesPage() {
     }
   }, [selectedCourseId]);
 
+  // Auto-extract learning objectives from syllabus text
+  const extractObjectivesFromSyllabus = async (syllabusText: string) => {
+    if (!syllabusText || syllabusText.length < 50) return;
+
+    setExtractingObjectives(true);
+    try {
+      const result = await api.extractLearningObjectives(syllabusText);
+      if (result.success && result.objectives.length > 0) {
+        // Join objectives with newlines for the textarea
+        setObjectives(result.objectives.join('\n'));
+        setObjectivesExtracted(true);
+      }
+    } catch (error) {
+      console.error('Failed to extract objectives:', error);
+      // Don't show error to user - objectives extraction is optional
+    } finally {
+      setExtractingObjectives(false);
+    }
+  };
+
   const handleSyllabusFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -173,11 +197,17 @@ export default function CoursesPage() {
     setSyllabusFile(file);
     setSyllabusUploadError(null);
     setUploadingSyllabus(true);
+    setObjectivesExtracted(false);
 
     try {
       const result = await api.uploadSyllabus(file);
       setSyllabus(result.extracted_text);
       setSyllabusUploadError(null);
+
+      // Auto-extract learning objectives from the uploaded syllabus
+      if (result.extracted_text && result.extracted_text.length >= 50) {
+        extractObjectivesFromSyllabus(result.extracted_text);
+      }
     } catch (error: any) {
       console.error('Failed to extract syllabus:', error);
       setSyllabusUploadError(error.message || 'Failed to extract text from file');
@@ -190,9 +220,24 @@ export default function CoursesPage() {
   const handleRemoveSyllabusFile = () => {
     setSyllabusFile(null);
     setSyllabus('');
+    setObjectives('');
     setSyllabusUploadError(null);
+    setObjectivesExtracted(false);
     if (syllabusFileInputRef.current) {
       syllabusFileInputRef.current.value = '';
+    }
+  };
+
+  // Handle syllabus text paste/change - extract objectives when user finishes typing
+  const handleSyllabusTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setSyllabus(e.target.value);
+    setObjectivesExtracted(false);
+  };
+
+  // Extract objectives when user leaves the syllabus field (blur event)
+  const handleSyllabusBlur = () => {
+    if (syllabus && syllabus.length >= 100 && !objectivesExtracted && !objectives.trim()) {
+      extractObjectivesFromSyllabus(syllabus);
     }
   };
 
@@ -238,6 +283,7 @@ export default function CoursesPage() {
       setObjectives('');
       setSyllabusFile(null);
       setSyllabusInputMode('paste');
+      setObjectivesExtracted(false);
       if (syllabusFileInputRef.current) {
         syllabusFileInputRef.current.value = '';
       }
@@ -670,7 +716,8 @@ export default function CoursesPage() {
                       placeholder={t('courses.syllabusPlaceholder')}
                       rows={8}
                       value={syllabus}
-                      onChange={(e) => setSyllabus(e.target.value)}
+                      onChange={handleSyllabusTextChange}
+                      onBlur={handleSyllabusBlur}
                       data-voice-id="syllabus"
                     />
                   ) : (
@@ -751,14 +798,47 @@ export default function CoursesPage() {
                   )}
                 </div>
 
-                <Textarea
-                  label={`${t('courses.learningObjectives')} ${t('courses.onePerLine')}`}
-                  placeholder={t('courses.learningObjectivesPlaceholder')}
-                  rows={5}
-                  value={objectives}
-                  onChange={(e) => setObjectives(e.target.value)}
-                  data-voice-id="learning-objectives"
-                />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">
+                      {t('courses.learningObjectives')} {t('courses.onePerLine')}
+                    </label>
+                    {extractingObjectives && (
+                      <span className="flex items-center gap-1 text-xs text-primary-600">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        Extracting objectives from syllabus...
+                      </span>
+                    )}
+                    {objectivesExtracted && !extractingObjectives && (
+                      <span className="flex items-center gap-1 text-xs text-green-600">
+                        <CheckCircle className="h-3 w-3" />
+                        Auto-extracted from syllabus
+                      </span>
+                    )}
+                  </div>
+                  <Textarea
+                    placeholder={t('courses.learningObjectivesPlaceholder')}
+                    rows={5}
+                    value={objectives}
+                    onChange={(e) => {
+                      setObjectives(e.target.value);
+                      setObjectivesExtracted(false);
+                    }}
+                    data-voice-id="learning-objectives"
+                  />
+                  {syllabus && syllabus.length >= 100 && !objectives.trim() && !extractingObjectives && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => extractObjectivesFromSyllabus(syllabus)}
+                      className="text-xs"
+                    >
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      Extract objectives from syllabus
+                    </Button>
+                  )}
+                </div>
 
                 <div className="flex gap-3">
                   <Button

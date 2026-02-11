@@ -156,11 +156,24 @@ export default function ConsolePage() {
 
   const fetchCourses = async () => {
     try {
-      const data = await api.getCourses();
-      setCourses(data);
-      if (data.length > 0 && !selectedCourseId) {
-        setSelectedCourseId(data[0].id);
+      if (!currentUser) return;
+
+      if (isAdmin) {
+        // Admin sees all courses
+        const data = await api.getCourses(currentUser.id);
+        setCourses(data);
+        if (data.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(data[0].id);
+        }
+      } else if (isInstructor) {
+        // Instructors see only their own courses
+        const data = await api.getCourses(currentUser.id);
+        setCourses(data);
+        if (data.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(data[0].id);
+        }
       }
+      // Note: Console page is for instructors/admins only, students shouldn't access this page
     } catch (error) {
       console.error('Failed to fetch courses:', error);
     }

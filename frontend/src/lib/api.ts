@@ -148,6 +148,19 @@ export const api = {
   joinCourseByCode: (joinCode: string, userId: number) =>
     fetchApi<any>(`/courses/join?user_id=${userId}`, { method: 'POST', body: JSON.stringify({ join_code: joinCode }) }),
 
+  extractLearningObjectives: async (syllabusText: string): Promise<{
+    objectives: string[];
+    confidence: string;
+    notes: string | null;
+    success: boolean;
+    error: string | null;
+  }> => {
+    return fetchApi('/courses/extract-objectives', {
+      method: 'POST',
+      body: JSON.stringify({ syllabus_text: syllabusText }),
+    });
+  },
+
   uploadSyllabus: async (
     file: File,
     options?: { courseId?: number; userId?: number }

@@ -419,3 +419,39 @@ async def upload_syllabus(
             " and saved to course materials" if material_id else ""
         )
     )
+
+
+class ExtractObjectivesRequest(BaseModel):
+    """Request for extracting learning objectives from syllabus text."""
+    syllabus_text: str
+
+
+class ExtractObjectivesResponse(BaseModel):
+    """Response for learning objectives extraction."""
+    objectives: List[str]
+    confidence: str
+    notes: Optional[str] = None
+    success: bool
+    error: Optional[str] = None
+
+
+@router.post("/extract-objectives", response_model=ExtractObjectivesResponse)
+async def extract_learning_objectives(request: ExtractObjectivesRequest):
+    """
+    Extract learning objectives from syllabus text using AI.
+
+    - Analyzes syllabus content to identify key learning objectives
+    - Returns 5-10 clear, measurable objectives
+    - Uses LLM when available, falls back to pattern matching otherwise
+    """
+    from api.services.learning_objectives_extractor import extract_learning_objectives as extract_objectives
+
+    result = extract_objectives(request.syllabus_text)
+
+    return ExtractObjectivesResponse(
+        objectives=result.get("objectives", []),
+        confidence=result.get("confidence", "low"),
+        notes=result.get("notes"),
+        success=result.get("success", False),
+        error=result.get("error"),
+    )

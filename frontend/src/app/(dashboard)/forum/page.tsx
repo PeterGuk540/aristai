@@ -108,13 +108,23 @@ export default function ForumPage() {
 
   const fetchCourses = async () => {
     try {
-      if (isInstructor) {
-        const data = await api.getCourses();
+      if (!user) return;
+
+      if (user.is_admin) {
+        // Admin sees all courses
+        const data = await api.getCourses(user.id);
         setCourses(data);
         if (data.length > 0 && !selectedCourseId) {
           setSelectedCourseId(data[0].id);
         }
-      } else if (user) {
+      } else if (isInstructor) {
+        // Instructors see only their own courses
+        const data = await api.getCourses(user.id);
+        setCourses(data);
+        if (data.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(data[0].id);
+        }
+      } else {
         // Students only see courses they're enrolled in
         const enrolledCourses = await api.getUserEnrolledCourses(user.id);
         const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));

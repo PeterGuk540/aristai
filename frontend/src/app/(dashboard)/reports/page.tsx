@@ -59,13 +59,23 @@ export default function ReportsPage() {
 
   const fetchCourses = async () => {
     try {
-      if (hasInstructorPrivileges) {
-        const data = await api.getCourses();
+      if (!currentUser) return;
+
+      if (isAdmin) {
+        // Admin sees all courses
+        const data = await api.getCourses(currentUser.id);
         setCourses(data);
         if (data.length > 0 && !selectedCourseId) {
           setSelectedCourseId(data[0].id);
         }
-      } else if (currentUser) {
+      } else if (isInstructor) {
+        // Instructors see only their own courses
+        const data = await api.getCourses(currentUser.id);
+        setCourses(data);
+        if (data.length > 0 && !selectedCourseId) {
+          setSelectedCourseId(data[0].id);
+        }
+      } else {
         // Students only see courses they're enrolled in
         const enrolledCourses = await api.getUserEnrolledCourses(currentUser.id);
         const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));

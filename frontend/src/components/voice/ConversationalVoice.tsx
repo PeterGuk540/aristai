@@ -50,7 +50,7 @@ interface ConversationalVoiceProps {
 export function ConversationalVoice(props: ConversationalVoiceProps) {
   const {
     onActiveChange,
-    autoStart = true,
+    autoStart = false,  // Changed to false - user must click Start button
     greeting,
     className,
   } = props;

@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import {
   FileText,
   RefreshCw,
-  Sparkles,
   Users,
   BarChart3,
   CheckCircle,
@@ -872,7 +871,7 @@ export default function ReportsPage() {
             <p className="text-neutral-600 dark:text-neutral-400 mb-4">{t('reports.noReport')}</p>
             {hasInstructorPrivileges && (
               <Button onClick={handleGenerateReport} disabled={generating} data-voice-id="generate-report">
-                <Sparkles className="h-4 w-4 mr-2" />
+                <FileText className="h-4 w-4 mr-2" />
                 {generating ? t('common.loading') : t('reports.generateReport')}
               </Button>
             )}
@@ -885,10 +884,10 @@ export default function ReportsPage() {
             <CardContent className="py-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
+                  <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                     Report for: {reportJson?.session_title || `Session #${report.session_id}`}
                   </h2>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
                     Generated: {formatTimestamp(report.created_at)} | Version: {report.version}
                   </p>
                 </div>
@@ -899,7 +898,7 @@ export default function ReportsPage() {
                   </Button>
                   {hasInstructorPrivileges && (
                     <Button onClick={handleGenerateReport} size="sm" disabled={generating} data-voice-id="regenerate-report">
-                      <Sparkles className="h-4 w-4 mr-2" />
+                      <FileText className="h-4 w-4 mr-2" />
                       {t('reports.regenerateReport')}
                     </Button>
                   )}

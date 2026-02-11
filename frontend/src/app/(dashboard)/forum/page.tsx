@@ -320,15 +320,15 @@ export default function ForumPage() {
         <div
           className={`p-4 rounded-xl ${
             post.pinned
-              ? 'bg-accent-50 dark:bg-accent-900/20 border border-accent-200 dark:border-accent-800'
+              ? 'bg-yellow-warm border border-yellow'
               : 'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700'
           } ${depth === 0 ? 'mb-4' : 'mt-3'} shadow-soft`}
         >
           {/* Post Header */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-                <User className="h-4 w-4 text-white" />
+              <div className="w-8 h-8 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
+                <User className="h-4 w-4 text-neutral-700 dark:text-neutral-200" />
               </div>
               <span className="text-sm font-medium text-neutral-900 dark:text-white">
                 User #{post.user_id}
@@ -584,8 +584,8 @@ export default function ForumPage() {
                 <Card variant="default">
                   <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-accent-100 dark:bg-accent-900/50">
-                        <Send className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                      <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
+                        <Send className="h-4 w-4 text-primary-600 dark:text-primary-400" />
                       </div>
                       Post to Discussion
                     </CardTitle>
@@ -615,7 +615,7 @@ export default function ForumPage() {
                 {pinnedPosts.length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3 flex items-center gap-2">
-                      <Pin className="h-4 w-4 text-accent-500" />
+                      <Pin className="h-4 w-4 text-primary-500" />
                       Pinned Posts
                     </h3>
                     {pinnedPosts.map((post) => renderPost(post))}

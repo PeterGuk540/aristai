@@ -469,8 +469,8 @@ export default function SessionsPage() {
               <Card variant="default">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-lg bg-accent-100 dark:bg-accent-900/50">
-                      <Clock className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                    <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
+                      <Clock className="h-4 w-4 text-primary-600 dark:text-primary-400" />
                     </div>
                     {t('sessions.statusControl')}
                   </CardTitle>

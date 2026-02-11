@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen, Plus, Users, Sparkles, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2 } from 'lucide-react';
+import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { Course, EnrolledStudent, User } from '@/types';
@@ -609,8 +609,8 @@ export default function CoursesPage() {
                       <div className="mt-5 pt-5 border-t border-neutral-200 dark:border-neutral-700">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="p-1.5 rounded-lg bg-accent-100 dark:bg-accent-900/50">
-                              <Key className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                            <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
+                              <Key className="h-4 w-4 text-primary-600 dark:text-primary-400" />
                             </div>
                             <span className="text-sm text-neutral-600 dark:text-neutral-400">{t('courses.joinCode')}:</span>
                             <code className="bg-neutral-100 dark:bg-neutral-700 px-3 py-1 rounded-lg text-sm font-mono font-bold text-primary-600 dark:text-primary-400">
@@ -661,7 +661,7 @@ export default function CoursesPage() {
                           }
                         }}
                       >
-                        <Sparkles className="h-4 w-4 mr-2" />
+                        <FileText className="h-4 w-4 mr-2" />
                         {t('courses.generatePlans')}
                       </Button>
                     )}
@@ -746,7 +746,7 @@ export default function CoursesPage() {
                       {!syllabusFile ? (
                         <div
                           onClick={() => syllabusFileInputRef.current?.click()}
-                          className="border-2 border-dashed border-neutral-300 dark:border-neutral-600 rounded-xl p-8 text-center cursor-pointer hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all"
+                          className="border border-neutral-300 dark:border-neutral-600 rounded-xl p-8 text-center cursor-pointer hover:border-neutral-400 dark:hover:border-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors"
                         >
                           <div className="p-3 rounded-xl bg-neutral-100 dark:bg-neutral-700 w-fit mx-auto mb-3">
                             <Upload className="h-8 w-8 text-neutral-400 dark:text-neutral-500" />
@@ -851,7 +851,7 @@ export default function CoursesPage() {
                       size="sm"
                       onClick={() => extractObjectivesFromSyllabus(syllabus)}
                     >
-                      <Sparkles className="h-4 w-4 mr-2" />
+                      <FileText className="h-4 w-4 mr-2" />
                       Extract objectives from syllabus
                     </Button>
                   )}
@@ -873,7 +873,7 @@ export default function CoursesPage() {
                     variant="accent"
                     data-voice-id="create-course-with-plans"
                   >
-                    <Sparkles className="h-4 w-4 mr-2" />
+                    <FileText className="h-4 w-4 mr-2" />
                     {t('courses.createAndGeneratePlans')}
                   </Button>
                 </div>
@@ -1045,8 +1045,8 @@ export default function CoursesPage() {
             <Card variant="default">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-accent-100 dark:bg-accent-900/50">
-                    <Key className="h-4 w-4 text-accent-600 dark:text-accent-400" />
+                  <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
+                    <Key className="h-4 w-4 text-primary-600 dark:text-primary-400" />
                   </div>
                   {t('courses.joinCourse')}
                 </CardTitle>

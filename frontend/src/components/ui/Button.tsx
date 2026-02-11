@@ -15,21 +15,21 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         className={cn(
           // Base styles
-          'inline-flex items-center justify-center font-medium rounded-lg',
-          'transition-all duration-200 ease-out',
+          'inline-flex items-center justify-center font-medium rounded-md',
+          'transition-colors duration-200 ease-out',
           'focus:outline-none focus:ring-2 focus:ring-offset-2',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           'cursor-pointer select-none',
           // Variant styles
           {
-            // Primary - Deep blue
-            'bg-primary-700 text-white hover:bg-primary-800 active:bg-primary-900 focus:ring-primary-500 shadow-sm hover:shadow-md':
+            // Primary - calm institutional blue
+            'bg-primary-700 text-white hover:bg-primary-800 active:bg-primary-900 focus:ring-primary-500':
               variant === 'primary',
             // Secondary - Neutral
             'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 active:bg-neutral-300 focus:ring-neutral-400 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700':
               variant === 'secondary',
             // Outline - Bordered
-            'border-2 border-neutral-300 bg-white text-neutral-700 hover:border-primary-500 hover:text-primary-700 hover:bg-primary-50 focus:ring-primary-500 dark:border-neutral-600 dark:bg-transparent dark:text-neutral-200 dark:hover:border-primary-400 dark:hover:text-primary-300':
+            'border border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 focus:ring-primary-500 dark:border-neutral-600 dark:bg-transparent dark:text-neutral-200 dark:hover:border-neutral-500 dark:hover:text-neutral-100':
               variant === 'outline',
             // Ghost - Minimal
             'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 focus:ring-neutral-400 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-neutral-800':
@@ -38,7 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             'bg-danger-600 text-white hover:bg-danger-700 active:bg-danger-800 focus:ring-danger-500 shadow-sm':
               variant === 'danger',
             // Accent - Gold (CTA)
-            'bg-accent-400 text-neutral-900 hover:bg-accent-500 active:bg-accent-600 focus:ring-accent-400 font-semibold shadow-sm hover:shadow-md':
+            'bg-accent-400 text-neutral-900 hover:bg-accent-500 active:bg-accent-600 focus:ring-accent-400 font-semibold':
               variant === 'accent',
           },
           // Size styles

@@ -238,11 +238,15 @@ export default function LoginPage() {
   // Main login view
   return (
     <AuthCard
-      title="Welcome back"
-      subtitle="Sign in to your account"
+      title="Request demo access"
+      subtitle="Sign in to continue with guided onboarding"
     >
       <form onSubmit={handleLogin} className="space-y-6">
         {error && <Alert type="error" message={error} />}
+        <Alert
+          type="info"
+          message="Use your approved account to continue the demo request process."
+        />
 
         <Input
           label="Email"
@@ -309,13 +313,7 @@ export default function LoginPage() {
         <MicrosoftLoginButton disabled={loading} />
 
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-          Don&apos;t have an account?{' '}
-          <Link
-            href="/register"
-            className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
-          >
-            Create account
-          </Link>
+          Need onboarding support? Contact your institution admin for access.
         </p>
       </form>
     </AuthCard>

@@ -7,8 +7,8 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    // Redirect to login page - if authenticated, login page will redirect to dashboard
-    router.replace('/login');
+    // Public-first entry. Authenticated users can still move into the app from intro CTA.
+    router.replace('/introduction');
   }, [router]);
 
   return (

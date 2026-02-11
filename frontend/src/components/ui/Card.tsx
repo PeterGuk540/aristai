@@ -13,14 +13,14 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       ref={ref}
       className={cn(
         // Base styles
-        'rounded-xl transition-all duration-200',
+        'rounded-xl transition-shadow duration-200',
         // Variant styles
         {
           // Default - subtle shadow and border
           'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-soft':
             variant === 'default',
           // Elevated - more prominent shadow
-          'bg-white dark:bg-neutral-800 shadow-soft-md':
+          'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-soft-md':
             variant === 'elevated',
           // Outlined - border only
           'bg-transparent border-2 border-neutral-200 dark:border-neutral-700':
@@ -30,7 +30,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
             variant === 'ghost',
         },
         // Hover effect
-        hover && 'cursor-pointer hover:shadow-lift hover:-translate-y-0.5',
+        hover && 'cursor-pointer hover:shadow-lift',
         // Padding
         {
           'p-0': padding === 'none',

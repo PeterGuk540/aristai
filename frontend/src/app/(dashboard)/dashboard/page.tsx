@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
-import { BookOpen, Calendar, MessageSquare, TrendingUp, Users, Activity, ArrowRight, Sparkles } from 'lucide-react';
+import { BookOpen, Calendar, MessageSquare, TrendingUp, Users, Activity, ArrowRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
 import Link from 'next/link';
@@ -103,7 +103,7 @@ export default function DashboardPage() {
     <div className="space-y-8">
       {/* Welcome section */}
       <div className="relative">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">
               {t('dashboard.welcomeBack', { name: user?.name || user?.email?.split('@')[0] || 'User' })}
@@ -111,10 +111,6 @@ export default function DashboardPage() {
             <p className="mt-2 text-neutral-600 dark:text-neutral-400 max-w-2xl">
               {t('dashboard.subtitle')}
             </p>
-          </div>
-          <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-full bg-accent-100 dark:bg-accent-900/50">
-            <Sparkles className="h-4 w-4 text-accent-600 dark:text-accent-400" />
-            <span className="text-sm font-medium text-accent-700 dark:text-accent-300">AI-Powered</span>
           </div>
         </div>
       </div>
@@ -139,7 +135,9 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-            <div className={`h-1 bg-gradient-to-r ${stat.gradient}`} />
+            <div className="px-6 pb-4">
+              <div className="h-px bg-neutral-200 dark:bg-neutral-700" />
+            </div>
           </Card>
         ))}
       </div>

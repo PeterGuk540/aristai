@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import {
-  GraduationCap,
+  CircleHelp,
   BookOpen,
   Calendar,
   MessageSquare,
@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 // Navigation items with optional instructor-only flag and enrollment requirement
 // Using translation keys instead of hardcoded names
 const allNavigation = [
+  { key: 'introduction', href: '/introduction', icon: CircleHelp, instructorOnly: false, requiresEnrollment: false },
   { key: 'courses', href: '/courses', icon: BookOpen, instructorOnly: false, requiresEnrollment: false },
   { key: 'sessions', href: '/sessions', icon: Calendar, instructorOnly: false, requiresEnrollment: true },
   { key: 'forum', href: '/forum', icon: MessageSquare, instructorOnly: false, requiresEnrollment: true },
@@ -156,7 +157,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
   return (
     <ToastProvider>
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -168,13 +169,13 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700',
+          'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-neutral-800 border-r border-neutral-200 dark:border-neutral-700',
           'transform transition-transform duration-300 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-neutral-200 dark:border-neutral-700">
           <Link href="/courses" className="flex items-center gap-2">
             <img
               src="/AristAI_logo.png"
@@ -185,9 +186,9 @@ export function AppShellHandsFree({ children }: AppShellProps) {
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="lg:hidden p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700"
           >
-            <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+            <X className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />
           </button>
         </div>
 
@@ -205,7 +206,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                   'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   isActive
                     ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
+                    : 'text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-white'
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -217,11 +218,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
         {/* Voice status indicator in sidebar */}
         {(isInstructor || isAdmin) && onboardingComplete && (
-          <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <div className="px-4 py-3 border-t border-neutral-200 dark:border-neutral-700">
+            <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
               <div className={cn(
                 'w-2 h-2 rounded-full',
-                voiceConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                voiceConnected ? 'bg-green-500' : 'bg-neutral-400'
               )} />
               <span>Voice {voiceConnected ? 'Connected' : 'Ready'}</span>
             </div>
@@ -232,14 +233,14 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top navigation */}
-        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 sm:px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-neutral-200 dark:border-neutral-700 bg-white/95 dark:bg-neutral-800/95 backdrop-blur px-4 sm:px-6">
           {/* Mobile menu button - left side */}
           <div className="flex-shrink-0">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="lg:hidden p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700"
             >
-              <Menu className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+              <Menu className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />
             </button>
           </div>
 
@@ -269,8 +270,8 @@ export function AppShellHandsFree({ children }: AppShellProps) {
               onClick={toggleDarkMode}
               className={cn(
                 'p-2 rounded-lg',
-                'text-gray-500 dark:text-gray-400',
-                'hover:bg-gray-100 dark:hover:bg-gray-700',
+                'text-neutral-500 dark:text-neutral-400',
+                'hover:bg-neutral-100 dark:hover:bg-neutral-700',
                 'focus:outline-none focus:ring-2 focus:ring-primary-500'
               )}
               aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}

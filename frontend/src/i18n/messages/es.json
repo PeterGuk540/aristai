@@ -27,6 +27,7 @@
     "remove": "Quitar"
   },
   "nav": {
+    "introduction": "Introduccion",
     "dashboard": "Panel",
     "courses": "Cursos",
     "sessions": "Sesiones",

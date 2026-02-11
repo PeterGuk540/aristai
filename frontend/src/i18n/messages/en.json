@@ -27,6 +27,7 @@
     "remove": "Remove"
   },
   "nav": {
+    "introduction": "Introduction",
     "dashboard": "Dashboard",
     "courses": "Courses",
     "sessions": "Sessions",

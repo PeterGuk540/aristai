@@ -44,7 +44,7 @@
   --info-light: #dbeafe;
 
   /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: var(--font-plus-jakarta), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-size-xs: 0.72rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 0.9375rem;
@@ -291,11 +291,27 @@ p {
 
   /* Hero gradient */
   .bg-hero-gradient {
-    background: linear-gradient(180deg, var(--yellow-bg) 0%, var(--white) 100%);
+    background: linear-gradient(180deg, #fffdf6 0%, #ffffff 62%, #fafafa 100%);
   }
 
   .dark .bg-hero-gradient {
-    background: linear-gradient(180deg, var(--section-warm) 0%, var(--bg-primary) 100%);
+    background: linear-gradient(180deg, #1f1d18 0%, #161616 65%, #101010 100%);
+  }
+
+  .bg-primary {
+    background-color: var(--bg-primary);
+  }
+
+  .text-primary {
+    color: var(--text-primary);
+  }
+
+  .text-secondary {
+    color: var(--text-secondary);
+  }
+
+  .border-default {
+    border-color: var(--border-default);
   }
 
   /* Section backgrounds */
@@ -356,7 +372,7 @@ p {
 
   .card-hover:hover {
     box-shadow: var(--shadow-hover);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
   }
 
   /* Link hover - yellow */

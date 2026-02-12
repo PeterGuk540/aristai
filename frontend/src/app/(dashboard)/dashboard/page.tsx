@@ -3,7 +3,7 @@
 import { useAuth } from '@/lib/auth-context';
 import { BookOpen, Calendar, MessageSquare, TrendingUp, Users, Activity, ArrowRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui';
+import { Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import Link from 'next/link';
 
 export default function DashboardPage() {
@@ -100,29 +100,26 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Welcome section */}
-      <div className="relative">
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-stone-200 bg-white px-6 py-6 shadow-sm dark:border-primary-900/20 dark:bg-[#1a150c]">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">
+          <div className="space-y-3">
+            <Badge variant="warning">Overview</Badge>
+            <h1 className="text-3xl font-semibold tracking-tight text-neutral-900 dark:text-white">
               {t('dashboard.welcomeBack', { name: user?.name || user?.email?.split('@')[0] || 'User' })}
             </h1>
-            <p className="mt-2 text-neutral-600 dark:text-neutral-400 max-w-2xl">
-              {t('dashboard.subtitle')}
-            </p>
+            <p className="max-w-2xl text-neutral-600 dark:text-neutral-400">{t('dashboard.subtitle')}</p>
           </div>
         </div>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <Card
             key={stat.name}
             variant="default"
             hover
-            className="overflow-hidden"
+            className="overflow-hidden border-stone-200 dark:border-primary-900/20"
           >
             <div className="p-6">
               <div className="flex items-center gap-4">
@@ -136,15 +133,13 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="px-6 pb-4">
-              <div className="h-px bg-neutral-200 dark:bg-neutral-700" />
+              <div className="h-px bg-stone-200 dark:bg-primary-900/20" />
             </div>
           </Card>
         ))}
       </div>
 
-      {/* Content grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Recent Activity */}
         <Card variant="default">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -155,13 +150,13 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-neutral-200 dark:divide-neutral-700">
+            <div className="divide-y divide-stone-200 dark:divide-primary-900/20">
               {recentActivity.map((activity, index) => {
                 const Icon = getActivityIcon(activity.type);
                 return (
                   <div
                     key={index}
-                    className="px-6 py-4 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors cursor-pointer group"
+                    className="group cursor-pointer px-6 py-4 transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/25"
                   >
                     <div className="flex items-center gap-4">
                       <div className={`p-2 rounded-lg ${getActivityColor(activity.type)}`}>
@@ -182,7 +177,7 @@ export default function DashboardPage() {
               })}
             </div>
           </CardContent>
-          <div className="px-6 py-4 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 rounded-b-xl">
+          <div className="rounded-b-xl border-t border-stone-200 bg-stone-50 px-6 py-4 dark:border-primary-900/20 dark:bg-stone-900/25">
             <button className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium flex items-center gap-1">
               {t('dashboard.viewAllActivity')}
               <ArrowRight className="h-4 w-4" />
@@ -190,7 +185,6 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        {/* Quick Actions */}
         <Card variant="default">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -206,15 +200,15 @@ export default function DashboardPage() {
                 <Link
                   key={index}
                   href={action.href}
-                  className="group flex flex-col items-center justify-center p-5 rounded-xl border-2 border-dashed border-neutral-200 dark:border-neutral-700 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all duration-200"
+                  className="group flex flex-col items-center justify-center rounded-xl border border-stone-200 p-5 transition-all duration-200 hover:border-primary-400 hover:bg-stone-50 dark:border-primary-900/20 dark:hover:border-primary-500 dark:hover:bg-stone-900/25"
                 >
-                  <div className="p-3 rounded-xl bg-neutral-100 dark:bg-neutral-700/50 group-hover:bg-primary-100 dark:group-hover:bg-primary-800/50 transition-colors mb-3">
-                    <action.icon className="h-6 w-6 text-neutral-500 dark:text-neutral-400 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors" />
+                  <div className="mb-3 rounded-xl bg-stone-100 p-3 transition-colors group-hover:bg-primary-100 dark:bg-stone-900/40 dark:group-hover:bg-primary-900/40">
+                    <action.icon className="h-6 w-6 text-neutral-500 transition-colors group-hover:text-primary-600 dark:text-neutral-400 dark:group-hover:text-primary-400" />
                   </div>
-                  <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 group-hover:text-primary-700 dark:group-hover:text-primary-300 text-center transition-colors">
+                  <span className="text-center text-sm font-medium text-neutral-700 transition-colors group-hover:text-primary-700 dark:text-neutral-300 dark:group-hover:text-primary-300">
                     {action.label}
                   </span>
-                  <span className="text-xs text-neutral-400 dark:text-neutral-500 mt-1 text-center hidden sm:block">
+                  <span className="mt-1 hidden text-center text-xs text-neutral-400 dark:text-neutral-500 sm:block">
                     {action.description}
                   </span>
                 </Link>

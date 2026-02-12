@@ -216,7 +216,7 @@ export default function ReportsPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <Users className="h-8 w-8 mx-auto text-blue-500 mb-2" />
+                <Users className="mx-auto mb-2 h-8 w-8 text-primary-500" />
                 <p className="text-2xl font-bold">{participation.total_enrolled_students}</p>
                 <p className="text-sm text-neutral-500">Enrolled Students</p>
               </div>
@@ -236,7 +236,7 @@ export default function ReportsPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
-                <BarChart3 className="h-8 w-8 mx-auto text-purple-500 mb-2" />
+                <BarChart3 className="mx-auto mb-2 h-8 w-8 text-accent-500" />
                 <p className="text-2xl font-bold">{rate.toFixed(1)}%</p>
                 <p className="text-sm text-neutral-500">Participation Rate</p>
               </div>
@@ -321,7 +321,7 @@ export default function ReportsPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <BarChart3 className="h-8 w-8 mx-auto text-blue-500 mb-2" />
+                  <BarChart3 className="mx-auto mb-2 h-8 w-8 text-primary-500" />
                   <p className="text-2xl font-bold">
                     {answer_scores.class_statistics.average_score.toFixed(1)}
                   </p>
@@ -496,7 +496,7 @@ export default function ReportsPage() {
                   <p className="text-sm text-neutral-500">Total Posts</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-blue-600">
+                  <p className="text-2xl font-bold text-primary-600">
                     {reportJson.summary.student_posts}
                   </p>
                   <p className="text-sm text-neutral-500">Student Posts</p>
@@ -746,9 +746,9 @@ export default function ReportsPage() {
 
               {/* Feedback */}
               {score.feedback && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Feedback</h4>
-                  <p className="text-blue-700">{score.feedback}</p>
+                <div className="rounded-lg bg-primary-50 p-4 dark:bg-primary-900/20">
+                  <h4 className="mb-2 font-medium text-primary-800 dark:text-primary-200">Feedback</h4>
+                  <p className="text-primary-700 dark:text-primary-300">{score.feedback}</p>
                 </div>
               )}
             </CardContent>
@@ -950,7 +950,7 @@ export default function ReportsPage() {
                       <Card>
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2">
-                            <BarChart3 className="h-5 w-5 text-purple-500" />
+                            <BarChart3 className="h-5 w-5 text-accent-500" />
                             Course Analytics
                           </CardTitle>
                         </CardHeader>
@@ -969,7 +969,7 @@ export default function ReportsPage() {
                               <p className="text-sm text-neutral-500">Completed</p>
                             </div>
                             <div className="text-center p-3 bg-neutral-50 rounded">
-                              <p className="text-2xl font-bold text-blue-600">
+                              <p className="text-2xl font-bold text-primary-600">
                                 {courseAnalytics.overall_stats?.average_participation_rate?.toFixed(0) || 0}%
                               </p>
                               <p className="text-sm text-neutral-500">Avg Participation</p>
@@ -1057,7 +1057,7 @@ export default function ReportsPage() {
                       <Card>
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2">
-                            <Users className="h-5 w-5 text-blue-500" />
+                            <Users className="h-5 w-5 text-primary-500" />
                             Student Progress
                           </CardTitle>
                         </CardHeader>

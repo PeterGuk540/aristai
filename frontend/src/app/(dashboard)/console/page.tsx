@@ -420,7 +420,7 @@ export default function ConsolePage() {
               <Zap className="h-4 w-4 text-yellow-500" />
               Intervention #{intervention.id}
             </CardTitle>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-neutral-500 dark:text-neutral-400">
               {formatTimestamp(intervention.created_at)}
             </span>
           </div>
@@ -429,8 +429,8 @@ export default function ConsolePage() {
           {/* Rolling Summary */}
           {suggestion.rolling_summary && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Summary</h4>
-              <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+              <h4 className="mb-1 text-sm font-medium text-neutral-700 dark:text-neutral-300">Summary</h4>
+              <p className="rounded-lg bg-stone-50 p-3 text-sm text-neutral-600 dark:bg-stone-900/25 dark:text-neutral-300">
                 {suggestion.rolling_summary}
               </p>
             </div>
@@ -439,7 +439,7 @@ export default function ConsolePage() {
           {/* Confusion Points */}
           {suggestion.confusion_points && suggestion.confusion_points.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 <AlertTriangle className="h-4 w-4 text-orange-500" />
                 Confusion Points
               </h4>
@@ -455,8 +455,8 @@ export default function ConsolePage() {
                         : 'bg-yellow-50 border-yellow-500'
                     }`}
                   >
-                    <p className="text-sm font-medium text-gray-800">{point.issue}</p>
-                    <p className="text-sm text-gray-600 mt-1">{point.explanation}</p>
+                    <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">{point.issue}</p>
+                    <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">{point.explanation}</p>
                     <Badge
                       variant={
                         point.severity === 'high'
@@ -478,15 +478,15 @@ export default function ConsolePage() {
           {/* Instructor Prompts */}
           {suggestion.instructor_prompts && suggestion.instructor_prompts.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                <Lightbulb className="h-4 w-4 text-blue-500" />
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                <Lightbulb className="h-4 w-4 text-primary-500" />
                 Suggested Prompts
               </h4>
               <div className="space-y-2">
                 {suggestion.instructor_prompts.map((prompt, i) => (
-                  <div key={i} className="bg-blue-50 p-3 rounded">
-                    <p className="text-sm text-blue-900 font-medium">"{prompt.prompt}"</p>
-                    <p className="text-xs text-blue-700 mt-1">
+                  <div key={i} className="rounded-lg bg-primary-50 p-3 dark:bg-primary-900/20">
+                    <p className="text-sm font-medium text-primary-900 dark:text-primary-200">"{prompt.prompt}"</p>
+                    <p className="mt-1 text-xs text-primary-700 dark:text-primary-300">
                       Purpose: {prompt.purpose} | Target: {prompt.target}
                     </p>
                   </div>
@@ -498,18 +498,18 @@ export default function ConsolePage() {
           {/* Poll Suggestion */}
           {suggestion.poll_suggestion && (
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-purple-500" />
+              <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                <BarChart3 className="h-4 w-4 text-accent-500" />
                 Suggested Poll
               </h4>
-              <div className="bg-purple-50 p-3 rounded">
-                <p className="text-sm font-medium text-purple-900">
+              <div className="rounded-lg bg-accent-50 p-3 dark:bg-accent-900/20">
+                <p className="text-sm font-medium text-accent-900 dark:text-accent-200">
                   {suggestion.poll_suggestion.question}
                 </p>
-                <ul className="mt-2 text-sm text-purple-700">
+                <ul className="mt-2 text-sm text-accent-700 dark:text-accent-300">
                   {suggestion.poll_suggestion.options.map((opt, i) => (
                     <li key={i} className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-purple-200 flex items-center justify-center text-xs">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-200 text-xs dark:bg-accent-800">
                         {String.fromCharCode(65 + i)}
                       </span>
                       {opt}
@@ -532,30 +532,30 @@ export default function ConsolePage() {
 
           {/* Overall Assessment */}
           {suggestion.overall_assessment && (
-            <div className="bg-gray-50 p-3 rounded">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">Assessment</h4>
+            <div className="rounded-lg bg-stone-50 p-3 dark:bg-stone-900/25">
+              <h4 className="mb-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">Assessment</h4>
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <div>
-                  <span className="text-gray-500">Engagement:</span>
+                  <span className="text-neutral-500 dark:text-neutral-400">Engagement:</span>
                   <span className="ml-1 font-medium">
                     {suggestion.overall_assessment.engagement_level}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Understanding:</span>
+                  <span className="text-neutral-500 dark:text-neutral-400">Understanding:</span>
                   <span className="ml-1 font-medium">
                     {suggestion.overall_assessment.understanding_level}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Quality:</span>
+                  <span className="text-neutral-500 dark:text-neutral-400">Quality:</span>
                   <span className="ml-1 font-medium">
                     {suggestion.overall_assessment.discussion_quality}
                   </span>
                 </div>
               </div>
               {suggestion.overall_assessment.recommendation && (
-                <p className="text-sm text-gray-600 mt-2 pt-2 border-t">
+                <p className="mt-2 border-t border-stone-200 pt-2 text-sm text-neutral-600 dark:border-primary-900/20 dark:text-neutral-300">
                   {suggestion.overall_assessment.recommendation}
                 </p>
               )}
@@ -724,7 +724,7 @@ export default function ConsolePage() {
                     </Button>
                   </div>
 
-                  <p className="text-xs text-gray-500 mt-4">
+                  <p className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
                     The copilot monitors discussion and provides real-time suggestions.
                     {copilotActive && ' Auto-refreshing every 15 seconds.'}
                   </p>
@@ -734,15 +734,15 @@ export default function ConsolePage() {
 
             {/* Interventions */}
             <div className="lg:col-span-2">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <h3 className="mb-4 text-lg font-medium text-neutral-900 dark:text-white">
                 Interventions ({interventions.length})
               </h3>
               {loading ? (
-                <div className="text-center py-8 text-gray-500">Loading...</div>
+                <div className="py-8 text-center text-neutral-500 dark:text-neutral-400">Loading...</div>
               ) : interventions.length === 0 ? (
                 <Card>
-                  <CardContent className="py-8 text-center text-gray-500">
-                    <Zap className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <CardContent className="py-8 text-center text-neutral-500 dark:text-neutral-400">
+                    <Zap className="mx-auto mb-4 h-12 w-12 text-neutral-300 dark:text-neutral-600" />
                     <p>No interventions yet.</p>
                     <p className="text-sm mt-2">
                       {copilotActive
@@ -777,7 +777,7 @@ export default function ConsolePage() {
                 />
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="mb-2 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                     Options
                   </label>
                   {pollOptions.map((option, index) => (
@@ -833,7 +833,7 @@ export default function ConsolePage() {
 
                     {pollResults ? (
                       <div>
-                        <h4 className="font-medium text-gray-900 mb-3">
+                        <h4 className="mb-3 font-medium text-neutral-900 dark:text-white">
                           {pollResults.question}
                         </h4>
                         <div className="space-y-2">
@@ -848,12 +848,12 @@ export default function ConsolePage() {
                               <div key={index}>
                                 <div className="flex justify-between text-sm mb-1">
                                   <span>{option}</span>
-                                  <span className="text-gray-500">
+                                  <span className="text-neutral-500 dark:text-neutral-400">
                                     {pollResults.vote_counts[index]} votes ({percentage.toFixed(0)}
                                     %)
                                   </span>
                                 </div>
-                                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div className="h-2 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800">
                                   <div
                                     className="h-full bg-primary-600 rounded-full transition-all"
                                     style={{ width: `${percentage}%` }}
@@ -863,16 +863,16 @@ export default function ConsolePage() {
                             );
                           })}
                         </div>
-                        <p className="text-sm text-gray-500 mt-4">
+                        <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
                           Total votes: {pollResults.total_votes}
                         </p>
                       </div>
                     ) : (
-                      <p className="text-gray-500">Click refresh to load results.</p>
+                      <p className="text-neutral-500 dark:text-neutral-400">Click refresh to load results.</p>
                     )}
                   </div>
                 ) : (
-                  <p className="text-gray-500">Create a poll to see results here.</p>
+                  <p className="text-neutral-500 dark:text-neutral-400">Create a poll to see results here.</p>
                 )}
               </CardContent>
             </Card>
@@ -914,7 +914,7 @@ export default function ConsolePage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-green-500" />
+                    <Activity className="h-5 w-5 text-success-500" />
                     Engagement Heatmap
                   </CardTitle>
                 </CardHeader>
@@ -922,7 +922,7 @@ export default function ConsolePage() {
                   {selectedSessionId ? (
                     <EngagementHeatmapComponent sessionId={selectedSessionId} />
                   ) : (
-                    <p className="text-gray-500">Select a session to view engagement.</p>
+                    <p className="text-neutral-500 dark:text-neutral-400">Select a session to view engagement.</p>
                   )}
                 </CardContent>
               </Card>
@@ -931,7 +931,7 @@ export default function ConsolePage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Timer className="h-5 w-5 text-blue-500" />
+                    <Timer className="h-5 w-5 text-primary-500" />
                     Session Timer
                   </CardTitle>
                 </CardHeader>
@@ -939,7 +939,7 @@ export default function ConsolePage() {
                   {selectedSessionId ? (
                     <SessionTimerComponent sessionId={selectedSessionId} />
                   ) : (
-                    <p className="text-gray-500">Select a session to use the timer.</p>
+                    <p className="text-neutral-500 dark:text-neutral-400">Select a session to use the timer.</p>
                   )}
                 </CardContent>
               </Card>
@@ -956,7 +956,7 @@ export default function ConsolePage() {
                   {selectedSessionId ? (
                     <FacilitationPanel sessionId={selectedSessionId} />
                   ) : (
-                    <p className="text-gray-500">Select a session to get suggestions.</p>
+                    <p className="text-neutral-500 dark:text-neutral-400">Select a session to get suggestions.</p>
                   )}
                 </CardContent>
               </Card>
@@ -965,7 +965,7 @@ export default function ConsolePage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-purple-500" />
+                    <Users className="h-5 w-5 text-accent-500" />
                     Breakout Groups
                   </CardTitle>
                 </CardHeader>
@@ -973,7 +973,7 @@ export default function ConsolePage() {
                   {selectedSessionId ? (
                     <BreakoutGroupsComponent sessionId={selectedSessionId} />
                   ) : (
-                    <p className="text-gray-500">Select a session to manage groups.</p>
+                    <p className="text-neutral-500 dark:text-neutral-400">Select a session to manage groups.</p>
                   )}
                 </CardContent>
               </Card>
@@ -994,13 +994,13 @@ export default function ConsolePage() {
                     instructorId={currentUser.id}
                   />
                 ) : (
-                  <p className="text-gray-500">Select a session to view AI drafts.</p>
+                  <p className="text-neutral-500 dark:text-neutral-400">Select a session to view AI drafts.</p>
                 )}
               </CardContent>
             </Card>
 
             {/* Voice Command Hints */}
-            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-primary-900/20 dark:bg-stone-900/25">
               <h3 className="font-medium mb-3 flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 Quick Voice Commands
@@ -1015,7 +1015,7 @@ export default function ConsolePage() {
                   'Suggest a poll',
                   'Show AI drafts'
                 ].map((cmd) => (
-                  <span key={cmd} className="px-3 py-1 text-sm bg-white dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 border">
+                  <span key={cmd} className="rounded-full border border-stone-200 bg-white px-3 py-1 text-sm text-neutral-600 dark:border-primary-900/20 dark:bg-[#1a150c] dark:text-neutral-300">
                     "{cmd}"
                   </span>
                 ))}
@@ -1040,10 +1040,10 @@ export default function ConsolePage() {
             </CardHeader>
             <CardContent>
               {loadingRequests ? (
-                <div className="text-center py-8 text-gray-500">Loading...</div>
+                <div className="py-8 text-center text-neutral-500 dark:text-neutral-400">Loading...</div>
               ) : instructorRequests.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <UserPlus className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <div className="py-8 text-center text-neutral-500 dark:text-neutral-400">
+                  <UserPlus className="mx-auto mb-4 h-12 w-12 text-neutral-300 dark:text-neutral-600" />
                   <p>No pending instructor requests.</p>
                 </div>
               ) : (
@@ -1051,12 +1051,12 @@ export default function ConsolePage() {
                   {instructorRequests.map((request) => (
                     <div
                       key={request.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                      className="flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-primary-900/20 dark:bg-stone-900/25"
                     >
                       <div>
-                        <p className="font-medium text-gray-900">{request.name}</p>
-                        <p className="text-sm text-gray-500">{request.email}</p>
-                        <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                        <p className="font-medium text-neutral-900 dark:text-white">{request.name}</p>
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400">{request.email}</p>
+                        <p className="mt-1 flex items-center gap-1 text-xs text-neutral-400 dark:text-neutral-500">
                           <Clock className="h-3 w-3" />
                           Requested: {request.instructor_request_date
                             ? formatTimestamp(request.instructor_request_date)
@@ -1097,22 +1097,22 @@ export default function ConsolePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-medium text-blue-900 mb-2">CSV Format</h4>
-                <p className="text-sm text-blue-700 mb-2">
+              <div className="rounded-xl border border-primary-200 bg-primary-50 p-4 dark:border-primary-900/30 dark:bg-primary-900/20">
+                <h4 className="mb-2 font-medium text-primary-900 dark:text-primary-200">CSV Format</h4>
+                <p className="mb-2 text-sm text-primary-700 dark:text-primary-300">
                   Upload a CSV file with student emails. The system will:
                 </p>
-                <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
+                <ul className="list-inside list-disc space-y-1 text-sm text-primary-700 dark:text-primary-300">
                   <li>Find existing users by email and enroll them</li>
                   <li>Create new student accounts for unknown emails</li>
                   <li>Skip students already enrolled in the course</li>
                 </ul>
-                <div className="mt-3 p-3 bg-white rounded border border-blue-200 font-mono text-xs">
+                <div className="mt-3 rounded border border-primary-200 bg-white p-3 font-mono text-xs dark:border-primary-900/30 dark:bg-[#1a150c]">
                   email,name<br />
                   student1@university.edu,John Doe<br />
                   student2@university.edu,Jane Smith
                 </div>
-                <p className="text-xs text-blue-600 mt-2">
+                <p className="mt-2 text-xs text-primary-600 dark:text-primary-300">
                   * &quot;name&quot; column is optional. If omitted, email prefix is used as name.
                 </p>
               </div>
@@ -1122,6 +1122,7 @@ export default function ConsolePage() {
                   label="Select Course"
                   value={rosterCourseId?.toString() || ''}
                   onChange={(e) => setRosterCourseId(Number(e.target.value))}
+                  data-voice-id="roster-course"
                 >
                   <option value="">Select a course...</option>
                   {courses.map((course) => (
@@ -1132,17 +1133,17 @@ export default function ConsolePage() {
                 </Select>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="mb-2 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                     CSV File
                   </label>
                   <input
                     type="file"
                     accept=".csv"
                     onChange={(e) => setRosterFile(e.target.files?.[0] || null)}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                    className="block w-full text-sm text-neutral-500 dark:text-neutral-400 file:mr-4 file:rounded file:border-0 file:bg-primary-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-primary-700 hover:file:bg-primary-100"
                   />
                   {rosterFile && (
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
                       Selected: {rosterFile.name}
                     </p>
                   )}
@@ -1153,38 +1154,39 @@ export default function ConsolePage() {
                 onClick={handleRosterUpload}
                 disabled={uploadingRoster || !rosterCourseId || !rosterFile}
                 className="w-full md:w-auto"
+                data-voice-id="upload-roster"
               >
                 <Upload className="h-4 w-4 mr-2" />
                 {uploadingRoster ? 'Uploading...' : 'Upload Roster'}
               </Button>
 
               {rosterResults && (
-                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium text-gray-900 mb-3">Upload Results</h4>
+                <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-primary-900/20 dark:bg-stone-900/25">
+                  <h4 className="mb-3 font-medium text-neutral-900 dark:text-white">Upload Results</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div className="text-center p-3 bg-white rounded">
+                    <div className="rounded bg-white p-3 text-center dark:bg-[#1a150c]">
                       <div className="text-2xl font-bold text-green-600">
                         {rosterResults.created_and_enrolled_count}
                       </div>
-                      <div className="text-xs text-gray-500">Created & Enrolled</div>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400">Created & Enrolled</div>
                     </div>
-                    <div className="text-center p-3 bg-white rounded">
-                      <div className="text-2xl font-bold text-blue-600">
+                    <div className="rounded bg-white p-3 text-center dark:bg-[#1a150c]">
+                      <div className="text-2xl font-bold text-primary-600">
                         {rosterResults.existing_enrolled_count}
                       </div>
-                      <div className="text-xs text-gray-500">Existing Enrolled</div>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400">Existing Enrolled</div>
                     </div>
-                    <div className="text-center p-3 bg-white rounded">
-                      <div className="text-2xl font-bold text-gray-600">
+                    <div className="rounded bg-white p-3 text-center dark:bg-[#1a150c]">
+                      <div className="text-2xl font-bold text-neutral-600 dark:text-neutral-300">
                         {rosterResults.already_enrolled_count}
                       </div>
-                      <div className="text-xs text-gray-500">Already Enrolled</div>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400">Already Enrolled</div>
                     </div>
-                    <div className="text-center p-3 bg-white rounded">
+                    <div className="rounded bg-white p-3 text-center dark:bg-[#1a150c]">
                       <div className="text-2xl font-bold text-red-600">
                         {rosterResults.error_count}
                       </div>
-                      <div className="text-xs text-gray-500">Errors</div>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400">Errors</div>
                     </div>
                   </div>
 

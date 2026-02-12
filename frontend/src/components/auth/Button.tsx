@@ -15,22 +15,22 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variants = {
       primary: cn(
-        'bg-primary-600 text-white',
-        'hover:bg-primary-700',
-        'focus:ring-primary-500',
-        'disabled:bg-primary-400'
+        'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900',
+        'hover:bg-neutral-800 dark:hover:bg-neutral-200',
+        'focus:ring-neutral-500',
+        'disabled:bg-neutral-400 dark:disabled:bg-neutral-600'
       ),
       secondary: cn(
-        'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
-        'hover:bg-gray-200 dark:hover:bg-gray-600',
-        'focus:ring-gray-500',
-        'disabled:bg-gray-100 dark:disabled:bg-gray-700'
+        'bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200',
+        'hover:bg-neutral-200 dark:hover:bg-neutral-700',
+        'focus:ring-neutral-500',
+        'disabled:bg-neutral-100 dark:disabled:bg-neutral-800'
       ),
       outline: cn(
-        'bg-transparent text-primary-600 dark:text-primary-400 border-2 border-primary-600 dark:border-primary-400',
-        'hover:bg-primary-50 dark:hover:bg-primary-900/20',
-        'focus:ring-primary-500',
-        'disabled:border-primary-300 disabled:text-primary-300'
+        'bg-transparent text-neutral-800 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-700',
+        'hover:bg-neutral-50 dark:hover:bg-neutral-800',
+        'focus:ring-neutral-500',
+        'disabled:border-neutral-200 dark:disabled:border-neutral-800 disabled:text-neutral-400 dark:disabled:text-neutral-600'
       ),
     };
 
@@ -39,9 +39,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={isDisabled}
         className={cn(
-          'w-full flex items-center justify-center gap-2 rounded-lg px-4 py-3',
-          'font-medium text-sm',
-          'focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800',
+          'w-full flex items-center justify-center gap-2 rounded-md px-4 py-3',
+          'font-medium text-sm tracking-[0.01em]',
+          'focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-neutral-900',
           'transition-colors duration-200',
           'disabled:cursor-not-allowed',
           variants[variant],

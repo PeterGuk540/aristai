@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
+import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
 import { Course, EnrolledStudent, User } from '@/types';
 import { formatTimestamp, truncate } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -83,7 +84,7 @@ export default function CoursesPage() {
   }, [searchParams]);
 
   // Enrollment
-  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
+  const { selectedCourseId, setSelectedCourseId } = useSharedCourseSessionSelection();
   const [enrolledStudents, setEnrolledStudents] = useState<EnrolledStudent[]>([]);
   const [allStudents, setAllStudents] = useState<User[]>([]);
   const [enrolling, setEnrolling] = useState(false);
@@ -126,20 +127,29 @@ export default function CoursesPage() {
       if (currentUser?.is_admin) {
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
-        if (data.length > 0 && !selectedCourseId) {
+        if (data.length > 0 && (!selectedCourseId || !data.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(data[0].id);
+        } else if (data.length === 0) {
+          setSelectedCourseId(null);
         }
       } else if (isInstructor && currentUser) {
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
-        if (data.length > 0 && !selectedCourseId) {
+        if (data.length > 0 && (!selectedCourseId || !data.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(data[0].id);
+        } else if (data.length === 0) {
+          setSelectedCourseId(null);
         }
       } else if (currentUser) {
         const enrolledCourses = await api.getUserEnrolledCourses(currentUser.id);
         const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));
         const fullCourses = await Promise.all(coursePromises);
         setCourses(fullCourses);
+        if (fullCourses.length > 0 && (!selectedCourseId || !fullCourses.some((course) => course.id === selectedCourseId))) {
+          setSelectedCourseId(fullCourses[0].id);
+        } else if (fullCourses.length === 0) {
+          setSelectedCourseId(null);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch courses:', error);
@@ -945,7 +955,7 @@ export default function CoursesPage() {
                   label={t('courses.selectCourse')}
                   value={selectedCourseId?.toString() || ''}
                   onChange={(e) => {
-                    setSelectedCourseId(Number(e.target.value));
+                    setSelectedCourseId(e.target.value ? Number(e.target.value) : null);
                     setSelectedStudentIds(new Set());
                     setStudentSearchQuery('');
                   }}

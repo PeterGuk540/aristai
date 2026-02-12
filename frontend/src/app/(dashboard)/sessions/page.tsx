@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText, BookOpen, Copy, LayoutTemplate } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
+import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
 import { Course, Session, SessionStatus } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -52,7 +53,12 @@ export default function SessionsPage() {
   const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
+  const {
+    selectedCourseId,
+    setSelectedCourseId,
+    selectedSessionId,
+    setSelectedSessionId,
+  } = useSharedCourseSessionSelection();
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -94,22 +100,28 @@ export default function SessionsPage() {
       if (isAdmin) {
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
-        if (data.length > 0 && !selectedCourseId) {
+        if (data.length > 0 && (!selectedCourseId || !data.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(data[0].id);
+        } else if (data.length === 0) {
+          setSelectedCourseId(null);
         }
       } else if (isInstructor) {
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
-        if (data.length > 0 && !selectedCourseId) {
+        if (data.length > 0 && (!selectedCourseId || !data.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(data[0].id);
+        } else if (data.length === 0) {
+          setSelectedCourseId(null);
         }
       } else {
         const enrolledCourses = await api.getUserEnrolledCourses(currentUser.id);
         const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));
         const fullCourses = await Promise.all(coursePromises);
         setCourses(fullCourses);
-        if (fullCourses.length > 0 && !selectedCourseId) {
+        if (fullCourses.length > 0 && (!selectedCourseId || !fullCourses.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(fullCourses[0].id);
+        } else if (fullCourses.length === 0) {
+          setSelectedCourseId(null);
         }
       }
     } catch (error) {
@@ -123,9 +135,13 @@ export default function SessionsPage() {
       const data = await api.getCourseSessions(courseId);
       setSessions(data);
       if (data.length > 0) {
-        setSelectedSession(data[0]);
+        const nextSession =
+          (selectedSessionId && data.find((session) => session.id === selectedSessionId)) || data[0];
+        setSelectedSession(nextSession);
+        setSelectedSessionId(nextSession.id);
       } else {
         setSelectedSession(null);
+        setSelectedSessionId(null);
       }
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
@@ -145,6 +161,17 @@ export default function SessionsPage() {
       fetchSessions(selectedCourseId);
     }
   }, [selectedCourseId]);
+
+  useEffect(() => {
+    if (!selectedSessionId) {
+      setSelectedSession(null);
+      return;
+    }
+    const matched = sessions.find((session) => session.id === selectedSessionId);
+    if (matched) {
+      setSelectedSession(matched);
+    }
+  }, [selectedSessionId, sessions]);
 
   const handleCreateSession = async () => {
     if (!selectedCourseId || !newSessionTitle.trim()) return;
@@ -279,7 +306,7 @@ export default function SessionsPage() {
         <Select
           label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
-          onChange={(e) => setSelectedCourseId(Number(e.target.value))}
+          onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
           data-voice-id="select-course"
         >
           <option value="">Select a course...</option>
@@ -349,7 +376,10 @@ export default function SessionsPage() {
                           return (
                             <button
                               key={session.id}
-                              onClick={() => setSelectedSession(session)}
+                              onClick={() => {
+                                setSelectedSession(session);
+                                setSelectedSessionId(session.id);
+                              }}
                               className={`w-full px-4 py-3.5 text-left hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors ${
                                 isSelected ? 'bg-primary-50 dark:bg-primary-900/30 border-l-3 border-primary-600' : ''
                               }`}

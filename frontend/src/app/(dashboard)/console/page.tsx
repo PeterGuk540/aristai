@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
+import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
 import { Course, Session, Intervention, PollResults, User } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -54,8 +55,12 @@ export default function ConsolePage() {
   const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const {
+    selectedCourseId,
+    setSelectedCourseId,
+    selectedSessionId,
+    setSelectedSessionId,
+  } = useSharedCourseSessionSelection();
   const [copilotActive, setCopilotActive] = useState(false);
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [loading, setLoading] = useState(false);
@@ -162,15 +167,19 @@ export default function ConsolePage() {
         // Admin sees all courses
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
-        if (data.length > 0 && !selectedCourseId) {
+        if (data.length > 0 && (!selectedCourseId || !data.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(data[0].id);
+        } else if (data.length === 0) {
+          setSelectedCourseId(null);
         }
       } else if (isInstructor) {
         // Instructors see only their own courses
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
-        if (data.length > 0 && !selectedCourseId) {
+        if (data.length > 0 && (!selectedCourseId || !data.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(data[0].id);
+        } else if (data.length === 0) {
+          setSelectedCourseId(null);
         }
       }
       // Note: Console page is for instructors/admins only, students shouldn't access this page
@@ -184,10 +193,12 @@ export default function ConsolePage() {
       const data = await api.getCourseSessions(courseId);
       const liveSessions = data.filter((s: Session) => s.status === 'live');
       setSessions(liveSessions);
-      if (liveSessions.length > 0) {
+      if (liveSessions.length > 0 && (!selectedSessionId || !liveSessions.some((session) => session.id === selectedSessionId))) {
         setSelectedSessionId(liveSessions[0].id);
       } else {
-        setSelectedSessionId(null);
+        if (liveSessions.length === 0) {
+          setSelectedSessionId(null);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
@@ -587,7 +598,7 @@ export default function ConsolePage() {
         <Select
           label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
-          onChange={(e) => setSelectedCourseId(Number(e.target.value))}
+          onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
           data-voice-id="select-course"
         >
           <option value="">Select a course...</option>
@@ -601,7 +612,7 @@ export default function ConsolePage() {
         <Select
           label="Select Live Session"
           value={selectedSessionId?.toString() || ''}
-          onChange={(e) => setSelectedSessionId(Number(e.target.value))}
+          onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
           disabled={!selectedCourseId}
           data-voice-id="select-session"
         >

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
+import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
 import { Course, Session, Report, ReportJSON, SessionComparison } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -45,8 +46,12 @@ export default function ReportsPage() {
   const t = useTranslations();
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const {
+    selectedCourseId,
+    setSelectedCourseId,
+    selectedSessionId,
+    setSelectedSessionId,
+  } = useSharedCourseSessionSelection();
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -64,15 +69,19 @@ export default function ReportsPage() {
         // Admin sees all courses
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
-        if (data.length > 0 && !selectedCourseId) {
+        if (data.length > 0 && (!selectedCourseId || !data.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(data[0].id);
+        } else if (data.length === 0) {
+          setSelectedCourseId(null);
         }
       } else if (isInstructor) {
         // Instructors see only their own courses
         const data = await api.getCourses(currentUser.id);
         setCourses(data);
-        if (data.length > 0 && !selectedCourseId) {
+        if (data.length > 0 && (!selectedCourseId || !data.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(data[0].id);
+        } else if (data.length === 0) {
+          setSelectedCourseId(null);
         }
       } else {
         // Students only see courses they're enrolled in
@@ -80,8 +89,10 @@ export default function ReportsPage() {
         const coursePromises = enrolledCourses.map((ec: any) => api.getCourse(ec.course_id));
         const fullCourses = await Promise.all(coursePromises);
         setCourses(fullCourses);
-        if (fullCourses.length > 0 && !selectedCourseId) {
+        if (fullCourses.length > 0 && (!selectedCourseId || !fullCourses.some((course) => course.id === selectedCourseId))) {
           setSelectedCourseId(fullCourses[0].id);
+        } else if (fullCourses.length === 0) {
+          setSelectedCourseId(null);
         }
       }
     } catch (error) {
@@ -97,10 +108,12 @@ export default function ReportsPage() {
         (s: Session) => s.status === 'completed'
       );
       setSessions(completedSessions);
-      if (completedSessions.length > 0) {
+      if (completedSessions.length > 0 && (!selectedSessionId || !completedSessions.some((session) => session.id === selectedSessionId))) {
         setSelectedSessionId(completedSessions[0].id);
       } else {
-        setSelectedSessionId(null);
+        if (completedSessions.length === 0) {
+          setSelectedSessionId(null);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
@@ -815,7 +828,7 @@ export default function ReportsPage() {
         <Select
           label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
-          onChange={(e) => setSelectedCourseId(Number(e.target.value))}
+          onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
           data-voice-id="select-course"
         >
           <option value="">Select a course...</option>
@@ -829,7 +842,7 @@ export default function ReportsPage() {
         <Select
           label="Select Session"
           value={selectedSessionId?.toString() || ''}
-          onChange={(e) => setSelectedSessionId(Number(e.target.value))}
+          onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
           disabled={!selectedCourseId}
           data-voice-id="select-session"
         >

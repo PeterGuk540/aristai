@@ -548,15 +548,15 @@ ACTION_PATTERNS = {
         # Without suffix - for known tab names (must list explicitly to avoid false matches)
         # Note: "ai copilot" and "ai assistant" added for voice recognition of "AI Copilot" tab
         # Note: Both "poll" and "polls" supported for voice recognition
-        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls?|requests|roster)\b',
+        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls?|requests|roster)\b',
         # Simple "switch to X" for common tabs
-        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|enrollment|create|manage|sessions|ai\s+copilot|copilot|polls?)$',
+        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|create|manage|sessions|ai\s+copilot|copilot|polls?)$',
         # Spanish - with tab/panel/section suffix (pestana, panel, seccion)
         r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(.+?)\s*(pestana|panel|seccion)\b',
         r'\b(.+?)\s+(pestana|panel|seccion)\b',
         # Spanish - known tab names (discusion, casos, resumen, participacion, puntuacion, inscripcion, encuestas, solicitudes, lista)
-        r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(discusion|casos|estudios\s+de\s+caso|resumen|participacion|puntuacion|inscripcion|crear|administrar|sesiones|cursos|copilot|asistente\s+de\s+ia|encuestas?|solicitudes|lista)\b',
-        r'^(cambiar\s+a|ir\s+a)\s+(discusion|casos|resumen|participacion|puntuacion|inscripcion|crear|administrar|sesiones|copilot|encuestas?)$',
+        r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(discusion|casos|estudios\s+de\s+caso|resumen|participacion|puntuacion|avanzado|inscripcion|crear|administrar|sesiones|cursos|copilot|asistente\s+de\s+ia|encuestas?|solicitudes|lista)\b',
+        r'^(cambiar\s+a|ir\s+a)\s+(discusion|casos|resumen|participacion|puntuacion|avanzado|inscripcion|crear|administrar|sesiones|copilot|encuestas?)$',
     ],
     # Universal button clicks - works for ANY button
     # Also handles form submission triggers like "submit", "create it", "post it"
@@ -1101,7 +1101,8 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'discusion': 'discussion',
             'participacion': 'participation',
             'puntuacion': 'scoring',
-            'inscripcion': 'enrollment',
+            'avanzado': 'advanced',
+            'inscripcion': 'advanced',
             'resumen': 'summary',
             'encuestas': 'polls',
             'solicitudes': 'requests',
@@ -1113,7 +1114,9 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'participation': 'participation',
             'scoring': 'scoring',
             'analytics': 'analytics',
-            'enrollment': 'enrollment',
+            'advanced': 'advanced',
+            'enrollment': 'advanced',
+            'instructor': 'advanced',
             'create': 'create',
             'manage': 'manage',
             'sessions': 'sessions',
@@ -1771,7 +1774,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(manage\s*status|management)\s*(tab)?\b', 'manage'),
                 (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(create|creation)\s*(tab)?\b', 'create'),
                 (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(view|sessions?|list)\s*(tab)?\b', 'sessions'),
-                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(enrollment|enroll)\s*(tab)?\b', 'enrollment'),
+                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(advanced|enrollment|enroll|instructor)\s*(tab)?\b', 'advanced'),
             ]
             for pattern, tab_name in tab_patterns:
                 if re.search(pattern, transcript.lower()):
@@ -3361,10 +3364,14 @@ def _extract_tab_info(transcript: str) -> Dict[str, str]:
         'student roster': 'roster',
         'class roster': 'roster',
         'roster upload': 'roster',
-        # Other tabs
-        'enroll': 'enrollment',
-        'enrollment': 'enrollment',
-        'enrollments': 'enrollment',
+        # Courses advanced tab (includes legacy enrollment/instructor language)
+        'advanced': 'advanced',
+        'enroll': 'advanced',
+        'enrollment': 'advanced',
+        'enrollments': 'advanced',
+        'instructor': 'advanced',
+        'instructor access': 'advanced',
+        'manage enrollment': 'advanced',
         'my performance': 'my-performance',
         'best practice': 'best-practice',
         'best practices': 'best-practice',
@@ -5303,7 +5310,7 @@ def get_action_suggestions(action: str) -> List[str]:
     """Get follow-up suggestions after an action"""
     suggestions = {
         # UI interaction suggestions
-        'ui_select_course': ["Select a session", "Go to enrollment tab", "Generate report"],
+        'ui_select_course': ["Select a session", "Go to advanced tab", "Generate report"],
         'ui_select_session': ["Go live", "Start copilot", "View forum"],
         'ui_switch_tab': ["What's on this page?", "Go back", "Help me"],
         'ui_click_button': ["What happened?", "What's next?", "Go to another page"],

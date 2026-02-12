@@ -221,7 +221,7 @@ CRITICAL: The ONLY valid navigation targets are: courses, sessions, forum, conso
 ANYTHING ELSE is NOT a page - it's either a TAB (use UI_ACTION with switch_tab) or a FEATURE (use QUERY).
 
 TABS ARE NOT PAGES! These are tabs within pages, use UI_ACTION category with action=switch_tab:
-- enrollment, create, join, manage, insights, materials → TABS, not pages
+- advanced, create, join, manage, insights, materials → TABS, not pages
 - summary, participation, scoring, analytics → TABS on reports page, not pages
 - copilot, polls, cases, tools, requests, roster, discussion → TABS, not pages
 
@@ -232,7 +232,7 @@ Examples of NAVIGATE (going to a whole page):
 - "go to console" / "ir a la consola" → navigate to console
 
 Examples that are NOT navigation (use UI_ACTION or QUERY instead):
-- "take me to enrollment" → UI_ACTION switch_tab with tab_name="enrollment"
+- "take me to advanced" → UI_ACTION switch_tab with tab_name="advanced"
 - "go to the analytics tab" → UI_ACTION switch_tab with tab_name="analytics"
 - "show me participation" → UI_ACTION switch_tab with tab_name="participation"
 - "open the scoring tab" → UI_ACTION switch_tab with tab_name="scoring"
@@ -249,7 +249,7 @@ Use "take me to X", "go to X", "open X", "show X" with tabs → switch_tab (NOT 
 Available tabs by page (use EXACT tab_name value):
 - Console page: copilot, polls, cases, tools, requests, roster
 - Forum page: cases, discussion
-- Courses page: courses, create, enrollment, join, instructor
+- Courses page: courses, create, join, advanced
 - Sessions page: sessions, materials, create, manage, insights
 - Reports page: summary, participation, scoring, analytics
 
@@ -261,7 +261,7 @@ Tab name mapping (spoken phrase → tab_name value):
 - "instructor tools" / "tools" / "features" → tools
 - "requests" / "instructor requests" / "student requests" → requests
 - "roster" / "student roster" / "class list" → roster
-- "enrollment" / "enroll" / "manage enrollment" / "students" → enrollment
+- "advanced" / "enrollment" / "instructor access" / "manage enrollment" / "students" → advanced
 - "insights" / "session insights" → insights
 - "materials" / "session materials" / "class materials" → materials
 - "summary" / "report summary" → summary
@@ -273,7 +273,7 @@ Tab name mapping (spoken phrase → tab_name value):
 
 Examples of switch_tab (use category=ui_action, action=switch_tab):
 - "go to the discussion tab" → switch_tab with tab_name="discussion"
-- "take me to enrollment" → switch_tab with tab_name="enrollment"
+- "take me to advanced" → switch_tab with tab_name="advanced"
 - "open the analytics tab" → switch_tab with tab_name="analytics"
 - "show me participation" → switch_tab with tab_name="participation"
 - "switch to post a case" → switch_tab with tab_name="cases"
@@ -810,10 +810,10 @@ def intent_to_legacy_format(intent: ClassifiedIntent) -> Dict[str, Any]:
             # Safety check: If the action is not a valid page, it might be a tab
             # Common tab names that might be mistaken for pages
             TAB_NAMES = {
-                'enrollment', 'create', 'join', 'manage', 'insights', 'materials',
+                'advanced', 'enrollment', 'instructor', 'create', 'join', 'manage', 'insights', 'materials',
                 'summary', 'participation', 'scoring', 'analytics',
                 'copilot', 'polls', 'cases', 'tools', 'requests', 'roster', 'discussion',
-                'instructor', 'switch_tab'
+                'switch_tab'
             }
             action_lower = intent.action.lower() if intent.action else ''
             if action_lower in TAB_NAMES or (intent.parameters.tab_name):
@@ -900,3 +900,4 @@ def build_page_context(
         is_session_live=is_session_live,
         copilot_active=copilot_active,
     )
+

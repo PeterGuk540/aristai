@@ -551,10 +551,10 @@ export default function CoursesPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="courses">Overview</TabsTrigger>
-          {isInstructor && <TabsTrigger value="create">{t('courses.createCourse')}</TabsTrigger>}
-          {!isInstructor && <TabsTrigger value="join">{t('courses.joinCourse')}</TabsTrigger>}
-          <TabsTrigger value="advanced">Advanced</TabsTrigger>
+          <TabsTrigger value="courses" data-voice-id="tab-courses">Overview</TabsTrigger>
+          {isInstructor && <TabsTrigger value="create" data-voice-id="tab-create">{t('courses.createCourse')}</TabsTrigger>}
+          {!isInstructor && <TabsTrigger value="join" data-voice-id="tab-join">{t('courses.joinCourse')}</TabsTrigger>}
+          <TabsTrigger value="advanced" data-voice-id="tab-advanced">Advanced</TabsTrigger>
         </TabsList>
 
         <TabsContent value="courses">

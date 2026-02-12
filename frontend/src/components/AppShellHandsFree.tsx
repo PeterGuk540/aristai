@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -44,6 +44,9 @@ const allNavigation = [
   { key: 'reports', href: '/reports', icon: FileText, instructorOnly: false, requiresEnrollment: true },
 ];
 
+const learningOpsKeys = new Set(['courses', 'sessions', 'forum']);
+const managementKeys = new Set(['reports', 'console']);
+
 interface AppShellProps {
   children: React.ReactNode;
 }
@@ -52,10 +55,15 @@ export function AppShellHandsFree({ children }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations('nav');
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const { currentUser, isInstructor, isAdmin, hasEnrollments } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
   
   // Voice state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -80,6 +88,10 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       return true;
     });
   }, [isInstructor, hasEnrollments]);
+
+  const introNav = useMemo(() => navigation.filter((item) => item.key === 'introduction'), [navigation]);
+  const learningNav = useMemo(() => navigation.filter((item) => learningOpsKeys.has(item.key)), [navigation]);
+  const managementNav = useMemo(() => navigation.filter((item) => managementKeys.has(item.key)), [navigation]);
 
   // Check authentication and redirect if not authenticated
   useEffect(() => {
@@ -144,6 +156,27 @@ export function AppShellHandsFree({ children }: AppShellProps) {
     router.push(path);
   };
 
+  const filteredNavigation = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return navigation;
+    return navigation.filter((item) => t(item.key).toLowerCase().includes(q));
+  }, [navigation, searchQuery, t]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (searchRef.current && !searchRef.current.contains(target)) {
+        setSearchOpen(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(target)) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
   // Show loading state while checking auth or onboarding
   if (isLoading || !isReady) {
     return (
@@ -199,8 +232,8 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {navigation.map((item) => {
+        <nav className="flex-1 space-y-4 px-3 py-4">
+          {introNav.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             const voiceId = item.key === 'introduction' ? undefined : `tab-${item.key}`;
 
@@ -211,18 +244,102 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                 data-voice-id={voiceId}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                  'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-300 border border-primary-200/80 dark:border-primary-900/30'
+                    ? 'bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-300'
                     : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#231d12] dark:hover:text-neutral-100'
                 )}
               >
+                {isActive && <span className="absolute left-0 h-6 w-[3px] rounded-r bg-primary-500" />}
                 <item.icon className="h-5 w-5" />
                 {t(item.key)}
               </Link>
             );
           })}
+
+          {learningNav.length > 0 && (
+            <div className="pt-2">
+              <p className="mb-1 px-3 text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                Learning Ops
+              </p>
+              <div className="space-y-1">
+                {learningNav.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                  const voiceId = `tab-${item.key}`;
+
+                  return (
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      data-voice-id={voiceId}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-300'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#231d12] dark:hover:text-neutral-100'
+                      )}
+                    >
+                      {isActive && <span className="absolute left-0 h-6 w-[3px] rounded-r bg-primary-500" />}
+                      <item.icon className="h-5 w-5" />
+                      {t(item.key)}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {managementNav.length > 0 && (
+            <div className="border-t border-stone-200 pt-3 dark:border-primary-900/20">
+              <p className="mb-1 px-3 text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                Management
+              </p>
+              <div className="space-y-1">
+                {managementNav.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                  const voiceId = `tab-${item.key}`;
+
+                  return (
+                    <Link
+                      key={item.key}
+                      href={item.href}
+                      data-voice-id={voiceId}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-300'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#231d12] dark:hover:text-neutral-100'
+                      )}
+                    >
+                      {isActive && <span className="absolute left-0 h-6 w-[3px] rounded-r bg-primary-500" />}
+                      <item.icon className="h-5 w-5" />
+                      {t(item.key)}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </nav>
+
+        {/* Sidebar identity block */}
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 dark:border-primary-900/20 dark:bg-stone-900/25">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-white dark:text-slate-900">
+              {currentUser?.name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-semibold text-neutral-900 dark:text-white">
+                {currentUser?.name || user?.name || 'User'}
+              </p>
+              <p className="truncate text-[11px] text-neutral-500 dark:text-neutral-400">
+                {currentUser?.role || 'member'}
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Voice status indicator in sidebar */}
         {(isInstructor || isAdmin) && onboardingComplete && voiceConnected && (
@@ -241,7 +358,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {/* Main content */}
       <div className="lg:pl-72">
         {/* Top navigation */}
-        <header className="sticky top-0 z-30 flex h-[72px] items-center border-b border-stone-200/80 bg-white/80 px-4 backdrop-blur-md dark:border-primary-900/20 dark:bg-[#221c10]/80 sm:px-6">
+        <header className="relative sticky top-0 z-30 flex h-[72px] items-center border-b border-stone-200/80 bg-white/80 px-4 backdrop-blur-md dark:border-primary-900/20 dark:bg-[#221c10]/80 sm:px-6">
           <div className="flex flex-1 items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -250,7 +367,8 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <button
+            <Link
+              href="/courses"
               className="hidden items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-bold uppercase tracking-wide text-neutral-500 transition-colors hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:flex"
               aria-label="Workspace"
             >
@@ -258,7 +376,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                 <LayoutGrid className="h-4 w-4" />
               </span>
               Workspace
-            </button>
+            </Link>
           </div>
 
           <div className="flex flex-1 items-center justify-center py-1">
@@ -277,12 +395,43 @@ export function AppShellHandsFree({ children }: AppShellProps) {
           </div>
 
           <div className="flex flex-1 items-center justify-end gap-2">
-            <button
-              className="hidden rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:inline-flex"
-              aria-label="Search workspace"
-            >
-              <Search className="h-5 w-5" />
-            </button>
+            <div className="relative hidden lg:block" ref={searchRef}>
+              <button
+                onClick={() => {
+                  setSearchOpen((prev) => !prev);
+                  setNotificationsOpen(false);
+                }}
+                className="rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white"
+                aria-label="Search workspace"
+              >
+                <Search className="h-5 w-5" />
+              </button>
+              {searchOpen && (
+                <div className="absolute right-0 top-12 z-50 w-72 rounded-xl border border-stone-200 bg-white p-3 shadow-md dark:border-primary-900/20 dark:bg-[#1a150c]">
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search pages..."
+                    className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm outline-none focus:border-primary-400 dark:border-primary-900/20 dark:bg-[#221c10]"
+                  />
+                  <div className="mt-2 max-h-56 overflow-auto">
+                    {filteredNavigation.map((item) => (
+                      <Link
+                        key={item.key}
+                        href={item.href}
+                        onClick={() => setSearchOpen(false)}
+                        className="block rounded-lg px-3 py-2 text-sm text-neutral-700 hover:bg-stone-100 dark:text-neutral-300 dark:hover:bg-stone-900/40"
+                      >
+                        {t(item.key)}
+                      </Link>
+                    ))}
+                    {filteredNavigation.length === 0 && (
+                      <p className="px-3 py-2 text-sm text-neutral-500 dark:text-neutral-400">No matches</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={showGuide}
               className="hidden rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:inline-flex"
@@ -290,12 +439,35 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             >
               <HelpCircle className="h-5 w-5" />
             </button>
-            <button
-              className="hidden rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:inline-flex"
-              aria-label="Notifications"
-            >
-              <Bell className="h-5 w-5" />
-            </button>
+            <div className="relative hidden lg:block" ref={notificationsRef}>
+              <button
+                onClick={() => {
+                  setNotificationsOpen((prev) => !prev);
+                  setSearchOpen(false);
+                }}
+                className="rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white"
+                aria-label="Notifications"
+              >
+                <Bell className="h-5 w-5" />
+              </button>
+              {notificationsOpen && (
+                <div className="absolute right-0 top-12 z-50 w-80 rounded-xl border border-stone-200 bg-white p-3 shadow-md dark:border-primary-900/20 dark:bg-[#1a150c]">
+                  <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    Notifications
+                  </p>
+                  <div className="space-y-1">
+                    <div className="rounded-lg bg-stone-50 px-3 py-2 dark:bg-stone-900/25">
+                      <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">Voice controller connected</p>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">Ready to execute commands.</p>
+                    </div>
+                    <div className="rounded-lg px-3 py-2">
+                      <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">No unread alerts</p>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">You are all caught up.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Language toggle */}
             <LanguageToggleCompact />
@@ -320,6 +492,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             {/* User menu */}
             <UserMenu onShowGuide={showGuide} onShowVoiceGuide={() => setShowVoiceCommandGuide(true)} />
           </div>
+          <div className="pointer-events-none absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-primary-400/40 to-transparent" />
         </header>
 
         {/* Page content */}

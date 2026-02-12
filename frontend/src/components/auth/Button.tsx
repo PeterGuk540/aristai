@@ -15,16 +15,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variants = {
       primary: cn(
-        'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900',
-        'hover:bg-neutral-800 dark:hover:bg-neutral-200',
-        'focus:ring-neutral-500',
-        'disabled:bg-neutral-400 dark:disabled:bg-neutral-600'
+        'bg-amber-400 text-neutral-950 dark:bg-amber-300 dark:text-neutral-950',
+        'hover:bg-amber-300 dark:hover:bg-amber-200',
+        'focus:ring-amber-400',
+        'disabled:bg-amber-200 dark:disabled:bg-amber-700'
       ),
       secondary: cn(
-        'bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200',
-        'hover:bg-neutral-200 dark:hover:bg-neutral-700',
-        'focus:ring-neutral-500',
-        'disabled:bg-neutral-100 dark:disabled:bg-neutral-800'
+        'bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200',
+        'hover:bg-sky-200 dark:hover:bg-sky-900/60',
+        'focus:ring-sky-400',
+        'disabled:bg-sky-50 dark:disabled:bg-sky-900/20'
       ),
       outline: cn(
         'bg-transparent text-neutral-800 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-700',

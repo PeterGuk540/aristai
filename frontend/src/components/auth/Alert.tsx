@@ -18,15 +18,15 @@ export function Alert({ type, message, className }: AlertProps) {
       icon: XCircle,
     },
     success: {
-      bg: 'bg-green-50 dark:bg-green-950/30',
-      border: 'border-green-200 dark:border-green-900',
-      text: 'text-green-800 dark:text-green-200',
+      bg: 'bg-emerald-50 dark:bg-emerald-950/30',
+      border: 'border-emerald-200 dark:border-emerald-900',
+      text: 'text-emerald-800 dark:text-emerald-200',
       icon: CheckCircle,
     },
     info: {
-      bg: 'bg-neutral-50 dark:bg-neutral-900',
-      border: 'border-neutral-300 dark:border-neutral-700',
-      text: 'text-neutral-700 dark:text-neutral-300',
+      bg: 'bg-sky-50 dark:bg-sky-950/30',
+      border: 'border-sky-200 dark:border-sky-900',
+      text: 'text-sky-800 dark:text-sky-200',
       icon: Info,
     },
     warning: {

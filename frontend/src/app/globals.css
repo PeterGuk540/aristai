@@ -44,7 +44,7 @@
   --info-light: #dbeafe;
 
   /* Typography */
-  --font-sans: var(--font-plus-jakarta), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: var(--font-manrope), 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-size-xs: 0.72rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 0.9375rem;

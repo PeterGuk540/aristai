@@ -15,6 +15,9 @@ import {
   X,
   Sun,
   Moon,
+  Search,
+  Bell,
+  LayoutGrid,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useUser } from '@/lib/context';
@@ -238,19 +241,27 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {/* Main content */}
       <div className="lg:pl-72">
         {/* Top navigation */}
-        <header className="sticky top-0 z-30 flex h-[72px] items-center border-b border-primary-200/40 dark:border-primary-900/20 bg-white/90 dark:bg-[#221c10]/85 px-4 sm:px-6 backdrop-blur">
-          {/* Mobile menu button - left side */}
-          <div className="flex-shrink-0">
+        <header className="sticky top-0 z-30 flex h-[72px] items-center border-b border-stone-200/80 bg-white/80 px-4 backdrop-blur-md dark:border-primary-900/20 dark:bg-[#221c10]/80 sm:px-6">
+          <div className="flex flex-1 items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700"
+              className="rounded-lg p-2 text-neutral-500 hover:bg-stone-100 dark:text-neutral-400 dark:hover:bg-[#2a2215] lg:hidden"
+              aria-label="Open navigation"
             >
-              <Menu className="h-5 w-5 text-neutral-500 dark:text-neutral-400" />
+              <Menu className="h-5 w-5" />
+            </button>
+            <button
+              className="hidden items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-bold uppercase tracking-wide text-neutral-500 transition-colors hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:flex"
+              aria-label="Workspace"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
+                <LayoutGrid className="h-4 w-4" />
+              </span>
+              Workspace
             </button>
           </div>
 
-          {/* Client Logo (EPGUPP) - centered, fills header height */}
-          <div className="flex-1 flex justify-center items-center py-1">
+          <div className="flex flex-1 items-center justify-center py-1">
             {/* Light mode logo (black on white) */}
             <img
               src="/EPGUPP_logo_light.png"
@@ -265,8 +276,27 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             />
           </div>
 
-          {/* Right side actions - flex-shrink-0 to keep right-aligned */}
-          <div className="flex-shrink-0 flex items-center gap-2">
+          <div className="flex flex-1 items-center justify-end gap-2">
+            <button
+              className="hidden rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:inline-flex"
+              aria-label="Search workspace"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+            <button
+              onClick={showGuide}
+              className="hidden rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:inline-flex"
+              aria-label="Help and documentation"
+            >
+              <HelpCircle className="h-5 w-5" />
+            </button>
+            <button
+              className="hidden rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:inline-flex"
+              aria-label="Notifications"
+            >
+              <Bell className="h-5 w-5" />
+            </button>
+
             {/* Language toggle */}
             <LanguageToggleCompact />
 
@@ -284,6 +314,8 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             >
               {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
+
+            <div className="mx-1 hidden h-6 w-px bg-stone-200 dark:bg-primary-900/20 sm:block" />
 
             {/* User menu */}
             <UserMenu onShowGuide={showGuide} onShowVoiceGuide={() => setShowVoiceCommandGuide(true)} />

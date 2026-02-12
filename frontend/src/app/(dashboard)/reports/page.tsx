@@ -800,9 +800,9 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between rounded-xl border border-rose-200/70 dark:border-neutral-800 bg-gradient-to-r from-rose-50 to-sky-50 dark:from-neutral-900 dark:to-neutral-900 px-5 py-4">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">{t('reports.title')}</h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('reports.subtitle')}</p>
@@ -914,7 +914,7 @@ export default function ReportsPage() {
                 fetchAnalytics();
               }
             }}>
-              <TabsList>
+              <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900">
                 <TabsTrigger value="summary">{t('reports.summary')}</TabsTrigger>
                 <TabsTrigger value="participation">{t('reports.participation')}</TabsTrigger>
                 <TabsTrigger value="scoring">{t('reports.answerScores')}</TabsTrigger>
@@ -1078,7 +1078,7 @@ export default function ReportsPage() {
           ) : (
             /* Student view: Only scoring, best practice, what they did well, gaps */
             <Tabs defaultValue="my-performance">
-              <TabsList>
+              <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900">
                 <TabsTrigger value="my-performance">My Performance</TabsTrigger>
                 <TabsTrigger value="best-practice">Best Practice Answer</TabsTrigger>
               </TabsList>

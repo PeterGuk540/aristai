@@ -238,10 +238,10 @@ export default function MaterialsManager({
       </CardHeader>
       <CardContent>
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+          <div className="mb-4 p-3 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-900/50 rounded-xl flex items-center gap-2 text-danger-700 dark:text-danger-300">
             <AlertCircle className="w-4 h-4" />
             {error}
-            <button onClick={() => setError(null)} className="ml-auto">
+            <button onClick={() => setError(null)} className="ml-auto p-1 rounded-md hover:bg-danger-100 dark:hover:bg-danger-900/30">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -249,20 +249,20 @@ export default function MaterialsManager({
 
         {uploading && (
           <div className="mb-4">
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-stone-200 dark:bg-stone-800 rounded-full h-2">
               <div
-                className="bg-blue-600 h-2 rounded-full transition-all"
+                className="bg-primary-600 h-2 rounded-full transition-all"
                 style={{ width: `${uploadProgress}%` }}
               />
             </div>
-            <p className="text-sm text-gray-500 mt-1">Uploading...</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Uploading...</p>
           </div>
         )}
 
         {loading ? (
-          <div className="text-center py-8 text-gray-500">Loading materials...</div>
+          <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">Loading materials...</div>
         ) : materials.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
             <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
             <p>No materials uploaded yet.</p>
             {isInstructor && (
@@ -278,9 +278,9 @@ export default function MaterialsManager({
               return (
                 <div
                   key={material.id}
-                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="flex items-center gap-3 p-3 bg-stone-50 dark:bg-stone-900/30 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-900/50 transition-colors"
                 >
-                  <FileIcon className="w-8 h-8 text-blue-500 flex-shrink-0" />
+                  <FileIcon className="w-8 h-8 text-primary-500 flex-shrink-0" />
 
                   <div className="flex-1 min-w-0">
                     {isEditing ? (
@@ -304,11 +304,11 @@ export default function MaterialsManager({
                           {material.title || material.filename}
                         </p>
                         {material.description && (
-                          <p className="text-sm text-gray-500 truncate">
+                          <p className="text-sm text-neutral-500 dark:text-neutral-400 truncate">
                             {material.description}
                           </p>
                         )}
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-neutral-400 dark:text-neutral-500">
                           {formatFileSize(material.file_size)} • {formatTimestamp(material.created_at)}
                           {material.version > 1 && ` • v${material.version}`}
                         </p>
@@ -325,7 +325,7 @@ export default function MaterialsManager({
                           onClick={handleSaveEdit}
                           title="Save"
                         >
-                          <Check className="w-4 h-4 text-green-600" />
+                          <Check className="w-4 h-4 text-success-600" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -333,7 +333,7 @@ export default function MaterialsManager({
                           onClick={() => setEditingId(null)}
                           title="Cancel"
                         >
-                          <X className="w-4 h-4 text-gray-500" />
+                          <X className="w-4 h-4 text-neutral-500" />
                         </Button>
                       </>
                     ) : (
@@ -370,7 +370,7 @@ export default function MaterialsManager({
                               size="sm"
                               onClick={() => handleDelete(material.id)}
                               title="Delete"
-                              className="text-red-500 hover:text-red-700"
+                              className="text-danger-500 hover:text-danger-700"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>

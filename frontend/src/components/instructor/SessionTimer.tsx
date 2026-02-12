@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { Timer, Play, Pause, Square, Clock } from 'lucide-react';
+import { Timer, Play, Pause, Square } from 'lucide-react';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/components/ui';
 import type { SessionTimer } from '@/types';
 
 interface SessionTimerProps {
@@ -107,8 +108,8 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
 
   if (loading) {
     return (
-      <div className="animate-pulse p-4 bg-gray-100 rounded-lg">
-        <div className="h-6 bg-gray-200 rounded w-24"></div>
+      <div className="animate-pulse p-4 bg-stone-100 dark:bg-stone-900/40 rounded-xl border border-stone-200 dark:border-stone-700">
+        <div className="h-6 bg-stone-200 dark:bg-stone-700 rounded w-24"></div>
       </div>
     );
   }
@@ -117,62 +118,63 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
   if (!timer) {
     if (showCreateForm) {
       return (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Timer className="w-5 h-5 text-primary-600" />
-            Start Timer
-          </h3>
-          <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Timer className="w-5 h-5 text-primary-600" />
+              Start Timer
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Duration (minutes)</label>
-              <input
+              <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-600 dark:text-neutral-400 mb-2">Duration (minutes)</label>
+              <Input
                 type="number"
                 min={1}
                 max={60}
                 value={newDuration}
                 onChange={(e) => setNewDuration(Number(e.target.value))}
-                className="w-full p-2 border rounded"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Label</label>
-              <input
+              <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-600 dark:text-neutral-400 mb-2">Label</label>
+              <Input
                 type="text"
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
                 placeholder="e.g., Group Discussion"
-                className="w-full p-2 border rounded"
               />
             </div>
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={handleStartTimer}
                 data-voice-id="start-session-timer"
-                className="flex-1 bg-primary-600 text-white py-2 px-4 rounded hover:bg-primary-700"
+                className="flex-1"
               >
                 Start
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setShowCreateForm(false)}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                variant="outline"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       );
     }
 
     return (
-      <button
+      <Button
         onClick={() => setShowCreateForm(true)}
         data-voice-id="open-timer-form"
-        className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+        variant="outline"
+        className="w-full md:w-auto"
       >
         <Timer className="w-5 h-5" />
         Start Timer
-      </button>
+      </Button>
     );
   }
 
@@ -183,63 +185,63 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
 
   return (
     <div className={cn(
-      'bg-white dark:bg-gray-800 rounded-lg shadow p-4',
-      isExpired && 'ring-2 ring-red-500',
-      isLow && !isExpired && 'ring-2 ring-yellow-500'
+      'bg-white dark:bg-[#1a150c] rounded-xl border border-stone-200 dark:border-primary-900/20 shadow-sm p-4',
+      isExpired && 'ring-2 ring-danger-500',
+      isLow && !isExpired && 'ring-2 ring-warning-500'
     )}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-600">{timer.label}</span>
+        <span className="text-sm font-semibold text-stone-700 dark:text-stone-300">{timer.label}</span>
         <div className="flex gap-1">
           {timer.is_paused ? (
             <button
               onClick={handleResume}
               data-voice-id="resume-timer"
-              className="p-1 hover:bg-gray-100 rounded"
+              className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
               title="Resume"
             >
-              <Play className="w-4 h-4 text-green-600" />
+              <Play className="w-4 h-4 text-success-600" />
             </button>
           ) : (
             <button
               onClick={handlePause}
               data-voice-id="pause-timer"
-              className="p-1 hover:bg-gray-100 rounded"
+              className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
               title="Pause"
             >
-              <Pause className="w-4 h-4 text-yellow-600" />
+              <Pause className="w-4 h-4 text-warning-600" />
             </button>
           )}
           <button
             onClick={handleStop}
             data-voice-id="stop-timer"
-            className="p-1 hover:bg-gray-100 rounded"
+            className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
             title="Stop"
           >
-            <Square className="w-4 h-4 text-red-600" />
+            <Square className="w-4 h-4 text-danger-600" />
           </button>
         </div>
       </div>
 
       <div className={cn(
         'text-4xl font-mono font-bold text-center',
-        isExpired ? 'text-red-600' : isLow ? 'text-yellow-600' : 'text-gray-900 dark:text-white'
+        isExpired ? 'text-danger-600' : isLow ? 'text-warning-600' : 'text-stone-900 dark:text-white'
       )}>
         {isExpired ? "Time's up!" : formatTime(localRemaining)}
       </div>
 
       {/* Progress bar */}
-      <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div className="mt-3 h-2 bg-stone-200 dark:bg-stone-800 rounded-full overflow-hidden">
         <div
           className={cn(
             'h-full transition-all duration-1000',
-            isExpired ? 'bg-red-500' : isLow ? 'bg-yellow-500' : 'bg-primary-500'
+            isExpired ? 'bg-danger-500' : isLow ? 'bg-warning-500' : 'bg-primary-500'
           )}
           style={{ width: `${Math.min(100, progress)}%` }}
         />
       </div>
 
       {timer.is_paused && (
-        <div className="mt-2 text-center text-sm text-yellow-600 font-medium">
+        <div className="mt-2 text-center text-sm text-warning-600 font-semibold">
           PAUSED
         </div>
       )}

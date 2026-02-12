@@ -13,7 +13,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, label, error, hint, variant = 'default', selectSize = 'md', children, ...props }, ref) => (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+        <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-600 dark:text-neutral-400 mb-2">
           {label}
         </label>
       )}
@@ -22,7 +22,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           ref={ref}
           className={cn(
             // Base styles
-            'w-full rounded-lg transition-all duration-200 appearance-none',
+            'w-full rounded-xl transition-all duration-200 appearance-none',
             'text-neutral-900 dark:text-neutral-100',
             'focus:outline-none focus:ring-2 focus:ring-offset-0',
             'disabled:opacity-50 disabled:cursor-not-allowed',
@@ -30,10 +30,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             // Variant styles
             {
               // Default - bordered
-              'bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 focus:border-primary-500 focus:ring-primary-500/20':
+              'bg-white dark:bg-[#1a150c] border border-stone-300 dark:border-stone-700 focus:border-amber-500 focus:ring-amber-500/20':
                 variant === 'default' && !error,
               // Filled - subtle background
-              'bg-neutral-100 dark:bg-neutral-800 border border-transparent focus:border-primary-500 focus:ring-primary-500/20 focus:bg-white dark:focus:bg-neutral-900':
+              'bg-stone-50 dark:bg-stone-900/40 border border-transparent focus:border-amber-500 focus:ring-amber-500/20 focus:bg-white dark:focus:bg-[#1a150c]':
                 variant === 'filled' && !error,
             },
             // Error state

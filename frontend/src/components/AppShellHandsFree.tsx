@@ -236,7 +236,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-72">
         {/* Top navigation */}
         <header className="sticky top-0 z-30 flex h-[72px] items-center border-b border-primary-200/40 dark:border-primary-900/20 bg-white/90 dark:bg-[#221c10]/85 px-4 sm:px-6 backdrop-blur">
           {/* Mobile menu button - left side */}

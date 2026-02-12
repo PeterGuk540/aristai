@@ -13,24 +13,24 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       ref={ref}
       className={cn(
         // Base styles
-        'rounded-xl transition-shadow duration-200',
+        'rounded-xl transition-all duration-200',
         // Variant styles
         {
-          // Default - subtle shadow and border
-          'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-soft':
+          // Default - stitched surface
+          'bg-white dark:bg-[#1a150c] border border-stone-200 dark:border-primary-900/20 shadow-sm':
             variant === 'default',
           // Elevated - more prominent shadow
-          'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-soft-md':
+          'bg-white dark:bg-[#1a150c] border border-stone-200 dark:border-primary-900/20 shadow-md':
             variant === 'elevated',
           // Outlined - border only
-          'bg-transparent border-2 border-neutral-200 dark:border-neutral-700':
+          'bg-transparent border border-stone-300 dark:border-stone-700':
             variant === 'outlined',
           // Ghost - minimal
-          'bg-neutral-50 dark:bg-neutral-800/50':
+          'bg-stone-50 dark:bg-stone-900/30':
             variant === 'ghost',
         },
         // Hover effect
-        hover && 'cursor-pointer hover:shadow-lift',
+        hover && 'cursor-pointer hover:shadow-md hover:-translate-y-[1px]',
         // Padding
         {
           'p-0': padding === 'none',
@@ -56,7 +56,7 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(
       ref={ref}
       className={cn(
         'px-6 py-4',
-        border && 'border-b border-neutral-200 dark:border-neutral-700',
+        border && 'border-b border-stone-200 dark:border-primary-900/20',
         className
       )}
       {...props}
@@ -71,6 +71,7 @@ export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadi
       ref={ref}
       className={cn(
         'text-lg font-semibold text-neutral-900 dark:text-white',
+        'tracking-tight',
         className
       )}
       {...props}
@@ -115,8 +116,8 @@ export const CardFooter = forwardRef<HTMLDivElement, CardFooterProps>(
       ref={ref}
       className={cn(
         'px-6 py-4',
-        border && 'border-t border-neutral-200 dark:border-neutral-700',
-        background && 'bg-neutral-50 dark:bg-neutral-800/50',
+        border && 'border-t border-stone-200 dark:border-primary-900/20',
+        background && 'bg-stone-50 dark:bg-stone-900/25',
         className
       )}
       {...props}

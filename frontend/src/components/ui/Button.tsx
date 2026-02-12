@@ -15,30 +15,30 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         className={cn(
           // Base styles
-          'inline-flex items-center justify-center font-medium rounded-md',
-          'transition-colors duration-200 ease-out',
+          'inline-flex items-center justify-center font-semibold rounded-xl',
+          'transition-all duration-200 ease-out',
           'focus:outline-none focus:ring-2 focus:ring-offset-2',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           'cursor-pointer select-none',
           // Variant styles
           {
-            // Primary - calm institutional blue
-            'bg-primary-700 text-white hover:bg-primary-800 active:bg-primary-900 focus:ring-primary-500':
+            // Primary - stitched dark action
+            'bg-slate-900 text-white hover:bg-slate-800 active:bg-black focus:ring-slate-500 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100':
               variant === 'primary',
-            // Secondary - Neutral
-            'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 active:bg-neutral-300 focus:ring-neutral-400 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700':
+            // Secondary - subtle neutral surface
+            'bg-stone-100 text-stone-800 hover:bg-stone-200 active:bg-stone-300 focus:ring-stone-400 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800':
               variant === 'secondary',
-            // Outline - Bordered
-            'border border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 focus:ring-primary-500 dark:border-neutral-600 dark:bg-transparent dark:text-neutral-200 dark:hover:border-neutral-500 dark:hover:text-neutral-100':
+            // Outline - stitched border tone
+            'border border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:text-stone-900 hover:bg-stone-50 focus:ring-stone-400 dark:border-stone-700 dark:bg-transparent dark:text-stone-200 dark:hover:border-stone-500 dark:hover:text-stone-100':
               variant === 'outline',
             // Ghost - Minimal
-            'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 focus:ring-neutral-400 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-neutral-800':
+            'text-stone-600 hover:text-stone-900 hover:bg-stone-100 focus:ring-stone-400 dark:text-stone-400 dark:hover:text-white dark:hover:bg-stone-800':
               variant === 'ghost',
             // Danger - Red
             'bg-danger-600 text-white hover:bg-danger-700 active:bg-danger-800 focus:ring-danger-500 shadow-sm':
               variant === 'danger',
-            // Accent - Gold (CTA)
-            'bg-accent-400 text-neutral-900 hover:bg-accent-500 active:bg-accent-600 focus:ring-accent-400 font-semibold':
+            // Accent - stitched amber CTA
+            'bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 focus:ring-amber-400':
               variant === 'accent',
           },
           // Size styles

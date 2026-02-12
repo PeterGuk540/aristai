@@ -13,29 +13,29 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
       ref={ref}
       className={cn(
         // Base styles
-        'inline-flex items-center font-medium rounded-full transition-colors',
+        'inline-flex items-center font-semibold rounded-full transition-colors',
         // Variant styles
         {
           // Default - neutral
-          'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300':
+          'bg-stone-100 text-stone-700 dark:bg-stone-900/50 dark:text-stone-300':
             variant === 'default',
           // Primary - blue
-          'bg-primary-100 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300':
+          'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300':
             variant === 'primary',
           // Success - green
-          'bg-success-100 text-success-700 dark:bg-success-900/50 dark:text-success-300':
+          'bg-success-100 text-success-700 dark:bg-success-900/40 dark:text-success-300':
             variant === 'success',
           // Warning - orange/amber
-          'bg-warning-100 text-warning-700 dark:bg-warning-900/50 dark:text-warning-300':
+          'bg-warning-100 text-warning-700 dark:bg-warning-900/40 dark:text-warning-300':
             variant === 'warning',
           // Danger - red
-          'bg-danger-100 text-danger-700 dark:bg-danger-900/50 dark:text-danger-300':
+          'bg-danger-100 text-danger-700 dark:bg-danger-900/40 dark:text-danger-300':
             variant === 'danger',
           // Info - blue (lighter than primary)
-          'bg-info-100 text-info-700 dark:bg-info-900/50 dark:text-info-300':
+          'bg-info-100 text-info-700 dark:bg-info-900/40 dark:text-info-300':
             variant === 'info',
           // Accent - gold
-          'bg-accent-100 text-accent-700 dark:bg-accent-900/50 dark:text-accent-300':
+          'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300':
             variant === 'accent',
         },
         // Size styles

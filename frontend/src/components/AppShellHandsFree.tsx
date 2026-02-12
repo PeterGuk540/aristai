@@ -157,7 +157,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
   return (
     <ToastProvider>
-    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-neutral-100 to-sky-50 dark:from-neutral-950 dark:via-neutral-950 dark:to-neutral-900">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -175,7 +175,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between px-6 border-b border-neutral-200 dark:border-neutral-700">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-amber-200/70 dark:border-neutral-700">
           <Link href="/courses" className="flex items-center gap-2">
             <img
               src="/AristAI_logo.png"
@@ -205,7 +205,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
+                    ? 'bg-amber-400 text-neutral-950 dark:bg-amber-300 dark:text-neutral-950'
                     : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
                 )}
               >
@@ -233,7 +233,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top navigation */}
-        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 sm:px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-amber-200/70 dark:border-neutral-800 bg-white/95 dark:bg-neutral-900/95 px-4 sm:px-6 backdrop-blur">
           {/* Mobile menu button - left side */}
           <div className="flex-shrink-0">
             <button

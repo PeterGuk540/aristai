@@ -507,9 +507,9 @@ export default function CoursesPage() {
   }, [loading, isInstructor, courses.length, selectedCourseId, enrolledStudents.length, currentUser?.instructor_request_status]);
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-8 max-w-6xl pb-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between rounded-xl border border-amber-200/70 dark:border-neutral-800 bg-gradient-to-r from-amber-50 to-sky-50 dark:from-neutral-900 dark:to-neutral-900 px-5 py-4">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">{t('courses.title')}</h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('courses.subtitle')}</p>
@@ -550,7 +550,7 @@ export default function CoursesPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
+        <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900">
           <TabsTrigger value="courses" data-voice-id="tab-courses">Overview</TabsTrigger>
           {isInstructor && <TabsTrigger value="create" data-voice-id="tab-create">{t('courses.createCourse')}</TabsTrigger>}
           {!isInstructor && <TabsTrigger value="join" data-voice-id="tab-join">{t('courses.joinCourse')}</TabsTrigger>}

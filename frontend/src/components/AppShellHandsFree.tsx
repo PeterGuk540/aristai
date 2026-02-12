@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -17,10 +17,12 @@ import {
   Moon,
   Search,
   Bell,
-  LayoutGrid,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useUser } from '@/lib/context';
+import { api } from '@/lib/api';
+import { User } from '@/types';
 import { UserMenu } from './UserMenu';
 import { Onboarding, useOnboarding } from './Onboarding';
 import { VoiceOnboarding } from './voice/VoiceOnboarding';
@@ -59,9 +61,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
   const { currentUser, isInstructor, isAdmin, hasEnrollments } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [adminPendingRequests, setAdminPendingRequests] = useState<User[]>([]);
+  const [loadingAdminRequests, setLoadingAdminRequests] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   
@@ -162,11 +166,32 @@ export function AppShellHandsFree({ children }: AppShellProps) {
     return navigation.filter((item) => t(item.key).toLowerCase().includes(q));
   }, [navigation, searchQuery, t]);
 
+  const currentNavLabel = useMemo(() => {
+    const matched = navigation.find((item) => pathname === item.href || pathname.startsWith(item.href + '/'));
+    return matched ? t(matched.key) : 'Dashboard';
+  }, [navigation, pathname, t]);
+
+  const fetchAdminRequests = useCallback(async () => {
+    if (!isAdmin || !currentUser?.id) {
+      setAdminPendingRequests([]);
+      return;
+    }
+    setLoadingAdminRequests(true);
+    try {
+      const requests = await api.getInstructorRequests(currentUser.id);
+      setAdminPendingRequests(requests);
+    } catch (error) {
+      console.error('Failed to fetch admin notifications:', error);
+    } finally {
+      setLoadingAdminRequests(false);
+    }
+  }, [currentUser?.id, isAdmin]);
+
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       const target = event.target as Node;
       if (searchRef.current && !searchRef.current.contains(target)) {
-        setSearchOpen(false);
+        setSearchFocused(false);
       }
       if (notificationsRef.current && !notificationsRef.current.contains(target)) {
         setNotificationsOpen(false);
@@ -176,6 +201,16 @@ export function AppShellHandsFree({ children }: AppShellProps) {
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
+
+  useEffect(() => {
+    fetchAdminRequests();
+  }, [fetchAdminRequests]);
+
+  useEffect(() => {
+    if (!isAdmin || !currentUser?.id) return;
+    const interval = window.setInterval(fetchAdminRequests, 30000);
+    return () => window.clearInterval(interval);
+  }, [fetchAdminRequests, currentUser?.id, isAdmin]);
 
   // Show loading state while checking auth or onboarding
   if (isLoading || !isReady) {
@@ -367,16 +402,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             >
               <Menu className="h-5 w-5" />
             </button>
-            <Link
-              href="/courses"
-              className="hidden items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-bold uppercase tracking-wide text-neutral-500 transition-colors hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:flex"
-              aria-label="Workspace"
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
-                <LayoutGrid className="h-4 w-4" />
-              </span>
-              Workspace
-            </Link>
+            <div className="hidden items-center gap-2 text-sm lg:flex">
+              <span className="font-medium text-neutral-400 dark:text-neutral-500">Workspace</span>
+              <ChevronRight className="h-4 w-4 text-neutral-300 dark:text-neutral-600" />
+              <span className="font-semibold text-neutral-900 dark:text-white">{currentNavLabel}</span>
+            </div>
           </div>
 
           <div className="flex flex-1 items-center justify-center py-1">
@@ -396,30 +426,35 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
           <div className="flex flex-1 items-center justify-end gap-2">
             <div className="relative hidden lg:block" ref={searchRef}>
-              <button
-                onClick={() => {
-                  setSearchOpen((prev) => !prev);
-                  setNotificationsOpen(false);
-                }}
-                className="rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white"
-                aria-label="Search workspace"
-              >
-                <Search className="h-5 w-5" />
-              </button>
-              {searchOpen && (
-                <div className="absolute right-0 top-12 z-50 w-72 rounded-xl border border-stone-200 bg-white p-3 shadow-md dark:border-primary-900/20 dark:bg-[#1a150c]">
-                  <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search pages..."
-                    className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm outline-none focus:border-primary-400 dark:border-primary-900/20 dark:bg-[#221c10]"
-                  />
-                  <div className="mt-2 max-h-56 overflow-auto">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                <input
+                  value={searchQuery}
+                  onFocus={() => setSearchFocused(true)}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && filteredNavigation.length > 0) {
+                      router.push(filteredNavigation[0].href);
+                      setSearchFocused(false);
+                      setSearchQuery('');
+                    }
+                  }}
+                  placeholder="Search pages..."
+                  data-voice-id="workspace-search"
+                  className="w-64 rounded-lg border border-stone-200 bg-stone-50 py-2 pl-9 pr-3 text-sm text-neutral-700 outline-none transition-all focus:border-primary-400 focus:bg-white dark:border-primary-900/20 dark:bg-[#221c10] dark:text-neutral-300"
+                />
+              </div>
+              {searchFocused && searchQuery.trim() && (
+                <div className="absolute right-0 top-12 z-50 w-72 rounded-xl border border-stone-200 bg-white p-2 shadow-md dark:border-primary-900/20 dark:bg-[#1a150c]">
+                  <div className="max-h-56 overflow-auto">
                     {filteredNavigation.map((item) => (
                       <Link
                         key={item.key}
                         href={item.href}
-                        onClick={() => setSearchOpen(false)}
+                        onClick={() => {
+                          setSearchFocused(false);
+                          setSearchQuery('');
+                        }}
                         className="block rounded-lg px-3 py-2 text-sm text-neutral-700 hover:bg-stone-100 dark:text-neutral-300 dark:hover:bg-stone-900/40"
                       >
                         {t(item.key)}
@@ -443,12 +478,19 @@ export function AppShellHandsFree({ children }: AppShellProps) {
               <button
                 onClick={() => {
                   setNotificationsOpen((prev) => !prev);
-                  setSearchOpen(false);
+                  setSearchFocused(false);
+                  if (!notificationsOpen) {
+                    fetchAdminRequests();
+                  }
                 }}
-                className="rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white"
+                className="relative rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white"
                 aria-label="Notifications"
+                data-voice-id="notifications-button"
               >
                 <Bell className="h-5 w-5" />
+                {isAdmin && adminPendingRequests.length > 0 && (
+                  <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-primary-500" />
+                )}
               </button>
               {notificationsOpen && (
                 <div className="absolute right-0 top-12 z-50 w-80 rounded-xl border border-stone-200 bg-white p-3 shadow-md dark:border-primary-900/20 dark:bg-[#1a150c]">
@@ -460,10 +502,30 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                       <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">Voice controller connected</p>
                       <p className="text-xs text-neutral-500 dark:text-neutral-400">Ready to execute commands.</p>
                     </div>
-                    <div className="rounded-lg px-3 py-2">
-                      <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">No unread alerts</p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400">You are all caught up.</p>
-                    </div>
+                    {isAdmin && (
+                      <button
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          router.push('/console');
+                          window.dispatchEvent(new CustomEvent('ui.switchTab', { detail: { tabName: 'requests' } }));
+                        }}
+                        data-voice-id="open-instructor-requests"
+                        className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/25"
+                      >
+                        <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                          Pending instructor requests: {loadingAdminRequests ? '...' : adminPendingRequests.length}
+                        </p>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                          Open Console Requests to approve or reject.
+                        </p>
+                      </button>
+                    )}
+                    {!isAdmin && (
+                      <div className="rounded-lg px-3 py-2">
+                        <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">No unread alerts</p>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400">You are all caught up.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

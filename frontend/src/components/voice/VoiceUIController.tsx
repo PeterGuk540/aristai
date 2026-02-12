@@ -226,6 +226,23 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
   },
 };
 
+const GLOBAL_UI_ELEMENTS: Record<string, string> = {
+  'toggle-theme': '[data-voice-id="toggle-theme"]',
+  'toggleTheme': '[data-voice-id="toggle-theme"]',
+  'user-menu': '[data-voice-id="user-menu"]',
+  'userMenu': '[data-voice-id="user-menu"]',
+  'notifications': '[data-voice-id="notifications-button"]',
+  'notification': '[data-voice-id="notifications-button"]',
+  'notifications-button': '[data-voice-id="notifications-button"]',
+  'open-notifications': '[data-voice-id="notifications-button"]',
+  'workspace-search': '[data-voice-id="workspace-search"]',
+  'search': '[data-voice-id="workspace-search"]',
+  'search-pages': '[data-voice-id="workspace-search"]',
+  'help': '[aria-label="Help and documentation"]',
+  'open-help': '[aria-label="Help and documentation"]',
+  'open-instructor-requests': '[data-voice-id="open-instructor-requests"]',
+};
+
 /**
  * Voice-friendly names mapping to actual option values
  * Helps match spoken words like "first", "second" to actual options
@@ -278,6 +295,13 @@ export const VoiceUIController = () => {
     const selector = pageRegistry[target];
     if (selector) {
       element = document.querySelector(selector) as HTMLElement;
+      if (element) return element;
+    }
+
+    // Check global shell controls
+    const globalSelector = GLOBAL_UI_ELEMENTS[target];
+    if (globalSelector) {
+      element = document.querySelector(globalSelector) as HTMLElement;
       if (element) return element;
     }
 

@@ -157,7 +157,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
   return (
     <ToastProvider>
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-neutral-100 to-sky-50 dark:from-neutral-950 dark:via-neutral-950 dark:to-neutral-900">
+    <div className="min-h-screen bg-stone-50 dark:bg-[#221c10]">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -169,20 +169,23 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800',
+          'fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-[#1a150c] border-r border-primary-200/40 dark:border-primary-900/20',
           'transform transition-transform duration-300 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between px-6 border-b border-amber-200/70 dark:border-neutral-700">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-primary-200/40 dark:border-primary-900/20">
           <Link href="/courses" className="flex items-center gap-2">
             <img
               src="/AristAI_logo.png"
               alt="AristAI"
-              className="h-7 w-7 object-contain"
+              className="h-8 w-8 object-contain"
             />
-            <span className="text-lg font-semibold text-neutral-900 dark:text-white tracking-tight">AristAI</span>
+            <div>
+              <span className="block text-lg font-semibold text-neutral-900 dark:text-white tracking-tight">AristAI</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary-600 dark:text-primary-400">Internal Console</span>
+            </div>
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -196,17 +199,19 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const voiceId = item.key === 'introduction' ? undefined : `tab-${item.key}`;
 
             return (
               <Link
                 key={item.key}
                 href={item.href}
+                data-voice-id={voiceId}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-amber-400 text-neutral-950 dark:bg-amber-300 dark:text-neutral-950'
-                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
+                    ? 'bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-300 border border-primary-200/80 dark:border-primary-900/30'
+                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#231d12] dark:hover:text-neutral-100'
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -218,7 +223,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
         {/* Voice status indicator in sidebar */}
         {(isInstructor || isAdmin) && onboardingComplete && voiceConnected && (
-          <div className="px-4 py-3 border-t border-neutral-200 dark:border-neutral-700">
+          <div className="px-4 py-3 border-t border-primary-200/40 dark:border-primary-900/20">
             <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
               <div className={cn(
                 'w-2 h-2 rounded-full',
@@ -233,7 +238,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top navigation */}
-        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-amber-200/70 dark:border-neutral-800 bg-white/95 dark:bg-neutral-900/95 px-4 sm:px-6 backdrop-blur">
+        <header className="sticky top-0 z-30 flex h-[72px] items-center border-b border-primary-200/40 dark:border-primary-900/20 bg-white/90 dark:bg-[#221c10]/85 px-4 sm:px-6 backdrop-blur">
           {/* Mobile menu button - left side */}
           <div className="flex-shrink-0">
             <button
@@ -250,13 +255,13 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             <img
               src="/EPGUPP_logo_light.png"
               alt="Postgrado Universidad Politécnica"
-              className="h-11 object-contain dark:hidden"
+              className="h-10 object-contain dark:hidden"
             />
             {/* Dark mode logo (white on dark) */}
             <img
               src="/EPGUPP_logo_white.png"
               alt="Postgrado Universidad Politécnica"
-              className="h-11 object-contain hidden dark:block"
+              className="h-10 object-contain hidden dark:block"
             />
           </div>
 
@@ -269,9 +274,9 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             <button
               onClick={toggleDarkMode}
               className={cn(
-                'p-2 rounded-lg',
+                'p-2.5 rounded-lg',
                 'text-neutral-500 dark:text-neutral-400',
-                'hover:bg-neutral-100 dark:hover:bg-neutral-700',
+                'hover:bg-neutral-100 dark:hover:bg-[#2a2215] hover:text-primary-600 dark:hover:text-primary-400',
                 'focus:outline-none focus:ring-2 focus:ring-primary-500'
               )}
               aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}

@@ -466,9 +466,9 @@ export default function ForumPage() {
   return (
     <div className="space-y-8 max-w-6xl pb-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between rounded-xl border border-violet-200/70 dark:border-neutral-800 bg-gradient-to-r from-violet-50 to-sky-50 dark:from-neutral-900 dark:to-neutral-900 px-5 py-4">
+      <div className="flex items-center justify-between rounded-2xl border border-violet-200/80 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] px-6 py-5 shadow-sm">
         <div>
-          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">{t('forum.title')}</h1>
+          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('forum.title')}</h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('forum.subtitle')}</p>
         </div>
         <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId} data-voice-id="refresh">
@@ -478,7 +478,7 @@ export default function ForumPage() {
       </div>
 
       {/* Course & Session Selector */}
-      <Card variant="default" padding="md">
+      <Card variant="default" padding="md" className="border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c]">
         <div className="grid md:grid-cols-2 gap-4">
           <Select
             label={t('courses.selectCourse')}
@@ -525,7 +525,7 @@ export default function ForumPage() {
         </Card>
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900">
+          <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
             <TabsTrigger value="cases">{t('forum.cases')}</TabsTrigger>
             <TabsTrigger value="discussion">
               {t('forum.discussion')}

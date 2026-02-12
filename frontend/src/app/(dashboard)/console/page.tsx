@@ -574,15 +574,15 @@ export default function ConsolePage() {
   return (
     <div className="space-y-6 pb-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between rounded-xl border border-sky-200/70 dark:border-neutral-800 bg-gradient-to-r from-sky-50 to-emerald-50 dark:from-neutral-900 dark:to-neutral-900 px-5 py-4">
+      <div className="flex items-center justify-between rounded-2xl border border-sky-200/80 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] px-6 py-5 shadow-sm">
         <div>
-          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">{t('console.title')}</h1>
+          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('console.title')}</h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('console.subtitle')}</p>
         </div>
       </div>
 
       {/* Course & Session Selector */}
-      <Card variant="default" padding="md">
+      <Card variant="default" padding="md" className="border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c]">
         <div className="grid md:grid-cols-2 gap-4">
         <Select
           label={t('courses.selectCourse')}
@@ -616,7 +616,7 @@ export default function ConsolePage() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900">
+        <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
           <TabsTrigger value="copilot" disabled={!selectedSessionId}>
             {t('console.copilot')}
           </TabsTrigger>

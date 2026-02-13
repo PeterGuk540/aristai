@@ -1,4 +1,4 @@
-"""Routes for LMS integrations (Canvas first, extensible to Blackboard/UPP)."""
+"""Routes for LMS integrations (Canvas first, extensible to Blackboard)."""
 
 from __future__ import annotations
 

@@ -14,4 +14,4 @@ def get_provider(provider_name: str) -> LmsProvider:
 
 
 def list_supported_providers() -> list[str]:
-    return ["canvas", "blackboard", "upp"]
+    return ["canvas", "blackboard"]

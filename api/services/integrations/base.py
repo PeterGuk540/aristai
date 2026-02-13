@@ -29,7 +29,7 @@ class ExternalMaterial:
 
 
 class LmsProvider(Protocol):
-    """Provider contract for LMS platforms (Canvas, Blackboard, UPP, etc.)."""
+    """Provider contract for LMS platforms (Canvas, Blackboard, etc.)."""
 
     provider_name: str
 

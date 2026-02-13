@@ -46,15 +46,17 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
         <div className="space-y-9">
           <div className="space-y-5">
             <div className="rounded-xl border border-white/25 bg-white/10 p-4 backdrop-blur-sm">
-              <img src="/AristAI_logo_white.png" alt="AristAI" className="h-11 w-auto object-contain" />
+              <div className="inline-flex rounded-lg bg-white p-2 shadow-sm">
+                <img src="/AristAI_logo.png" alt="AristAI" className="h-11 w-auto object-contain" />
+              </div>
               <p className="mt-2 text-xs uppercase tracking-[0.12em] text-white/75">Teaching Platform</p>
             </div>
 
             <div className="flex items-center justify-between gap-4 rounded-xl border border-white/25 bg-white/10 px-4 py-3 backdrop-blur-sm">
               <img
-                src="/EPGUPP_logo_white.png"
+                src="/EPGUPP_logo_light.png"
                 alt="Postgrado Universidad Politecnica"
-                className="h-8 w-auto object-contain"
+                className="h-8 w-auto object-contain rounded bg-white p-1 shadow-sm"
               />
               <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">Academic Partner</span>
             </div>
@@ -86,18 +88,16 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
       <div className="flex items-center justify-center px-6 py-10 sm:px-12 bg-white dark:bg-slate-950">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex flex-col items-center gap-3 mb-8">
-            <img src="/AristAI_logo.png" alt="AristAI" className="h-10 w-auto object-contain dark:hidden" />
-            <img src="/AristAI_logo_white.png" alt="AristAI" className="h-10 w-auto object-contain hidden dark:block" />
-            <img
-              src="/EPGUPP_logo_light.png"
-              alt="Postgrado Universidad Politecnica"
-              className="h-8 object-contain dark:hidden"
-            />
-            <img
-              src="/EPGUPP_logo_white.png"
-              alt="Postgrado Universidad Politecnica"
-              className="h-8 object-contain hidden dark:block"
-            />
+            <div className="rounded-lg bg-white p-2 border border-stone-200 shadow-sm">
+              <img src="/AristAI_logo.png" alt="AristAI" className="h-10 w-auto object-contain" />
+            </div>
+            <div className="rounded-lg bg-white p-2 border border-stone-200 shadow-sm">
+              <img
+                src="/EPGUPP_logo_light.png"
+                alt="Postgrado Universidad Politecnica"
+                className="h-8 object-contain"
+              />
+            </div>
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 rounded-xl p-8 shadow-sm">

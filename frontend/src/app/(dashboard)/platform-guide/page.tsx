@@ -221,7 +221,7 @@ export default function IntroductionPage() {
   const steps = showInstructorContent ? instructorSteps : studentSteps;
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in" data-voice-id="introduction-page">
       {/* Hero Section */}
       <section className="bg-hero-gradient -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-12 pb-16 mb-12">
         <div className="container-ebook">
@@ -233,11 +233,11 @@ export default function IntroductionPage() {
             An AI-powered platform for synchronous classroom discussions. Create engaging case-based learning experiences with real-time AI assistance, voice control, and comprehensive analytics.
           </p>
           <div className="flex flex-wrap gap-4">
-            <Link href="/courses" className="btn-primary-ebook gap-2">
+            <Link href="/courses" className="btn-primary-ebook gap-2" data-voice-id="intro-get-started">
               <Play className="w-4 h-4" />
               Get Started
             </Link>
-            <a href="#voice-commands" className="btn-secondary-ebook gap-2">
+            <a href="#voice-commands" className="btn-secondary-ebook gap-2" data-voice-id="intro-voice-commands">
               <Mic className="w-4 h-4" />
               Voice Commands
             </a>
@@ -464,6 +464,7 @@ export default function IntroductionPage() {
               <button
                 className="faq-question"
                 onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                data-voice-id={`faq-question-${idx + 1}`}
               >
                 <span>{item.question}</span>
                 <span className="faq-toggle">+</span>
@@ -490,7 +491,7 @@ export default function IntroductionPage() {
               ? 'Create your first course and experience AI-powered classroom discussions.'
               : 'Join a course and start participating in engaging discussions.'}
           </p>
-          <Link href="/courses" className="btn-primary-ebook gap-2">
+          <Link href="/courses" className="btn-primary-ebook gap-2" data-voice-id="intro-cta-courses">
             {showInstructorContent ? 'Create Your First Course' : 'View Available Courses'}
             <ArrowRight className="w-4 h-4" />
           </Link>

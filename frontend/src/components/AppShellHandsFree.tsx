@@ -353,7 +353,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         <nav className="flex-1 space-y-4 px-3 py-4">
           {introNav.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-            const voiceId = item.key === 'introduction' ? undefined : `tab-${item.key}`;
+            const voiceId = `tab-${item.key}`;
 
             return (
               <Link

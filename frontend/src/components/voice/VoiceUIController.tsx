@@ -212,10 +212,10 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'toggleTheme': '[data-voice-id="toggle-theme"]',
     'user-menu': '[data-voice-id="user-menu"]',
     'userMenu': '[data-voice-id="user-menu"]',
-    'view-voice-guide': '[data-voice-id="view-voice-guide"]',
-    'viewVoiceGuide': '[data-voice-id="view-voice-guide"]',
-    'forum-instructions': '[data-voice-id="forum-instructions"]',
-    'forumInstructions': '[data-voice-id="forum-instructions"]',
+    'view-voice-guide': '[data-voice-id="open-help"]',
+    'viewVoiceGuide': '[data-voice-id="open-help"]',
+    'forum-instructions': '[data-voice-id="open-help"]',
+    'forumInstructions': '[data-voice-id="open-help"]',
     // Got It buttons for closing floating windows
     'got-it-voice-guide': '[data-voice-id="got-it-voice-guide"]',
     'got-it-platform-guide': '[data-voice-id="got-it-platform-guide"]',
@@ -223,6 +223,17 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'openProfile': '[data-voice-id="open-profile"]',
     'sign-out': '[data-voice-id="sign-out"]',
     'signOut': '[data-voice-id="sign-out"]',
+  },
+  '/platform-guide': {
+    'introduction': '[data-voice-id="introduction-page"]',
+    'get-started': '[data-voice-id="intro-get-started"]',
+    'voice-commands': '[data-voice-id="intro-voice-commands"]',
+    'open-faq-1': '[data-voice-id="faq-question-1"]',
+    'open-faq-2': '[data-voice-id="faq-question-2"]',
+    'open-faq-3': '[data-voice-id="faq-question-3"]',
+    'open-faq-4': '[data-voice-id="faq-question-4"]',
+    'open-faq-5': '[data-voice-id="faq-question-5"]',
+    'open-courses': '[data-voice-id="intro-cta-courses"]',
   },
 };
 
@@ -244,6 +255,9 @@ const GLOBAL_UI_ELEMENTS: Record<string, string> = {
   'forum-instructions': '[data-voice-id="open-help"]',
   'open-instructor-requests': '[data-voice-id="open-instructor-requests"]',
   'open-courses-from-notifications': '[data-voice-id="open-courses-from-notifications"]',
+  'introduction': '[data-voice-id="tab-introduction"]',
+  'tab-introduction': '[data-voice-id="tab-introduction"]',
+  'platform-guide': '[data-voice-id="tab-introduction"]',
 };
 
 /**
@@ -267,6 +281,19 @@ const ORDINAL_MAP: Record<string, number> = {
   'three': 2,
   'four': 3,
   'five': 4,
+};
+
+const NUMBER_WORD_MAP: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
 };
 
 /**
@@ -377,6 +404,25 @@ export const VoiceUIController = () => {
       }
     }
 
+    // Check for numeric index embedded in phrase (e.g., "course number 3")
+    const embeddedNumericMatch = termLower.match(/\b(\d+)\b/);
+    if (embeddedNumericMatch) {
+      const idx = parseInt(embeddedNumericMatch[1], 10) - 1;
+      if (idx >= 0 && idx < options.length) {
+        return options[idx];
+      }
+    }
+
+    // Check for written number embedded in phrase (e.g., "course number three")
+    for (const [word, num] of Object.entries(NUMBER_WORD_MAP)) {
+      if (termLower.includes(word)) {
+        const idx = num - 1;
+        if (idx >= 0 && idx < options.length) {
+          return options[idx];
+        }
+      }
+    }
+
     // Exact match (case insensitive)
     const exactMatch = options.find(o => o.text.toLowerCase() === termLower);
     if (exactMatch) return exactMatch;
@@ -427,6 +473,13 @@ export const VoiceUIController = () => {
       nativeSelectValueSetter.call(select, newValue);
     } else {
       select.value = newValue;
+    }
+
+    if (select.value !== newValue) {
+      const targetOption = Array.from(select.options).find((o) => o.value === newValue);
+      if (targetOption) {
+        select.selectedIndex = targetOption.index;
+      }
     }
 
     // React 16+ uses a tracker on the DOM node to detect value changes
@@ -516,7 +569,7 @@ export const VoiceUIController = () => {
     }
 
     // UNIVERSAL: If no target or not found, use the first visible select
-    if (!element || element.tagName !== 'SELECT') {
+    if ((!target || String(target).trim() === '') && (!element || element.tagName !== 'SELECT')) {
       const selects = Array.from(document.querySelectorAll('select')).filter(sel => {
         const rect = sel.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0;

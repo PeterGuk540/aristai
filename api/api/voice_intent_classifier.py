@@ -42,6 +42,7 @@ class NavigationTarget(str, Enum):
     FORUM = "/forum"
     CONSOLE = "/console"
     REPORTS = "/reports"
+    INTRODUCTION = "/platform-guide"
     DASHBOARD = "/dashboard"
     PROFILE = "/profile"
     VOICE_GUIDE = "/voice-guide"
@@ -214,10 +215,10 @@ The user may speak in English or Spanish. Both languages should be understood eq
 ## Available Actions by Category:
 
 ### NAVIGATE (category: "navigate")
-Go to different PAGES in the application. ONLY these 8 pages exist:
-Actions: courses, sessions, forum, console, reports, dashboard, profile, voice_guide
+Go to different PAGES in the application. ONLY these pages exist:
+Actions: courses, sessions, forum, console, reports, introduction, platform_guide, dashboard, profile, voice_guide
 
-CRITICAL: The ONLY valid navigation targets are: courses, sessions, forum, console, reports, dashboard, profile, voice_guide
+CRITICAL: The ONLY valid navigation targets are: courses, sessions, forum, console, reports, introduction, platform_guide, dashboard, profile, voice_guide
 ANYTHING ELSE is NOT a page - it's either a TAB (use UI_ACTION with switch_tab) or a FEATURE (use QUERY).
 
 TABS ARE NOT PAGES! These are tabs within pages, use UI_ACTION category with action=switch_tab:
@@ -230,6 +231,7 @@ Examples of NAVIGATE (going to a whole page):
 - "open the forum" / "ir al foro" → navigate to forum
 - "navigate to reports" / "ver reportes" → navigate to reports
 - "go to console" / "ir a la consola" → navigate to console
+- "take me to the introduction page" / "llevame a la introduccion" → navigate to introduction
 
 Examples that are NOT navigation (use UI_ACTION or QUERY instead):
 - "take me to advanced" → UI_ACTION switch_tab with tab_name="advanced"
@@ -674,6 +676,8 @@ INTENT_TO_LEGACY_ACTION = {
     "forum": "/forum",
     "console": "/console",
     "reports": "/reports",
+    "introduction": "/platform-guide",
+    "platform_guide": "/platform-guide",
     "dashboard": "/dashboard",
     "profile": "/profile",
     "voice_guide": "/voice-guide",
@@ -768,7 +772,7 @@ INTENT_TO_LEGACY_ACTION = {
 
 # Navigation targets
 NAVIGATION_TARGETS = {
-    "courses", "sessions", "forum", "console", "reports", "dashboard", "profile", "voice_guide"
+    "courses", "sessions", "forum", "console", "reports", "introduction", "platform_guide", "dashboard", "profile", "voice_guide"
 }
 
 
@@ -799,13 +803,27 @@ def intent_to_legacy_format(intent: ClassifiedIntent) -> Dict[str, Any]:
     }
 
     if intent.category == IntentCategory.NAVIGATE:
+        action_name = (intent.action or "").strip().lower()
+        if action_name in {"/platform-guide", "platform-guide", "/introduction", "introduction", "intro"}:
+            action_name = "introduction"
+        elif action_name in {"platform guide", "platform_guide"}:
+            action_name = "platform_guide"
+
+        # Normalize common page aliases returned by the LLM.
+        target_page = (intent.parameters.target_page or "").strip().lower()
+        if target_page in {"/platform-guide", "platform-guide", "/introduction", "introduction", "intro"}:
+            target_page = "introduction"
+        elif target_page in {"platform guide", "platform_guide"}:
+            target_page = "platform_guide"
+
         # Get navigation path from action or parameters
-        if intent.action in NAVIGATION_TARGETS:
+        if action_name in NAVIGATION_TARGETS:
             result["type"] = "navigate"
-            result["value"] = INTENT_TO_LEGACY_ACTION.get(intent.action, f"/{intent.action}")
-        elif intent.parameters.target_page and intent.parameters.target_page.lstrip('/') in NAVIGATION_TARGETS:
+            result["value"] = INTENT_TO_LEGACY_ACTION.get(action_name, f"/{action_name}")
+        elif target_page and target_page.lstrip('/') in NAVIGATION_TARGETS:
             result["type"] = "navigate"
-            result["value"] = intent.parameters.target_page
+            mapped = INTENT_TO_LEGACY_ACTION.get(target_page.lstrip('/'))
+            result["value"] = mapped or target_page
         else:
             # Safety check: If the action is not a valid page, it might be a tab
             # Common tab names that might be mistaken for pages

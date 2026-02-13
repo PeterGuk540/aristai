@@ -406,6 +406,30 @@ export const api = {
   getIntegrationProviders: () =>
     fetchApi<Array<{ name: string; configured: boolean; enabled: boolean }>>('/integrations/providers'),
 
+  checkIntegrationConnection: (provider: string, userId: number) =>
+    fetchApi<{
+      id: number;
+      provider: string;
+      user_id: number;
+      status: string;
+      provider_user_id?: string;
+      provider_user_name?: string;
+      last_checked_at?: string;
+    }>(`/integrations/${provider}/connections/check?user_id=${userId}`, { method: 'POST' }),
+
+  listIntegrationConnections: (provider: string, userId?: number) =>
+    fetchApi<Array<{
+      id: number;
+      provider: string;
+      user_id: number;
+      status: string;
+      provider_user_id?: string;
+      provider_user_name?: string;
+      last_checked_at?: string;
+    }>>(
+      `/integrations/${provider}/connections${userId ? `?user_id=${userId}` : ''}`
+    ),
+
   getExternalCourses: (provider: string) =>
     fetchApi<Array<{
       provider: string;
@@ -428,6 +452,42 @@ export const api = {
       source_url?: string;
     }>>(`/integrations/${provider}/courses/${encodeURIComponent(courseExternalId)}/materials`),
 
+  listIntegrationMappings: (provider: string, targetCourseId?: number) =>
+    fetchApi<Array<{
+      id: number;
+      provider: string;
+      external_course_id: string;
+      external_course_name?: string;
+      target_course_id: number;
+      created_by?: number;
+      is_active: boolean;
+      created_at?: string;
+      updated_at?: string;
+    }>>(
+      `/integrations/${provider}/mappings${targetCourseId ? `?target_course_id=${targetCourseId}` : ''}`
+    ),
+
+  createIntegrationMapping: (
+    provider: string,
+    data: {
+      target_course_id: number;
+      source_course_external_id: string;
+      source_course_name?: string;
+      created_by?: number;
+    }
+  ) =>
+    fetchApi<{
+      id: number;
+      provider: string;
+      external_course_id: string;
+      external_course_name?: string;
+      target_course_id: number;
+      created_by?: number;
+      is_active: boolean;
+      created_at?: string;
+      updated_at?: string;
+    }>(`/integrations/${provider}/mappings`, { method: 'POST', body: JSON.stringify(data) }),
+
   importExternalMaterials: (
     provider: string,
     data: {
@@ -441,7 +501,9 @@ export const api = {
   ) =>
     fetchApi<{
       provider: string;
+      job_id: number;
       imported_count: number;
+      skipped_count: number;
       failed_count: number;
       results: Array<{
         material_external_id: string;
@@ -450,6 +512,56 @@ export const api = {
         created_material_id?: number;
       }>;
     }>(`/integrations/${provider}/import`, { method: 'POST', body: JSON.stringify(data) }),
+
+  syncExternalMaterials: (
+    provider: string,
+    data: {
+      target_course_id: number;
+      source_course_external_id: string;
+      target_session_id?: number;
+      uploaded_by?: number;
+      overwrite_title_prefix?: string;
+      mapping_id?: number;
+      material_external_ids?: string[];
+    }
+  ) =>
+    fetchApi<{
+      provider: string;
+      job_id: number;
+      imported_count: number;
+      skipped_count: number;
+      failed_count: number;
+      results: Array<{
+        material_external_id: string;
+        status: string;
+        message: string;
+        created_material_id?: number;
+      }>;
+    }>(`/integrations/${provider}/sync`, { method: 'POST', body: JSON.stringify(data) }),
+
+  listIntegrationSyncJobs: (provider?: string, targetCourseId?: number, limit: number = 20) => {
+    const params = new URLSearchParams();
+    if (provider) params.append('provider', provider);
+    if (targetCourseId) params.append('target_course_id', String(targetCourseId));
+    params.append('limit', String(limit));
+    return fetchApi<Array<{
+      id: number;
+      provider: string;
+      source_course_external_id: string;
+      target_course_id: number;
+      target_session_id?: number;
+      triggered_by?: number;
+      status: string;
+      requested_count: number;
+      imported_count: number;
+      skipped_count: number;
+      failed_count: number;
+      error_message?: string;
+      started_at?: string;
+      completed_at?: string;
+      created_at?: string;
+    }>>(`/integrations/sync-jobs?${params.toString()}`);
+  },
 
   // =============================================================================
   // INSTRUCTOR ENHANCEMENT FEATURES

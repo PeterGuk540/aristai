@@ -1,7 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Download, ExternalLink, Loader2, Plug, RefreshCw } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Link2,
+  Loader2,
+  Plug,
+  RefreshCw,
+  RotateCw,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 
@@ -20,6 +30,39 @@ type ExternalMaterial = {
 };
 type LocalCourse = { id: number; title: string };
 type LocalSession = { id: number; title: string; status?: string };
+type Connection = {
+  id: number;
+  provider: string;
+  user_id: number;
+  status: string;
+  provider_user_id?: string;
+  provider_user_name?: string;
+  last_checked_at?: string;
+};
+type Mapping = {
+  id: number;
+  provider: string;
+  external_course_id: string;
+  external_course_name?: string;
+  target_course_id: number;
+  created_by?: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+type SyncJob = {
+  id: number;
+  provider: string;
+  source_course_external_id: string;
+  target_course_id: number;
+  target_session_id?: number;
+  status: string;
+  requested_count: number;
+  imported_count: number;
+  skipped_count: number;
+  failed_count: number;
+  created_at?: string;
+};
 
 const formatBytes = (bytes: number) => {
   if (!bytes || bytes <= 0) return '0 B';
@@ -38,15 +81,22 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
   const [provider, setProvider] = useState('canvas');
+  const [connection, setConnection] = useState<Connection | null>(null);
+  const [checkingConnection, setCheckingConnection] = useState(false);
   const [externalCourses, setExternalCourses] = useState<ExternalCourse[]>([]);
   const [externalMaterials, setExternalMaterials] = useState<ExternalMaterial[]>([]);
   const [localCourses, setLocalCourses] = useState<LocalCourse[]>([]);
   const [localSessions, setLocalSessions] = useState<LocalSession[]>([]);
+  const [mappings, setMappings] = useState<Mapping[]>([]);
+  const [jobs, setJobs] = useState<SyncJob[]>([]);
+  const [selectedMappingId, setSelectedMappingId] = useState('');
   const [selectedExternalCourse, setSelectedExternalCourse] = useState('');
   const [selectedLocalCourse, setSelectedLocalCourse] = useState('');
   const [selectedLocalSession, setSelectedLocalSession] = useState('');
   const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([]);
   const [importing, setImporting] = useState(false);
+  const [savingMapping, setSavingMapping] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -54,6 +104,12 @@ export default function IntegrationsPage() {
     () => providers.find((p) => p.name === provider),
     [providers, provider]
   );
+
+  const localCourseTitleById = useMemo(() => {
+    const out: Record<number, string> = {};
+    for (const c of localCourses) out[c.id] = c.title;
+    return out;
+  }, [localCourses]);
 
   const refreshBaseData = async () => {
     setError('');
@@ -70,6 +126,44 @@ export default function IntegrationsPage() {
     }
   };
 
+  const refreshProviderData = async () => {
+    if (!providerState?.enabled || !providerState?.configured) {
+      setConnection(null);
+      setExternalCourses([]);
+      setMappings([]);
+      setJobs([]);
+      return;
+    }
+
+    try {
+      const [courses, mappingRows, jobRows] = await Promise.all([
+        api.getExternalCourses(provider),
+        api.listIntegrationMappings(provider),
+        api.listIntegrationSyncJobs(provider, undefined, 10),
+      ]);
+      setExternalCourses(courses);
+      setMappings(mappingRows);
+      setJobs(jobRows);
+    } catch (e: any) {
+      setError(e?.message || `Failed to load ${provider} integration data.`);
+    }
+  };
+
+  const handleConnectionCheck = async () => {
+    if (!currentUser?.id || !providerState?.enabled || !providerState?.configured) return;
+    setCheckingConnection(true);
+    setError('');
+    try {
+      const row = await api.checkIntegrationConnection(provider, currentUser.id);
+      setConnection(row);
+    } catch (e: any) {
+      setConnection(null);
+      setError(e?.message || 'Connection check failed.');
+    } finally {
+      setCheckingConnection(false);
+    }
+  };
+
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -80,21 +174,20 @@ export default function IntegrationsPage() {
   }, [currentUser?.id]);
 
   useEffect(() => {
-    if (!providerState?.enabled || !providerState?.configured) {
-      setExternalCourses([]);
-      setSelectedExternalCourse('');
-      return;
-    }
     const run = async () => {
-      try {
-        const courses = await api.getExternalCourses(provider);
-        setExternalCourses(courses);
-      } catch (e: any) {
-        setError(e?.message || `Failed to load ${provider} courses.`);
-      }
+      await refreshProviderData();
+      await handleConnectionCheck();
     };
     void run();
-  }, [provider, providerState?.enabled, providerState?.configured]);
+  }, [provider, providerState?.enabled, providerState?.configured, currentUser?.id]);
+
+  useEffect(() => {
+    if (!selectedMappingId) return;
+    const selected = mappings.find((m) => String(m.id) === selectedMappingId);
+    if (!selected) return;
+    setSelectedLocalCourse(String(selected.target_course_id));
+    setSelectedExternalCourse(selected.external_course_id);
+  }, [selectedMappingId, mappings]);
 
   useEffect(() => {
     setExternalMaterials([]);
@@ -132,11 +225,34 @@ export default function IntegrationsPage() {
     );
   };
 
-  const selectAllMaterials = () => {
-    setSelectedMaterialIds(externalMaterials.map((m) => m.external_id));
-  };
-
+  const selectAllMaterials = () => setSelectedMaterialIds(externalMaterials.map((m) => m.external_id));
   const clearMaterials = () => setSelectedMaterialIds([]);
+
+  const handleSaveMapping = async () => {
+    setError('');
+    setMessage('');
+    if (!selectedLocalCourse || !selectedExternalCourse) {
+      setError('Choose both source external course and target AristAI course before saving mapping.');
+      return;
+    }
+    setSavingMapping(true);
+    try {
+      const source = externalCourses.find((c) => c.external_id === selectedExternalCourse);
+      const mapped = await api.createIntegrationMapping(provider, {
+        target_course_id: Number(selectedLocalCourse),
+        source_course_external_id: selectedExternalCourse,
+        source_course_name: source?.title,
+        created_by: currentUser?.id,
+      });
+      setSelectedMappingId(String(mapped.id));
+      await refreshProviderData();
+      setMessage('Course mapping saved.');
+    } catch (e: any) {
+      setError(e?.message || 'Could not save mapping.');
+    } finally {
+      setSavingMapping(false);
+    }
+  };
 
   const handleImport = async () => {
     setError('');
@@ -165,12 +281,45 @@ export default function IntegrationsPage() {
         overwrite_title_prefix: '[Canvas] ',
       });
       setMessage(
-        `Import complete. Imported ${result.imported_count}, failed ${result.failed_count}.`
+        `Import complete. Imported ${result.imported_count}, skipped ${result.skipped_count ?? 0}, failed ${result.failed_count}.`
       );
+      await refreshProviderData();
     } catch (e: any) {
       setError(e?.message || 'Import failed.');
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    setError('');
+    setMessage('');
+    if (!selectedLocalCourse) {
+      setError('Select a target AristAI course first.');
+      return;
+    }
+    if (!selectedExternalCourse) {
+      setError('Select a source external course first.');
+      return;
+    }
+    setSyncing(true);
+    try {
+      const result = await api.syncExternalMaterials(provider, {
+        target_course_id: Number(selectedLocalCourse),
+        source_course_external_id: selectedExternalCourse,
+        target_session_id: selectedLocalSession ? Number(selectedLocalSession) : undefined,
+        uploaded_by: currentUser?.id,
+        overwrite_title_prefix: '[Canvas] ',
+        mapping_id: selectedMappingId ? Number(selectedMappingId) : undefined,
+      });
+      setMessage(
+        `Sync job #${result.job_id} complete. Imported ${result.imported_count}, skipped ${result.skipped_count}, failed ${result.failed_count}.`
+      );
+      await refreshProviderData();
+    } catch (e: any) {
+      setError(e?.message || 'Sync failed.');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -198,7 +347,7 @@ export default function IntegrationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">LMS Integrations</h1>
           <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Connect external LMS platforms and import course materials into AristAI.
+            Connect external LMS platforms, save mappings, and sync materials into AristAI.
           </p>
         </div>
         <button
@@ -212,10 +361,22 @@ export default function IntegrationsPage() {
       </div>
 
       <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-[#1a150c]">
-        <div className="mb-4 flex items-center gap-2">
-          <Plug className="h-4 w-4 text-primary-600" />
-          <h2 className="font-semibold text-neutral-900 dark:text-neutral-100">Provider Status</h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Plug className="h-4 w-4 text-primary-600" />
+            <h2 className="font-semibold text-neutral-900 dark:text-neutral-100">Provider Status</h2>
+          </div>
+          <button
+            onClick={() => void handleConnectionCheck()}
+            disabled={checkingConnection || !providerState?.configured}
+            data-voice-id="check-integration-connection"
+            className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-1.5 text-xs hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+          >
+            {checkingConnection ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+            Check connection
+          </button>
         </div>
+
         <div className="grid gap-3 md:grid-cols-3">
           {providers.map((p) => (
             <div
@@ -236,6 +397,16 @@ export default function IntegrationsPage() {
               </p>
             </div>
           ))}
+        </div>
+
+        <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs dark:border-stone-700 dark:bg-stone-900/30">
+          {connection ? (
+            <span className="text-emerald-700 dark:text-emerald-300">
+              Connected as {connection.provider_user_name || `user ${connection.user_id}`}.
+            </span>
+          ) : (
+            <span className="text-neutral-600 dark:text-neutral-300">No verified connection yet.</span>
+          )}
         </div>
       </section>
 
@@ -260,6 +431,26 @@ export default function IntegrationsPage() {
                 ))}
             </select>
           </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
+              Saved Mapping
+            </label>
+            <select
+              value={selectedMappingId}
+              onChange={(e) => setSelectedMappingId(e.target.value)}
+              data-voice-id="select-integration-mapping"
+              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+            >
+              <option value="">No mapping selected</option>
+              {mappings.map((m) => (
+                <option key={m.id} value={String(m.id)}>
+                  {m.external_course_name || m.external_course_id} -> {localCourseTitleById[m.target_course_id] || m.target_course_id}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
               Source External Course
@@ -279,6 +470,7 @@ export default function IntegrationsPage() {
               ))}
             </select>
           </div>
+
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
               Target AristAI Course
@@ -297,6 +489,7 @@ export default function IntegrationsPage() {
               ))}
             </select>
           </div>
+
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
               Target Session (Optional)
@@ -316,6 +509,27 @@ export default function IntegrationsPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <button
+              onClick={handleSaveMapping}
+              disabled={savingMapping}
+              data-voice-id="save-course-mapping"
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+            >
+              {savingMapping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+              Save mapping
+            </button>
+            <button
+              onClick={handleSyncAll}
+              disabled={syncing}
+              data-voice-id="sync-all-materials"
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+            >
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
+              Sync all
+            </button>
           </div>
         </div>
       </section>
@@ -366,7 +580,7 @@ export default function IntegrationsPage() {
                     <div className="min-w-0">
                       <p className="truncate font-medium">{m.title}</p>
                       <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
-                        {m.filename} · {formatBytes(m.size_bytes)} · {m.content_type}
+                        {m.filename} | {formatBytes(m.size_bytes)} | {m.content_type}
                       </p>
                     </div>
                   </div>
@@ -405,6 +619,36 @@ export default function IntegrationsPage() {
             </span>
           )}
         </div>
+
+        <div className="mt-5 border-t border-stone-200 pt-4 dark:border-stone-700">
+          <h3 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">Recent Sync Jobs</h3>
+          {!jobs.length ? (
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">No sync jobs recorded yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {jobs.map((j) => (
+                <div
+                  key={j.id}
+                  className="rounded-lg border border-stone-200 px-3 py-2 text-xs dark:border-stone-700"
+                  data-voice-id={`sync-job-${j.id}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">
+                      Job #{j.id} ({j.status})
+                    </span>
+                    <span className="text-neutral-500 dark:text-neutral-400">
+                      {j.created_at ? new Date(j.created_at).toLocaleString() : ''}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-neutral-600 dark:text-neutral-300">
+                    Requested {j.requested_count}, imported {j.imported_count}, skipped {j.skipped_count}, failed {j.failed_count}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {message && (
           <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
             {message}

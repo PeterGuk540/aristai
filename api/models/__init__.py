@@ -20,6 +20,13 @@ from api.models.engagement import (
     CheckpointCompletion,
     AIResponseDraft,
 )
+from api.models.integration import (
+    IntegrationConnection,
+    IntegrationCourseMapping,
+    IntegrationSyncJob,
+    IntegrationSyncItem,
+    IntegrationMaterialLink,
+)
 
 __all__ = [
     "User",
@@ -45,4 +52,10 @@ __all__ = [
     "PreClassCheckpoint",
     "CheckpointCompletion",
     "AIResponseDraft",
+    # Integration models
+    "IntegrationConnection",
+    "IntegrationCourseMapping",
+    "IntegrationSyncJob",
+    "IntegrationSyncItem",
+    "IntegrationMaterialLink",
 ]

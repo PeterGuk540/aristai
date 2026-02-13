@@ -151,6 +151,13 @@ NAVIGATION_PATTERNS = {
     # Reports - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(reports?|report page|analytics)\b': '/reports',
     r'\breports?\s*page\b': '/reports',
+    # Introduction / Platform Guide - English
+    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(introduction|intro|platform guide|guide)\b': '/platform-guide',
+    r'\bintroduction\s*page\b': '/platform-guide',
+    r'\bplatform\s+guide\s*page\b': '/platform-guide',
+    # Introduction / Platform Guide - Spanish (non-accented: introduccion)
+    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(la\s+)?(introduccion|guia|guia de plataforma)\b': '/platform-guide',
+    r'\bpagina\s+de\s+(la\s+)?introduccion\b': '/platform-guide',
     # Reports - Spanish (non-accented: analiticas instead of analíticas)
     r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(los\s+)?(reportes?|informes?|pagina de reportes|analiticas?)\b': '/reports',
     r'\bpagina\s+de\s+reportes?\b': '/reports',
@@ -3752,23 +3759,42 @@ async def execute_action(
 
         # === UNIVERSAL DROPDOWN SELECTION ===
         if action == 'ui_select_dropdown':
-            # Use LLM-extracted selection info if available
-            if llm_params.get("selectionIndex") is not None or llm_params.get("selectionValue") or llm_params.get("ordinal"):
-                selection_info = {}
-                if llm_params.get("selectionIndex") is not None:
-                    selection_info["optionIndex"] = llm_params["selectionIndex"]
-                    selection_info["optionName"] = llm_params.get("ordinal", f"option {llm_params['selectionIndex'] + 1}")
-                elif llm_params.get("selectionValue"):
-                    selection_info["optionName"] = llm_params["selectionValue"]
-                elif llm_params.get("ordinal"):
-                    # Map ordinal to index
-                    ordinal_map = {"first": 0, "second": 1, "third": 2, "fourth": 3, "last": -1,
-                                  "primero": 0, "segundo": 1, "tercero": 2, "cuarto": 3, "ultimo": -1}
-                    ordinal = llm_params["ordinal"].lower()
-                    selection_info["optionIndex"] = ordinal_map.get(ordinal, 0)
-                    selection_info["optionName"] = ordinal
-            else:
-                selection_info = _extract_dropdown_selection(transcript or "")
+            transcript_text = transcript or ""
+            transcript_lower = transcript_text.lower()
+
+            # Parse transcript first because phrases like "number five" are 1-indexed.
+            selection_info = _extract_dropdown_selection(transcript_text)
+
+            # Merge LLM extraction if present.
+            if llm_params.get("selectionIndex") is not None:
+                try:
+                    llm_index = int(llm_params["selectionIndex"])
+                except (TypeError, ValueError):
+                    llm_index = None
+                if llm_index is not None and "optionIndex" not in selection_info:
+                    selection_info["optionIndex"] = llm_index
+                selection_info["optionName"] = llm_params.get("ordinal", selection_info.get("optionName", "option"))
+            elif llm_params.get("selectionValue"):
+                selection_info["optionName"] = llm_params["selectionValue"]
+            elif llm_params.get("ordinal"):
+                ordinal_map = {"first": 0, "second": 1, "third": 2, "fourth": 3, "last": -1,
+                              "primero": 0, "segundo": 1, "tercero": 2, "cuarto": 3, "ultimo": -1}
+                ordinal = llm_params["ordinal"].lower()
+                selection_info["optionIndex"] = ordinal_map.get(ordinal, 0)
+                selection_info["optionName"] = ordinal
+
+            # Infer target dropdown to avoid selecting the wrong <select>.
+            target_hint = llm_params.get("target") or llm_params.get("dropdownTarget")
+            if target_hint:
+                selection_info["target"] = target_hint
+            elif any(word in transcript_lower for word in ["course", "courses", "curso", "cursos", "class"]):
+                selection_info["target"] = "select-course"
+            elif any(word in transcript_lower for word in ["session", "sessions", "sesion", "sesiones"]):
+                selection_info["target"] = "select-session"
+            elif current_page and any(page in current_page for page in ["/reports", "/forum", "/console", "/sessions"]):
+                # Course is first-level selector on these pages.
+                selection_info["target"] = "select-course"
+
             return {
                 "action": "select_dropdown",
                 "message": f"Selecting {selection_info.get('optionName', 'option')}",

@@ -1,39 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
+const REQUEST_TIMEOUT_MS = 10000;
+
+const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('📡 Next.js API proxy: Forwarding request to backend');
-    
-    // Forward through the local proxy to avoid exposing backend ports to the browser.
     const targetUrl = new URL('/api/proxy/voice/agent/test', request.url).toString();
-    
-    const response = await fetch(targetUrl, {
+    const response = await fetchWithTimeout(targetUrl, {
       method: 'GET',
       headers: {
-        'Authorization': request.headers.get('Authorization') || 'Bearer dummy-token',
+        Authorization: request.headers.get('Authorization') || 'Bearer dummy-token',
         'Content-Type': 'application/json',
       },
-    });
-    
-    console.log('🔗 Backend response status:', response.status);
-    
+      cache: 'no-store',
+    }, REQUEST_TIMEOUT_MS);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Backend error:', errorText);
       return NextResponse.json(
         { error: `Backend error: ${response.status}`, details: errorText },
         { status: response.status }
       );
     }
-    
+
     const data = await response.json();
-    console.log('✅ Backend test response received');
     return NextResponse.json(data);
-    
   } catch (error) {
-    console.error('❌ Proxy error:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      return NextResponse.json(
+        { error: 'Voice test request timed out', timeout_ms: REQUEST_TIMEOUT_MS },
+        { status: 504 }
+      );
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       { error: 'Internal server error', details: errorMessage },

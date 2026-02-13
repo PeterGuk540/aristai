@@ -512,7 +512,10 @@ export const VoiceUIController = () => {
 
     // If an option index is provided (0-based, or -1 for last)
     if (optionIndex !== undefined && optionIndex !== null) {
-      const actualIndex = optionIndex === -1 ? options.length - 1 : optionIndex;
+      let actualIndex = optionIndex === -1 ? options.length - 1 : optionIndex;
+      if (actualIndex >= options.length && actualIndex - 1 >= 0 && actualIndex - 1 < options.length) {
+        actualIndex = actualIndex - 1;
+      }
       if (actualIndex >= 0 && actualIndex < options.length) {
         setSelectValueReactCompatible(select, options[actualIndex].value);
         console.log('🎤 VoiceUI: Selected by index:', actualIndex, options[actualIndex].text);

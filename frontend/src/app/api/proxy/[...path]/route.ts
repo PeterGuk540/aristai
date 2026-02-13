@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
+
 const BACKEND_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://ec2-13-219-204-7.compute-1.amazonaws.com:8000';
+const REQUEST_TIMEOUT_MS = 12000;
 
 const API_PROXY_BASE = '/api/proxy';
 
@@ -28,6 +33,16 @@ const rewriteLocationHeader = (location: string | null, baseUrl: string) => {
   }
 
   return location;
+};
+
+const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
@@ -58,12 +73,12 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
   }
 
   try {
-    const response = await fetch(targetUrl, {
+    const response = await fetchWithTimeout(targetUrl, {
       method: request.method,
       headers,
       body,
       redirect: 'follow',  // Follow redirects server-side to avoid redirect loops
-    });
+    }, REQUEST_TIMEOUT_MS);
 
     const responseHeaders = new Headers(response.headers);
     responseHeaders.set('x-proxy-target', targetUrl);
@@ -73,6 +88,17 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
       headers: responseHeaders,
     });
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return NextResponse.json(
+        {
+          detail: 'Proxy request timed out',
+          target: targetUrl,
+          timeout_ms: REQUEST_TIMEOUT_MS,
+        },
+        { status: 504 }
+      );
+    }
+
     const fallbackBase = BACKEND_BASE.startsWith('https://')
       ? BACKEND_BASE.replace('https://', 'http://')
       : null;
@@ -80,12 +106,12 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
     if (fallbackBase && fallbackBase !== BACKEND_BASE) {
       const fallbackUrl = buildTargetUrl(request, pathSegments, fallbackBase);
       try {
-        const fallbackResponse = await fetch(fallbackUrl, {
+        const fallbackResponse = await fetchWithTimeout(fallbackUrl, {
           method: request.method,
           headers,
           body,
           redirect: 'follow',
-        });
+        }, REQUEST_TIMEOUT_MS);
 
         const responseHeaders = new Headers(fallbackResponse.headers);
         responseHeaders.set('x-proxy-target', fallbackUrl);
@@ -96,6 +122,18 @@ const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
           headers: responseHeaders,
         });
       } catch (fallbackError) {
+        if (fallbackError instanceof Error && fallbackError.name === 'AbortError') {
+          return NextResponse.json(
+            {
+              detail: 'Proxy fallback request timed out',
+              target: targetUrl,
+              fallback_target: fallbackUrl,
+              timeout_ms: REQUEST_TIMEOUT_MS,
+            },
+            { status: 504 }
+          );
+        }
+
         const message = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
         return NextResponse.json(
           {

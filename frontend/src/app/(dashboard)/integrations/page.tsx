@@ -445,7 +445,7 @@ export default function IntegrationsPage() {
               <option value="">No mapping selected</option>
               {mappings.map((m) => (
                 <option key={m.id} value={String(m.id)}>
-                  {m.external_course_name || m.external_course_id} -> {localCourseTitleById[m.target_course_id] || m.target_course_id}
+                  {m.external_course_name || m.external_course_id} {'->'} {localCourseTitleById[m.target_course_id] || m.target_course_id}
                 </option>
               ))}
             </select>

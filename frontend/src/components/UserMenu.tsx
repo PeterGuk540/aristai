@@ -1,17 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { User, LogOut, Settings, ChevronDown, Mic, BookOpen } from 'lucide-react';
+import { LogOut, Settings, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 
-interface UserMenuProps {
-  onShowGuide?: () => void;
-  onShowVoiceGuide?: () => void;
-}
-
-export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
+export function UserMenu() {
   const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -47,13 +42,7 @@ export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
       const { action } = event.detail || {};
       console.log('UserMenu: Voice action received:', action);
 
-      if (action === 'view-voice-guide') {
-        setIsOpen(false);
-        onShowVoiceGuide?.();
-      } else if (action === 'forum-instructions') {
-        setIsOpen(false);
-        onShowGuide?.();
-      } else if (action === 'open-profile') {
+      if (action === 'open-profile') {
         setIsOpen(false);
         alert('Profile page coming soon');
       } else if (action === 'sign-out') {
@@ -64,7 +53,7 @@ export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
 
     window.addEventListener('voice-menu-action', handleVoiceMenuAction as EventListener);
     return () => window.removeEventListener('voice-menu-action', handleVoiceMenuAction as EventListener);
-  }, [onShowVoiceGuide, onShowGuide, signOut]);
+  }, [signOut]);
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'User';
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -132,46 +121,6 @@ export function UserMenu({ onShowGuide, onShowVoiceGuide }: UserMenuProps) {
 
           {/* Menu items */}
           <div className="py-2">
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                onShowVoiceGuide?.();
-              }}
-              className={cn(
-                'w-full flex items-center gap-3 px-4 py-2.5 text-sm',
-                'text-neutral-700 dark:text-neutral-200',
-                'hover:bg-stone-100 dark:hover:bg-stone-900/50',
-                'transition-colors duration-200'
-              )}
-              role="menuitem"
-              data-voice-id="view-voice-guide"
-            >
-              <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
-                <Mic className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-              </div>
-              <span className="flex-1 text-left">{t('voice.voiceCommands')}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                onShowGuide?.();
-              }}
-              className={cn(
-                'w-full flex items-center gap-3 px-4 py-2.5 text-sm',
-                'text-neutral-700 dark:text-neutral-200',
-                'hover:bg-stone-100 dark:hover:bg-stone-900/50',
-                'transition-colors duration-200'
-              )}
-              role="menuitem"
-              data-voice-id="forum-instructions"
-            >
-              <div className="p-1.5 rounded-lg bg-accent-100 dark:bg-accent-900/50">
-                <BookOpen className="h-4 w-4 text-accent-600 dark:text-accent-400" />
-              </div>
-              <span className="flex-1 text-left">{t('user.platformInstructions')}</span>
-            </button>
-
             <button
               onClick={() => {
                 setIsOpen(false);

@@ -26,7 +26,6 @@ import { User } from '@/types';
 import { UserMenu } from './UserMenu';
 import { Onboarding, useOnboarding } from './Onboarding';
 import { VoiceOnboarding } from './voice/VoiceOnboarding';
-import { VoiceCommandGuide } from './voice/VoiceCommandGuide';
 import { ConversationalVoice } from './voice/ConversationalVoice';
 import { VoiceUiActionBridge } from './voice/VoiceUiActionBridge';
 import { UiActionHandler } from './voice/UiActionHandler';
@@ -74,7 +73,6 @@ export function AppShellHandsFree({ children }: AppShellProps) {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceConnected, setVoiceConnected] = useState(false);
-  const [showVoiceCommandGuide, setShowVoiceCommandGuide] = useState(false);
 
   // Determine the effective role for onboarding
   const effectiveRole = isAdmin ? 'admin' : isInstructor ? 'instructor' : 'student';
@@ -165,6 +163,91 @@ export function AppShellHandsFree({ children }: AppShellProps) {
     if (!q) return navigation;
     return navigation.filter((item) => t(item.key).toLowerCase().includes(q));
   }, [navigation, searchQuery, t]);
+
+  const shellNotifications = useMemo(() => {
+    const items: Array<{
+      id: string;
+      title: string;
+      detail: string;
+      tone: 'default' | 'warning';
+      action?: () => void;
+      actionVoiceId?: string;
+    }> = [];
+
+    // System status
+    if (isInstructor || isAdmin) {
+      items.push({
+        id: 'voice-status',
+        title: voiceConnected ? 'Voice controller connected' : 'Voice controller disconnected',
+        detail: voiceConnected
+          ? 'Natural-language commands are available.'
+          : 'Reconnect voice services to restore command execution.',
+        tone: voiceConnected ? 'default' : 'warning',
+      });
+    }
+
+    // Admin requests workflow
+    if (isAdmin) {
+      if (adminPendingRequests.length > 0 || loadingAdminRequests) {
+        items.push({
+          id: 'admin-requests',
+          title: `Pending instructor requests: ${loadingAdminRequests ? '...' : adminPendingRequests.length}`,
+          detail: 'Open Console Requests to approve or reject.',
+          tone: adminPendingRequests.length > 0 ? 'warning' : 'default',
+          action: () => {
+            setNotificationsOpen(false);
+            router.push('/console');
+            window.dispatchEvent(new CustomEvent('ui.switchTab', { detail: { tabName: 'requests' } }));
+          },
+          actionVoiceId: 'open-instructor-requests',
+        });
+      }
+    }
+
+    // Student account/request status
+    if (!isAdmin && !isInstructor && currentUser?.instructor_request_status === 'pending') {
+      items.push({
+        id: 'instructor-request-pending',
+        title: 'Instructor request pending',
+        detail: 'Your request is awaiting administrator approval.',
+        tone: 'default',
+      });
+    }
+    if (!isAdmin && !isInstructor && currentUser?.instructor_request_status === 'rejected') {
+      items.push({
+        id: 'instructor-request-rejected',
+        title: 'Instructor request rejected',
+        detail: 'Your request was rejected. You can submit a new one later.',
+        tone: 'warning',
+      });
+    }
+
+    // Enrollment guidance
+    if (!isAdmin && !isInstructor && !hasEnrollments) {
+      items.push({
+        id: 'no-enrollments',
+        title: 'No enrolled courses',
+        detail: 'Join a course to unlock sessions, forum, and reports.',
+        tone: 'warning',
+        action: () => {
+          setNotificationsOpen(false);
+          router.push('/courses');
+        },
+        actionVoiceId: 'open-courses-from-notifications',
+      });
+    }
+
+    return items;
+  }, [
+    isInstructor,
+    isAdmin,
+    voiceConnected,
+    adminPendingRequests.length,
+    loadingAdminRequests,
+    currentUser?.instructor_request_status,
+    hasEnrollments,
+    router,
+  ]);
 
   const currentNavLabel = useMemo(() => {
     const matched = navigation.find((item) => pathname === item.href || pathname.startsWith(item.href + '/'));
@@ -471,6 +554,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
               onClick={showGuide}
               className="hidden rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:inline-flex"
               aria-label="Help and documentation"
+              data-voice-id="open-help"
             >
               <HelpCircle className="h-5 w-5" />
             </button>
@@ -498,29 +582,43 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                     Notifications
                   </p>
                   <div className="space-y-1">
-                    <div className="rounded-lg bg-stone-50 px-3 py-2 dark:bg-stone-900/25">
-                      <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">Voice controller connected</p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400">Ready to execute commands.</p>
-                    </div>
-                    {isAdmin && (
-                      <button
-                        onClick={() => {
-                          setNotificationsOpen(false);
-                          router.push('/console');
-                          window.dispatchEvent(new CustomEvent('ui.switchTab', { detail: { tabName: 'requests' } }));
-                        }}
-                        data-voice-id="open-instructor-requests"
-                        className="w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/25"
-                      >
-                        <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-                          Pending instructor requests: {loadingAdminRequests ? '...' : adminPendingRequests.length}
-                        </p>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                          Open Console Requests to approve or reject.
-                        </p>
-                      </button>
-                    )}
-                    {!isAdmin && (
+                    {shellNotifications.map((item) => {
+                      const body = (
+                        <>
+                          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">{item.title}</p>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400">{item.detail}</p>
+                        </>
+                      );
+
+                      if (item.action) {
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={item.action}
+                            data-voice-id={item.actionVoiceId}
+                            className={cn(
+                              'w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/25',
+                              item.tone === 'warning' && 'bg-warning-50/60 dark:bg-warning-900/20'
+                            )}
+                          >
+                            {body}
+                          </button>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            'rounded-lg px-3 py-2',
+                            item.tone === 'warning' && 'bg-warning-50/60 dark:bg-warning-900/20'
+                          )}
+                        >
+                          {body}
+                        </div>
+                      );
+                    })}
+                    {shellNotifications.length === 0 && (
                       <div className="rounded-lg px-3 py-2">
                         <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">No unread alerts</p>
                         <p className="text-xs text-neutral-500 dark:text-neutral-400">You are all caught up.</p>
@@ -552,7 +650,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             <div className="mx-1 hidden h-6 w-px bg-stone-200 dark:bg-primary-900/20 sm:block" />
 
             {/* User menu */}
-            <UserMenu onShowGuide={showGuide} onShowVoiceGuide={() => setShowVoiceCommandGuide(true)} />
+            <UserMenu />
           </div>
           <div className="pointer-events-none absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-primary-400/40 to-transparent" />
         </header>
@@ -577,11 +675,6 @@ export function AppShellHandsFree({ children }: AppShellProps) {
           userName={currentUser.name}
           onComplete={completeWelcomeGuide}
         />
-      )}
-
-      {/* Voice Command Guide - shows when "Voice Commands" is clicked */}
-      {showVoiceCommandGuide && (
-        <VoiceCommandGuide onClose={() => setShowVoiceCommandGuide(false)} />
       )}
 
       {/* Conversational Voice Assistant - always on for instructors after onboarding */}

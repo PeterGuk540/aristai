@@ -240,7 +240,10 @@ const GLOBAL_UI_ELEMENTS: Record<string, string> = {
   'search-pages': '[data-voice-id="workspace-search"]',
   'help': '[aria-label="Help and documentation"]',
   'open-help': '[aria-label="Help and documentation"]',
+  'view-voice-guide': '[data-voice-id="open-help"]',
+  'forum-instructions': '[data-voice-id="open-help"]',
   'open-instructor-requests': '[data-voice-id="open-instructor-requests"]',
+  'open-courses-from-notifications': '[data-voice-id="open-courses-from-notifications"]',
 };
 
 /**

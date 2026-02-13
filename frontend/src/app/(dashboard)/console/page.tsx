@@ -628,21 +628,21 @@ export default function ConsolePage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
-          <TabsTrigger value="copilot" disabled={!selectedSessionId}>
+          <TabsTrigger value="copilot" disabled={!selectedSessionId} data-voice-id="tab-copilot">
             {t('console.copilot')}
           </TabsTrigger>
-          <TabsTrigger value="polls" disabled={!selectedSessionId}>
+          <TabsTrigger value="polls" disabled={!selectedSessionId} data-voice-id="tab-polls">
             {t('console.polls')}
           </TabsTrigger>
-          <TabsTrigger value="cases" disabled={!selectedSessionId}>
+          <TabsTrigger value="cases" disabled={!selectedSessionId} data-voice-id="tab-cases">
             {t('console.postCase')}
           </TabsTrigger>
-          <TabsTrigger value="tools" disabled={!selectedSessionId}>
+          <TabsTrigger value="tools" disabled={!selectedSessionId} data-voice-id="tab-tools">
             <Activity className="h-4 w-4 mr-1" />
             Instructor Tools
           </TabsTrigger>
           {isAdmin && (
-            <TabsTrigger value="requests">
+            <TabsTrigger value="requests" data-voice-id="tab-requests">
               {t('console.instructorRequests')}
               {instructorRequests.length > 0 && (
                 <Badge variant="danger" className="ml-2">{instructorRequests.length}</Badge>
@@ -650,7 +650,7 @@ export default function ConsolePage() {
             </TabsTrigger>
           )}
           {isAdmin && (
-            <TabsTrigger value="roster">
+            <TabsTrigger value="roster" data-voice-id="tab-roster">
               <FileSpreadsheet className="h-4 w-4 mr-1" />
               {t('console.roster')}
             </TabsTrigger>
@@ -826,7 +826,7 @@ export default function ConsolePage() {
               <CardContent>
                 {activePollId ? (
                   <div className="space-y-4">
-                    <Button onClick={handleFetchPollResults} variant="outline">
+                    <Button onClick={handleFetchPollResults} variant="outline" data-voice-id="refresh-poll-results">
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Refresh Results
                     </Button>
@@ -1032,7 +1032,7 @@ export default function ConsolePage() {
                   <UserPlus className="h-5 w-5" />
                   Pending Instructor Requests
                 </CardTitle>
-                <Button onClick={fetchInstructorRequests} variant="outline" size="sm">
+                <Button onClick={fetchInstructorRequests} variant="outline" size="sm" data-voice-id="refresh-instructor-requests">
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>
@@ -1067,6 +1067,7 @@ export default function ConsolePage() {
                         <Button
                           size="sm"
                           onClick={() => handleApproveRequest(request.id)}
+                          data-voice-id="approve-instructor-request"
                         >
                           <CheckCircle className="h-4 w-4 mr-1" />
                           Approve
@@ -1075,6 +1076,7 @@ export default function ConsolePage() {
                           size="sm"
                           variant="outline"
                           onClick={() => handleRejectRequest(request.id)}
+                          data-voice-id="reject-instructor-request"
                         >
                           <XCircle className="h-4 w-4 mr-1" />
                           Reject

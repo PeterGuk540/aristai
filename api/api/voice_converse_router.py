@@ -570,12 +570,18 @@ ACTION_PATTERNS = {
     'ui_click_button': [
         r'\b(click|press|hit|tap)\s+(the\s+)?(.+?)\s*(button)?\b',
         r'\b(click|press)\s+(on\s+)?(.+)\b',
+        r'\b(open|show)\s+(the\s+)?(notifications?|notification\s+panel)\b',
+        r'\b(change|switch|toggle)\s+(the\s+)?(language|idioma)\b',
+        r'\b(get\s+started|start\s+now)\b',
         r'\b(submit|confirm|send|post)\s*(it|this|the\s+form|now)?\s*$',
         r'\b(create|make)\s+(it|this|the\s+course|the\s+session|the\s+poll)\s*$',
         r'\byes,?\s*(submit|create|post|do\s+it)\b',
         # Spanish
         r'\b(hacer\s+clic|presionar|pulsar|tocar)\s+(el\s+)?(.+?)\s*(boton)?\b',
         r'\b(hacer\s+clic|presionar)\s+(en\s+)?(.+)\b',
+        r'\b(abrir|mostrar)\s+(las\s+)?(notificaciones?)\b',
+        r'\b(cambiar|alternar)\s+(el\s+)?idioma\b',
+        r'\b(comenzar|empezar)\s+ahora\b',
         r'\b(enviar|confirmar|publicar)\s*(lo|esto|el\s+formulario|ahora)?\s*$',
         r'\b(crear|hacer)\s+(lo|esto|el\s+curso|la\s+sesion|la\s+encuesta)\s*$',
         r'\bsi,?\s*(enviar|crear|publicar|hazlo)\b',
@@ -1152,6 +1158,17 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
         # Extract button target (English + Spanish)
         button_mappings = {
             # English
+            'get started': 'intro-get-started',
+            'voice commands': 'intro-voice-commands',
+            'notifications': 'notifications-button',
+            'notification': 'notifications-button',
+            'change language': 'toggle-language',
+            'switch language': 'toggle-language',
+            'toggle language': 'toggle-language',
+            'refresh poll results': 'refresh-poll-results',
+            'refresh instructor requests': 'refresh-instructor-requests',
+            'approve request': 'approve-instructor-request',
+            'reject request': 'reject-instructor-request',
             'generate report': 'generate-report',
             'regenerate report': 'regenerate-report',
             'refresh': 'refresh',
@@ -1169,6 +1186,13 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'create course': 'create-course',
             'create session': 'create-session',
             # Spanish (non-accented)
+            'comenzar': 'intro-get-started',
+            'comandos de voz': 'intro-voice-commands',
+            'notificaciones': 'notifications-button',
+            'notificacion': 'notifications-button',
+            'cambiar idioma': 'toggle-language',
+            'actualizar resultados de encuesta': 'refresh-poll-results',
+            'actualizar solicitudes': 'refresh-instructor-requests',
             'generar reporte': 'generate-report',
             'regenerar reporte': 'regenerate-report',
             'actualizar': 'refresh',
@@ -3267,6 +3291,31 @@ def _extract_button_info(transcript: str) -> Dict[str, str]:
 
     # Direct button mappings
     button_mappings = {
+        'get started': 'intro-get-started',
+        'start now': 'intro-get-started',
+        'voice commands': 'intro-voice-commands',
+        'voice command': 'intro-voice-commands',
+        'open voice commands': 'intro-voice-commands',
+        'notifications': 'notifications-button',
+        'notification': 'notifications-button',
+        'open notifications': 'notifications-button',
+        'open notification': 'notifications-button',
+        'top notification': 'notifications-button',
+        'top-bar notification': 'notifications-button',
+        'change language': 'toggle-language',
+        'switch language': 'toggle-language',
+        'toggle language': 'toggle-language',
+        'language': 'toggle-language',
+        'cambiar idioma': 'toggle-language',
+        'cambiar el idioma': 'toggle-language',
+        'notificaciones': 'notifications-button',
+        'notificacion': 'notifications-button',
+        'comandos de voz': 'intro-voice-commands',
+        'comenzar': 'intro-get-started',
+        'refresh poll results': 'refresh-poll-results',
+        'refresh instructor requests': 'refresh-instructor-requests',
+        'approve request': 'approve-instructor-request',
+        'reject request': 'reject-instructor-request',
         'generate report': 'generate-report',
         'regenerate report': 'regenerate-report',
         'refresh': 'refresh',
@@ -3818,8 +3867,32 @@ async def execute_action(
                 button_label = form_name.replace("_", " ").title() if form_name else "Submit"
             # Use LLM-extracted button name if available
             elif llm_params.get("buttonName"):
-                button_target = llm_params["buttonName"]
-                button_label = llm_params["buttonName"]
+                raw_button_name = str(llm_params["buttonName"]).strip()
+                normalized_button_name = raw_button_name.lower().replace("_", " ").replace("-", " ")
+                button_aliases = {
+                    "get started": "intro-get-started",
+                    "start now": "intro-get-started",
+                    "voice commands": "intro-voice-commands",
+                    "open voice commands": "intro-voice-commands",
+                    "notifications": "notifications-button",
+                    "notification": "notifications-button",
+                    "open notifications": "notifications-button",
+                    "open notification": "notifications-button",
+                    "language": "toggle-language",
+                    "change language": "toggle-language",
+                    "switch language": "toggle-language",
+                    "toggle language": "toggle-language",
+                    "notificaciones": "notifications-button",
+                    "notificacion": "notifications-button",
+                    "comandos de voz": "intro-voice-commands",
+                    "cambiar idioma": "toggle-language",
+                    "refresh poll results": "refresh-poll-results",
+                    "refresh instructor requests": "refresh-instructor-requests",
+                    "approve request": "approve-instructor-request",
+                    "reject request": "reject-instructor-request",
+                }
+                button_target = button_aliases.get(normalized_button_name, raw_button_name)
+                button_label = raw_button_name
             else:
                 # Extract from transcript using regex
                 button_info = _extract_button_info(transcript or "")
@@ -3838,7 +3911,7 @@ async def execute_action(
                     "action": "click_button",
                     "message": f"Clicking {button_label}.",
                     "ui_actions": [
-                        {"type": "ui.clickButton", "payload": {"target": button_target}},
+                        {"type": "ui.clickButton", "payload": {"target": button_target, "buttonLabel": button_label}},
                         {"type": "ui.toast", "payload": {"message": f"{button_label} clicked", "type": "success"}},
                     ],
                 }

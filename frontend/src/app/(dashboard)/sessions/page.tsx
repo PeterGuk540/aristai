@@ -321,15 +321,15 @@ export default function SessionsPage() {
       {selectedCourseId && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
-            <TabsTrigger value="sessions">{t('sessions.viewSessions')}</TabsTrigger>
-            <TabsTrigger value="materials">
+            <TabsTrigger value="sessions" data-voice-id="tab-sessions">{t('sessions.viewSessions')}</TabsTrigger>
+            <TabsTrigger value="materials" data-voice-id="tab-materials">
               <FileText className="w-4 h-4 mr-1.5" />
               {t('sessions.materials')}
             </TabsTrigger>
-            {hasInstructorPrivileges && <TabsTrigger value="create">{t('sessions.createSession')}</TabsTrigger>}
-            {hasInstructorPrivileges && <TabsTrigger value="manage">{t('sessions.manageStatus')}</TabsTrigger>}
+            {hasInstructorPrivileges && <TabsTrigger value="create" data-voice-id="tab-create">{t('sessions.createSession')}</TabsTrigger>}
+            {hasInstructorPrivileges && <TabsTrigger value="manage" data-voice-id="tab-manage">{t('sessions.manageStatus')}</TabsTrigger>}
             {hasInstructorPrivileges && (
-              <TabsTrigger value="insights">
+              <TabsTrigger value="insights" data-voice-id="tab-insights">
                 Insights
               </TabsTrigger>
             )}

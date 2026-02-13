@@ -539,8 +539,8 @@ export default function ForumPage() {
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
-            <TabsTrigger value="cases">{t('forum.cases')}</TabsTrigger>
-            <TabsTrigger value="discussion">
+            <TabsTrigger value="cases" data-voice-id="tab-cases">{t('forum.cases')}</TabsTrigger>
+            <TabsTrigger value="discussion" data-voice-id="tab-discussion">
               {t('forum.discussion')}
               <Badge variant="primary" size="sm" className="ml-2">{posts.length}</Badge>
             </TabsTrigger>

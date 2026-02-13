@@ -15,6 +15,7 @@ export function LanguageToggle() {
   return (
     <button
       onClick={toggleLanguage}
+      data-voice-id="toggle-language"
       className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
       title={`Switch to ${locale === 'en' ? 'Español' : 'English'}`}
     >
@@ -35,6 +36,7 @@ export function LanguageToggleCompact() {
   return (
     <button
       onClick={toggleLanguage}
+      data-voice-id="toggle-language"
       className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-gray-500 dark:text-gray-400"
       title={`Switch to ${locale === 'en' ? 'Español' : 'English'}`}
     >

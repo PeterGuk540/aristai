@@ -928,10 +928,10 @@ export default function ReportsPage() {
               }
             }}>
               <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
-                <TabsTrigger value="summary">{t('reports.summary')}</TabsTrigger>
-                <TabsTrigger value="participation">{t('reports.participation')}</TabsTrigger>
-                <TabsTrigger value="scoring">{t('reports.answerScores')}</TabsTrigger>
-                <TabsTrigger value="analytics">
+                <TabsTrigger value="summary" data-voice-id="tab-summary">{t('reports.summary')}</TabsTrigger>
+                <TabsTrigger value="participation" data-voice-id="tab-participation">{t('reports.participation')}</TabsTrigger>
+                <TabsTrigger value="scoring" data-voice-id="tab-scoring">{t('reports.answerScores')}</TabsTrigger>
+                <TabsTrigger value="analytics" data-voice-id="tab-analytics">
                   <TrendingUp className="h-4 w-4 mr-1" />
                   Analytics
                 </TabsTrigger>
@@ -1092,8 +1092,8 @@ export default function ReportsPage() {
             /* Student view: Only scoring, best practice, what they did well, gaps */
             <Tabs defaultValue="my-performance">
               <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900">
-                <TabsTrigger value="my-performance">My Performance</TabsTrigger>
-                <TabsTrigger value="best-practice">Best Practice Answer</TabsTrigger>
+                <TabsTrigger value="my-performance" data-voice-id="tab-my-performance">My Performance</TabsTrigger>
+                <TabsTrigger value="best-practice" data-voice-id="tab-best-practice">Best Practice Answer</TabsTrigger>
               </TabsList>
 
               <TabsContent value="my-performance">{renderStudentPerformance()}</TabsContent>

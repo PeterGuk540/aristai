@@ -31,6 +31,10 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'analyticsTab': '[data-voice-id="tab-analytics"]',
     'tab-analytics': '[data-voice-id="tab-analytics"]',
     'analytics': '[data-voice-id="tab-analytics"]',
+    'my-performance': '[data-voice-id="tab-my-performance"]',
+    'tab-my-performance': '[data-voice-id="tab-my-performance"]',
+    'best-practice': '[data-voice-id="tab-best-practice"]',
+    'tab-best-practice': '[data-voice-id="tab-best-practice"]',
   },
   // Courses page elements
   '/courses': {
@@ -246,6 +250,8 @@ const GLOBAL_UI_ELEMENTS: Record<string, string> = {
   'notification': '[data-voice-id="notifications-button"]',
   'notifications-button': '[data-voice-id="notifications-button"]',
   'open-notifications': '[data-voice-id="notifications-button"]',
+  'top-notification': '[data-voice-id="notifications-button"]',
+  'top-bar-notification': '[data-voice-id="notifications-button"]',
   'workspace-search': '[data-voice-id="workspace-search"]',
   'search': '[data-voice-id="workspace-search"]',
   'search-pages': '[data-voice-id="workspace-search"]',
@@ -255,9 +261,17 @@ const GLOBAL_UI_ELEMENTS: Record<string, string> = {
   'forum-instructions': '[data-voice-id="open-help"]',
   'open-instructor-requests': '[data-voice-id="open-instructor-requests"]',
   'open-courses-from-notifications': '[data-voice-id="open-courses-from-notifications"]',
+  'refresh-poll-results': '[data-voice-id="refresh-poll-results"]',
+  'refresh-instructor-requests': '[data-voice-id="refresh-instructor-requests"]',
+  'approve-instructor-request': '[data-voice-id="approve-instructor-request"]',
+  'reject-instructor-request': '[data-voice-id="reject-instructor-request"]',
   'introduction': '[data-voice-id="tab-introduction"]',
   'tab-introduction': '[data-voice-id="tab-introduction"]',
   'platform-guide': '[data-voice-id="tab-introduction"]',
+  'toggle-language': '[data-voice-id="toggle-language"]',
+  'change-language': '[data-voice-id="toggle-language"]',
+  'switch-language': '[data-voice-id="toggle-language"]',
+  'language-button': '[data-voice-id="toggle-language"]',
 };
 
 /**
@@ -614,6 +628,23 @@ export const VoiceUIController = () => {
         const btnText = btn.textContent?.toLowerCase() || '';
         if (btnText.includes(labelLower)) {
           element = btn as HTMLElement;
+          break;
+        }
+      }
+    }
+
+    // If still not found, try fuzzy lookup on target text across common clickable elements.
+    if (!element && target) {
+      const targetLower = String(target).toLowerCase().replace(/[-_]/g, ' ').trim();
+      const clickables = Array.from(document.querySelectorAll('button, a, [role=\"button\"]'));
+      for (const node of clickables) {
+        const text = node.textContent?.toLowerCase().trim() || '';
+        const aria = node.getAttribute('aria-label')?.toLowerCase() || '';
+        const title = node.getAttribute('title')?.toLowerCase() || '';
+        if ((text && (text.includes(targetLower) || targetLower.includes(text))) ||
+            (aria && (aria.includes(targetLower) || targetLower.includes(aria))) ||
+            (title && (title.includes(targetLower) || targetLower.includes(title)))) {
+          element = node as HTMLElement;
           break;
         }
       }

@@ -286,6 +286,8 @@ Examples of switch_tab (use category=ui_action, action=switch_tab):
 
 Examples of click_button:
 - "click submit" / "press the create button" / "presionar enviar"
+- "click get started" / "open notifications" / "change language"
+- "click voice commands" / "open the voice commands button"
 
 Examples of expand_dropdown (open dropdown and list options):
 - "select a course" / "select the course" → expand_dropdown (opens dropdown, lists options)

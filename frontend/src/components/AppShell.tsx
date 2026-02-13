@@ -16,6 +16,7 @@ import {
   Moon,
   ChevronRight,
   HelpCircle,
+  Plug,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useUser } from '@/lib/context';
@@ -31,6 +32,7 @@ const allNavigation = [
   { name: 'Sessions', href: '/sessions', icon: Calendar, instructorOnly: false, requiresEnrollment: true },
   { name: 'Forum', href: '/forum', icon: MessageSquare, instructorOnly: false, requiresEnrollment: true },
   { name: 'Console', href: '/console', icon: Settings, instructorOnly: true, requiresEnrollment: false },
+  { name: 'Integrations', href: '/integrations', icon: Plug, instructorOnly: true, requiresEnrollment: false },
   { name: 'Reports', href: '/reports', icon: FileText, instructorOnly: false, requiresEnrollment: true },
 ];
 

@@ -244,6 +244,20 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'open-faq-5': '[data-voice-id="faq-question-5"]',
     'open-courses': '[data-voice-id="intro-cta-courses"]',
   },
+  '/integrations': {
+    'provider-dropdown': '[data-voice-id="select-integration-provider"]',
+    'select-integration-provider': '[data-voice-id="select-integration-provider"]',
+    'external-course-dropdown': '[data-voice-id="select-external-course"]',
+    'select-external-course': '[data-voice-id="select-external-course"]',
+    'target-course-dropdown': '[data-voice-id="select-target-course"]',
+    'select-target-course': '[data-voice-id="select-target-course"]',
+    'target-session-dropdown': '[data-voice-id="select-target-session"]',
+    'select-target-session': '[data-voice-id="select-target-session"]',
+    'import-external-materials': '[data-voice-id="import-external-materials"]',
+    'refresh-integrations': '[data-voice-id="refresh-integrations"]',
+    'select-all-external-materials': '[data-voice-id="select-all-external-materials"]',
+    'clear-external-materials': '[data-voice-id="clear-external-materials"]',
+  },
 };
 
 const GLOBAL_UI_ELEMENTS: Record<string, string> = {
@@ -273,6 +287,10 @@ const GLOBAL_UI_ELEMENTS: Record<string, string> = {
   'introduction': '[data-voice-id="tab-introduction"]',
   'tab-introduction': '[data-voice-id="tab-introduction"]',
   'platform-guide': '[data-voice-id="tab-introduction"]',
+  'integrations': '[data-voice-id="tab-integrations"]',
+  'tab-integrations': '[data-voice-id="tab-integrations"]',
+  'lms-integrations': '[data-voice-id="tab-integrations"]',
+  'canvas-integrations': '[data-voice-id="tab-integrations"]',
   'toggle-language': '[data-voice-id="toggle-language"]',
   'change-language': '[data-voice-id="toggle-language"]',
   'switch-language': '[data-voice-id="toggle-language"]',
@@ -1150,6 +1168,7 @@ export const VoiceUIController = () => {
       // Fallback to direct route match if popover didn't yield a hit.
       const pathMatchMap: Array<{ keys: string[]; path: string }> = [
         { keys: ['introduction', 'intro', 'guide', 'platform'], path: '/platform-guide' },
+        { keys: ['integration', 'integrations', 'canvas', 'lms'], path: '/integrations' },
         { keys: ['course', 'courses'], path: '/courses' },
         { keys: ['session', 'sessions'], path: '/sessions' },
         { keys: ['forum', 'discussion'], path: '/forum' },

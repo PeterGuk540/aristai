@@ -18,6 +18,7 @@ import {
   Search,
   Bell,
   ChevronRight,
+  Plug,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useUser } from '@/lib/context';
@@ -42,11 +43,12 @@ const allNavigation = [
   { key: 'sessions', href: '/sessions', icon: Calendar, instructorOnly: false, requiresEnrollment: true },
   { key: 'forum', href: '/forum', icon: MessageSquare, instructorOnly: false, requiresEnrollment: true },
   { key: 'console', href: '/console', icon: Settings, instructorOnly: true, requiresEnrollment: false },
+  { key: 'integrations', href: '/integrations', icon: Plug, instructorOnly: true, requiresEnrollment: false },
   { key: 'reports', href: '/reports', icon: FileText, instructorOnly: false, requiresEnrollment: true },
 ];
 
 const learningOpsKeys = new Set(['courses', 'sessions', 'forum']);
-const managementKeys = new Set(['reports', 'console']);
+const managementKeys = new Set(['reports', 'console', 'integrations']);
 
 interface AppShellProps {
   children: React.ReactNode;

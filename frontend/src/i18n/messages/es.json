@@ -33,6 +33,7 @@
     "sessions": "Sesiones",
     "forum": "Foro",
     "console": "Consola",
+    "integrations": "Integraciones",
     "reports": "Reportes"
   },
   "auth": {

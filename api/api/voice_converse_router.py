@@ -151,6 +151,9 @@ NAVIGATION_PATTERNS = {
     # Reports - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(reports?|report page|analytics)\b': '/reports',
     r'\breports?\s*page\b': '/reports',
+    # Integrations - English
+    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(integrations?|lms integrations?|canvas integrations?)\b': '/integrations',
+    r'\bintegrations?\s*page\b': '/integrations',
     # Introduction / Platform Guide - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(introduction|intro|platform guide|guide)\b': '/platform-guide',
     r'\bintroduction\s*page\b': '/platform-guide',
@@ -161,6 +164,9 @@ NAVIGATION_PATTERNS = {
     # Reports - Spanish (non-accented: analiticas instead of analíticas)
     r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(los\s+)?(reportes?|informes?|pagina de reportes|analiticas?)\b': '/reports',
     r'\bpagina\s+de\s+reportes?\b': '/reports',
+    # Integrations - Spanish
+    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(las\s+)?(integraciones?|integraciones de lms|integracion con canvas)\b': '/integrations',
+    r'\bpagina\s+de\s+integraciones?\b': '/integrations',
     # Dashboard - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(dashboard|home|main)\b': '/dashboard',
     r'\bdashboard\s*page\b': '/dashboard',
@@ -561,9 +567,9 @@ ACTION_PATTERNS = {
         # Without suffix - for known tab names (must list explicitly to avoid false matches)
         # Note: "ai copilot" and "ai assistant" added for voice recognition of "AI Copilot" tab
         # Note: Both "poll" and "polls" supported for voice recognition
-        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|instructor\s+tools|tools|features|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls?|requests|roster)\b',
+        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|instructor\s+tools|tools|features|integrations?|lms\s+integrations?|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls?|requests|roster)\b',
         # Simple "switch to X" for common tabs
-        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|instructor\s+tools|tools|features|create|manage|sessions|ai\s+copilot|copilot|polls?)$',
+        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|instructor\s+tools|tools|features|integrations?|lms\s+integrations?|create|manage|sessions|ai\s+copilot|copilot|polls?)$',
         # Spanish - with tab/panel/section suffix (pestana, panel, seccion)
         r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(.+?)\s*(pestana|panel|seccion)\b',
         r'\b(.+?)\s+(pestana|panel|seccion)\b',
@@ -1110,6 +1116,8 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'session-insights': 'insights',
             'view sessions': 'sessions',
             'view courses': 'courses',
+            'lms integrations': 'integrations',
+            'canvas integrations': 'integrations',
             # Spanish keywords -> tab value (non-accented: discusion, participacion, etc.)
             'estudios de caso': 'cases',
             'casos de estudio': 'cases',
@@ -1128,11 +1136,13 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'lista': 'roster',
             'analiticas': 'analytics',
             'materiales': 'materials',
+            'integraciones': 'integrations',
             # Simple English keywords (single words)
             'summary': 'summary',
             'participation': 'participation',
             'scoring': 'scoring',
             'analytics': 'analytics',
+            'integrations': 'integrations',
             'advanced': 'advanced',
             'enrollment': 'advanced',
             'instructor': 'advanced',

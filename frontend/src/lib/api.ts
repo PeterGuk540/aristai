@@ -402,6 +402,55 @@ export const api = {
   getMaterialDownloadUrl: (courseId: number, materialId: number) =>
     `${API_PROXY_BASE}/courses/${courseId}/materials/${materialId}/download`,
 
+  // LMS Integrations (Canvas-first, provider-based)
+  getIntegrationProviders: () =>
+    fetchApi<Array<{ name: string; configured: boolean; enabled: boolean }>>('/integrations/providers'),
+
+  getExternalCourses: (provider: string) =>
+    fetchApi<Array<{
+      provider: string;
+      external_id: string;
+      title: string;
+      code?: string;
+      term?: string;
+    }>>(`/integrations/${provider}/courses`),
+
+  getExternalMaterials: (provider: string, courseExternalId: string) =>
+    fetchApi<Array<{
+      provider: string;
+      external_id: string;
+      course_external_id: string;
+      title: string;
+      filename: string;
+      content_type: string;
+      size_bytes: number;
+      updated_at?: string;
+      source_url?: string;
+    }>>(`/integrations/${provider}/courses/${encodeURIComponent(courseExternalId)}/materials`),
+
+  importExternalMaterials: (
+    provider: string,
+    data: {
+      target_course_id: number;
+      source_course_external_id: string;
+      material_external_ids: string[];
+      target_session_id?: number;
+      uploaded_by?: number;
+      overwrite_title_prefix?: string;
+    }
+  ) =>
+    fetchApi<{
+      provider: string;
+      imported_count: number;
+      failed_count: number;
+      results: Array<{
+        material_external_id: string;
+        status: string;
+        message: string;
+        created_material_id?: number;
+      }>;
+    }>(`/integrations/${provider}/import`, { method: 'POST', body: JSON.stringify(data) }),
+
   // =============================================================================
   // INSTRUCTOR ENHANCEMENT FEATURES
   // =============================================================================

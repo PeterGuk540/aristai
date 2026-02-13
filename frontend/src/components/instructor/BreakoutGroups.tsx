@@ -108,6 +108,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
                 max={10}
                 value={numGroups}
                 onChange={(e) => setNumGroups(Number(e.target.value))}
+                data-voice-id="num-breakout-groups"
               />
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 Students will be randomly distributed across groups
@@ -125,6 +126,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
               <Button
                 onClick={() => setShowCreateForm(false)}
                 variant="outline"
+                data-voice-id="cancel-breakout-groups"
               >
                 Cancel
               </Button>

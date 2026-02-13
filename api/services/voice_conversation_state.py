@@ -311,6 +311,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
             Tab(name="Copilot", voice_id="tab-copilot", description="AI teaching assistant for live sessions"),
             Tab(name="Polls", voice_id="tab-polls", description="Create and manage live polls"),
             Tab(name="Cases", voice_id="tab-cases", description="Present case studies to students"),
+            Tab(name="Tools", voice_id="tab-tools", description="Instructor tools including timers and breakout groups"),
             Tab(name="Requests", voice_id="tab-requests", description="View student questions and requests"),
             Tab(name="Roster", voice_id="tab-roster", description="View class roster and attendance"),
         ],
@@ -361,6 +362,34 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                     prompt="What case scenario would you like to present to students?",
                 ),
             ],
+            "create_breakout_groups": [
+                FormField(
+                    name="Number of Groups",
+                    voice_id="num-breakout-groups",
+                    field_type="input",
+                    required=True,
+                    prompt="How many breakout groups would you like to create?",
+                    validation_hint="Choose between 2 and 10 groups."
+                ),
+            ],
+            "start_timer": [
+                FormField(
+                    name="Duration in Minutes",
+                    voice_id="timer-duration-minutes",
+                    field_type="input",
+                    required=True,
+                    prompt="How many minutes should the timer run?",
+                    validation_hint="Use a value from 1 to 60 minutes."
+                ),
+                FormField(
+                    name="Timer Label",
+                    voice_id="timer-label",
+                    field_type="input",
+                    required=False,
+                    prompt="What label should I use for this timer? You can say skip to keep the default.",
+                    validation_hint="For example: Group discussion or Q and A."
+                ),
+            ],
         },
         dropdowns=[
             Dropdown(
@@ -407,6 +436,18 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                 name="Post Case",
                 voice_id="post-case",
                 description="Post the case study for students",
+                destructive=False
+            ),
+            ActionButton(
+                name="Create Breakout Groups",
+                voice_id="create-breakout-groups",
+                description="Create breakout groups for the current session",
+                destructive=False
+            ),
+            ActionButton(
+                name="Start Session Timer",
+                voice_id="start-session-timer",
+                description="Start a countdown timer for the current session",
                 destructive=False
             ),
         ],
@@ -467,6 +508,8 @@ FORM_SUBMIT_BUTTONS: Dict[str, str] = {
     "create_poll": "create-poll",
     "create_case": "post-case",
     "create_post": "submit-post",
+    "create_breakout_groups": "create-breakout-groups",
+    "start_timer": "start-session-timer",
 }
 
 

@@ -134,6 +134,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
                 max={60}
                 value={newDuration}
                 onChange={(e) => setNewDuration(Number(e.target.value))}
+                data-voice-id="timer-duration-minutes"
               />
             </div>
             <div>
@@ -143,6 +144,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
                 placeholder="e.g., Group Discussion"
+                data-voice-id="timer-label"
               />
             </div>
             <div className="flex gap-2">
@@ -156,6 +158,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
               <Button
                 onClick={() => setShowCreateForm(false)}
                 variant="outline"
+                data-voice-id="cancel-session-timer"
               >
                 Cancel
               </Button>

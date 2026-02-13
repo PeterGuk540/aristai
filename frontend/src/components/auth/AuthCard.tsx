@@ -45,23 +45,18 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
       <aside className="hidden lg:flex flex-col justify-between border-r border-stone-200/70 dark:border-slate-800 bg-[radial-gradient(circle_at_20%_25%,#ffd19f_0%,#ff8a7a_34%,#8f52d7_70%,#5a36b8_100%)] px-10 py-10 text-white">
         <div className="space-y-9">
           <div className="space-y-5">
+            <div className="rounded-xl border border-white/25 bg-white/10 p-4 backdrop-blur-sm">
+              <img src="/AristAI_logo_white.png" alt="AristAI" className="h-11 w-auto object-contain" />
+              <p className="mt-2 text-xs uppercase tracking-[0.12em] text-white/75">Teaching Platform</p>
+            </div>
+
             <div className="flex items-center justify-between gap-4 rounded-xl border border-white/25 bg-white/10 px-4 py-3 backdrop-blur-sm">
-              <img
-                src="/EPGUPP_logo_light.png"
-                alt="Postgrado Universidad Politecnica"
-                className="h-8 object-contain brightness-0 invert"
-              />
               <img
                 src="/EPGUPP_logo_white.png"
                 alt="Postgrado Universidad Politecnica"
-                className="h-8 object-contain hidden"
+                className="h-8 w-auto object-contain"
               />
               <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">Academic Partner</span>
-            </div>
-
-            <div className="rounded-xl border border-white/25 bg-white/10 p-4 backdrop-blur-sm">
-              <img src="/AristAI_logo.png" alt="AristAI" className="h-11 w-auto brightness-0 invert" />
-              <p className="mt-2 text-xs uppercase tracking-[0.12em] text-white/75">Teaching Platform</p>
             </div>
           </div>
 
@@ -91,6 +86,8 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
       <div className="flex items-center justify-center px-6 py-10 sm:px-12 bg-white dark:bg-slate-950">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex flex-col items-center gap-3 mb-8">
+            <img src="/AristAI_logo.png" alt="AristAI" className="h-10 w-auto object-contain dark:hidden" />
+            <img src="/AristAI_logo_white.png" alt="AristAI" className="h-10 w-auto object-contain hidden dark:block" />
             <img
               src="/EPGUPP_logo_light.png"
               alt="Postgrado Universidad Politecnica"
@@ -101,7 +98,6 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
               alt="Postgrado Universidad Politecnica"
               className="h-8 object-contain hidden dark:block"
             />
-            <img src="/AristAI_logo.png" alt="AristAI" className="h-10 w-auto" />
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-stone-200 dark:border-slate-800 rounded-xl p-8 shadow-sm">

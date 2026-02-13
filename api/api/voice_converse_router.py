@@ -561,15 +561,15 @@ ACTION_PATTERNS = {
         # Without suffix - for known tab names (must list explicitly to avoid false matches)
         # Note: "ai copilot" and "ai assistant" added for voice recognition of "AI Copilot" tab
         # Note: Both "poll" and "polls" supported for voice recognition
-        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls?|requests|roster)\b',
+        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|instructor\s+tools|tools|features|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls?|requests|roster)\b',
         # Simple "switch to X" for common tabs
-        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|create|manage|sessions|ai\s+copilot|copilot|polls?)$',
+        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|instructor\s+tools|tools|features|create|manage|sessions|ai\s+copilot|copilot|polls?)$',
         # Spanish - with tab/panel/section suffix (pestana, panel, seccion)
         r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(.+?)\s*(pestana|panel|seccion)\b',
         r'\b(.+?)\s+(pestana|panel|seccion)\b',
         # Spanish - known tab names (discusion, casos, resumen, participacion, puntuacion, inscripcion, encuestas, solicitudes, lista)
-        r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(discusion|casos|estudios\s+de\s+caso|resumen|participacion|puntuacion|avanzado|inscripcion|crear|administrar|sesiones|cursos|copilot|asistente\s+de\s+ia|encuestas?|solicitudes|lista)\b',
-        r'^(cambiar\s+a|ir\s+a)\s+(discusion|casos|resumen|participacion|puntuacion|avanzado|inscripcion|crear|administrar|sesiones|copilot|encuestas?)$',
+        r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(discusion|casos|estudios\s+de\s+caso|resumen|participacion|puntuacion|avanzado|inscripcion|herramientas|herramientas\s+del\s+instructor|crear|administrar|sesiones|cursos|copilot|asistente\s+de\s+ia|encuestas?|solicitudes|lista)\b',
+        r'^(cambiar\s+a|ir\s+a)\s+(discusion|casos|resumen|participacion|puntuacion|avanzado|inscripcion|herramientas|crear|administrar|sesiones|copilot|encuestas?)$',
     ],
     # Universal button clicks - works for ANY button
     # Also handles form submission triggers like "submit", "create it", "post it"
@@ -3678,6 +3678,57 @@ async def execute_action(
     # Use LLM-extracted parameters if available, otherwise fall back to regex extraction
     llm_params = llm_params or {}
     try:
+        # === CONVERSATIONAL INSTRUCTOR TOOL FORMS ===
+        # Route these through the frontend form flow so voice asks for missing fields
+        # and then clicks the exact UI controls (instead of backend-only execution).
+        if action in {'create_breakout_groups', 'start_timer'}:
+            course_id = _resolve_course_id(db, current_page, user_id)
+            session_id = _resolve_session_id(db, current_page, user_id, course_id)
+
+            if not session_id:
+                missing_target = "create breakout groups" if action == "create_breakout_groups" else "start a timer"
+                return {
+                    "action": action,
+                    "message": f"Please select a session first, then I can {missing_target}.",
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": "/console"}},
+                        {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+                        {"type": "ui.expandDropdown", "payload": {"target": "select-session"}},
+                    ],
+                }
+
+            if action == 'create_breakout_groups':
+                first_question = conversation_manager.start_form_filling(
+                    user_id, "create_breakout_groups", "/console"
+                )
+                return {
+                    "action": "create_breakout_groups",
+                    "session_id": session_id,
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": "/console"}},
+                        {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+                        {"type": "ui.clickButton", "payload": {"target": "open-breakout-form", "buttonLabel": "Create Breakout Groups"}},
+                    ],
+                    "message": first_question or "Opening breakout groups. How many groups would you like?",
+                    "conversation_state": "form_filling",
+                }
+
+            if action == 'start_timer':
+                first_question = conversation_manager.start_form_filling(
+                    user_id, "start_timer", "/console"
+                )
+                return {
+                    "action": "start_timer",
+                    "session_id": session_id,
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": "/console"}},
+                        {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
+                        {"type": "ui.clickButton", "payload": {"target": "open-timer-form", "buttonLabel": "Start Timer"}},
+                    ],
+                    "message": first_question or "Opening timer setup. How many minutes should the timer run?",
+                    "conversation_state": "form_filling",
+                }
+
         # === INSTRUCTOR ENHANCEMENT FEATURES ===
         # Try to handle instructor-specific voice commands first
         # Resolve session and course IDs from context

@@ -547,6 +547,12 @@ ACTION_PATTERNS = {
         r'\b(usar|utilizar)\s+(el|la\s+)?(\w+)\s+(.+)',
         r'\b(el|la)\s+(primero?|segundo?|tercero?|ultimo?|ultima?)\b',
     ],
+    'ui_search_navigate': [
+        r'\b(search|find|look\s+for)\s+(for\s+)?(.+)\b',
+        r'\b(go\s+to|open)\s+(.+)\s+(using\s+)?search\b',
+        r'\b(busca|buscar)\s+(.+)\b',
+        r'\b(abrir|ir\s+a)\s+(.+)\s+(con\s+)?busqueda\b',
+    ],
     # Universal tab switching - works for ANY tab name
     'ui_switch_tab': [
         # With "tab/panel/section" suffix
@@ -2943,6 +2949,26 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     # INTENT DETECTION: LLM-first or Regex-based (configurable)
     # =========================================================================
 
+    # Fast-path workspace search intent so this works reliably even if the LLM
+    # classifies it as a generic query.
+    search_query = _extract_search_query(transcript)
+    if search_query:
+        search_result = await execute_action(
+            'ui_search_navigate',
+            request.user_id,
+            request.current_page,
+            db,
+            transcript,
+            {"searchQuery": search_query},
+        )
+        if search_result:
+            return ConverseResponse(
+                message=sanitize_speech(f"Searching for {search_query}."),
+                action=ActionResponse(type='execute', executed=True),
+                results=[search_result],
+                suggestions=["Open notifications", "Switch tab", "Go back"],
+            )
+
     if USE_LLM_INTENT_DETECTION:
         # =====================================================================
         # LLM-FIRST INTENT DETECTION (Natural Language Understanding)
@@ -3339,6 +3365,39 @@ def _extract_button_info(transcript: str) -> Dict[str, str]:
             return {"target": target, "label": phrase.title()}
 
     return {}
+
+
+def _extract_search_query(transcript: str) -> Optional[str]:
+    """Extract the intended search query for workspace search navigation."""
+    text = normalize_spanish_text((transcript or "").strip().lower())
+    if not text:
+        return None
+
+    patterns = [
+        r'^(?:search|find|look\s+for)\s+(?:for\s+)?(.+)$',
+        r'^(?:busca|buscar)\s+(.+)$',
+        r'^(?:open|go\s+to)\s+(.+?)\s+(?:using\s+)?search$',
+        r'^(?:abrir|ir\s+a)\s+(.+?)\s+(?:con\s+)?busqueda$',
+    ]
+
+    query = None
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            query = match.group(1).strip()
+            break
+
+    if not query:
+        if any(k in text for k in ["search", "find", "look for", "busca", "buscar"]):
+            query = text
+        else:
+            return None
+
+    # Remove common filler words that hurt matching.
+    query = re.sub(r'\b(page|tab|section|panel|the|a|an|please|for me|por favor)\b', '', query).strip()
+    query = re.sub(r'\s+', ' ', query)
+
+    return query if len(query) >= 2 else None
 
 
 def _extract_student_name(transcript: str) -> Optional[str]:
@@ -3916,6 +3975,22 @@ async def execute_action(
                     ],
                 }
             return {"message": "I couldn't determine which button to click."}
+
+        # === WORKSPACE SEARCH + NAVIGATE ===
+        if action == 'ui_search_navigate':
+            query = llm_params.get("searchQuery") if llm_params else None
+            if not query:
+                query = _extract_search_query(transcript or "")
+            if not query:
+                return {"message": "What should I search for?"}
+
+            return {
+                "action": "search_navigate",
+                "message": f"Searching for {query}.",
+                "ui_actions": [
+                    {"type": "ui.searchAndNavigate", "payload": {"query": query}},
+                ],
+            }
 
         # Note: Specific tab handlers (open_enrollment_tab, open_create_tab, open_manage_tab)
         # are now handled by the universal ui_switch_tab action above

@@ -1090,6 +1090,80 @@ export const VoiceUIController = () => {
   }, [findElement]);
 
   /**
+   * Workspace search: fill top search input and navigate to best matching result.
+   */
+  const handleSearchAndNavigate = useCallback((event: CustomEvent) => {
+    const rawQuery = String(event.detail?.query || event.detail?.target || '').trim();
+    if (!rawQuery) {
+      console.warn('🎤 VoiceUI: searchAndNavigate missing query');
+      return;
+    }
+
+    const query = rawQuery.toLowerCase();
+    console.log('🎤 VoiceUI: searchAndNavigate', { query });
+
+    const input = (findElement('workspace-search') ||
+      document.querySelector('[data-voice-id="workspace-search"]')) as HTMLInputElement | null;
+
+    if (!input) {
+      console.warn('🎤 VoiceUI: workspace search input not found');
+      return;
+    }
+
+    // React-compatible input update
+    input.focus();
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value'
+    )?.set;
+    if (nativeInputValueSetter) {
+      nativeInputValueSetter.call(input, rawQuery);
+    } else {
+      input.value = rawQuery;
+    }
+    const tracker = (input as any)._valueTracker;
+    if (tracker) {
+      tracker.setValue('__voice_search__');
+    }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Wait for search popover links to render and click the best match.
+    window.setTimeout(() => {
+      const links = Array.from(document.querySelectorAll('a[href^="/"]')) as HTMLAnchorElement[];
+      const best = links.find((link) => {
+        const text = (link.textContent || '').toLowerCase();
+        return text.includes(query);
+      });
+
+      if (best) {
+        best.click();
+        console.log('🎤 VoiceUI: searchAndNavigate clicked result:', best.textContent?.trim());
+        return;
+      }
+
+      // Fallback to direct route match if popover didn't yield a hit.
+      const pathMatchMap: Array<{ keys: string[]; path: string }> = [
+        { keys: ['introduction', 'intro', 'guide', 'platform'], path: '/platform-guide' },
+        { keys: ['course', 'courses'], path: '/courses' },
+        { keys: ['session', 'sessions'], path: '/sessions' },
+        { keys: ['forum', 'discussion'], path: '/forum' },
+        { keys: ['console', 'copilot'], path: '/console' },
+        { keys: ['report', 'reports', 'analytics'], path: '/reports' },
+        { keys: ['dashboard', 'home'], path: '/dashboard' },
+      ];
+
+      const mapped = pathMatchMap.find((entry) => entry.keys.some((k) => query.includes(k)));
+      if (mapped) {
+        router.push(mapped.path);
+        console.log('🎤 VoiceUI: searchAndNavigate fallback route:', mapped.path);
+      } else {
+        console.warn('🎤 VoiceUI: searchAndNavigate no matching result found');
+      }
+    }, 250);
+  }, [findElement, router]);
+
+  /**
    * Get available UI elements on current page (for debugging/help)
    */
   const handleGetAvailableElements = useCallback((event: CustomEvent) => {
@@ -1133,6 +1207,7 @@ export const VoiceUIController = () => {
       'ui.clearInput': handleClearInput,
       'ui.switchTab': handleSwitchTab,
       'ui.selectListItem': handleSelectListItem,
+      'ui.searchAndNavigate': handleSearchAndNavigate,
       'ui.getAvailableElements': handleGetAvailableElements,
     };
 
@@ -1159,6 +1234,7 @@ export const VoiceUIController = () => {
     handleClearInput,
     handleSwitchTab,
     handleSelectListItem,
+    handleSearchAndNavigate,
     handleGetAvailableElements,
   ]);
 

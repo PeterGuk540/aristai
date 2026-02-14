@@ -35,16 +35,51 @@ class IntegrationConnection(Base):
     user = relationship("User")
 
 
+class IntegrationProviderConnection(Base):
+    __tablename__ = "integration_provider_connections"
+    __table_args__ = (
+        UniqueConstraint("provider", "label", name="uq_integration_provider_connection_provider_label"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider = Column(String(50), nullable=False, index=True)
+    label = Column(String(255), nullable=False)
+    api_base_url = Column(String(500), nullable=False)
+    api_token_encrypted = Column(Text, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    is_default = Column(Boolean, nullable=False, default=False)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    last_tested_at = Column(DateTime(timezone=True), nullable=True)
+    last_test_status = Column(String(30), nullable=True)  # ok|error
+    last_test_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    creator = relationship("User")
+
+
 class IntegrationCourseMapping(Base):
     __tablename__ = "integration_course_mappings"
     __table_args__ = (
-        UniqueConstraint("provider", "external_course_id", "target_course_id", name="uq_integration_course_mapping"),
+        UniqueConstraint(
+            "provider",
+            "external_course_id",
+            "target_course_id",
+            "source_connection_id",
+            name="uq_integration_course_mapping",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
     provider = Column(String(50), nullable=False, index=True)
     external_course_id = Column(String(255), nullable=False, index=True)
     external_course_name = Column(String(500), nullable=True)
+    source_connection_id = Column(
+        Integer,
+        ForeignKey("integration_provider_connections.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     target_course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     is_active = Column(Boolean, nullable=False, default=True)
@@ -53,6 +88,7 @@ class IntegrationCourseMapping(Base):
 
     target_course = relationship("Course")
     creator = relationship("User")
+    source_connection = relationship("IntegrationProviderConnection")
 
 
 class IntegrationSyncJob(Base):
@@ -61,6 +97,12 @@ class IntegrationSyncJob(Base):
     id = Column(Integer, primary_key=True, index=True)
     provider = Column(String(50), nullable=False, index=True)
     source_course_external_id = Column(String(255), nullable=False, index=True)
+    source_connection_id = Column(
+        Integer,
+        ForeignKey("integration_provider_connections.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     target_course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     target_session_id = Column(Integer, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True)
     triggered_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -78,6 +120,7 @@ class IntegrationSyncJob(Base):
     target_course = relationship("Course")
     target_session = relationship("Session")
     trigger_user = relationship("User")
+    source_connection = relationship("IntegrationProviderConnection")
 
 
 class IntegrationSyncItem(Base):
@@ -100,7 +143,7 @@ class IntegrationMaterialLink(Base):
     __tablename__ = "integration_material_links"
     __table_args__ = (
         UniqueConstraint(
-            "provider", "external_material_id", "target_course_id", "target_session_id",
+            "provider", "external_material_id", "target_course_id", "target_session_id", "source_connection_id",
             name="uq_integration_material_link_provider_external_target"
         ),
     )
@@ -109,6 +152,12 @@ class IntegrationMaterialLink(Base):
     provider = Column(String(50), nullable=False, index=True)
     external_material_id = Column(String(255), nullable=False, index=True)
     external_course_id = Column(String(255), nullable=False, index=True)
+    source_connection_id = Column(
+        Integer,
+        ForeignKey("integration_provider_connections.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     target_course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     target_session_id = Column(Integer, ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True)
     course_material_id = Column(Integer, ForeignKey("course_materials.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -118,3 +167,4 @@ class IntegrationMaterialLink(Base):
     target_course = relationship("Course")
     target_session = relationship("Session")
     course_material = relationship("CourseMaterial")
+    source_connection = relationship("IntegrationProviderConnection")

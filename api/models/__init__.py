@@ -22,6 +22,7 @@ from api.models.engagement import (
 )
 from api.models.integration import (
     IntegrationConnection,
+    IntegrationProviderConnection,
     IntegrationCourseMapping,
     IntegrationSyncJob,
     IntegrationSyncItem,
@@ -54,6 +55,7 @@ __all__ = [
     "AIResponseDraft",
     # Integration models
     "IntegrationConnection",
+    "IntegrationProviderConnection",
     "IntegrationCourseMapping",
     "IntegrationSyncJob",
     "IntegrationSyncItem",

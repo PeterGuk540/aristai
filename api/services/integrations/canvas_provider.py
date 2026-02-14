@@ -14,9 +14,9 @@ from api.services.integrations.base import ExternalCourse, ExternalMaterial, Lms
 class CanvasProvider(LmsProvider):
     provider_name = "canvas"
 
-    def __init__(self) -> None:
-        self.api_url = os.getenv("CANVAS_API_URL", "").strip().rstrip("/")
-        self.api_token = os.getenv("CANVAS_API_TOKEN", "").strip()
+    def __init__(self, api_url: str | None = None, api_token: str | None = None) -> None:
+        self.api_url = (api_url if api_url is not None else os.getenv("CANVAS_API_URL", "")).strip().rstrip("/")
+        self.api_token = (api_token if api_token is not None else os.getenv("CANVAS_API_TOKEN", "")).strip()
         self.timeout = float(os.getenv("CANVAS_API_TIMEOUT", "30"))
 
     def is_configured(self) -> bool:

@@ -30,7 +30,7 @@ type ExternalMaterial = {
 };
 type LocalCourse = { id: number; title: string };
 type LocalSession = { id: number; title: string; status?: string };
-type Connection = {
+type ConnectionCheck = {
   id: number;
   provider: string;
   user_id: number;
@@ -39,11 +39,24 @@ type Connection = {
   provider_user_name?: string;
   last_checked_at?: string;
 };
+type ProviderConnection = {
+  id: number;
+  provider: string;
+  label: string;
+  api_base_url: string;
+  token_masked: string;
+  is_active: boolean;
+  is_default: boolean;
+  last_tested_at?: string;
+  last_test_status?: string;
+  last_test_error?: string;
+};
 type Mapping = {
   id: number;
   provider: string;
   external_course_id: string;
   external_course_name?: string;
+  source_connection_id?: number;
   target_course_id: number;
   created_by?: number;
   is_active: boolean;
@@ -54,6 +67,7 @@ type SyncJob = {
   id: number;
   provider: string;
   source_course_external_id: string;
+  source_connection_id?: number;
   target_course_id: number;
   target_session_id?: number;
   status: string;
@@ -81,8 +95,14 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
   const [provider, setProvider] = useState('canvas');
-  const [connection, setConnection] = useState<Connection | null>(null);
+  const [connectionCheck, setConnectionCheck] = useState<ConnectionCheck | null>(null);
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const [providerConnections, setProviderConnections] = useState<ProviderConnection[]>([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState('');
+  const [newConnLabel, setNewConnLabel] = useState('');
+  const [newConnUrl, setNewConnUrl] = useState('');
+  const [newConnToken, setNewConnToken] = useState('');
+  const [savingProviderConnection, setSavingProviderConnection] = useState(false);
   const [externalCourses, setExternalCourses] = useState<ExternalCourse[]>([]);
   const [externalMaterials, setExternalMaterials] = useState<ExternalMaterial[]>([]);
   const [localCourses, setLocalCourses] = useState<LocalCourse[]>([]);
@@ -104,6 +124,8 @@ export default function IntegrationsPage() {
     () => providers.find((p) => p.name === provider),
     [providers, provider]
   );
+  const activeConnectionId = selectedConnectionId ? Number(selectedConnectionId) : undefined;
+  const canReadExternal = Boolean(activeConnectionId || providerState?.configured);
 
   const localCourseTitleById = useMemo(() => {
     const out: Record<number, string> = {};
@@ -127,20 +149,32 @@ export default function IntegrationsPage() {
   };
 
   const refreshProviderData = async () => {
-    if (!providerState?.enabled || !providerState?.configured) {
-      setConnection(null);
+    if (!providerState?.enabled) {
+      setProviderConnections([]);
       setExternalCourses([]);
       setMappings([]);
       setJobs([]);
       return;
     }
-
     try {
+      const connections = await api.listProviderConnections(provider);
+      setProviderConnections(connections);
+
+      let effectiveConnectionId = activeConnectionId;
+      if (!effectiveConnectionId && connections.length > 0) {
+        const preferred = connections.find((c) => c.is_default) || connections[0];
+        effectiveConnectionId = preferred.id;
+        setSelectedConnectionId(String(preferred.id));
+      }
+
       const [courses, mappingRows, jobRows] = await Promise.all([
-        api.getExternalCourses(provider),
-        api.listIntegrationMappings(provider),
-        api.listIntegrationSyncJobs(provider, undefined, 10),
+        (effectiveConnectionId || providerState?.configured)
+          ? api.getExternalCourses(provider, effectiveConnectionId)
+          : Promise.resolve([]),
+        api.listIntegrationMappings(provider, undefined, effectiveConnectionId),
+        api.listIntegrationSyncJobs(provider, undefined, 10, effectiveConnectionId),
       ]);
+
       setExternalCourses(courses);
       setMappings(mappingRows);
       setJobs(jobRows);
@@ -150,14 +184,14 @@ export default function IntegrationsPage() {
   };
 
   const handleConnectionCheck = async () => {
-    if (!currentUser?.id || !providerState?.enabled || !providerState?.configured) return;
+    if (!currentUser?.id || !providerState?.enabled || !canReadExternal) return;
     setCheckingConnection(true);
     setError('');
     try {
-      const row = await api.checkIntegrationConnection(provider, currentUser.id);
-      setConnection(row);
+      const row = await api.checkIntegrationConnection(provider, currentUser.id, activeConnectionId);
+      setConnectionCheck(row);
     } catch (e: any) {
-      setConnection(null);
+      setConnectionCheck(null);
       setError(e?.message || 'Connection check failed.');
     } finally {
       setCheckingConnection(false);
@@ -179,7 +213,7 @@ export default function IntegrationsPage() {
       await handleConnectionCheck();
     };
     void run();
-  }, [provider, providerState?.enabled, providerState?.configured, currentUser?.id]);
+  }, [provider, providerState?.enabled, providerState?.configured, currentUser?.id, selectedConnectionId]);
 
   useEffect(() => {
     if (!selectedMappingId) return;
@@ -187,22 +221,25 @@ export default function IntegrationsPage() {
     if (!selected) return;
     setSelectedLocalCourse(String(selected.target_course_id));
     setSelectedExternalCourse(selected.external_course_id);
+    if (selected.source_connection_id) {
+      setSelectedConnectionId(String(selected.source_connection_id));
+    }
   }, [selectedMappingId, mappings]);
 
   useEffect(() => {
     setExternalMaterials([]);
     setSelectedMaterialIds([]);
-    if (!selectedExternalCourse || !providerState?.enabled || !providerState?.configured) return;
+    if (!selectedExternalCourse || !providerState?.enabled || !canReadExternal) return;
     const run = async () => {
       try {
-        const items = await api.getExternalMaterials(provider, selectedExternalCourse);
+        const items = await api.getExternalMaterials(provider, selectedExternalCourse, activeConnectionId);
         setExternalMaterials(items);
       } catch (e: any) {
         setError(e?.message || `Failed to load materials for external course ${selectedExternalCourse}.`);
       }
     };
     void run();
-  }, [provider, selectedExternalCourse, providerState?.enabled, providerState?.configured]);
+  }, [provider, selectedExternalCourse, providerState?.enabled, canReadExternal, activeConnectionId]);
 
   useEffect(() => {
     setLocalSessions([]);
@@ -228,6 +265,63 @@ export default function IntegrationsPage() {
   const selectAllMaterials = () => setSelectedMaterialIds(externalMaterials.map((m) => m.external_id));
   const clearMaterials = () => setSelectedMaterialIds([]);
 
+  const handleAddProviderConnection = async () => {
+    setError('');
+    setMessage('');
+    if (!newConnLabel.trim() || !newConnUrl.trim() || !newConnToken.trim()) {
+      setError('Label, API URL, and API token are required.');
+      return;
+    }
+    setSavingProviderConnection(true);
+    try {
+      const created = await api.createProviderConnection(provider, {
+        label: newConnLabel.trim(),
+        api_base_url: newConnUrl.trim(),
+        api_token: newConnToken.trim(),
+        is_default: providerConnections.length === 0,
+        created_by: currentUser?.id,
+      });
+      setSelectedConnectionId(String(created.id));
+      setNewConnLabel('');
+      setNewConnUrl('');
+      setNewConnToken('');
+      setMessage(`Connection "${created.label}" added.`);
+      await refreshProviderData();
+    } catch (e: any) {
+      setError(e?.message || 'Could not add provider connection.');
+    } finally {
+      setSavingProviderConnection(false);
+    }
+  };
+
+  const handleTestActiveConnection = async () => {
+    if (!activeConnectionId) {
+      setError('Select a provider connection first.');
+      return;
+    }
+    try {
+      await api.testProviderConnection(provider, activeConnectionId);
+      setMessage('Connection test complete.');
+      await refreshProviderData();
+    } catch (e: any) {
+      setError(e?.message || 'Connection test failed.');
+    }
+  };
+
+  const handleActivateConnection = async () => {
+    if (!activeConnectionId) {
+      setError('Select a provider connection first.');
+      return;
+    }
+    try {
+      await api.activateProviderConnection(provider, activeConnectionId);
+      setMessage('Connection is now default.');
+      await refreshProviderData();
+    } catch (e: any) {
+      setError(e?.message || 'Could not activate connection.');
+    }
+  };
+
   const handleSaveMapping = async () => {
     setError('');
     setMessage('');
@@ -242,6 +336,7 @@ export default function IntegrationsPage() {
         target_course_id: Number(selectedLocalCourse),
         source_course_external_id: selectedExternalCourse,
         source_course_name: source?.title,
+        source_connection_id: activeConnectionId,
         created_by: currentUser?.id,
       });
       setSelectedMappingId(String(mapped.id));
@@ -276,6 +371,7 @@ export default function IntegrationsPage() {
         target_course_id: Number(selectedLocalCourse),
         source_course_external_id: selectedExternalCourse,
         material_external_ids: selectedMaterialIds,
+        source_connection_id: activeConnectionId,
         target_session_id: selectedLocalSession ? Number(selectedLocalSession) : undefined,
         uploaded_by: currentUser?.id,
         overwrite_title_prefix: '[Canvas] ',
@@ -307,6 +403,7 @@ export default function IntegrationsPage() {
       const result = await api.syncExternalMaterials(provider, {
         target_course_id: Number(selectedLocalCourse),
         source_course_external_id: selectedExternalCourse,
+        source_connection_id: activeConnectionId,
         target_session_id: selectedLocalSession ? Number(selectedLocalSession) : undefined,
         uploaded_by: currentUser?.id,
         overwrite_title_prefix: '[Canvas] ',
@@ -347,7 +444,7 @@ export default function IntegrationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">LMS Integrations</h1>
           <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Connect external LMS platforms, save mappings, and sync materials into AristAI.
+            Connect each partner LMS tenant separately, then map and sync materials into AristAI.
           </p>
         </div>
         <button
@@ -368,7 +465,7 @@ export default function IntegrationsPage() {
           </div>
           <button
             onClick={() => void handleConnectionCheck()}
-            disabled={checkingConnection || !providerState?.configured}
+            disabled={checkingConnection || !canReadExternal}
             data-voice-id="check-integration-connection"
             className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-1.5 text-xs hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
           >
@@ -393,16 +490,16 @@ export default function IntegrationsPage() {
                 )}
               </div>
               <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                {p.enabled ? (p.configured ? 'Configured' : 'Not configured') : 'Planned'}
+                {p.enabled ? (p.configured ? 'Global credentials available' : 'Use saved connection') : 'Planned'}
               </p>
             </div>
           ))}
         </div>
 
         <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs dark:border-stone-700 dark:bg-stone-900/30">
-          {connection ? (
+          {connectionCheck ? (
             <span className="text-emerald-700 dark:text-emerald-300">
-              Connected as {connection.provider_user_name || `user ${connection.user_id}`}.
+              Connected as {connectionCheck.provider_user_name || `user ${connectionCheck.user_id}`}.
             </span>
           ) : (
             <span className="text-neutral-600 dark:text-neutral-300">No verified connection yet.</span>
@@ -434,6 +531,80 @@ export default function IntegrationsPage() {
 
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
+              Provider Connection
+            </label>
+            <select
+              value={selectedConnectionId}
+              onChange={(e) => setSelectedConnectionId(e.target.value)}
+              data-voice-id="select-provider-connection"
+              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+            >
+              <option value="">Use global env credentials</option>
+              {providerConnections.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.label} ({c.token_masked}) {c.is_default ? '[default]' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-2 grid gap-2 md:grid-cols-3">
+            <input
+              value={newConnLabel}
+              onChange={(e) => setNewConnLabel(e.target.value)}
+              data-voice-id="new-provider-connection-label"
+              placeholder="Connection label (e.g., UPP Canvas)"
+              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+            />
+            <input
+              value={newConnUrl}
+              onChange={(e) => setNewConnUrl(e.target.value)}
+              data-voice-id="new-provider-connection-url"
+              placeholder="API base URL (e.g., https://.../api/v1)"
+              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+            />
+            <input
+              value={newConnToken}
+              onChange={(e) => setNewConnToken(e.target.value)}
+              data-voice-id="new-provider-connection-token"
+              placeholder="API token"
+              type="password"
+              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+            />
+          </div>
+
+          <div className="flex items-end gap-2">
+            <button
+              onClick={handleAddProviderConnection}
+              disabled={savingProviderConnection}
+              data-voice-id="add-provider-connection"
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+            >
+              {savingProviderConnection ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />}
+              Add connection
+            </button>
+            <button
+              onClick={handleTestActiveConnection}
+              data-voice-id="test-provider-connection"
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+            >
+              Test selected
+            </button>
+            <button
+              onClick={handleActivateConnection}
+              data-voice-id="activate-provider-connection"
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+            >
+              Set default
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-[#1a150c]">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
               Saved Mapping
             </label>
             <select
@@ -460,9 +631,9 @@ export default function IntegrationsPage() {
               onChange={(e) => setSelectedExternalCourse(e.target.value)}
               data-voice-id="select-external-course"
               className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
-              disabled={!providerState?.configured}
+              disabled={!canReadExternal}
             >
-              <option value="">{providerState?.configured ? 'Select external course' : 'Configure provider first'}</option>
+              <option value="">{canReadExternal ? 'Select external course' : 'Select or add a connection first'}</option>
               {externalCourses.map((c) => (
                 <option key={c.external_id} value={c.external_id}>
                   {c.title}

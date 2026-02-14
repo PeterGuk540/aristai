@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from api.core.database import get_db
 from api.models.course import Course, generate_join_code
 from api.models.course_material import CourseMaterial
+from api.models.enrollment import Enrollment
 from api.models.integration import (
     IntegrationConnection,
     IntegrationCourseMapping,
@@ -30,6 +31,7 @@ from api.models.integration import (
 )
 from api.models.session import Session as SessionModel
 from api.models.session import SessionStatus
+from api.models.user import AuthProvider, User, UserRole
 from api.services.integrations.registry import get_provider, list_supported_providers
 from api.services.integrations.secrets import decrypt_secret, encrypt_secret
 from api.services.s3_service import get_s3_service
@@ -129,6 +131,25 @@ class ImportCourseResponse(BaseModel):
     target_course_title: str
     mapping_id: int
     created: bool
+
+
+class SyncRosterRequest(BaseModel):
+    target_course_id: int
+    source_course_external_id: str
+    source_connection_id: Optional[int] = None
+    mapping_id: Optional[int] = None
+
+
+class SyncRosterResponse(BaseModel):
+    provider: str
+    source_connection_id: Optional[int] = None
+    source_course_external_id: str
+    target_course_id: int
+    scanned_count: int
+    enrolled_count: int
+    created_users_count: int
+    skipped_count: int
+    missing_email_count: int
 
 
 class MappingRequest(BaseModel):
@@ -1024,3 +1045,79 @@ def sync_materials(
     )
     actor_id = request.uploaded_by if request.uploaded_by is not None else user_id
     return _import_with_tracking(db, provider, p, import_request, actor_id, external_ids)
+
+
+@router.post("/{provider}/sync-roster", response_model=SyncRosterResponse)
+def sync_roster(
+    provider: str,
+    request: SyncRosterRequest,
+    db: Session = Depends(get_db),
+):
+    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id)
+    _validate_target(db, request.target_course_id, None)
+
+    if request.mapping_id is not None:
+        mapping = db.query(IntegrationCourseMapping).filter(
+            IntegrationCourseMapping.id == request.mapping_id,
+            IntegrationCourseMapping.provider == provider,
+            IntegrationCourseMapping.is_active.is_(True),
+        ).first()
+        if not mapping:
+            raise HTTPException(status_code=404, detail="Mapping not found.")
+        request.source_course_external_id = mapping.external_course_id
+        request.source_connection_id = mapping.source_connection_id
+        request.target_course_id = mapping.target_course_id
+
+    external_enrollments = p.list_enrollments(request.source_course_external_id)
+    scanned_count = len(external_enrollments)
+    enrolled_count = 0
+    created_users_count = 0
+    skipped_count = 0
+    missing_email_count = 0
+
+    for record in external_enrollments:
+        email = (record.email or "").strip().lower()
+        if not email:
+            missing_email_count += 1
+            skipped_count += 1
+            continue
+
+        user = db.query(User).filter(
+            User.email == email,
+            User.auth_provider == AuthProvider.cognito,
+        ).first()
+        if user is None:
+            user = User(
+                name=(record.name or email.split("@")[0]).strip() or email,
+                email=email,
+                role=UserRole.student,
+                auth_provider=AuthProvider.cognito,
+            )
+            db.add(user)
+            db.flush()
+            created_users_count += 1
+
+        existing = db.query(Enrollment).filter(
+            Enrollment.user_id == user.id,
+            Enrollment.course_id == request.target_course_id,
+        ).first()
+        if existing:
+            skipped_count += 1
+            continue
+
+        db.add(Enrollment(user_id=user.id, course_id=request.target_course_id))
+        enrolled_count += 1
+
+    db.commit()
+
+    return SyncRosterResponse(
+        provider=provider,
+        source_connection_id=request.source_connection_id,
+        source_course_external_id=request.source_course_external_id,
+        target_course_id=request.target_course_id,
+        scanned_count=scanned_count,
+        enrolled_count=enrolled_count,
+        created_users_count=created_users_count,
+        skipped_count=skipped_count,
+        missing_email_count=missing_email_count,
+    )

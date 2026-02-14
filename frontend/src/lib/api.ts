@@ -638,6 +638,27 @@ export const api = {
       }>;
     }>(`/integrations/${provider}/sync`, { method: 'POST', body: JSON.stringify(data) }),
 
+  syncExternalRoster: (
+    provider: string,
+    data: {
+      target_course_id: number;
+      source_course_external_id: string;
+      source_connection_id?: number;
+      mapping_id?: number;
+    }
+  ) =>
+    fetchApi<{
+      provider: string;
+      source_connection_id?: number;
+      source_course_external_id: string;
+      target_course_id: number;
+      scanned_count: number;
+      enrolled_count: number;
+      created_users_count: number;
+      skipped_count: number;
+      missing_email_count: number;
+    }>(`/integrations/${provider}/sync-roster`, { method: 'POST', body: JSON.stringify(data) }),
+
   listIntegrationSyncJobs: (provider?: string, targetCourseId?: number, limit: number = 20, sourceConnectionId?: number) => {
     const params = new URLSearchParams();
     if (provider) params.append('provider', provider);

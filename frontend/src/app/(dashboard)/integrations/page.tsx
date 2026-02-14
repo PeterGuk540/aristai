@@ -118,6 +118,7 @@ export default function IntegrationsPage() {
   const [importing, setImporting] = useState(false);
   const [savingMapping, setSavingMapping] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncingRoster, setSyncingRoster] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -480,6 +481,35 @@ export default function IntegrationsPage() {
     }
   };
 
+  const handleSyncRoster = async () => {
+    setError('');
+    setMessage('');
+    if (!selectedLocalCourse) {
+      setError('Select a target AristAI course first.');
+      return;
+    }
+    if (!selectedExternalCourse) {
+      setError('Select a source external course first.');
+      return;
+    }
+    setSyncingRoster(true);
+    try {
+      const result = await api.syncExternalRoster(provider, {
+        target_course_id: Number(selectedLocalCourse),
+        source_course_external_id: selectedExternalCourse,
+        source_connection_id: activeConnectionId,
+        mapping_id: selectedMappingId ? Number(selectedMappingId) : undefined,
+      });
+      setMessage(
+        `Roster sync complete. Scanned ${result.scanned_count}, enrolled ${result.enrolled_count}, created users ${result.created_users_count}, skipped ${result.skipped_count}.`
+      );
+    } catch (e: any) {
+      setError(e?.message || 'Roster sync failed.');
+    } finally {
+      setSyncingRoster(false);
+    }
+  };
+
   if (!isInstructor && !isAdmin) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
@@ -778,6 +808,15 @@ export default function IntegrationsPage() {
             >
               {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
               Sync all
+            </button>
+            <button
+              onClick={handleSyncRoster}
+              disabled={syncingRoster}
+              data-voice-id="sync-roster"
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+            >
+              {syncingRoster ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
+              Sync students
             </button>
           </div>
         </div>

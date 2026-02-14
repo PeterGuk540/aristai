@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from api.services.integrations.base import ExternalCourse, ExternalMaterial, LmsProvider
+from api.services.integrations.base import ExternalCourse, ExternalEnrollment, ExternalMaterial, LmsProvider
 
 
 class BlackboardProvider(LmsProvider):
@@ -24,4 +24,7 @@ class BlackboardProvider(LmsProvider):
         raise RuntimeError("Blackboard connector is not implemented yet.")
 
     def download_material(self, material_external_id: str) -> tuple[bytes, ExternalMaterial]:
+        raise RuntimeError("Blackboard connector is not implemented yet.")
+
+    def list_enrollments(self, course_external_id: str) -> list[ExternalEnrollment]:
         raise RuntimeError("Blackboard connector is not implemented yet.")

@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from api.services.integrations.base import ExternalCourse, ExternalMaterial, LmsProvider
+from api.services.integrations.base import ExternalCourse, ExternalEnrollment, ExternalMaterial, LmsProvider
 
 
 class CanvasProvider(LmsProvider):
@@ -126,3 +126,26 @@ class CanvasProvider(LmsProvider):
             response = client.get(material.source_url)
             response.raise_for_status()
             return response.content, material
+
+    def list_enrollments(self, course_external_id: str) -> list[ExternalEnrollment]:
+        raw_users = self._get_paginated(
+            f"/courses/{course_external_id}/users",
+            params={"enrollment_type[]": "student"},
+        )
+        enrollments: list[ExternalEnrollment] = []
+        for u in raw_users:
+            user_id = u.get("id")
+            if user_id is None:
+                continue
+            email = u.get("email") or u.get("login_id") or None
+            name = u.get("name") or u.get("short_name") or u.get("sortable_name")
+            enrollments.append(
+                ExternalEnrollment(
+                    provider=self.provider_name,
+                    external_user_id=str(user_id),
+                    role="student",
+                    name=name,
+                    email=email,
+                )
+            )
+        return enrollments

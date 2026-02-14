@@ -28,6 +28,15 @@ class ExternalMaterial:
     source_url: str | None = None
 
 
+@dataclass
+class ExternalEnrollment:
+    provider: str
+    external_user_id: str
+    role: str
+    name: str | None = None
+    email: str | None = None
+
+
 class LmsProvider(Protocol):
     """Provider contract for LMS platforms (Canvas, Blackboard, etc.)."""
 
@@ -44,3 +53,6 @@ class LmsProvider(Protocol):
 
     def download_material(self, material_external_id: str) -> tuple[bytes, ExternalMaterial]:
         """Download one material and return payload plus normalized metadata."""
+
+    def list_enrollments(self, course_external_id: str) -> list[ExternalEnrollment]:
+        """List enrollments for an external course."""

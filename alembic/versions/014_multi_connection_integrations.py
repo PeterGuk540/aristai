@@ -1,6 +1,6 @@
 """Add provider connection configs and connection-aware integration keys.
 
-Revision ID: 014_multi_connection_integrations
+Revision ID: 014_multi_conn_integrations
 Revises: 013_integrations_tables
 Create Date: 2026-02-13
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "014_multi_connection_integrations"
+revision = "014_multi_conn_integrations"
 down_revision = "013_integrations_tables"
 branch_labels = None
 depends_on = None

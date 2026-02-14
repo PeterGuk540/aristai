@@ -241,6 +241,13 @@ def _mask_token(token: str) -> str:
     return f"{token[:3]}...{token[-3:]}"
 
 
+def _provider_display_name(provider: str) -> str:
+    p = (provider or "").strip().lower()
+    if p == "upp":
+        return "UPP"
+    return p.title()
+
+
 def _is_admin(db: Session, user_id: Optional[int]) -> bool:
     if user_id is None:
         return False
@@ -422,7 +429,7 @@ def _ensure_target_course(
     except Exception:
         source_title = None
 
-    title = source_title or f"Imported {provider.title()} Course {source_course_external_id}"
+    title = source_title or f"Imported {_provider_display_name(provider)} Course {source_course_external_id}"
     join_code = generate_join_code()
     while db.query(Course).filter(Course.join_code == join_code).first():
         join_code = generate_join_code()
@@ -962,7 +969,7 @@ def import_external_course(
         except Exception:  # noqa: BLE001
             course_name = None
     if not course_name:
-        course_name = f"Imported {provider.title()} Course {course_external_id}"
+        course_name = f"Imported {_provider_display_name(provider)} Course {course_external_id}"
 
     join_code = generate_join_code()
     while db.query(Course).filter(Course.join_code == join_code).first():

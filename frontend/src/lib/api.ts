@@ -601,7 +601,7 @@ export const api = {
   importExternalMaterials: (
     provider: string,
     data: {
-      target_course_id: number;
+      target_course_id?: number;
       source_course_external_id: string;
       material_external_ids: string[];
       source_connection_id?: number;
@@ -613,6 +613,9 @@ export const api = {
     fetchApi<{
       provider: string;
       job_id: number;
+      target_course_id?: number;
+      target_course_title?: string;
+      created_target_course?: boolean;
       imported_count: number;
       skipped_count: number;
       failed_count: number;

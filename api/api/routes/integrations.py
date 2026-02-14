@@ -175,7 +175,7 @@ class MappingResponse(BaseModel):
 
 
 class ImportRequest(BaseModel):
-    target_course_id: int = Field(..., description="AristAI course id")
+    target_course_id: Optional[int] = Field(None, description="AristAI course id")
     source_course_external_id: str = Field(..., description="External provider course id")
     material_external_ids: list[str] = Field(default_factory=list, description="External material ids to import")
     source_connection_id: Optional[int] = Field(None, description="Optional provider connection id")
@@ -1156,9 +1156,23 @@ def import_materials(
     p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id, actor_user_id=actor_id)
     if not request.material_external_ids:
         raise HTTPException(status_code=400, detail="material_external_ids cannot be empty.")
-    _validate_target(db, request.target_course_id, request.target_session_id)
+    resolved_target_course_id, resolved_target_title, created_target_course = _ensure_target_course(
+        db=db,
+        provider=provider,
+        provider_obj=p,
+        source_course_external_id=request.source_course_external_id,
+        source_connection_id=request.source_connection_id,
+        target_course_id=request.target_course_id,
+        created_by=actor_id,
+    )
+    request.target_course_id = resolved_target_course_id
+    _validate_target(db, resolved_target_course_id, request.target_session_id)
 
-    return _import_with_tracking(db, provider, p, request, actor_id, request.material_external_ids)
+    result = _import_with_tracking(db, provider, p, request, actor_id, request.material_external_ids)
+    result.target_course_id = resolved_target_course_id
+    result.target_course_title = resolved_target_title
+    result.created_target_course = created_target_course
+    return result
 
 
 @router.post("/{provider}/sync", response_model=ImportResponse)

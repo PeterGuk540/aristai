@@ -3312,6 +3312,12 @@ def _extract_dropdown_hint(transcript: str) -> str:
         'instructor': 'select-instructor',
         'status': 'select-status',
         'type': 'select-type',
+        'provider': 'select-integration-provider',
+        'connection': 'select-provider-connection',
+        'external course': 'select-external-course',
+        'mapping': 'select-integration-mapping',
+        'target course': 'select-target-course',
+        'target session': 'select-target-session',
     }
 
     for keyword, target in dropdown_keywords.items():
@@ -3368,6 +3374,18 @@ def _extract_button_info(transcript: str) -> Dict[str, str]:
         'create session': 'create-session',
         'create and generate': 'create-course-with-plans',
         'generate plans': 'create-course-with-plans',
+        'add connection': 'add-provider-connection',
+        'connect canvas': 'connect-canvas-oauth',
+        'test selected': 'test-provider-connection',
+        'set default': 'activate-provider-connection',
+        'create forum course': 'import-external-course',
+        'save mapping': 'save-course-mapping',
+        'sync all': 'sync-all-materials',
+        'sync students': 'sync-roster',
+        'import selected materials': 'import-external-materials',
+        'import materials': 'import-external-materials',
+        'select all materials': 'select-all-external-materials',
+        'clear materials': 'clear-external-materials',
     }
 
     for phrase, target in button_mappings.items():
@@ -3956,6 +3974,18 @@ async def execute_action(
             target_hint = llm_params.get("target") or llm_params.get("dropdownTarget")
             if target_hint:
                 selection_info["target"] = target_hint
+            elif any(phrase in transcript_lower for phrase in ["provider connection", "connection", "conexion"]):
+                selection_info["target"] = "select-provider-connection"
+            elif any(phrase in transcript_lower for phrase in ["source provider", "provider", "proveedor"]):
+                selection_info["target"] = "select-integration-provider"
+            elif any(phrase in transcript_lower for phrase in ["saved mapping", "mapping", "mapeo"]):
+                selection_info["target"] = "select-integration-mapping"
+            elif any(phrase in transcript_lower for phrase in ["external course", "source course", "curso externo"]):
+                selection_info["target"] = "select-external-course"
+            elif any(phrase in transcript_lower for phrase in ["target course", "aristai course", "curso objetivo"]):
+                selection_info["target"] = "select-target-course"
+            elif any(phrase in transcript_lower for phrase in ["target session", "session optional", "sesion objetivo"]):
+                selection_info["target"] = "select-target-session"
             elif any(word in transcript_lower for word in ["course", "courses", "curso", "cursos", "class"]):
                 selection_info["target"] = "select-course"
             elif any(word in transcript_lower for word in ["session", "sessions", "sesion", "sesiones"]):
@@ -4010,6 +4040,18 @@ async def execute_action(
                     "refresh instructor requests": "refresh-instructor-requests",
                     "approve request": "approve-instructor-request",
                     "reject request": "reject-instructor-request",
+                    "add connection": "add-provider-connection",
+                    "connect canvas": "connect-canvas-oauth",
+                    "test selected": "test-provider-connection",
+                    "set default": "activate-provider-connection",
+                    "create forum course": "import-external-course",
+                    "save mapping": "save-course-mapping",
+                    "sync all": "sync-all-materials",
+                    "sync students": "sync-roster",
+                    "import selected materials": "import-external-materials",
+                    "import materials": "import-external-materials",
+                    "select all materials": "select-all-external-materials",
+                    "clear materials": "clear-external-materials",
                 }
                 button_target = button_aliases.get(normalized_button_name, raw_button_name)
                 button_label = raw_button_name

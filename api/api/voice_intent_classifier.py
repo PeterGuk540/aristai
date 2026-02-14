@@ -216,9 +216,9 @@ The user may speak in English or Spanish. Both languages should be understood eq
 
 ### NAVIGATE (category: "navigate")
 Go to different PAGES in the application. ONLY these pages exist:
-Actions: courses, sessions, forum, console, reports, introduction, platform_guide, dashboard, profile, voice_guide
+Actions: courses, sessions, forum, console, reports, integrations, introduction, platform_guide, dashboard, profile, voice_guide
 
-CRITICAL: The ONLY valid navigation targets are: courses, sessions, forum, console, reports, introduction, platform_guide, dashboard, profile, voice_guide
+CRITICAL: The ONLY valid navigation targets are: courses, sessions, forum, console, reports, integrations, introduction, platform_guide, dashboard, profile, voice_guide
 ANYTHING ELSE is NOT a page - it's either a TAB (use UI_ACTION with switch_tab) or a FEATURE (use QUERY).
 
 TABS ARE NOT PAGES! These are tabs within pages, use UI_ACTION category with action=switch_tab:
@@ -231,6 +231,7 @@ Examples of NAVIGATE (going to a whole page):
 - "open the forum" / "ir al foro" → navigate to forum
 - "navigate to reports" / "ver reportes" → navigate to reports
 - "go to console" / "ir a la consola" → navigate to console
+- "open integrations" / "ir a integraciones" → navigate to integrations
 - "take me to the introduction page" / "llevame a la introduccion" → navigate to introduction
 
 Examples that are NOT navigation (use UI_ACTION or QUERY instead):
@@ -678,6 +679,7 @@ INTENT_TO_LEGACY_ACTION = {
     "forum": "/forum",
     "console": "/console",
     "reports": "/reports",
+    "integrations": "/integrations",
     "introduction": "/platform-guide",
     "platform_guide": "/platform-guide",
     "dashboard": "/dashboard",
@@ -774,7 +776,7 @@ INTENT_TO_LEGACY_ACTION = {
 
 # Navigation targets
 NAVIGATION_TARGETS = {
-    "courses", "sessions", "forum", "console", "reports", "introduction", "platform_guide", "dashboard", "profile", "voice_guide"
+    "courses", "sessions", "forum", "console", "reports", "integrations", "introduction", "platform_guide", "dashboard", "profile", "voice_guide"
 }
 
 

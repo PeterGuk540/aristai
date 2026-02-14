@@ -62,6 +62,20 @@ async def execute_tool(request: MCPExecuteRequest, db: Session = Depends(get_db)
         )
 
     args = request.arguments or {}
+    if tool_info.get("mode") == "write" and request.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required for write tools",
+        )
+
+    if request.user_id is not None:
+        for identity_field in ("user_id", "created_by", "uploaded_by", "triggered_by"):
+            if identity_field in args and args[identity_field] is not None and args[identity_field] != request.user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Argument '{identity_field}' must match request user_id",
+                )
+
     validation_error = _validate_tool_args(request.tool, args, tool_info.get("parameters", {}))
     if validation_error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=validation_error)

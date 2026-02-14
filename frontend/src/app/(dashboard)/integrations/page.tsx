@@ -429,10 +429,6 @@ export default function IntegrationsPage() {
   const handleImport = async () => {
     setError('');
     setMessage('');
-    if (!selectedLocalCourse) {
-      setError('Select a target AristAI course first.');
-      return;
-    }
     if (!selectedExternalCourse) {
       setError('Select a source external course first.');
       return;
@@ -445,7 +441,7 @@ export default function IntegrationsPage() {
     setImporting(true);
     try {
       const result = await api.importExternalMaterials(provider, {
-        target_course_id: Number(selectedLocalCourse),
+        target_course_id: selectedLocalCourse ? Number(selectedLocalCourse) : undefined,
         source_course_external_id: selectedExternalCourse,
         material_external_ids: selectedMaterialIds,
         source_connection_id: activeConnectionId,
@@ -453,8 +449,11 @@ export default function IntegrationsPage() {
         uploaded_by: currentUser?.id,
         overwrite_title_prefix: '[Canvas] ',
       });
+      if (result.target_course_id) {
+        setSelectedLocalCourse(String(result.target_course_id));
+      }
       setMessage(
-        `Import complete. Imported ${result.imported_count}, skipped ${result.skipped_count ?? 0}, failed ${result.failed_count}.`
+        `${result.created_target_course ? `Created target course: ${result.target_course_title}. ` : ''}Import complete. Imported ${result.imported_count}, skipped ${result.skipped_count ?? 0}, failed ${result.failed_count}.`
       );
       await refreshProviderData();
     } catch (e: any) {

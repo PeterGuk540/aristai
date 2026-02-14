@@ -406,7 +406,7 @@ export const api = {
   getIntegrationProviders: () =>
     fetchApi<Array<{ name: string; configured: boolean; enabled: boolean }>>('/integrations/providers'),
 
-  listProviderConnections: (provider: string) =>
+  listProviderConnections: (provider: string, userId: number) =>
     fetchApi<Array<{
       id: number;
       provider: string;
@@ -421,7 +421,7 @@ export const api = {
       last_test_error?: string;
       created_at?: string;
       updated_at?: string;
-    }>>(`/integrations/${provider}/config-connections`),
+    }>>(`/integrations/${provider}/config-connections?user_id=${userId}`),
 
   createProviderConnection: (
     provider: string,
@@ -462,11 +462,11 @@ export const api = {
       is_default: boolean;
     }>('/integrations/canvas/oauth/exchange', { method: 'POST', body: JSON.stringify(data) }),
 
-  activateProviderConnection: (provider: string, connectionId: number) =>
-    fetchApi<any>(`/integrations/${provider}/config-connections/${connectionId}/activate`, { method: 'POST' }),
+  activateProviderConnection: (provider: string, connectionId: number, userId: number) =>
+    fetchApi<any>(`/integrations/${provider}/config-connections/${connectionId}/activate?user_id=${userId}`, { method: 'POST' }),
 
-  testProviderConnection: (provider: string, connectionId: number) =>
-    fetchApi<any>(`/integrations/${provider}/config-connections/${connectionId}/test`, { method: 'POST' }),
+  testProviderConnection: (provider: string, connectionId: number, userId: number) =>
+    fetchApi<any>(`/integrations/${provider}/config-connections/${connectionId}/test?user_id=${userId}`, { method: 'POST' }),
 
   checkIntegrationConnection: (provider: string, userId: number, connectionId?: number) =>
     fetchApi<{
@@ -495,16 +495,23 @@ export const api = {
       `/integrations/${provider}/connections${userId ? `?user_id=${userId}` : ''}`
     ),
 
-  getExternalCourses: (provider: string, connectionId?: number) =>
+  getExternalCourses: (provider: string, connectionId?: number, userId?: number) =>
     fetchApi<Array<{
       provider: string;
       external_id: string;
       title: string;
       code?: string;
       term?: string;
-    }>>(`/integrations/${provider}/courses${connectionId ? `?connection_id=${connectionId}` : ''}`),
+    }>>(
+      `/integrations/${provider}/courses?${
+        [
+          connectionId ? `connection_id=${connectionId}` : '',
+          userId ? `user_id=${userId}` : '',
+        ].filter(Boolean).join('&')
+      }`
+    ),
 
-  getExternalMaterials: (provider: string, courseExternalId: string, connectionId?: number) =>
+  getExternalMaterials: (provider: string, courseExternalId: string, connectionId?: number, userId?: number) =>
     fetchApi<Array<{
       provider: string;
       external_id: string;
@@ -516,7 +523,12 @@ export const api = {
       updated_at?: string;
       source_url?: string;
     }>>(
-      `/integrations/${provider}/courses/${encodeURIComponent(courseExternalId)}/materials${connectionId ? `?connection_id=${connectionId}` : ''}`
+      `/integrations/${provider}/courses/${encodeURIComponent(courseExternalId)}/materials?${
+        [
+          connectionId ? `connection_id=${connectionId}` : '',
+          userId ? `user_id=${userId}` : '',
+        ].filter(Boolean).join('&')
+      }`
     ),
 
   importExternalCourse: (
@@ -541,7 +553,7 @@ export const api = {
       { method: 'POST', body: JSON.stringify(data) }
     ),
 
-  listIntegrationMappings: (provider: string, targetCourseId?: number, sourceConnectionId?: number) =>
+  listIntegrationMappings: (provider: string, targetCourseId?: number, sourceConnectionId?: number, userId?: number) =>
     fetchApi<Array<{
       id: number;
       provider: string;
@@ -558,6 +570,7 @@ export const api = {
         [
           targetCourseId ? `target_course_id=${targetCourseId}` : '',
           sourceConnectionId ? `source_connection_id=${sourceConnectionId}` : '',
+          userId ? `user_id=${userId}` : '',
         ].filter(Boolean).join('&')
       }`
     ),
@@ -614,7 +627,7 @@ export const api = {
   syncExternalMaterials: (
     provider: string,
     data: {
-      target_course_id: number;
+      target_course_id?: number;
       source_course_external_id: string;
       source_connection_id?: number;
       target_session_id?: number;
@@ -627,6 +640,9 @@ export const api = {
     fetchApi<{
       provider: string;
       job_id: number;
+      target_course_id?: number;
+      target_course_title?: string;
+      created_target_course?: boolean;
       imported_count: number;
       skipped_count: number;
       failed_count: number;
@@ -641,10 +657,11 @@ export const api = {
   syncExternalRoster: (
     provider: string,
     data: {
-      target_course_id: number;
+      target_course_id?: number;
       source_course_external_id: string;
       source_connection_id?: number;
       mapping_id?: number;
+      created_by?: number;
     }
   ) =>
     fetchApi<{
@@ -659,11 +676,12 @@ export const api = {
       missing_email_count: number;
     }>(`/integrations/${provider}/sync-roster`, { method: 'POST', body: JSON.stringify(data) }),
 
-  listIntegrationSyncJobs: (provider?: string, targetCourseId?: number, limit: number = 20, sourceConnectionId?: number) => {
+  listIntegrationSyncJobs: (provider?: string, targetCourseId?: number, limit: number = 20, sourceConnectionId?: number, userId?: number) => {
     const params = new URLSearchParams();
     if (provider) params.append('provider', provider);
     if (targetCourseId) params.append('target_course_id', String(targetCourseId));
     if (sourceConnectionId) params.append('source_connection_id', String(sourceConnectionId));
+    if (userId) params.append('user_id', String(userId));
     params.append('limit', String(limit));
     return fetchApi<Array<{
       id: number;

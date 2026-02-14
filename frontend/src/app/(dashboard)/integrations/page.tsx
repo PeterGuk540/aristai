@@ -47,6 +47,7 @@ type ProviderConnection = {
   token_masked: string;
   is_active: boolean;
   is_default: boolean;
+  created_by?: number;
   last_tested_at?: string;
   last_test_status?: string;
   last_test_error?: string;
@@ -129,6 +130,7 @@ export default function IntegrationsPage() {
   );
   const activeConnectionId = selectedConnectionId ? Number(selectedConnectionId) : undefined;
   const canReadExternal = Boolean(activeConnectionId || providerState?.configured);
+  const selectedConnection = providerConnections.find((c) => c.id === activeConnectionId);
 
   const localCourseTitleById = useMemo(() => {
     const out: Record<number, string> = {};
@@ -160,7 +162,8 @@ export default function IntegrationsPage() {
       return;
     }
     try {
-      const connections = await api.listProviderConnections(provider);
+      if (!currentUser?.id) return;
+      const connections = await api.listProviderConnections(provider, currentUser.id);
       setProviderConnections(connections);
 
       let effectiveConnectionId = activeConnectionId;
@@ -172,10 +175,10 @@ export default function IntegrationsPage() {
 
       const [courses, mappingRows, jobRows] = await Promise.all([
         (effectiveConnectionId || providerState?.configured)
-          ? api.getExternalCourses(provider, effectiveConnectionId)
+          ? api.getExternalCourses(provider, effectiveConnectionId, currentUser?.id)
           : Promise.resolve([]),
-        api.listIntegrationMappings(provider, undefined, effectiveConnectionId),
-        api.listIntegrationSyncJobs(provider, undefined, 10, effectiveConnectionId),
+        api.listIntegrationMappings(provider, undefined, effectiveConnectionId, currentUser?.id),
+        api.listIntegrationSyncJobs(provider, undefined, 10, effectiveConnectionId, currentUser?.id),
       ]);
 
       setExternalCourses(courses);
@@ -235,14 +238,19 @@ export default function IntegrationsPage() {
     if (!selectedExternalCourse || !providerState?.enabled || !canReadExternal) return;
     const run = async () => {
       try {
-        const items = await api.getExternalMaterials(provider, selectedExternalCourse, activeConnectionId);
+        const items = await api.getExternalMaterials(
+          provider,
+          selectedExternalCourse,
+          activeConnectionId,
+          currentUser?.id
+        );
         setExternalMaterials(items);
       } catch (e: any) {
         setError(e?.message || `Failed to load materials for external course ${selectedExternalCourse}.`);
       }
     };
     void run();
-  }, [provider, selectedExternalCourse, providerState?.enabled, canReadExternal, activeConnectionId]);
+  }, [provider, selectedExternalCourse, providerState?.enabled, canReadExternal, activeConnectionId, currentUser?.id]);
 
   useEffect(() => {
     setLocalSessions([]);
@@ -303,7 +311,11 @@ export default function IntegrationsPage() {
       return;
     }
     try {
-      await api.testProviderConnection(provider, activeConnectionId);
+      if (!currentUser?.id) {
+        setError('Missing user context.');
+        return;
+      }
+      await api.testProviderConnection(provider, activeConnectionId, currentUser.id);
       setMessage('Connection test complete.');
       await refreshProviderData();
     } catch (e: any) {
@@ -317,7 +329,11 @@ export default function IntegrationsPage() {
       return;
     }
     try {
-      await api.activateProviderConnection(provider, activeConnectionId);
+      if (!currentUser?.id) {
+        setError('Missing user context.');
+        return;
+      }
+      await api.activateProviderConnection(provider, activeConnectionId, currentUser.id);
       setMessage('Connection is now default.');
       await refreshProviderData();
     } catch (e: any) {
@@ -451,10 +467,6 @@ export default function IntegrationsPage() {
   const handleSyncAll = async () => {
     setError('');
     setMessage('');
-    if (!selectedLocalCourse) {
-      setError('Select a target AristAI course first.');
-      return;
-    }
     if (!selectedExternalCourse) {
       setError('Select a source external course first.');
       return;
@@ -462,7 +474,7 @@ export default function IntegrationsPage() {
     setSyncing(true);
     try {
       const result = await api.syncExternalMaterials(provider, {
-        target_course_id: Number(selectedLocalCourse),
+        target_course_id: selectedLocalCourse ? Number(selectedLocalCourse) : undefined,
         source_course_external_id: selectedExternalCourse,
         source_connection_id: activeConnectionId,
         target_session_id: selectedLocalSession ? Number(selectedLocalSession) : undefined,
@@ -470,8 +482,11 @@ export default function IntegrationsPage() {
         overwrite_title_prefix: '[Canvas] ',
         mapping_id: selectedMappingId ? Number(selectedMappingId) : undefined,
       });
+      if (result.target_course_id) {
+        setSelectedLocalCourse(String(result.target_course_id));
+      }
       setMessage(
-        `Sync job #${result.job_id} complete. Imported ${result.imported_count}, skipped ${result.skipped_count}, failed ${result.failed_count}.`
+        `${result.created_target_course ? `Created target course: ${result.target_course_title}. ` : ''}Sync job #${result.job_id} complete. Imported ${result.imported_count}, skipped ${result.skipped_count}, failed ${result.failed_count}.`
       );
       await refreshProviderData();
     } catch (e: any) {
@@ -484,10 +499,6 @@ export default function IntegrationsPage() {
   const handleSyncRoster = async () => {
     setError('');
     setMessage('');
-    if (!selectedLocalCourse) {
-      setError('Select a target AristAI course first.');
-      return;
-    }
     if (!selectedExternalCourse) {
       setError('Select a source external course first.');
       return;
@@ -495,11 +506,13 @@ export default function IntegrationsPage() {
     setSyncingRoster(true);
     try {
       const result = await api.syncExternalRoster(provider, {
-        target_course_id: Number(selectedLocalCourse),
+        target_course_id: selectedLocalCourse ? Number(selectedLocalCourse) : undefined,
         source_course_external_id: selectedExternalCourse,
         source_connection_id: activeConnectionId,
         mapping_id: selectedMappingId ? Number(selectedMappingId) : undefined,
+        created_by: currentUser?.id,
       });
+      setSelectedLocalCourse(String(result.target_course_id));
       setMessage(
         `Roster sync complete. Scanned ${result.scanned_count}, enrolled ${result.enrolled_count}, created users ${result.created_users_count}, skipped ${result.skipped_count}.`
       );
@@ -598,6 +611,11 @@ export default function IntegrationsPage() {
       </section>
 
       <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-[#1a150c]">
+        <div className="mb-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-neutral-700 dark:border-stone-700 dark:bg-stone-900/30 dark:text-neutral-200">
+          {isAdmin
+            ? `Admin scope: showing all saved ${provider.toUpperCase()} connections.`
+            : `Instructor scope: showing only your saved ${provider.toUpperCase()} connections.`}
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
@@ -632,10 +650,17 @@ export default function IntegrationsPage() {
               <option value="">Use global env credentials</option>
               {providerConnections.map((c) => (
                 <option key={c.id} value={String(c.id)}>
-                  {c.label} ({c.token_masked}) {c.is_default ? '[default]' : ''}
+                  {c.label} ({c.token_masked}) {c.is_default ? '[default]' : ''} {isAdmin && c.created_by ? `[owner #${c.created_by}]` : ''}
                 </option>
               ))}
             </select>
+            <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+              {providerConnections.length === 0
+                ? 'No saved connection yet. Add one or use global environment credentials.'
+                : selectedConnection
+                  ? `Selected: ${selectedConnection.label}${selectedConnection.last_test_status ? `, last test ${selectedConnection.last_test_status}.` : '.'}`
+                  : 'Pick a saved connection or keep global environment credentials.'}
+            </p>
           </div>
 
           <div className="md:col-span-2 grid gap-2 md:grid-cols-3">
@@ -685,6 +710,7 @@ export default function IntegrationsPage() {
             <button
               onClick={handleTestActiveConnection}
               data-voice-id="test-provider-connection"
+              disabled={!activeConnectionId}
               className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
             >
               Test selected
@@ -692,6 +718,7 @@ export default function IntegrationsPage() {
             <button
               onClick={handleActivateConnection}
               data-voice-id="activate-provider-connection"
+              disabled={!activeConnectionId}
               className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
             >
               Set default

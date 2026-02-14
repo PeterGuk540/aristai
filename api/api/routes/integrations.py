@@ -134,10 +134,11 @@ class ImportCourseResponse(BaseModel):
 
 
 class SyncRosterRequest(BaseModel):
-    target_course_id: int
+    target_course_id: Optional[int] = None
     source_course_external_id: str
     source_connection_id: Optional[int] = None
     mapping_id: Optional[int] = None
+    created_by: Optional[int] = None
 
 
 class SyncRosterResponse(BaseModel):
@@ -184,7 +185,7 @@ class ImportRequest(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    target_course_id: int = Field(..., description="AristAI course id")
+    target_course_id: Optional[int] = Field(None, description="AristAI course id")
     source_course_external_id: str = Field(..., description="External provider course id")
     source_connection_id: Optional[int] = Field(None, description="Optional provider connection id")
     target_session_id: Optional[int] = Field(None, description="Optional AristAI session id")
@@ -204,6 +205,9 @@ class ImportItemResult(BaseModel):
 class ImportResponse(BaseModel):
     provider: str
     job_id: int
+    target_course_id: Optional[int] = None
+    target_course_title: Optional[str] = None
+    created_target_course: bool = False
     imported_count: int
     skipped_count: int
     failed_count: int
@@ -235,6 +239,26 @@ def _mask_token(token: str) -> str:
     if len(token) <= 6:
         return "*" * len(token)
     return f"{token[:3]}...{token[-3:]}"
+
+
+def _is_admin(db: Session, user_id: Optional[int]) -> bool:
+    if user_id is None:
+        return False
+    user = db.query(User).filter(User.id == user_id).first()
+    return bool(user and user.is_admin)
+
+
+def _assert_connection_access(
+    db: Session,
+    connection: IntegrationProviderConnection,
+    actor_user_id: Optional[int],
+) -> None:
+    if actor_user_id is None:
+        raise HTTPException(status_code=403, detail="user_id is required for provider connection access.")
+    if _is_admin(db, actor_user_id):
+        return
+    if connection.created_by != actor_user_id:
+        raise HTTPException(status_code=403, detail="You do not have access to this provider connection.")
 
 
 def _oauth_state_secret() -> str:
@@ -293,6 +317,7 @@ def _resolve_config_connection(
     db: Session,
     provider: str,
     connection_id: Optional[int],
+    actor_user_id: Optional[int] = None,
 ) -> Optional[IntegrationProviderConnection]:
     if connection_id is not None:
         row = db.query(IntegrationProviderConnection).filter(
@@ -302,13 +327,20 @@ def _resolve_config_connection(
         ).first()
         if not row:
             raise HTTPException(status_code=404, detail="Provider connection not found.")
+        _assert_connection_access(db, row, actor_user_id)
         return row
 
-    return db.query(IntegrationProviderConnection).filter(
+    q = db.query(IntegrationProviderConnection).filter(
         IntegrationProviderConnection.provider == provider,
         IntegrationProviderConnection.is_active.is_(True),
         IntegrationProviderConnection.is_default.is_(True),
-    ).first()
+    )
+    if actor_user_id is not None and not _is_admin(db, actor_user_id):
+        q = q.filter(IntegrationProviderConnection.created_by == actor_user_id)
+    row = q.first()
+    if row is not None and actor_user_id is not None:
+        _assert_connection_access(db, row, actor_user_id)
+    return row
 
 
 def _resolve_provider(
@@ -316,10 +348,11 @@ def _resolve_provider(
     db: Optional[Session] = None,
     connection_id: Optional[int] = None,
     require_configured: bool = True,
+    actor_user_id: Optional[int] = None,
 ):
     config: dict[str, Any] | None = None
     if db is not None:
-        cfg = _resolve_config_connection(db, provider, connection_id)
+        cfg = _resolve_config_connection(db, provider, connection_id, actor_user_id=actor_user_id)
         if cfg is not None:
             config = {
                 "api_base_url": cfg.api_base_url,
@@ -348,6 +381,81 @@ def _validate_target(db: Session, target_course_id: int, target_session_id: Opti
         ).first()
         if not session:
             raise HTTPException(status_code=404, detail="Target session not found for target course.")
+
+
+def _ensure_target_course(
+    db: Session,
+    provider: str,
+    provider_obj,
+    source_course_external_id: str,
+    source_connection_id: Optional[int],
+    target_course_id: Optional[int],
+    created_by: Optional[int],
+) -> tuple[int, str, bool]:
+    """
+    Ensure a local target course exists.
+    Returns: (target_course_id, title, created_target_course)
+    """
+    if target_course_id is not None:
+        target = db.query(Course).filter(Course.id == target_course_id).first()
+        if not target:
+            raise HTTPException(status_code=404, detail="Target course not found.")
+        return target.id, target.title, False
+
+    existing_mapping = db.query(IntegrationCourseMapping).filter(
+        IntegrationCourseMapping.provider == provider,
+        IntegrationCourseMapping.external_course_id == source_course_external_id,
+        IntegrationCourseMapping.source_connection_id == source_connection_id,
+        IntegrationCourseMapping.is_active.is_(True),
+    ).order_by(IntegrationCourseMapping.updated_at.desc()).first()
+    if existing_mapping:
+        mapped_course = db.query(Course).filter(Course.id == existing_mapping.target_course_id).first()
+        if mapped_course:
+            return mapped_course.id, mapped_course.title, False
+
+    source_title: Optional[str] = None
+    try:
+        for c in provider_obj.list_courses():
+            if c.external_id == source_course_external_id:
+                source_title = c.title
+                break
+    except Exception:
+        source_title = None
+
+    title = source_title or f"Imported {provider.title()} Course {source_course_external_id}"
+    join_code = generate_join_code()
+    while db.query(Course).filter(Course.join_code == join_code).first():
+        join_code = generate_join_code()
+
+    new_course = Course(title=title, created_by=created_by, join_code=join_code)
+    db.add(new_course)
+    db.flush()
+
+    materials_session = SessionModel(
+        course_id=new_course.id,
+        title="Course Materials",
+        status=SessionStatus.completed,
+        plan_json={
+            "is_materials_session": True,
+            "description": "Repository for course readings, documents, and other materials.",
+        },
+    )
+    db.add(materials_session)
+    db.flush()
+
+    mapping = IntegrationCourseMapping(
+        provider=provider,
+        external_course_id=source_course_external_id,
+        external_course_name=title,
+        source_connection_id=source_connection_id,
+        target_course_id=new_course.id,
+        created_by=created_by,
+        is_active=True,
+    )
+    db.add(mapping)
+    db.commit()
+    db.refresh(new_course)
+    return new_course.id, new_course.title, True
 
 
 def _import_with_tracking(
@@ -622,12 +730,16 @@ def exchange_canvas_oauth(
 @router.get("/{provider}/config-connections", response_model=list[ProviderConnectionResponse])
 def list_provider_connections(
     provider: str,
+    user_id: int = Query(...),
     db: Session = Depends(get_db),
 ):
-    records = db.query(IntegrationProviderConnection).filter(
+    q = db.query(IntegrationProviderConnection).filter(
         IntegrationProviderConnection.provider == provider,
         IntegrationProviderConnection.is_active.is_(True),
-    ).order_by(IntegrationProviderConnection.is_default.desc(), IntegrationProviderConnection.updated_at.desc()).all()
+    )
+    if not _is_admin(db, user_id):
+        q = q.filter(IntegrationProviderConnection.created_by == user_id)
+    records = q.order_by(IntegrationProviderConnection.is_default.desc(), IntegrationProviderConnection.updated_at.desc()).all()
     return [_connection_to_response(r) for r in records]
 
 
@@ -635,10 +747,22 @@ def list_provider_connections(
 def create_provider_connection(
     provider: str,
     request: ProviderConnectionRequest,
+    user_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     if provider not in list_supported_providers():
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+
+    actor_user_id = request.created_by if request.created_by is not None else user_id
+    if actor_user_id is None:
+        raise HTTPException(status_code=400, detail="user_id is required to create provider connections.")
+    if (
+        request.created_by is not None
+        and user_id is not None
+        and request.created_by != user_id
+        and not _is_admin(db, user_id)
+    ):
+        raise HTTPException(status_code=403, detail="You cannot create provider connections for another user.")
 
     if request.is_default:
         db.query(IntegrationProviderConnection).filter(
@@ -652,7 +776,7 @@ def create_provider_connection(
         api_token_encrypted=encrypt_secret(request.api_token.strip()),
         is_active=True,
         is_default=request.is_default,
-        created_by=request.created_by,
+        created_by=actor_user_id,
     )
     db.add(row)
     db.commit()
@@ -664,15 +788,17 @@ def create_provider_connection(
 def activate_provider_connection(
     provider: str,
     connection_id: int,
+    user_id: int = Query(...),
     db: Session = Depends(get_db),
 ):
-    row = _resolve_config_connection(db, provider, connection_id)
+    row = _resolve_config_connection(db, provider, connection_id, actor_user_id=user_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Provider connection not found.")
 
-    db.query(IntegrationProviderConnection).filter(
-        IntegrationProviderConnection.provider == provider
-    ).update({"is_default": False})
+    update_q = db.query(IntegrationProviderConnection).filter(IntegrationProviderConnection.provider == provider)
+    if not _is_admin(db, user_id):
+        update_q = update_q.filter(IntegrationProviderConnection.created_by == user_id)
+    update_q.update({"is_default": False})
     row.is_default = True
     row.is_active = True
     db.add(row)
@@ -685,15 +811,16 @@ def activate_provider_connection(
 def test_provider_connection(
     provider: str,
     connection_id: int,
+    user_id: int = Query(...),
     db: Session = Depends(get_db),
 ):
-    row = _resolve_config_connection(db, provider, connection_id)
+    row = _resolve_config_connection(db, provider, connection_id, actor_user_id=user_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Provider connection not found.")
 
     row.last_tested_at = datetime.now(timezone.utc)
     try:
-        p = _resolve_provider(provider, db=db, connection_id=connection_id)
+        p = _resolve_provider(provider, db=db, connection_id=connection_id, actor_user_id=user_id)
         p.list_courses()
         row.last_test_status = "ok"
         row.last_test_error = None
@@ -713,7 +840,7 @@ def check_connection(
     connection_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    p = _resolve_provider(provider, db=db, connection_id=connection_id)
+    p = _resolve_provider(provider, db=db, connection_id=connection_id, actor_user_id=user_id)
     courses = p.list_courses()
     provider_user_name = "Connected User"
     if courses:
@@ -747,12 +874,12 @@ def check_connection(
 @router.get("/{provider}/connections", response_model=list[IntegrationConnectionResponse])
 def list_connections(
     provider: str,
-    user_id: Optional[int] = Query(None),
+    user_id: int = Query(...),
     db: Session = Depends(get_db),
 ):
     _resolve_provider(provider, db=db, require_configured=False)
     q = db.query(IntegrationConnection).filter(IntegrationConnection.provider == provider)
-    if user_id is not None:
+    if not _is_admin(db, user_id):
         q = q.filter(IntegrationConnection.user_id == user_id)
     records = q.order_by(IntegrationConnection.updated_at.desc()).all()
     return [
@@ -770,8 +897,13 @@ def list_connections(
 
 
 @router.get("/{provider}/courses", response_model=list[ExternalCourseResponse])
-def list_external_courses(provider: str, connection_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
-    p = _resolve_provider(provider, db=db, connection_id=connection_id)
+def list_external_courses(
+    provider: str,
+    connection_id: Optional[int] = Query(None),
+    user_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    p = _resolve_provider(provider, db=db, connection_id=connection_id, actor_user_id=user_id)
     return [ExternalCourseResponse(**course.__dict__) for course in p.list_courses()]
 
 
@@ -780,9 +912,10 @@ def list_external_materials(
     provider: str,
     course_external_id: str,
     connection_id: Optional[int] = Query(None),
+    user_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    p = _resolve_provider(provider, db=db, connection_id=connection_id)
+    p = _resolve_provider(provider, db=db, connection_id=connection_id, actor_user_id=user_id)
     return [ExternalMaterialResponse(**m.__dict__) for m in p.list_materials(course_external_id)]
 
 
@@ -791,9 +924,16 @@ def import_external_course(
     provider: str,
     course_external_id: str,
     request: ImportCourseRequest,
+    user_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id)
+    actor_user_id = request.created_by if request.created_by is not None else user_id
+    p = _resolve_provider(
+        provider,
+        db=db,
+        connection_id=request.source_connection_id,
+        actor_user_id=actor_user_id,
+    )
 
     existing_mapping = db.query(IntegrationCourseMapping).filter(
         IntegrationCourseMapping.provider == provider,
@@ -830,7 +970,7 @@ def import_external_course(
 
     new_course = Course(
         title=course_name,
-        created_by=request.created_by,
+        created_by=actor_user_id,
         join_code=join_code,
     )
     db.add(new_course)
@@ -854,7 +994,7 @@ def import_external_course(
         external_course_name=course_name,
         source_connection_id=request.source_connection_id,
         target_course_id=new_course.id,
-        created_by=request.created_by,
+        created_by=actor_user_id,
         is_active=True,
     )
     db.add(mapping)
@@ -878,9 +1018,16 @@ def list_mappings(
     provider: str,
     target_course_id: Optional[int] = Query(None),
     source_connection_id: Optional[int] = Query(None),
+    user_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    _resolve_provider(provider, db=db, connection_id=source_connection_id, require_configured=False)
+    _resolve_provider(
+        provider,
+        db=db,
+        connection_id=source_connection_id,
+        require_configured=False,
+        actor_user_id=user_id,
+    )
     q = db.query(IntegrationCourseMapping).filter(
         IntegrationCourseMapping.provider == provider,
         IntegrationCourseMapping.is_active.is_(True),
@@ -889,6 +1036,8 @@ def list_mappings(
         q = q.filter(IntegrationCourseMapping.target_course_id == target_course_id)
     if source_connection_id is not None:
         q = q.filter(IntegrationCourseMapping.source_connection_id == source_connection_id)
+    if user_id is not None and not _is_admin(db, user_id):
+        q = q.filter(IntegrationCourseMapping.created_by == user_id)
     mappings = q.order_by(IntegrationCourseMapping.updated_at.desc()).all()
     return [
         MappingResponse(
@@ -911,9 +1060,11 @@ def list_mappings(
 def create_mapping(
     provider: str,
     request: MappingRequest,
+    user_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    _resolve_provider(provider, db=db, connection_id=request.source_connection_id)
+    actor_user_id = request.created_by if request.created_by is not None else user_id
+    _resolve_provider(provider, db=db, connection_id=request.source_connection_id, actor_user_id=actor_user_id)
     _validate_target(db, request.target_course_id, None)
 
     mapping = db.query(IntegrationCourseMapping).filter(
@@ -933,7 +1084,7 @@ def create_mapping(
         db.add(mapping)
 
     mapping.external_course_name = request.source_course_name
-    mapping.created_by = request.created_by
+    mapping.created_by = actor_user_id
     mapping.is_active = True
     db.commit()
     db.refresh(mapping)
@@ -957,6 +1108,7 @@ def list_sync_jobs(
     provider: Optional[str] = Query(None),
     source_connection_id: Optional[int] = Query(None),
     target_course_id: Optional[int] = Query(None),
+    user_id: Optional[int] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
@@ -967,6 +1119,8 @@ def list_sync_jobs(
         q = q.filter(IntegrationSyncJob.source_connection_id == source_connection_id)
     if target_course_id:
         q = q.filter(IntegrationSyncJob.target_course_id == target_course_id)
+    if user_id is not None and not _is_admin(db, user_id):
+        q = q.filter(IntegrationSyncJob.triggered_by == user_id)
     jobs = q.order_by(IntegrationSyncJob.created_at.desc()).limit(limit).all()
     return [
         SyncJobResponse(
@@ -998,12 +1152,12 @@ def import_materials(
     user_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id)
+    actor_id = request.uploaded_by if request.uploaded_by is not None else user_id
+    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id, actor_user_id=actor_id)
     if not request.material_external_ids:
         raise HTTPException(status_code=400, detail="material_external_ids cannot be empty.")
     _validate_target(db, request.target_course_id, request.target_session_id)
 
-    actor_id = request.uploaded_by if request.uploaded_by is not None else user_id
     return _import_with_tracking(db, provider, p, request, actor_id, request.material_external_ids)
 
 
@@ -1014,8 +1168,8 @@ def sync_materials(
     user_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id)
-    _validate_target(db, request.target_course_id, request.target_session_id)
+    actor_id = request.uploaded_by if request.uploaded_by is not None else user_id
+    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id, actor_user_id=actor_id)
 
     if request.mapping_id is not None:
         mapping = db.query(IntegrationCourseMapping).filter(
@@ -1028,6 +1182,18 @@ def sync_materials(
         request.source_course_external_id = mapping.external_course_id
         request.source_connection_id = mapping.source_connection_id
         request.target_course_id = mapping.target_course_id
+
+    resolved_target_course_id, resolved_target_title, created_target_course = _ensure_target_course(
+        db=db,
+        provider=provider,
+        provider_obj=p,
+        source_course_external_id=request.source_course_external_id,
+        source_connection_id=request.source_connection_id,
+        target_course_id=request.target_course_id,
+        created_by=actor_id,
+    )
+    request.target_course_id = resolved_target_course_id
+    _validate_target(db, resolved_target_course_id, request.target_session_id)
 
     external_ids = request.material_external_ids
     if not external_ids:
@@ -1043,18 +1209,22 @@ def sync_materials(
         uploaded_by=request.uploaded_by,
         overwrite_title_prefix=request.overwrite_title_prefix,
     )
-    actor_id = request.uploaded_by if request.uploaded_by is not None else user_id
-    return _import_with_tracking(db, provider, p, import_request, actor_id, external_ids)
+    result = _import_with_tracking(db, provider, p, import_request, actor_id, external_ids)
+    result.target_course_id = resolved_target_course_id
+    result.target_course_title = resolved_target_title
+    result.created_target_course = created_target_course
+    return result
 
 
 @router.post("/{provider}/sync-roster", response_model=SyncRosterResponse)
 def sync_roster(
     provider: str,
     request: SyncRosterRequest,
+    user_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id)
-    _validate_target(db, request.target_course_id, None)
+    actor_id = request.created_by if request.created_by is not None else user_id
+    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id, actor_user_id=actor_id)
 
     if request.mapping_id is not None:
         mapping = db.query(IntegrationCourseMapping).filter(
@@ -1067,6 +1237,18 @@ def sync_roster(
         request.source_course_external_id = mapping.external_course_id
         request.source_connection_id = mapping.source_connection_id
         request.target_course_id = mapping.target_course_id
+
+    resolved_target_course_id, _, _ = _ensure_target_course(
+        db=db,
+        provider=provider,
+        provider_obj=p,
+        source_course_external_id=request.source_course_external_id,
+        source_connection_id=request.source_connection_id,
+        target_course_id=request.target_course_id,
+        created_by=actor_id,
+    )
+    request.target_course_id = resolved_target_course_id
+    _validate_target(db, resolved_target_course_id, None)
 
     external_enrollments = p.list_enrollments(request.source_course_external_id)
     scanned_count = len(external_enrollments)
@@ -1099,13 +1281,13 @@ def sync_roster(
 
         existing = db.query(Enrollment).filter(
             Enrollment.user_id == user.id,
-            Enrollment.course_id == request.target_course_id,
+            Enrollment.course_id == resolved_target_course_id,
         ).first()
         if existing:
             skipped_count += 1
             continue
 
-        db.add(Enrollment(user_id=user.id, course_id=request.target_course_id))
+        db.add(Enrollment(user_id=user.id, course_id=resolved_target_course_id))
         enrolled_count += 1
 
     db.commit()
@@ -1114,7 +1296,7 @@ def sync_roster(
         provider=provider,
         source_connection_id=request.source_connection_id,
         source_course_external_id=request.source_course_external_id,
-        target_course_id=request.target_course_id,
+        target_course_id=resolved_target_course_id,
         scanned_count=scanned_count,
         enrolled_count=enrolled_count,
         created_users_count=created_users_count,

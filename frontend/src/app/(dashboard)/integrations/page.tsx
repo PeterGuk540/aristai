@@ -103,6 +103,7 @@ export default function IntegrationsPage() {
   const [newConnUrl, setNewConnUrl] = useState('');
   const [newConnToken, setNewConnToken] = useState('');
   const [savingProviderConnection, setSavingProviderConnection] = useState(false);
+  const [startingOAuth, setStartingOAuth] = useState(false);
   const [externalCourses, setExternalCourses] = useState<ExternalCourse[]>([]);
   const [externalMaterials, setExternalMaterials] = useState<ExternalMaterial[]>([]);
   const [localCourses, setLocalCourses] = useState<LocalCourse[]>([]);
@@ -117,6 +118,7 @@ export default function IntegrationsPage() {
   const [importing, setImporting] = useState(false);
   const [savingMapping, setSavingMapping] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [importingCourse, setImportingCourse] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -322,6 +324,34 @@ export default function IntegrationsPage() {
     }
   };
 
+  const handleStartCanvasOAuth = async () => {
+    setError('');
+    setMessage('');
+    if (provider !== 'canvas') {
+      setError('OAuth connect is currently available for Canvas only.');
+      return;
+    }
+    if (!newConnLabel.trim() || !newConnUrl.trim()) {
+      setError('Enter a connection label and Canvas API base URL first.');
+      return;
+    }
+    setStartingOAuth(true);
+    try {
+      const redirectUri = `${window.location.origin}/oauth/canvas-callback`;
+      const result = await api.startCanvasOAuth({
+        label: newConnLabel.trim(),
+        api_base_url: newConnUrl.trim(),
+        created_by: currentUser?.id,
+        redirect_uri: redirectUri,
+      });
+      sessionStorage.setItem('canvas_oauth_redirect_uri', redirectUri);
+      window.location.href = result.authorization_url;
+    } catch (e: any) {
+      setError(e?.message || 'Failed to start Canvas OAuth.');
+      setStartingOAuth(false);
+    }
+  };
+
   const handleSaveMapping = async () => {
     setError('');
     setMessage('');
@@ -346,6 +376,36 @@ export default function IntegrationsPage() {
       setError(e?.message || 'Could not save mapping.');
     } finally {
       setSavingMapping(false);
+    }
+  };
+
+  const handleImportCourseToForum = async () => {
+    setError('');
+    setMessage('');
+    if (!selectedExternalCourse) {
+      setError('Select a source external course first.');
+      return;
+    }
+    setImportingCourse(true);
+    try {
+      const source = externalCourses.find((c) => c.external_id === selectedExternalCourse);
+      const result = await api.importExternalCourse(provider, selectedExternalCourse, {
+        source_connection_id: activeConnectionId,
+        created_by: currentUser?.id,
+        source_course_name: source?.title,
+      });
+      setSelectedLocalCourse(String(result.target_course_id));
+      setMessage(
+        result.created
+          ? `Course created in Forum: ${result.target_course_title}`
+          : `Course already mapped: ${result.target_course_title}`
+      );
+      await refreshBaseData();
+      await refreshProviderData();
+    } catch (e: any) {
+      setError(e?.message || 'Could not import external course.');
+    } finally {
+      setImportingCourse(false);
     }
   };
 
@@ -584,6 +644,15 @@ export default function IntegrationsPage() {
               Add connection
             </button>
             <button
+              onClick={handleStartCanvasOAuth}
+              disabled={startingOAuth || provider !== 'canvas'}
+              data-voice-id="connect-canvas-oauth"
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+            >
+              {startingOAuth ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+              Connect Canvas
+            </button>
+            <button
               onClick={handleTestActiveConnection}
               data-voice-id="test-provider-connection"
               className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
@@ -683,6 +752,15 @@ export default function IntegrationsPage() {
           </div>
 
           <div className="flex items-end gap-2">
+            <button
+              onClick={handleImportCourseToForum}
+              disabled={importingCourse}
+              data-voice-id="import-external-course"
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+            >
+              {importingCourse ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Create Forum course
+            </button>
             <button
               onClick={handleSaveMapping}
               disabled={savingMapping}

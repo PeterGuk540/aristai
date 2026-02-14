@@ -445,6 +445,23 @@ export const api = {
       last_test_error?: string;
     }>(`/integrations/${provider}/config-connections`, { method: 'POST', body: JSON.stringify(data) }),
 
+  startCanvasOAuth: (data: { label: string; api_base_url: string; created_by?: number; redirect_uri: string }) =>
+    fetchApi<{ authorization_url: string; state: string }>(
+      '/integrations/canvas/oauth/start',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  exchangeCanvasOAuth: (data: { code: string; state: string; redirect_uri: string }) =>
+    fetchApi<{
+      id: number;
+      provider: string;
+      label: string;
+      api_base_url: string;
+      token_masked: string;
+      is_active: boolean;
+      is_default: boolean;
+    }>('/integrations/canvas/oauth/exchange', { method: 'POST', body: JSON.stringify(data) }),
+
   activateProviderConnection: (provider: string, connectionId: number) =>
     fetchApi<any>(`/integrations/${provider}/config-connections/${connectionId}/activate`, { method: 'POST' }),
 
@@ -500,6 +517,28 @@ export const api = {
       source_url?: string;
     }>>(
       `/integrations/${provider}/courses/${encodeURIComponent(courseExternalId)}/materials${connectionId ? `?connection_id=${connectionId}` : ''}`
+    ),
+
+  importExternalCourse: (
+    provider: string,
+    courseExternalId: string,
+    data: {
+      source_connection_id?: number;
+      created_by?: number;
+      source_course_name?: string;
+    }
+  ) =>
+    fetchApi<{
+      provider: string;
+      source_connection_id?: number;
+      source_course_external_id: string;
+      target_course_id: number;
+      target_course_title: string;
+      mapping_id: number;
+      created: boolean;
+    }>(
+      `/integrations/${provider}/courses/${encodeURIComponent(courseExternalId)}/import-course`,
+      { method: 'POST', body: JSON.stringify(data) }
     ),
 
   listIntegrationMappings: (provider: string, targetCourseId?: number, sourceConnectionId?: number) =>

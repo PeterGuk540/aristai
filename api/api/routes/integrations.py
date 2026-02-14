@@ -4,15 +4,21 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
+import os
+import hmac
+import base64
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import quote_plus
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from api.core.database import get_db
-from api.models.course import Course
+from api.models.course import Course, generate_join_code
 from api.models.course_material import CourseMaterial
 from api.models.integration import (
     IntegrationConnection,
@@ -23,6 +29,7 @@ from api.models.integration import (
     IntegrationSyncJob,
 )
 from api.models.session import Session as SessionModel
+from api.models.session import SessionStatus
 from api.services.integrations.registry import get_provider, list_supported_providers
 from api.services.integrations.secrets import decrypt_secret, encrypt_secret
 from api.services.s3_service import get_s3_service
@@ -74,6 +81,24 @@ class ProviderConnectionRequest(BaseModel):
     created_by: Optional[int] = None
 
 
+class CanvasOAuthStartRequest(BaseModel):
+    label: str
+    api_base_url: str
+    created_by: Optional[int] = None
+    redirect_uri: str
+
+
+class CanvasOAuthStartResponse(BaseModel):
+    authorization_url: str
+    state: str
+
+
+class CanvasOAuthExchangeRequest(BaseModel):
+    code: str
+    state: str
+    redirect_uri: str
+
+
 class ProviderConnectionResponse(BaseModel):
     id: int
     provider: str
@@ -88,6 +113,22 @@ class ProviderConnectionResponse(BaseModel):
     last_test_error: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class ImportCourseRequest(BaseModel):
+    source_connection_id: Optional[int] = None
+    created_by: Optional[int] = None
+    source_course_name: Optional[str] = None
+
+
+class ImportCourseResponse(BaseModel):
+    provider: str
+    source_connection_id: Optional[int] = None
+    source_course_external_id: str
+    target_course_id: int
+    target_course_title: str
+    mapping_id: int
+    created: bool
 
 
 class MappingRequest(BaseModel):
@@ -173,6 +214,39 @@ def _mask_token(token: str) -> str:
     if len(token) <= 6:
         return "*" * len(token)
     return f"{token[:3]}...{token[-3:]}"
+
+
+def _oauth_state_secret() -> str:
+    return os.getenv("INTEGRATIONS_SECRET_KEY", "aristai-integrations-dev-key-change-me")
+
+
+def _sign_oauth_state(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    body = base64.urlsafe_b64encode(raw).decode("utf-8")
+    sig = hmac.new(_oauth_state_secret().encode("utf-8"), body.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{body}.{sig}"
+
+
+def _verify_oauth_state(token: str) -> dict[str, Any]:
+    try:
+        body, sig = token.rsplit(".", 1)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state format.") from exc
+    expected = hmac.new(_oauth_state_secret().encode("utf-8"), body.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        raise HTTPException(status_code=400, detail="Invalid OAuth state signature.")
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(body.encode("utf-8")).decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Invalid OAuth state payload.") from exc
+    return payload
+
+
+def _canvas_site_root(api_base_url: str) -> str:
+    base = api_base_url.strip().rstrip("/")
+    if base.endswith("/api/v1"):
+        return base[:-7]
+    return base
 
 
 def _connection_to_response(record: IntegrationProviderConnection) -> ProviderConnectionResponse:
@@ -433,6 +507,97 @@ def get_providers() -> list[ProviderStatus]:
     return statuses
 
 
+@router.post("/canvas/oauth/start", response_model=CanvasOAuthStartResponse)
+def start_canvas_oauth(request: CanvasOAuthStartRequest):
+    client_id = os.getenv("CANVAS_OAUTH_CLIENT_ID", "").strip()
+    if not client_id:
+        raise HTTPException(status_code=400, detail="CANVAS_OAUTH_CLIENT_ID is not configured.")
+
+    site_root = _canvas_site_root(request.api_base_url)
+    state = _sign_oauth_state(
+        {
+            "provider": "canvas",
+            "label": request.label,
+            "api_base_url": request.api_base_url.strip().rstrip("/"),
+            "created_by": request.created_by,
+            "iat": int(datetime.now(timezone.utc).timestamp()),
+        }
+    )
+    auth_url = (
+        f"{site_root}/login/oauth2/auth"
+        f"?client_id={client_id}"
+        f"&response_type=code"
+        f"&redirect_uri={quote_plus(request.redirect_uri)}"
+        f"&state={quote_plus(state)}"
+    )
+    return CanvasOAuthStartResponse(authorization_url=auth_url, state=state)
+
+
+@router.post("/canvas/oauth/exchange", response_model=ProviderConnectionResponse)
+def exchange_canvas_oauth(
+    request: CanvasOAuthExchangeRequest,
+    db: Session = Depends(get_db),
+):
+    client_id = os.getenv("CANVAS_OAUTH_CLIENT_ID", "").strip()
+    client_secret = os.getenv("CANVAS_OAUTH_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=400, detail="Canvas OAuth credentials are not configured.")
+
+    payload = _verify_oauth_state(request.state)
+    api_base_url = str(payload.get("api_base_url", "")).strip().rstrip("/")
+    label = str(payload.get("label", "")).strip() or "Canvas Connection"
+    created_by = payload.get("created_by")
+    site_root = _canvas_site_root(api_base_url)
+    token_url = f"{site_root}/login/oauth2/token"
+
+    try:
+        with httpx.Client(timeout=30) as client:
+            response = client.post(
+                token_url,
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": request.redirect_uri,
+                    "code": request.code,
+                },
+            )
+            response.raise_for_status()
+            token_payload = response.json()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Canvas OAuth exchange failed: {exc}") from exc
+
+    access_token = str(token_payload.get("access_token", "")).strip()
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Canvas OAuth response missing access_token.")
+
+    row = db.query(IntegrationProviderConnection).filter(
+        IntegrationProviderConnection.provider == "canvas",
+        IntegrationProviderConnection.label == label,
+    ).first()
+    if row is None:
+        row = IntegrationProviderConnection(provider="canvas", label=label)
+        db.add(row)
+
+    existing_count = db.query(IntegrationProviderConnection).filter(
+        IntegrationProviderConnection.provider == "canvas",
+        IntegrationProviderConnection.is_active.is_(True),
+    ).count()
+
+    row.api_base_url = api_base_url
+    row.api_token_encrypted = encrypt_secret(access_token)
+    row.is_active = True
+    row.is_default = existing_count == 0
+    row.created_by = created_by
+    row.last_tested_at = datetime.now(timezone.utc)
+    row.last_test_status = "ok"
+    row.last_test_error = None
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _connection_to_response(row)
+
+
 @router.get("/{provider}/config-connections", response_model=list[ProviderConnectionResponse])
 def list_provider_connections(
     provider: str,
@@ -598,6 +763,93 @@ def list_external_materials(
 ):
     p = _resolve_provider(provider, db=db, connection_id=connection_id)
     return [ExternalMaterialResponse(**m.__dict__) for m in p.list_materials(course_external_id)]
+
+
+@router.post("/{provider}/courses/{course_external_id}/import-course", response_model=ImportCourseResponse)
+def import_external_course(
+    provider: str,
+    course_external_id: str,
+    request: ImportCourseRequest,
+    db: Session = Depends(get_db),
+):
+    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id)
+
+    existing_mapping = db.query(IntegrationCourseMapping).filter(
+        IntegrationCourseMapping.provider == provider,
+        IntegrationCourseMapping.external_course_id == course_external_id,
+        IntegrationCourseMapping.source_connection_id == request.source_connection_id,
+        IntegrationCourseMapping.is_active.is_(True),
+    ).first()
+    if existing_mapping:
+        existing_course = db.query(Course).filter(Course.id == existing_mapping.target_course_id).first()
+        if existing_course:
+            return ImportCourseResponse(
+                provider=provider,
+                source_connection_id=request.source_connection_id,
+                source_course_external_id=course_external_id,
+                target_course_id=existing_course.id,
+                target_course_title=existing_course.title,
+                mapping_id=existing_mapping.id,
+                created=False,
+            )
+
+    course_name = request.source_course_name
+    if not course_name:
+        try:
+            courses = p.list_courses()
+            course_name = next((c.title for c in courses if c.external_id == course_external_id), None)
+        except Exception:  # noqa: BLE001
+            course_name = None
+    if not course_name:
+        course_name = f"Imported {provider.title()} Course {course_external_id}"
+
+    join_code = generate_join_code()
+    while db.query(Course).filter(Course.join_code == join_code).first():
+        join_code = generate_join_code()
+
+    new_course = Course(
+        title=course_name,
+        created_by=request.created_by,
+        join_code=join_code,
+    )
+    db.add(new_course)
+    db.flush()
+
+    materials_session = SessionModel(
+        course_id=new_course.id,
+        title="Course Materials",
+        status=SessionStatus.completed,
+        plan_json={
+            "is_materials_session": True,
+            "description": "Repository for course readings, documents, and other materials.",
+        },
+    )
+    db.add(materials_session)
+    db.flush()
+
+    mapping = IntegrationCourseMapping(
+        provider=provider,
+        external_course_id=course_external_id,
+        external_course_name=course_name,
+        source_connection_id=request.source_connection_id,
+        target_course_id=new_course.id,
+        created_by=request.created_by,
+        is_active=True,
+    )
+    db.add(mapping)
+    db.commit()
+    db.refresh(new_course)
+    db.refresh(mapping)
+
+    return ImportCourseResponse(
+        provider=provider,
+        source_connection_id=request.source_connection_id,
+        source_course_external_id=course_external_id,
+        target_course_id=new_course.id,
+        target_course_title=new_course.title,
+        mapping_id=mapping.id,
+        created=True,
+    )
 
 
 @router.get("/{provider}/mappings", response_model=list[MappingResponse])

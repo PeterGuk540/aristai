@@ -82,6 +82,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const lastAgentResponseRef = useRef<string>(''); // Track last agent response to detect brief acknowledgments
   const lastMcpResponseTimeRef = useRef<number>(0); // Track when MCP_RESPONSE was sent to filter duplicate AI responses
   const lastMcpResponseContentRef = useRef<string>(''); // Track MCP_RESPONSE content to detect duplicates
+  const mcpResponseDisplayedRef = useRef<boolean>(false); // Track if MCP_RESPONSE has been displayed already
 
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = Number.MAX_SAFE_INTEGER;
@@ -308,6 +309,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // Reset MCP response tracking - new user turn starts
             lastMcpResponseTimeRef.current = 0;
             lastMcpResponseContentRef.current = '';
+            mcpResponseDisplayedRef.current = false;
 
             // Note: MCP_RESPONSE injection removed with Option A architecture
             // All responses come from ElevenLabs agent directly
@@ -354,20 +356,30 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             const recentMcpResponse = timeSinceMcpResponse < 10000; // Within 10 seconds
 
             if (recentMcpResponse && lastMcpResponseContentRef.current) {
-              // Check if this is a follow-up response after MCP_RESPONSE was spoken
-              // The first AI response after MCP_RESPONSE is the spoken MCP content (OK to display)
-              // Any ADDITIONAL responses are duplicates (should be filtered)
               const mcpContent = lastMcpResponseContentRef.current.toLowerCase();
               const aiContent = message?.toLowerCase() || '';
 
-              // If the AI response is substantially similar to MCP content, it's the spoken version (OK)
-              // If it's different (a follow-up like "Would you like to select one?"), filter it
-              const isMcpEcho = mcpContent.includes(aiContent.substring(0, 50)) ||
-                               aiContent.includes(mcpContent.substring(0, 50));
+              // Check if this AI response is related to the MCP content
+              const isMcpRelated = mcpContent.includes(aiContent.substring(0, 30)) ||
+                                   aiContent.includes(mcpContent.substring(0, 30)) ||
+                                   // Check for significant overlap
+                                   mcpContent.split(' ').slice(0, 5).some(word =>
+                                     word.length > 3 && aiContent.includes(word)
+                                   );
 
-              if (!isMcpEcho && timeSinceMcpResponse > 2000) {
+              if (isMcpRelated) {
+                // This is ElevenLabs speaking the MCP content
+                if (mcpResponseDisplayedRef.current) {
+                  // We already displayed this MCP content - filter duplicate
+                  console.log('🔇 Filtering duplicate MCP echo:', message?.substring(0, 50));
+                  return;
+                }
+                // First time - mark as displayed and let it through
+                mcpResponseDisplayedRef.current = true;
+                console.log('✅ Displaying MCP response (first time):', message?.substring(0, 50));
+              } else if (timeSinceMcpResponse > 1500) {
                 // This is a follow-up response after MCP was spoken - filter it
-                console.log('🔇 Filtering duplicate AI response after MCP_RESPONSE:', message?.substring(0, 50));
+                console.log('🔇 Filtering follow-up AI response after MCP:', message?.substring(0, 50));
                 return;
               }
             }
@@ -580,13 +592,41 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       // MCP is the authoritative brain. Speak backend message when available.
       // The backend provides data-driven responses (dropdown options, course lists, etc.)
       // that ElevenLabs agent doesn't have access to, so we MUST speak these.
-      // To prevent double responses, the prompt instructs ElevenLabs to use brief
-      // acknowledgments ("One moment", "Doing that now") while waiting for MCP,
-      // and those are filtered out in the onMessage handler.
+      //
+      // IMPORTANT: Do NOT call addAssistantMessage here!
+      // The message will be added to chatbox when ElevenLabs speaks it and fires onMessage.
+      // Adding it here AND in onMessage causes duplicate messages in the chatbox.
       if (response?.message) {
-        console.log('📢 Speaking MCP-authoritative response');
-        addAssistantMessage(response.message);
-        speakViaElevenLabs(response.message);
+        // Check if ElevenLabs already gave a substantive response
+        // Brief acks like "One moment" don't count
+        const agentResponse = lastAgentResponseRef.current?.toLowerCase() || '';
+        const briefAcks = ['one moment', 'let me check', 'checking', 'doing that', 'un momento'];
+        const agentGaveSubstantiveResponse = agentResponse.length > 20 &&
+          !briefAcks.some(ack => agentResponse.includes(ack));
+
+        // Check if MCP response is just a simple confirmation
+        const mcpMessage = response.message.toLowerCase();
+        const isSimpleConfirmation = mcpMessage.includes('taking you to') ||
+          mcpMessage.includes('opening') ||
+          mcpMessage.includes('switching to') ||
+          mcpMessage.includes('navigating to') ||
+          (mcpMessage.startsWith('selected') && mcpMessage.length < 50);
+
+        // If agent already responded substantively AND MCP is just confirming, skip MCP
+        // But if MCP has data (like dropdown options), always speak it
+        const mcpHasData = mcpMessage.includes('options are') ||
+          mcpMessage.includes('your courses') ||
+          mcpMessage.includes('which would you like') ||
+          mcpMessage.includes('1.') ||
+          mcpMessage.includes('2.');
+
+        if (agentGaveSubstantiveResponse && isSimpleConfirmation && !mcpHasData) {
+          console.log('ℹ️ Skipping MCP confirmation - agent already responded:', agentResponse.substring(0, 50));
+        } else {
+          console.log('📢 Speaking MCP-authoritative response via ElevenLabs');
+          // Only send to ElevenLabs - the onMessage handler will add to chatbox when spoken
+          speakViaElevenLabs(response.message);
+        }
       } else {
         console.log('ℹ️ No backend message to speak');
       }

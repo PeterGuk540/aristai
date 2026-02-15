@@ -322,10 +322,17 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
             // Debounce: Wait 500ms after last transcript update before processing
             // This ensures we process the final transcript, not interim ones
-            setTimeout(() => {
+            // Clear any existing timeout to prevent race conditions
+            if ((window as any).__pendingTranscriptTimeout) {
+              clearTimeout((window as any).__pendingTranscriptTimeout);
+            }
+            (window as any).__pendingTranscriptTimeout = setTimeout(() => {
+              // Double-check: only process if this is still the pending transcript
+              // AND we're not already processing another request
               if (pendingTranscriptRef.current === message && !isProcessingTranscriptRef.current) {
                 handleTranscript(message);
               }
+              (window as any).__pendingTranscriptTimeout = null;
             }, 500);
           } else if (source === 'ai') {
             // ElevenLabs agent responses - display what the agent speaks
@@ -455,7 +462,19 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       allActions.push({ type: 'ui.navigate', payload: { path: action.target } });
     }
 
-    return allActions;
+    // 4. Deduplicate actions by type + payload to prevent multiple executions
+    const seen = new Set<string>();
+    const uniqueActions = allActions.filter((action) => {
+      const key = `${action.type}:${JSON.stringify(action.payload)}`;
+      if (seen.has(key)) {
+        console.log('🔄 Skipping duplicate action:', key);
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+
+    return uniqueActions;
   };
 
   // MCP Response prefix for data-driven responses
@@ -519,13 +538,17 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         console.log('ℹ️ No UI actions needed');
       }
 
-      // MCP is the authoritative brain. Always speak backend message when available.
+      // MCP is the authoritative brain. Display backend message when available.
+      // NOTE: We only add to message history, NOT speak via ElevenLabs.
+      // Sending response back to ElevenLabs causes double responses because:
+      // 1. ElevenLabs agent already responded to the user's transcript
+      // 2. Sending MCP_RESPONSE triggers another ElevenLabs response
       if (response?.message) {
-        console.log('📢 Speaking MCP-authoritative response');
+        console.log('📢 Displaying MCP-authoritative response (not speaking to avoid double response)');
         addAssistantMessage(response.message);
-        speakViaElevenLabs(response.message);
+        // REMOVED: speakViaElevenLabs(response.message) - causes duplicate responses
       } else {
-        console.log('ℹ️ No backend message to speak');
+        console.log('ℹ️ No backend message to display');
       }
 
       // Reset agent response tracking

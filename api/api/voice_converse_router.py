@@ -3356,22 +3356,29 @@ def _extract_dropdown_hint(transcript: str) -> str:
     text_lower = transcript.lower()
 
     # Look for specific dropdown mentions
-    dropdown_keywords = {
-        'course': 'select-course',
-        'session': 'select-session',
-        'student': 'select-student',
-        'instructor': 'select-instructor',
-        'status': 'select-status',
-        'type': 'select-type',
-        'provider': 'select-integration-provider',
-        'connection': 'select-provider-connection',
-        'external course': 'select-external-course',
-        'mapping': 'select-integration-mapping',
-        'target course': 'select-target-course',
-        'target session': 'select-target-session',
-    }
+    # IMPORTANT: Order matters! Check more specific phrases BEFORE generic ones.
+    # e.g., "provider connection" must be checked before "provider"
+    dropdown_keywords = [
+        # Multi-word phrases first (more specific)
+        ('provider connection', 'select-provider-connection'),
+        ('source provider', 'select-integration-provider'),
+        ('external course', 'select-external-course'),
+        ('target course', 'select-target-course'),
+        ('target session', 'select-target-session'),
+        ('saved mapping', 'select-integration-mapping'),
+        # Single words last (less specific)
+        ('connection', 'select-provider-connection'),
+        ('provider', 'select-integration-provider'),
+        ('mapping', 'select-integration-mapping'),
+        ('course', 'select-course'),
+        ('session', 'select-session'),
+        ('student', 'select-student'),
+        ('instructor', 'select-instructor'),
+        ('status', 'select-status'),
+        ('type', 'select-type'),
+    ]
 
-    for keyword, target in dropdown_keywords.items():
+    for keyword, target in dropdown_keywords:
         if keyword in text_lower:
             return target
 

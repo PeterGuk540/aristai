@@ -904,7 +904,10 @@ def check_connection(
     db: Session = Depends(get_db),
 ):
     p = _resolve_provider(provider, db=db, connection_id=connection_id, actor_user_id=user_id)
-    courses = p.list_courses()
+    try:
+        courses = p.list_courses()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     provider_user_name = "Connected User"
     if courses:
         provider_user_name = courses[0].title
@@ -967,7 +970,11 @@ def list_external_courses(
     db: Session = Depends(get_db),
 ):
     p = _resolve_provider(provider, db=db, connection_id=connection_id, actor_user_id=user_id)
-    return [ExternalCourseResponse(**course.__dict__) for course in p.list_courses()]
+    try:
+        courses = p.list_courses()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return [ExternalCourseResponse(**course.__dict__) for course in courses]
 
 
 @router.get("/{provider}/courses/{course_external_id}/materials", response_model=list[ExternalMaterialResponse])

@@ -12,7 +12,7 @@ import mimetypes
 import os
 import re
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
@@ -44,6 +44,14 @@ class UppProvider(LmsProvider):
         self.auth_scheme = os.getenv("UPP_AUTH_SCHEME", "Bearer").strip()
         self.login_path = os.getenv("UPP_LOGIN_PATH", "/login/index.php").strip() or "/login/index.php"
         self.my_courses_path = os.getenv("UPP_MY_COURSES_PATH", "/my/courses.php").strip() or "/my/courses.php"
+        self.portal_courses_paths = [
+            p.strip()
+            for p in os.getenv(
+                "UPP_PORTAL_COURSES_PATHS",
+                "/coordinador/index.asp,/coordinador/cursos.asp,/aula-virtual.asp",
+            ).split(",")
+            if p.strip()
+        ]
 
         self.courses_path = os.getenv("UPP_COURSES_PATH", "/courses").strip() or "/courses"
         self.materials_path_tpl = os.getenv("UPP_MATERIALS_PATH", "/courses/{course_id}/materials").strip()
@@ -109,6 +117,12 @@ class UppProvider(LmsProvider):
             )
         return inputs
 
+    @staticmethod
+    def _clean_html_text(raw: str) -> str:
+        text = re.sub(r"<[^>]+>", " ", raw or "")
+        text = re.sub(r"\s+", " ", text)
+        return text.strip()
+
     def _guess_login_fields(self, inputs: list[dict[str, str]]) -> tuple[str | None, str | None]:
         password_name: str | None = None
         username_name: str | None = None
@@ -140,6 +154,52 @@ class UppProvider(LmsProvider):
             username_name = username_candidates[0][1]
 
         return username_name, password_name
+
+    def _extract_course_id_from_url(self, href: str) -> str | None:
+        parsed = urlparse(href)
+        qs = parse_qs(parsed.query)
+        for key in ("id", "course_id", "curso", "idcurso", "aula", "seccion"):
+            val = qs.get(key)
+            if val and val[0]:
+                return str(val[0]).strip()
+        match = re.search(r"(?:course|curso|aula|seccion)[=/\-](\d+)", href, flags=re.IGNORECASE)
+        if match:
+            return match.group(1)
+        return None
+
+    def _scrape_courses_from_html(self, html: str, base_url: str) -> list[dict[str, Any]]:
+        links = re.findall(
+            r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        out: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for href_raw, label_html in links:
+            href = urljoin(base_url, href_raw.strip())
+            label = self._clean_html_text(label_html)
+            href_l = href.lower()
+            label_l = label.lower()
+            looks_like_course = bool(
+                re.search(r"course|curso|asignatura|materia|aula|secci[oó]n", href_l)
+                or re.search(r"course|curso|asignatura|materia|aula|secci[oó]n", label_l)
+                or "id=" in href_l
+            )
+            if not looks_like_course:
+                continue
+            external_id = self._extract_course_id_from_url(href) or str(abs(hash(href)))
+            key = f"{external_id}:{label}"
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(
+                {
+                    "id": external_id,
+                    "title": label or f"UPP Course {external_id}",
+                    "url": href,
+                }
+            )
+        return out
 
     @staticmethod
     def _contains_any(text: str, needles: list[str]) -> bool:
@@ -248,24 +308,40 @@ class UppProvider(LmsProvider):
         except Exception:
             if not self._credentials_configured():
                 raise
-            courses_url = f"{self.api_url}{self.my_courses_path}"
             with httpx.Client(
                 timeout=self.timeout,
                 headers=self._headers(),
                 cookies=self._login_cookies(),
                 follow_redirects=True,
             ) as client:
-                response = client.get(courses_url)
-                response.raise_for_status()
-                html = response.text
-            links = re.findall(r'href=["\']([^"\']*course/view\.php\?id=(\d+)[^"\']*)["\'][^>]*>(.*?)</a>', html, flags=re.IGNORECASE | re.DOTALL)
-            seen: set[str] = set()
-            for href, course_id, label in links:
-                if course_id in seen:
-                    continue
-                seen.add(course_id)
-                title = re.sub(r"<[^>]+>", "", label).strip() or f"UPP Course {course_id}"
-                raw_courses.append({"id": course_id, "title": title, "url": href})
+                # Moodle-like fallback
+                try:
+                    courses_url = f"{self.api_url}{self.my_courses_path}"
+                    response = client.get(courses_url)
+                    response.raise_for_status()
+                    raw_courses.extend(self._scrape_courses_from_html(response.text, str(response.url)))
+                except Exception:
+                    pass
+
+                # Portal fallback (UPP-specific coordinator pages)
+                if not raw_courses:
+                    for path in self.portal_courses_paths:
+                        try:
+                            portal_url = f"{self.api_url}{path}"
+                            response = client.get(portal_url)
+                            response.raise_for_status()
+                            scraped = self._scrape_courses_from_html(response.text, str(response.url))
+                            if scraped:
+                                raw_courses.extend(scraped)
+                                break
+                        except Exception:
+                            continue
+
+            if not raw_courses:
+                raise RuntimeError(
+                    "UPP course discovery failed: no supported JSON course endpoint and no course links found in portal pages. "
+                    "Configure UPP_COURSES_PATH for this tenant or provide portal-specific scraping paths."
+                )
         courses: list[ExternalCourse] = []
         for c in raw_courses:
             course_id = self._pick(c.get("id"), c.get("course_id"), c.get("external_id"), c.get("uuid"))

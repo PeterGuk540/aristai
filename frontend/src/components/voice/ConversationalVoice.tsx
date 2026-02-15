@@ -335,16 +335,24 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             lastAgentResponseRef.current = message || '';
 
             // Display agent responses in chatbox
-            // Skip brief acknowledgments - backend will provide the full response
+            // Skip brief acknowledgments and generic denials - backend is authoritative.
             const briefAcks = [
               "i'm retrieving", "retrieving your", "let me get", "let me check",
               "checking", "one moment", "just a moment", "getting that",
               "fetching", "loading", "looking up", "i'll get",
               "un momento", "buscando", "obteniendo"
             ];
+            const genericDenials = [
+              "couldn't process that request",
+              "unable to assist",
+              "not available",
+              "could you please clarify",
+              "please provide more details",
+            ];
             const isAck = message && briefAcks.some(ack => message.toLowerCase().includes(ack));
+            const isGenericDenial = message && genericDenials.some(p => message.toLowerCase().includes(p));
 
-            if (message && message.length > 5 && !isAck) {
+            if (message && message.length > 5 && !isAck && !isGenericDenial) {
               addAssistantMessage(message);
             }
           }
@@ -467,31 +475,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     }
   };
 
-  // Check if a response contains data that must be spoken by backend
-  // These are dynamic responses that the ElevenLabs agent cannot know
-  const isDataDrivenResponse = (response: any): boolean => {
-    // Check for dropdown options (listing courses, sessions)
-    if (response?.options && Array.isArray(response.options) && response.options.length > 0) {
-      return true;
-    }
-    // Check for conversation state that requires verbal interaction
-    if (response?.conversation_state === 'dropdown_selection') {
-      return true;
-    }
-    // Check for data queries that return specific info
-    if (response?.data && response?.message) {
-      return true;
-    }
-    // Check for results with specific data
-    const results = response?.results ?? [];
-    for (const result of results) {
-      if (result?.options || result?.data || result?.students || result?.courses || result?.sessions) {
-        return true;
-      }
-    }
-    return false;
-  };
-
   const handleTranscript = async (transcript: string) => {
     if (!transcript || isProcessingTranscriptRef.current) {
       return;
@@ -536,33 +519,13 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         console.log('ℹ️ No UI actions needed');
       }
 
-      // Check if backend returned data-driven content that must be spoken
-      // This handles: dropdown options, student data, query results, etc.
-      // The ElevenLabs agent cannot know this data - only the backend can provide it
-      if (isDataDrivenResponse(response) && response.message) {
-        // Check if the agent gave a brief acknowledgment or a full response
-        const agentResponse = lastAgentResponseRef.current.toLowerCase();
-        const briefAcks = [
-          "i'm retrieving", "retrieving your", "let me get", "let me check",
-          "checking", "one moment", "just a moment", "getting that",
-          "fetching", "loading", "looking up", "i'll get",
-          "un momento", "buscando", "obteniendo"
-        ];
-        const agentGaveAck = briefAcks.some(ack => agentResponse.includes(ack));
-        const agentGaveFullResponse = lastAgentResponseRef.current.length > 50 && !agentGaveAck;
-
-        if (agentGaveFullResponse) {
-          // Agent already gave a full response - don't speak backend data
-          // Just show it in the chatbox for reference
-          console.log('ℹ️ Agent gave full response - skipping backend speech');
-        } else {
-          // Agent gave brief ack or no response - speak the backend data
-          console.log('📢 Data-driven response - speaking via backend');
-          addAssistantMessage(response.message);
-          speakViaElevenLabs(response.message);
-        }
+      // MCP is the authoritative brain. Always speak backend message when available.
+      if (response?.message) {
+        console.log('📢 Speaking MCP-authoritative response');
+        addAssistantMessage(response.message);
+        speakViaElevenLabs(response.message);
       } else {
-        console.log('ℹ️ Agent handles response directly');
+        console.log('ℹ️ No backend message to speak');
       }
 
       // Reset agent response tracking

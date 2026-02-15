@@ -80,6 +80,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const lastUserMessageIdRef = useRef<string | null>(null); // Track last user message for transcript updates
   const pendingTranscriptRef = useRef<string | null>(null); // Track pending transcript to avoid duplicate processing
   const lastAgentResponseRef = useRef<string>(''); // Track last agent response to detect brief acknowledgments
+  const lastMcpResponseTimeRef = useRef<number>(0); // Track when MCP_RESPONSE was sent to filter duplicate AI responses
+  const lastMcpResponseContentRef = useRef<string>(''); // Track MCP_RESPONSE content to detect duplicates
 
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = Number.MAX_SAFE_INTEGER;
@@ -303,6 +305,10 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // We UPDATE the last user message instead of adding new ones for each interim
             console.log('🎤 User message received:', message);
 
+            // Reset MCP response tracking - new user turn starts
+            lastMcpResponseTimeRef.current = 0;
+            lastMcpResponseContentRef.current = '';
+
             // Note: MCP_RESPONSE injection removed with Option A architecture
             // All responses come from ElevenLabs agent directly
 
@@ -341,6 +347,31 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // Track the agent's response
             lastAgentResponseRef.current = message || '';
 
+            // CRITICAL: Filter out duplicate responses after MCP_RESPONSE
+            // If we just sent MCP_RESPONSE (within last 10 seconds), check if this AI response
+            // is a duplicate/follow-up that should be suppressed
+            const timeSinceMcpResponse = Date.now() - lastMcpResponseTimeRef.current;
+            const recentMcpResponse = timeSinceMcpResponse < 10000; // Within 10 seconds
+
+            if (recentMcpResponse && lastMcpResponseContentRef.current) {
+              // Check if this is a follow-up response after MCP_RESPONSE was spoken
+              // The first AI response after MCP_RESPONSE is the spoken MCP content (OK to display)
+              // Any ADDITIONAL responses are duplicates (should be filtered)
+              const mcpContent = lastMcpResponseContentRef.current.toLowerCase();
+              const aiContent = message?.toLowerCase() || '';
+
+              // If the AI response is substantially similar to MCP content, it's the spoken version (OK)
+              // If it's different (a follow-up like "Would you like to select one?"), filter it
+              const isMcpEcho = mcpContent.includes(aiContent.substring(0, 50)) ||
+                               aiContent.includes(mcpContent.substring(0, 50));
+
+              if (!isMcpEcho && timeSinceMcpResponse > 2000) {
+                // This is a follow-up response after MCP was spoken - filter it
+                console.log('🔇 Filtering duplicate AI response after MCP_RESPONSE:', message?.substring(0, 50));
+                return;
+              }
+            }
+
             // Display agent responses in chatbox
             // Skip brief acknowledgments and generic denials - backend is authoritative.
             const briefAcks = [
@@ -351,7 +382,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             ];
             // Only filter out clear denial phrases that indicate ElevenLabs is rejecting
             // the request before MCP has a chance to respond.
-            // Do NOT filter legitimate clarifying questions or natural responses.
             const genericDenials = [
               "couldn't process that request",
               "couldn't process your request",
@@ -494,6 +524,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     }
     try {
       console.log('🔊 Speaking via ElevenLabs:', text.substring(0, 100) + '...');
+      // Track when and what we sent so we can filter duplicate AI responses
+      lastMcpResponseTimeRef.current = Date.now();
+      lastMcpResponseContentRef.current = text;
       conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
     } catch (error) {
       console.error('❌ Failed to send MCP message to ElevenLabs:', error);

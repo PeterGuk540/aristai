@@ -280,7 +280,7 @@ class UppProvider(LmsProvider):
     def _extract_course_urls_from_raw_html(self, html: str, base_url: str) -> list[str]:
         urls: list[str] = []
         seen: set[str] = set()
-        for raw in re.findall(r"curso_cargar\.asp\?[^\"'<>\\s]+", html, flags=re.IGNORECASE):
+        for raw in re.findall(r"curso_cargar\.asp\?[^\"'<>\s]+", html, flags=re.IGNORECASE):
             href = urljoin(base_url, raw.replace("&amp;", "&"))
             if href in seen:
                 continue
@@ -315,11 +315,7 @@ class UppProvider(LmsProvider):
             return False
         # Strict course row signature for this UPP tenant.
         if "curso_cargar.asp" in h:
-            return bool(
-                re.search(r"curcodi=", h)
-                and re.search(r"ciccodi=", h)
-                and re.search(r"seccodi=", h)
-            )
+            return bool(re.search(r"curcodi=", h))
         # Fallback: label has code and query includes curcodi.
         if re.search(r"p\d{6}-cur\d{5,}", l) and re.search(r"curcodi=", h):
             return True

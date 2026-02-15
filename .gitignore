@@ -35,3 +35,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 aristai-key.pem
+
+node_modules/
+tmp/

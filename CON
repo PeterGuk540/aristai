@@ -216,7 +216,12 @@ class UppProvider(LmsProvider):
             label_l = label.lower()
             if label_l in self.portal_nav_exclude:
                 continue
-            looks_like_course = self._is_course_entry_link(href, label)
+            looks_like_course = bool(
+                ("inicio.asp" in href_l and "carcodi=" in href_l)
+                or ("curso_cargar.asp" in href_l)
+                or re.search(r"curcodi=|ciccodi=|seccodi=|crrcodi=", href_l)
+                or re.search(r"p\d{6}-cur\d{5,}", label_l)
+            )
             if not looks_like_course:
                 continue
             extracted_id = self._extract_course_id_from_url(href)
@@ -283,12 +288,10 @@ class UppProvider(LmsProvider):
 
     def _is_semester_link(self, href: str, label: str) -> bool:
         txt = f"{href} {label}".lower()
-        if "seme=" in txt or "sem=" in txt:
-            return True
-        if "cursos.asp" in txt and ("carcodi=" in txt or "sem=" in txt):
+        if "seme=" in txt:
             return True
         return bool(
-            re.search(r"semestre|periodo|ciclo|campa[nÃ±]a|t[eÃ©]rmino|term", txt)
+            re.search(r"semestre|periodo|ciclo|campa[nñ]a|t[eé]rmino|term", txt)
             or re.search(r"20\d{2}", txt)
             or re.search(r"\b(i|ii|iii|iv|v|vi|vii|viii)\b", txt)
         )
@@ -321,7 +324,7 @@ class UppProvider(LmsProvider):
         href_l = href.lower()
         if re.search(r"mis[_\s-]?cursos?|descargar[_\s-]?material|logout|salir", href_l):
             return False
-        if re.search(r"silabo|s[iÃ­]labo|contenido del curso|semana", label_l):
+        if re.search(r"silabo|s[ií]labo|contenido del curso|semana", label_l):
             return False
         # Strong UPP course signatures first.
         if ("inicio.asp" in href_l and "carcodi=" in href_l) or ("curso_cargar.asp" in href_l):
@@ -330,7 +333,7 @@ class UppProvider(LmsProvider):
             return True
         if re.search(r"p\d{6}-cur\d{5,}", label_l):
             return True
-        if re.search(r"curso|course|asignatura|materia|secci[oÃ³]n|aula", label_l):
+        if re.search(r"curso|course|asignatura|materia|secci[oó]n|aula", label_l):
             return True
         if re.search(r"[A-Z]{2,}\s*[-:]?\s*\d{2,}", label):
             return True
@@ -366,23 +369,6 @@ class UppProvider(LmsProvider):
                 continue
 
             career_links_all = self._extract_links(career_page.text, str(career_page.url))
-            for href, label in career_links_all:
-                if not self._is_course_entry_link(href, label):
-                    continue
-                course_id = self._encode_url_ref("courseurl", href)
-                title = self._normalize_course_title(label.strip())
-                key = f"{course_id}:{title.lower()}"
-                if key in seen:
-                    continue
-                seen.add(key)
-                discovered.append(
-                    {
-                        "id": course_id,
-                        "title": title or f"UPP Course {course_id}",
-                        "url": href,
-                    }
-                )
-
             semester_links = [href for href, label in career_links_all if self._is_semester_link(href, label)]
             candidate_pages = semester_links if semester_links else [str(career_page.url)]
 
@@ -417,17 +403,9 @@ class UppProvider(LmsProvider):
         label_l = label.lower()
         if re.search(r"\.(pdf|docx?|pptx?|xlsx?|csv|txt|zip|rar|mp4|mp3)(\?|$)", href_l):
             return True
-        if re.search(
-            r"filemanager|linkmanager|syllabus|silabo|s[iÃ­]labo|onlineclasses|recordedclasses|educationalcontent|academicwork|academicsupport|selectedreadings|webgrafia|evaluations",
-            href_l,
-        ):
-            return True
         if re.search(r"download|archivo|material|recurso|adjunto|file|files|document", href_l):
             return True
-        if re.search(
-            r"archivo|material|recurso|adjunto|documento|s[iÃ­]labo|silabo|clases en l[iÃ­]nea|clases grabadas|contenido did[aÃ¡]ctico|trabajo acad[eÃ©]mico|ayudas|lecturas seleccionadas|evaluaciones",
-            label_l,
-        ):
+        if re.search(r"archivo|material|recurso|adjunto|documento", label_l):
             return True
         return False
 
@@ -475,7 +453,7 @@ class UppProvider(LmsProvider):
         txt = f"{href} {label}".lower()
         return bool(
             re.search(
-                r"semana=|s[iÃ­]labo|syllabus|contenido|did[aÃ¡]ctico|clases|grabadas|trabajo|ayudas|lecturas|evaluaciones|filemanager|linkmanager|onlineclasses|recordedclasses|educationalcontent|academicwork|selectedreadings|academicsupport|webgrafia",
+                r"semana=|s[ií]labo|syllabus|contenido|did[aá]ctico|clases|grabadas|trabajo|ayudas|lecturas|evaluaciones|filemanager|linkmanager|onlineclasses|recordedclasses|educationalcontent|academicwork|selectedreadings|academicsupport|webgrafia",
                 txt,
             )
         )
@@ -488,7 +466,7 @@ class UppProvider(LmsProvider):
     def _diagnose_login_failure(self, html: str, status_code: int | None = None) -> str:
         if status_code in (401, 403):
             return "UPP login failed: credentials rejected (401/403). Check username/password."
-        if self._contains_any(html, ["invalid login", "incorrect", "authentication failed", "credenciales", "usuario o contraseÃ±a"]):
+        if self._contains_any(html, ["invalid login", "incorrect", "authentication failed", "credenciales", "usuario o contraseña"]):
             return "UPP login failed: invalid username or password."
         if self._contains_any(html, ["captcha", "recaptcha"]):
             return "UPP login failed: CAPTCHA/interactive challenge is required and cannot be completed by backend sync."
@@ -527,7 +505,7 @@ class UppProvider(LmsProvider):
             post_text = post.text or ""
             if self._contains_any(post.url.path.lower(), ["/login"]) and not client.cookies:
                 raise RuntimeError(self._diagnose_login_failure(post_text, post.status_code))
-            if self._contains_any(post_text, ["invalid login", "incorrect", "authentication failed", "credenciales", "usuario o contraseÃ±a"]):
+            if self._contains_any(post_text, ["invalid login", "incorrect", "authentication failed", "credenciales", "usuario o contraseña"]):
                 raise RuntimeError(self._diagnose_login_failure(post_text, post.status_code))
             cookies = dict(client.cookies.items())
             if not cookies:

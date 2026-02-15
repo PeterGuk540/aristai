@@ -4,11 +4,12 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 
-function CanvasOAuthCallbackContent() {
+function ProviderOAuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(true);
+  const [providerLabel, setProviderLabel] = useState('Provider');
 
   useEffect(() => {
     const run = async () => {
@@ -22,23 +23,25 @@ function CanvasOAuthCallbackContent() {
         return;
       }
       if (!code || !state) {
-        setError('Missing Canvas OAuth callback parameters.');
+        setError('Missing OAuth callback parameters.');
         setIsProcessing(false);
         return;
       }
 
       try {
+        const provider = (sessionStorage.getItem('provider_oauth_provider') || 'canvas').toLowerCase();
+        setProviderLabel(provider.toUpperCase());
         const redirectUri =
-          sessionStorage.getItem('canvas_oauth_redirect_uri') ||
+          sessionStorage.getItem('provider_oauth_redirect_uri') ||
           `${window.location.origin}/oauth/canvas-callback`;
-        await api.exchangeCanvasOAuth({
+        await api.exchangeProviderOAuth(provider, {
           code,
           state,
           redirect_uri: redirectUri,
         });
-        router.replace('/integrations?canvas_oauth=success');
+        router.replace(`/integrations?oauth=success&provider=${provider}`);
       } catch (e: any) {
-        setError(e?.message || 'Failed to complete Canvas OAuth.');
+        setError(e?.message || 'Failed to complete OAuth.');
         setIsProcessing(false);
       }
     };
@@ -51,7 +54,7 @@ function CanvasOAuthCallbackContent() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-300 border-t-stone-700" />
-          <p className="mt-3 text-sm text-neutral-600">Completing Canvas connection...</p>
+          <p className="mt-3 text-sm text-neutral-600">Completing {providerLabel} connection...</p>
         </div>
       </div>
     );
@@ -61,7 +64,7 @@ function CanvasOAuthCallbackContent() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="w-full max-w-lg rounded-xl border border-red-200 bg-red-50 p-6 text-red-800">
-          <p className="text-lg font-semibold">Canvas connection failed</p>
+          <p className="text-lg font-semibold">{providerLabel} connection failed</p>
           <p className="mt-2 text-sm">{error}</p>
           <button
             onClick={() => router.replace('/integrations')}
@@ -88,10 +91,10 @@ function LoadingFallback() {
   );
 }
 
-export default function CanvasOAuthCallbackPage() {
+export default function ProviderOAuthCallbackPage() {
   return (
     <Suspense fallback={<LoadingFallback />}>
-      <CanvasOAuthCallbackContent />
+      <ProviderOAuthCallbackContent />
     </Suspense>
   );
 }

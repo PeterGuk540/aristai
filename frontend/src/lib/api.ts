@@ -445,13 +445,16 @@ export const api = {
       last_test_error?: string;
     }>(`/integrations/${provider}/config-connections`, { method: 'POST', body: JSON.stringify(data) }),
 
-  startCanvasOAuth: (data: { label: string; api_base_url: string; created_by?: number; redirect_uri: string }) =>
+  startProviderOAuth: (
+    provider: string,
+    data: { label: string; api_base_url: string; created_by?: number; redirect_uri: string }
+  ) =>
     fetchApi<{ authorization_url: string; state: string }>(
-      '/integrations/canvas/oauth/start',
+      `/integrations/${provider}/oauth/start`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
 
-  exchangeCanvasOAuth: (data: { code: string; state: string; redirect_uri: string }) =>
+  exchangeProviderOAuth: (provider: string, data: { code: string; state: string; redirect_uri: string }) =>
     fetchApi<{
       id: number;
       provider: string;
@@ -460,7 +463,7 @@ export const api = {
       token_masked: string;
       is_active: boolean;
       is_default: boolean;
-    }>('/integrations/canvas/oauth/exchange', { method: 'POST', body: JSON.stringify(data) }),
+    }>(`/integrations/${provider}/oauth/exchange`, { method: 'POST', body: JSON.stringify(data) }),
 
   activateProviderConnection: (provider: string, connectionId: number, userId: number) =>
     fetchApi<any>(`/integrations/${provider}/config-connections/${connectionId}/activate?user_id=${userId}`, { method: 'POST' }),

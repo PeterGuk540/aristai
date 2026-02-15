@@ -103,6 +103,8 @@ export default function IntegrationsPage() {
   const [newConnLabel, setNewConnLabel] = useState('');
   const [newConnUrl, setNewConnUrl] = useState('');
   const [newConnToken, setNewConnToken] = useState('');
+  const [newConnUsername, setNewConnUsername] = useState('');
+  const [newConnPassword, setNewConnPassword] = useState('');
   const [savingProviderConnection, setSavingProviderConnection] = useState(false);
   const [startingOAuth, setStartingOAuth] = useState(false);
   const [externalCourses, setExternalCourses] = useState<ExternalCourse[]>([]);
@@ -276,19 +278,40 @@ export default function IntegrationsPage() {
   const selectAllMaterials = () => setSelectedMaterialIds(externalMaterials.map((m) => m.external_id));
   const clearMaterials = () => setSelectedMaterialIds([]);
 
+  const encodeUppCredentials = (username: string, password: string) => {
+    const json = JSON.stringify({ username, password });
+    const b64 = typeof window === 'undefined'
+      ? ''
+      : window.btoa(
+          Array.from(new TextEncoder().encode(json))
+            .map((byte) => String.fromCharCode(byte))
+            .join('')
+        );
+    return `UPP_CRED_B64:${b64}`;
+  };
+
   const handleAddProviderConnection = async () => {
     setError('');
     setMessage('');
-    if (!newConnLabel.trim() || !newConnUrl.trim() || !newConnToken.trim()) {
-      setError('Label, API URL, and API token are required.');
+    const requiresToken = provider !== 'upp';
+    const hasUppCreds = Boolean(newConnUsername.trim() && newConnPassword.trim());
+    if (!newConnLabel.trim() || !newConnUrl.trim() || (requiresToken && !newConnToken.trim()) || (provider === 'upp' && !newConnToken.trim() && !hasUppCreds)) {
+      setError(
+        requiresToken
+          ? 'Label, API URL, and API token are required.'
+          : 'Label, API URL, and either API token or username/password are required for UPP.'
+      );
       return;
     }
+    const tokenForSave = provider === 'upp' && hasUppCreds
+      ? encodeUppCredentials(newConnUsername.trim(), newConnPassword.trim())
+      : newConnToken.trim();
     setSavingProviderConnection(true);
     try {
       const created = await api.createProviderConnection(provider, {
         label: newConnLabel.trim(),
         api_base_url: newConnUrl.trim(),
-        api_token: newConnToken.trim(),
+        api_token: tokenForSave,
         is_default: providerConnections.length === 0,
         created_by: currentUser?.id,
       });
@@ -296,6 +319,8 @@ export default function IntegrationsPage() {
       setNewConnLabel('');
       setNewConnUrl('');
       setNewConnToken('');
+      setNewConnUsername('');
+      setNewConnPassword('');
       setMessage(`Connection "${created.label}" added.`);
       await refreshProviderData();
     } catch (e: any) {
@@ -341,30 +366,52 @@ export default function IntegrationsPage() {
     }
   };
 
-  const handleStartCanvasOAuth = async () => {
+  const handleStartProviderOAuth = async () => {
     setError('');
     setMessage('');
-    if (provider !== 'canvas') {
-      setError('OAuth connect is currently available for Canvas only.');
+    if (!newConnLabel.trim() || !newConnUrl.trim()) {
+      setError(`Enter a connection label and ${provider.toUpperCase()} API base URL first.`);
       return;
     }
-    if (!newConnLabel.trim() || !newConnUrl.trim()) {
-      setError('Enter a connection label and Canvas API base URL first.');
+    if (provider === 'upp') {
+      if (!newConnUsername.trim() || !newConnPassword.trim()) {
+        setError('Enter UPP username and password first.');
+        return;
+      }
+      setStartingOAuth(true);
+      try {
+        const created = await api.createProviderConnection(provider, {
+          label: newConnLabel.trim(),
+          api_base_url: newConnUrl.trim(),
+          api_token: encodeUppCredentials(newConnUsername.trim(), newConnPassword.trim()),
+          is_default: providerConnections.length === 0,
+          created_by: currentUser?.id,
+        });
+        setSelectedConnectionId(String(created.id));
+        setNewConnToken('');
+        setMessage(`Connected ${provider.toUpperCase()} as "${created.label}".`);
+        await refreshProviderData();
+      } catch (e: any) {
+        setError(e?.message || `Failed to connect ${provider.toUpperCase()}.`);
+      } finally {
+        setStartingOAuth(false);
+      }
       return;
     }
     setStartingOAuth(true);
     try {
       const redirectUri = `${window.location.origin}/oauth/canvas-callback`;
-      const result = await api.startCanvasOAuth({
+      const result = await api.startProviderOAuth(provider, {
         label: newConnLabel.trim(),
         api_base_url: newConnUrl.trim(),
         created_by: currentUser?.id,
         redirect_uri: redirectUri,
       });
-      sessionStorage.setItem('canvas_oauth_redirect_uri', redirectUri);
+      sessionStorage.setItem('provider_oauth_redirect_uri', redirectUri);
+      sessionStorage.setItem('provider_oauth_provider', provider);
       window.location.href = result.authorization_url;
     } catch (e: any) {
-      setError(e?.message || 'Failed to start Canvas OAuth.');
+      setError(e?.message || `Failed to start ${provider.toUpperCase()} OAuth.`);
       setStartingOAuth(false);
     }
   };
@@ -681,11 +728,30 @@ export default function IntegrationsPage() {
               value={newConnToken}
               onChange={(e) => setNewConnToken(e.target.value)}
               data-voice-id="new-provider-connection-token"
-              placeholder="API token"
+              placeholder={provider === 'upp' ? 'API token (optional if using username/password)' : 'API token'}
               type="password"
               className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
             />
           </div>
+          {provider === 'upp' && (
+            <div className="md:col-span-2 grid gap-2 md:grid-cols-2">
+              <input
+                value={newConnUsername}
+                onChange={(e) => setNewConnUsername(e.target.value)}
+                data-voice-id="new-provider-connection-username"
+                placeholder="UPP username"
+                className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              />
+              <input
+                value={newConnPassword}
+                onChange={(e) => setNewConnPassword(e.target.value)}
+                data-voice-id="new-provider-connection-password"
+                placeholder="UPP password"
+                type="password"
+                className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              />
+            </div>
+          )}
 
           <div className="flex items-end gap-2">
             <button
@@ -698,13 +764,13 @@ export default function IntegrationsPage() {
               Add connection
             </button>
             <button
-              onClick={handleStartCanvasOAuth}
-              disabled={startingOAuth || provider !== 'canvas'}
+              onClick={handleStartProviderOAuth}
+              disabled={startingOAuth}
               data-voice-id="connect-canvas-oauth"
               className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
             >
               {startingOAuth ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-              Connect Canvas
+              {provider === 'upp' ? 'Connect UPP (username/password)' : `Connect ${provider.toUpperCase()}`}
             </button>
             <button
               onClick={handleTestActiveConnection}

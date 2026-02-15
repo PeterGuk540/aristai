@@ -78,24 +78,24 @@ class IntegrationConnectionResponse(BaseModel):
 class ProviderConnectionRequest(BaseModel):
     label: str
     api_base_url: str
-    api_token: str
+    api_token: Optional[str] = ""
     is_default: bool = False
     created_by: Optional[int] = None
 
 
-class CanvasOAuthStartRequest(BaseModel):
+class ProviderOAuthStartRequest(BaseModel):
     label: str
     api_base_url: str
     created_by: Optional[int] = None
     redirect_uri: str
 
 
-class CanvasOAuthStartResponse(BaseModel):
+class ProviderOAuthStartResponse(BaseModel):
     authorization_url: str
     state: str
 
 
-class CanvasOAuthExchangeRequest(BaseModel):
+class ProviderOAuthExchangeRequest(BaseModel):
     code: str
     state: str
     redirect_uri: str
@@ -643,16 +643,53 @@ def get_providers() -> list[ProviderStatus]:
     return statuses
 
 
-@router.post("/canvas/oauth/start", response_model=CanvasOAuthStartResponse)
-def start_canvas_oauth(request: CanvasOAuthStartRequest):
-    client_id = os.getenv("CANVAS_OAUTH_CLIENT_ID", "").strip()
-    if not client_id:
-        raise HTTPException(status_code=400, detail="CANVAS_OAUTH_CLIENT_ID is not configured.")
+def _oauth_config_for_provider(provider: str, api_base_url: str) -> dict[str, str]:
+    p = provider.strip().lower()
+    base = api_base_url.strip().rstrip("/")
+    if p == "canvas":
+        site_root = _canvas_site_root(base)
+        return {
+            "client_id": os.getenv("CANVAS_OAUTH_CLIENT_ID", "").strip(),
+            "client_secret": os.getenv("CANVAS_OAUTH_CLIENT_SECRET", "").strip(),
+            "authorize_url": f"{site_root}/login/oauth2/auth",
+            "token_url": f"{site_root}/login/oauth2/token",
+            "scope": os.getenv("CANVAS_OAUTH_SCOPE", "").strip(),
+        }
 
-    site_root = _canvas_site_root(request.api_base_url)
+    upper = p.upper()
+    authorize_url = os.getenv(f"{upper}_OAUTH_AUTHORIZE_URL", "").strip()
+    token_url = os.getenv(f"{upper}_OAUTH_TOKEN_URL", "").strip()
+    client_id = os.getenv(f"{upper}_OAUTH_CLIENT_ID", "").strip()
+    client_secret = os.getenv(f"{upper}_OAUTH_CLIENT_SECRET", "").strip()
+    scope = os.getenv(f"{upper}_OAUTH_SCOPE", "").strip()
+
+    if not authorize_url:
+        authorize_url = f"{base}/oauth/authorize"
+    if not token_url:
+        token_url = f"{base}/oauth/token"
+
+    return {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "authorize_url": authorize_url,
+        "token_url": token_url,
+        "scope": scope,
+    }
+
+
+@router.post("/{provider}/oauth/start", response_model=ProviderOAuthStartResponse)
+def start_provider_oauth(provider: str, request: ProviderOAuthStartRequest):
+    if provider not in list_supported_providers():
+        raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+
+    oauth_cfg = _oauth_config_for_provider(provider, request.api_base_url)
+    client_id = oauth_cfg.get("client_id", "")
+    if not client_id:
+        raise HTTPException(status_code=400, detail=f"{provider.upper()} OAuth client id is not configured.")
+
     state = _sign_oauth_state(
         {
-            "provider": "canvas",
+            "provider": provider,
             "label": request.label,
             "api_base_url": request.api_base_url.strip().rstrip("/"),
             "created_by": request.created_by,
@@ -660,63 +697,82 @@ def start_canvas_oauth(request: CanvasOAuthStartRequest):
         }
     )
     auth_url = (
-        f"{site_root}/login/oauth2/auth"
-        f"?client_id={client_id}"
+        f"{oauth_cfg['authorize_url']}"
+        f"?client_id={quote_plus(client_id)}"
         f"&response_type=code"
         f"&redirect_uri={quote_plus(request.redirect_uri)}"
         f"&state={quote_plus(state)}"
     )
-    return CanvasOAuthStartResponse(authorization_url=auth_url, state=state)
+    scope = oauth_cfg.get("scope", "")
+    if scope:
+        auth_url += f"&scope={quote_plus(scope)}"
+    return ProviderOAuthStartResponse(authorization_url=auth_url, state=state)
 
 
-@router.post("/canvas/oauth/exchange", response_model=ProviderConnectionResponse)
-def exchange_canvas_oauth(
-    request: CanvasOAuthExchangeRequest,
+@router.post("/{provider}/oauth/exchange", response_model=ProviderConnectionResponse)
+def exchange_provider_oauth(
+    provider: str,
+    request: ProviderOAuthExchangeRequest,
     db: Session = Depends(get_db),
 ):
-    client_id = os.getenv("CANVAS_OAUTH_CLIENT_ID", "").strip()
-    client_secret = os.getenv("CANVAS_OAUTH_CLIENT_SECRET", "").strip()
-    if not client_id or not client_secret:
-        raise HTTPException(status_code=400, detail="Canvas OAuth credentials are not configured.")
+    if provider not in list_supported_providers():
+        raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
     payload = _verify_oauth_state(request.state)
+    state_provider = str(payload.get("provider", "")).strip().lower()
+    if state_provider and state_provider != provider:
+        raise HTTPException(status_code=400, detail="OAuth state provider mismatch.")
+
     api_base_url = str(payload.get("api_base_url", "")).strip().rstrip("/")
-    label = str(payload.get("label", "")).strip() or "Canvas Connection"
+    oauth_cfg = _oauth_config_for_provider(provider, api_base_url)
+    client_id = oauth_cfg.get("client_id", "")
+    client_secret = oauth_cfg.get("client_secret", "")
+    if not client_id:
+        raise HTTPException(status_code=400, detail=f"{provider.upper()} OAuth client id is not configured.")
+
+    api_base_url = str(payload.get("api_base_url", "")).strip().rstrip("/")
+    label = str(payload.get("label", "")).strip() or f"{_provider_display_name(provider)} Connection"
     created_by = payload.get("created_by")
-    site_root = _canvas_site_root(api_base_url)
-    token_url = f"{site_root}/login/oauth2/token"
+    token_url = oauth_cfg["token_url"]
 
     try:
         with httpx.Client(timeout=30) as client:
+            token_data = {
+                "grant_type": "authorization_code",
+                "client_id": client_id,
+                "redirect_uri": request.redirect_uri,
+                "code": request.code,
+            }
+            if client_secret:
+                token_data["client_secret"] = client_secret
             response = client.post(
                 token_url,
-                data={
-                    "grant_type": "authorization_code",
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "redirect_uri": request.redirect_uri,
-                    "code": request.code,
-                },
+                data=token_data,
             )
             response.raise_for_status()
             token_payload = response.json()
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"Canvas OAuth exchange failed: {exc}") from exc
+        raise HTTPException(status_code=400, detail=f"{_provider_display_name(provider)} OAuth exchange failed: {exc}") from exc
 
-    access_token = str(token_payload.get("access_token", "")).strip()
+    access_token = str(
+        token_payload.get("access_token")
+        or token_payload.get("token")
+        or token_payload.get("id_token")
+        or ""
+    ).strip()
     if not access_token:
-        raise HTTPException(status_code=400, detail="Canvas OAuth response missing access_token.")
+        raise HTTPException(status_code=400, detail=f"{_provider_display_name(provider)} OAuth response missing access token.")
 
     row = db.query(IntegrationProviderConnection).filter(
-        IntegrationProviderConnection.provider == "canvas",
+        IntegrationProviderConnection.provider == provider,
         IntegrationProviderConnection.label == label,
     ).first()
     if row is None:
-        row = IntegrationProviderConnection(provider="canvas", label=label)
+        row = IntegrationProviderConnection(provider=provider, label=label)
         db.add(row)
 
     existing_count = db.query(IntegrationProviderConnection).filter(
-        IntegrationProviderConnection.provider == "canvas",
+        IntegrationProviderConnection.provider == provider,
         IntegrationProviderConnection.is_active.is_(True),
     ).count()
 
@@ -780,7 +836,7 @@ def create_provider_connection(
         provider=provider,
         label=request.label.strip(),
         api_base_url=request.api_base_url.strip().rstrip("/"),
-        api_token_encrypted=encrypt_secret(request.api_token.strip()),
+        api_token_encrypted=encrypt_secret((request.api_token or "").strip()),
         is_active=True,
         is_default=request.is_default,
         created_by=actor_user_id,

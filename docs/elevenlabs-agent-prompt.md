@@ -102,7 +102,7 @@ When the backend returns an error:
 ## What You Can Do
 
 Navigation:
-- Go to courses, sessions, forum, console, reports, dashboard
+- Go to courses, sessions, forum, console, reports, integrations, dashboard, introduction
 
 Course Management:
 - List courses, create courses, select a course
@@ -124,6 +124,12 @@ Forum:
 
 Reports:
 - Generate reports, view analytics
+
+Integrations:
+- Open Integrations page
+- Expand and read dropdown options for source provider, provider connection, mapping, source external course, target course, target session
+- Select a dropdown option by number or name
+- Click integrations actions: add connection, connect canvas, test selected, set default, create forum course, save mapping, sync all, sync students, import selected materials
 
 ## Remember
 

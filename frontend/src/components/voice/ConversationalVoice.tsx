@@ -349,12 +349,18 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
               "fetching", "loading", "looking up", "i'll get",
               "un momento", "buscando", "obteniendo"
             ];
+            // Only filter out clear denial phrases that indicate ElevenLabs is rejecting
+            // the request before MCP has a chance to respond.
+            // Do NOT filter legitimate clarifying questions or natural responses.
             const genericDenials = [
               "couldn't process that request",
-              "unable to assist",
-              "not available",
-              "could you please clarify",
-              "please provide more details",
+              "couldn't process your request",
+              "cannot process your request",
+              "unable to assist with that",
+              "that feature is not available",
+              "i don't have access to that",
+              "i'm not able to do that",
+              "that's outside my capabilities",
             ];
             const isAck = message && briefAcks.some(ack => message.toLowerCase().includes(ack));
             const isGenericDenial = message && genericDenials.some(p => message.toLowerCase().includes(p));
@@ -538,17 +544,18 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         console.log('ℹ️ No UI actions needed');
       }
 
-      // MCP is the authoritative brain. Display backend message when available.
-      // NOTE: We only add to message history, NOT speak via ElevenLabs.
-      // Sending response back to ElevenLabs causes double responses because:
-      // 1. ElevenLabs agent already responded to the user's transcript
-      // 2. Sending MCP_RESPONSE triggers another ElevenLabs response
+      // MCP is the authoritative brain. Speak backend message when available.
+      // The backend provides data-driven responses (dropdown options, course lists, etc.)
+      // that ElevenLabs agent doesn't have access to, so we MUST speak these.
+      // To prevent double responses, the prompt instructs ElevenLabs to use brief
+      // acknowledgments ("One moment", "Doing that now") while waiting for MCP,
+      // and those are filtered out in the onMessage handler.
       if (response?.message) {
-        console.log('📢 Displaying MCP-authoritative response (not speaking to avoid double response)');
+        console.log('📢 Speaking MCP-authoritative response');
         addAssistantMessage(response.message);
-        // REMOVED: speakViaElevenLabs(response.message) - causes duplicate responses
+        speakViaElevenLabs(response.message);
       } else {
-        console.log('ℹ️ No backend message to display');
+        console.log('ℹ️ No backend message to speak');
       }
 
       // Reset agent response tracking

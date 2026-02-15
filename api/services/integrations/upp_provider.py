@@ -167,6 +167,24 @@ class UppProvider(LmsProvider):
             return match.group(1)
         return None
 
+    @staticmethod
+    def _encode_url_ref(prefix: str, url: str) -> str:
+        raw = base64.urlsafe_b64encode(url.encode("utf-8")).decode("utf-8").rstrip("=")
+        return f"{prefix}:{raw}"
+
+    @staticmethod
+    def _decode_url_ref(value: str, prefix: str) -> str | None:
+        if not value.startswith(f"{prefix}:"):
+            return None
+        payload = value.split(":", 1)[1]
+        if not payload:
+            return None
+        pad = "=" * (-len(payload) % 4)
+        try:
+            return base64.urlsafe_b64decode((payload + pad).encode("utf-8")).decode("utf-8")
+        except Exception:  # noqa: BLE001
+            return None
+
     def _scrape_courses_from_html(self, html: str, base_url: str) -> list[dict[str, Any]]:
         links = re.findall(
             r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
@@ -187,7 +205,8 @@ class UppProvider(LmsProvider):
             )
             if not looks_like_course:
                 continue
-            external_id = self._extract_course_id_from_url(href) or str(abs(hash(href)))
+            extracted_id = self._extract_course_id_from_url(href)
+            external_id = extracted_id if extracted_id else self._encode_url_ref("courseurl", href)
             key = f"{external_id}:{label}"
             if key in seen:
                 continue
@@ -198,6 +217,57 @@ class UppProvider(LmsProvider):
                     "title": label or f"UPP Course {external_id}",
                     "url": href,
                 }
+            )
+        return out
+
+    def _looks_like_material_link(self, href: str, label: str) -> bool:
+        href_l = href.lower()
+        label_l = label.lower()
+        if re.search(r"\.(pdf|docx?|pptx?|xlsx?|csv|txt|zip|rar|mp4|mp3)(\?|$)", href_l):
+            return True
+        if re.search(r"download|archivo|material|recurso|adjunto|file|files|document", href_l):
+            return True
+        if re.search(r"archivo|material|recurso|adjunto|documento", label_l):
+            return True
+        return False
+
+    def _filename_from_url(self, href: str) -> str:
+        parsed = urlparse(href)
+        name = (parsed.path.rsplit("/", 1)[-1] or "").strip()
+        if name:
+            return name
+        return "material.bin"
+
+    def _scrape_materials_from_html(self, html: str, base_url: str, course_external_id: str) -> list[ExternalMaterial]:
+        links = re.findall(
+            r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        out: list[ExternalMaterial] = []
+        seen: set[str] = set()
+        for href_raw, label_html in links:
+            href = urljoin(base_url, href_raw.strip())
+            label = self._clean_html_text(label_html)
+            if not self._looks_like_material_link(href, label):
+                continue
+            external_id = self._encode_url_ref("maturl", href)
+            if external_id in seen:
+                continue
+            seen.add(external_id)
+            filename = self._filename_from_url(href)
+            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            out.append(
+                ExternalMaterial(
+                    provider=self.provider_name,
+                    external_id=external_id,
+                    course_external_id=str(course_external_id),
+                    title=label or filename,
+                    filename=filename,
+                    content_type=content_type,
+                    size_bytes=0,
+                    source_url=href,
+                )
             )
         return out
 
@@ -362,9 +432,38 @@ class UppProvider(LmsProvider):
         return courses
 
     def list_materials(self, course_external_id: str) -> list[ExternalMaterial]:
-        path = self.materials_path_tpl.format(course_id=course_external_id)
-        payload = self._request_json("get", path)
-        raw_materials = self._extract_list(payload)
+        course_url = self._decode_url_ref(str(course_external_id), "courseurl")
+        raw_materials: list[dict[str, Any]] = []
+        if course_url is None:
+            path = self.materials_path_tpl.format(course_id=course_external_id)
+            try:
+                payload = self._request_json("get", path)
+                raw_materials = self._extract_list(payload)
+            except Exception:
+                raw_materials = []
+
+        if course_url is not None or not raw_materials:
+            if course_url is None:
+                raise RuntimeError(
+                    f"UPP materials endpoint not found for course '{course_external_id}'. "
+                    "This tenant likely needs portal scraping with URL-based course identifiers."
+                )
+            with httpx.Client(
+                timeout=self.timeout,
+                headers=self._headers(),
+                cookies=self._login_cookies(),
+                follow_redirects=True,
+            ) as client:
+                response = client.get(course_url)
+                response.raise_for_status()
+                scraped = self._scrape_materials_from_html(response.text, str(response.url), str(course_external_id))
+            if scraped:
+                return scraped
+            raise RuntimeError(
+                f"UPP materials could not be discovered from course page: {course_url}. "
+                "No downloadable material links were detected."
+            )
+
         materials: list[ExternalMaterial] = []
         for m in raw_materials:
             material_id = self._pick(m.get("id"), m.get("material_id"), m.get("external_id"), m.get("uuid"))
@@ -411,6 +510,35 @@ class UppProvider(LmsProvider):
         return None
 
     def download_material(self, material_external_id: str) -> tuple[bytes, ExternalMaterial]:
+        material_url = self._decode_url_ref(str(material_external_id), "maturl")
+        if material_url is not None:
+            filename = self._filename_from_url(material_url)
+            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            meta = ExternalMaterial(
+                provider=self.provider_name,
+                external_id=str(material_external_id),
+                course_external_id="",
+                title=filename,
+                filename=filename,
+                content_type=content_type,
+                size_bytes=0,
+                source_url=material_url,
+            )
+            with httpx.Client(
+                timeout=self.timeout,
+                headers=self._headers(),
+                cookies=self._login_cookies(),
+                follow_redirects=True,
+            ) as client:
+                response = client.get(material_url)
+                response.raise_for_status()
+                if not response.content:
+                    raise RuntimeError(
+                        f"UPP material download returned empty content for URL material {material_url}."
+                    )
+                meta.size_bytes = len(response.content)
+                return response.content, meta
+
         path = self.download_path_tpl.format(material_id=material_external_id)
         if not self.is_configured():
             raise RuntimeError("UPP provider is not configured. Set UPP_API_URL.")

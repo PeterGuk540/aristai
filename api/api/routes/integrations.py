@@ -986,7 +986,11 @@ def list_external_materials(
     db: Session = Depends(get_db),
 ):
     p = _resolve_provider(provider, db=db, connection_id=connection_id, actor_user_id=user_id)
-    return [ExternalMaterialResponse(**m.__dict__) for m in p.list_materials(course_external_id)]
+    try:
+        materials = p.list_materials(course_external_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return [ExternalMaterialResponse(**m.__dict__) for m in materials]
 
 
 @router.post("/{provider}/courses/{course_external_id}/import-course", response_model=ImportCourseResponse)
@@ -1281,7 +1285,10 @@ def sync_materials(
 
     external_ids = request.material_external_ids
     if not external_ids:
-        materials = p.list_materials(request.source_course_external_id)
+        try:
+            materials = p.list_materials(request.source_course_external_id)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         external_ids = [m.external_id for m in materials]
 
     import_request = ImportRequest(

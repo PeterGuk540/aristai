@@ -240,18 +240,46 @@ class UppProvider(LmsProvider):
         return out
 
     def _extract_links(self, html: str, base_url: str) -> list[tuple[str, str]]:
-        links = re.findall(
+        out: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+
+        href_links = re.findall(
             r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
             html,
             flags=re.IGNORECASE | re.DOTALL,
         )
-        out: list[tuple[str, str]] = []
-        for href_raw, label_html in links:
+        for href_raw, label_html in href_links:
             href = urljoin(base_url, href_raw.strip())
             label = self._clean_html_text(label_html)
             if not href:
                 continue
-            out.append((href, label))
+            key = (href, label)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(key)
+
+        onclick_links = re.findall(
+            r'<a[^>]+onclick=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        for onclick_js, label_html in onclick_links:
+            label = self._clean_html_text(label_html)
+            js = onclick_js.strip()
+            match = re.search(
+                r"""(?:location(?:\.href)?|window\.open)\s*\(?\s*['"]([^'"]+)['"]""",
+                js,
+                flags=re.IGNORECASE,
+            )
+            if not match:
+                continue
+            href = urljoin(base_url, match.group(1).strip())
+            key = (href, label)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(key)
         return out
 
     def _is_career_link(self, href: str) -> bool:
@@ -788,3 +816,6 @@ class UppProvider(LmsProvider):
                 )
             )
         return enrollments
+
+
+

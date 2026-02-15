@@ -12,6 +12,7 @@ import mimetypes
 import os
 import re
 from typing import Any
+from urllib.parse import urljoin
 
 import httpx
 
@@ -75,6 +76,71 @@ class UppProvider(LmsProvider):
             hidden[name] = value
         return hidden
 
+    def _extract_form_html(self, html: str) -> tuple[str | None, str]:
+        # Prefer a form containing a password input.
+        forms = re.findall(r"(<form\b[^>]*>.*?</form>)", html, flags=re.IGNORECASE | re.DOTALL)
+        if not forms:
+            return None, html
+        for form in forms:
+            if re.search(r'<input[^>]+type=["\']password["\']', form, flags=re.IGNORECASE):
+                return form, form
+        return forms[0], forms[0]
+
+    def _extract_form_action(self, form_html: str) -> str | None:
+        match = re.search(r'<form\b[^>]*\baction=["\']([^"\']+)["\']', form_html, flags=re.IGNORECASE)
+        if not match:
+            return None
+        return match.group(1).strip() or None
+
+    def _extract_inputs(self, html: str) -> list[dict[str, str]]:
+        inputs: list[dict[str, str]] = []
+        for attrs in re.findall(r"<input\b([^>]*)>", html, flags=re.IGNORECASE | re.DOTALL):
+            name_match = re.search(r'\bname=["\']([^"\']+)["\']', attrs, flags=re.IGNORECASE)
+            if not name_match:
+                continue
+            value_match = re.search(r'\bvalue=["\']([^"\']*)["\']', attrs, flags=re.IGNORECASE)
+            type_match = re.search(r'\btype=["\']([^"\']+)["\']', attrs, flags=re.IGNORECASE)
+            inputs.append(
+                {
+                    "name": name_match.group(1).strip(),
+                    "value": (value_match.group(1) if value_match else "").strip(),
+                    "type": (type_match.group(1).strip().lower() if type_match else "text"),
+                }
+            )
+        return inputs
+
+    def _guess_login_fields(self, inputs: list[dict[str, str]]) -> tuple[str | None, str | None]:
+        password_name: str | None = None
+        username_name: str | None = None
+
+        for inp in inputs:
+            n = inp["name"].lower()
+            t = inp["type"]
+            if t == "password":
+                password_name = inp["name"]
+                break
+            if not password_name and re.search(r"pass|clave|contras", n):
+                password_name = inp["name"]
+
+        username_candidates = []
+        for inp in inputs:
+            n = inp["name"].lower()
+            t = inp["type"]
+            if t in {"hidden", "password", "submit", "button", "checkbox", "radio"}:
+                continue
+            score = 0
+            if re.search(r"user|usuario|login|email|correo|identifier|id", n):
+                score += 2
+            if t in {"text", "email"}:
+                score += 1
+            username_candidates.append((score, inp["name"]))
+
+        if username_candidates:
+            username_candidates.sort(key=lambda x: x[0], reverse=True)
+            username_name = username_candidates[0][1]
+
+        return username_name, password_name
+
     @staticmethod
     def _contains_any(text: str, needles: list[str]) -> bool:
         low = text.lower()
@@ -97,13 +163,27 @@ class UppProvider(LmsProvider):
         if not self._credentials_configured():
             return {}
         login_url = f"{self.api_url}{self.login_path}"
-        with httpx.Client(timeout=self.timeout, follow_redirects=True) as client:
+        with httpx.Client(
+            timeout=self.timeout,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 AristAI/UPP-Integration"},
+        ) as client:
             page = client.get(login_url)
             page.raise_for_status()
-            payload = self._extract_hidden_inputs(page.text)
-            payload["username"] = self.username or ""
-            payload["password"] = self.password or ""
-            post = client.post(login_url, data=payload)
+            form_html, _ = self._extract_form_html(page.text)
+            candidate_html = form_html or page.text
+            inputs = self._extract_inputs(candidate_html)
+            payload = {inp["name"]: inp["value"] for inp in inputs if inp["type"] == "hidden"}
+            username_field, password_field = self._guess_login_fields(inputs)
+            if not username_field:
+                username_field = "username"
+            if not password_field:
+                password_field = "password"
+            payload[username_field] = self.username or ""
+            payload[password_field] = self.password or ""
+            action = self._extract_form_action(candidate_html)
+            post_url = urljoin(str(page.url), action) if action else login_url
+            post = client.post(post_url, data=payload)
             post.raise_for_status()
             post_text = post.text or ""
             if self._contains_any(post.url.path.lower(), ["/login"]) and not client.cookies:

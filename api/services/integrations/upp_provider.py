@@ -55,6 +55,9 @@ class UppProvider(LmsProvider):
         self.portal_nav_exclude = {
             "mis cursos",
             "descargar material",
+            "descargar materiales",
+            "material",
+            "materiales",
             "inicio",
             "home",
             "salir",
@@ -211,10 +214,13 @@ class UppProvider(LmsProvider):
             label = self._clean_html_text(label_html)
             href_l = href.lower()
             label_l = label.lower()
+            if label_l in self.portal_nav_exclude:
+                continue
             looks_like_course = bool(
-                re.search(r"course|curso|asignatura|materia|aula|secci[oó]n", href_l)
-                or re.search(r"course|curso|asignatura|materia|aula|secci[oó]n", label_l)
-                or "id=" in href_l
+                ("inicio.asp" in href_l and "carcodi=" in href_l)
+                or ("curso_cargar.asp" in href_l)
+                or re.search(r"curcodi=|ciccodi=|seccodi=|crrcodi=", href_l)
+                or re.search(r"p\d{6}-cur\d{5,}", label_l)
             )
             if not looks_like_course:
                 continue
@@ -280,6 +286,13 @@ class UppProvider(LmsProvider):
             return False
         if re.search(r"silabo|s[ií]labo|contenido del curso|semana", label_l):
             return False
+        # Strong UPP course signatures first.
+        if ("inicio.asp" in href_l and "carcodi=" in href_l) or ("curso_cargar.asp" in href_l):
+            return True
+        if re.search(r"curcodi=|ciccodi=|seccodi=|crrcodi=", href_l):
+            return True
+        if re.search(r"p\d{6}-cur\d{5,}", label_l):
+            return True
         if re.search(r"curso|course|asignatura|materia|secci[oó]n|aula", label_l):
             return True
         if re.search(r"[A-Z]{2,}\s*[-:]?\s*\d{2,}", label):

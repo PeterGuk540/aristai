@@ -277,6 +277,17 @@ class UppProvider(LmsProvider):
             out.append(key)
         return out
 
+    def _extract_course_urls_from_raw_html(self, html: str, base_url: str) -> list[str]:
+        urls: list[str] = []
+        seen: set[str] = set()
+        for raw in re.findall(r"curso_cargar\.asp\?[^\"'<>\\s]+", html, flags=re.IGNORECASE):
+            href = urljoin(base_url, raw.replace("&amp;", "&"))
+            if href in seen:
+                continue
+            seen.add(href)
+            urls.append(href)
+        return urls
+
     def _is_career_link(self, href: str) -> bool:
         h = href.lower()
         return "inicio.asp" in h and "carcodi=" in h
@@ -366,6 +377,23 @@ class UppProvider(LmsProvider):
                 continue
 
             career_links_all = self._extract_links(career_page.text, str(career_page.url))
+            for href in self._extract_course_urls_from_raw_html(career_page.text, str(career_page.url)):
+                if not self._is_course_entry_link(href, "curso"):
+                    continue
+                course_id = self._encode_url_ref("courseurl", href)
+                title = f"UPP Course {urlparse(href).query}"[:180]
+                key = f"{course_id}:{title.lower()}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                discovered.append(
+                    {
+                        "id": course_id,
+                        "title": title,
+                        "url": href,
+                    }
+                )
+
             for href, label in career_links_all:
                 if not self._is_course_entry_link(href, label):
                     continue
@@ -394,6 +422,22 @@ class UppProvider(LmsProvider):
                 except Exception:
                     continue
                 page_links = self._extract_links(page.text, str(page.url))
+                for href in self._extract_course_urls_from_raw_html(page.text, str(page.url)):
+                    if not self._is_course_entry_link(href, "curso"):
+                        continue
+                    course_id = self._encode_url_ref("courseurl", href)
+                    title = f"UPP Course {urlparse(href).query}"[:180]
+                    key = f"{course_id}:{title.lower()}"
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    discovered.append(
+                        {
+                            "id": course_id,
+                            "title": title,
+                            "url": href,
+                        }
+                    )
                 for href, label in page_links:
                     if not self._is_course_entry_link(href, label):
                         continue

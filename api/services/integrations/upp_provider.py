@@ -52,6 +52,18 @@ class UppProvider(LmsProvider):
             ).split(",")
             if p.strip()
         ]
+        self.portal_nav_exclude = {
+            "mis cursos",
+            "descargar material",
+            "inicio",
+            "home",
+            "salir",
+            "logout",
+            "perfil",
+            "mi perfil",
+            "ayuda",
+            "contacto",
+        }
 
         self.courses_path = os.getenv("UPP_COURSES_PATH", "/courses").strip() or "/courses"
         self.materials_path_tpl = os.getenv("UPP_MATERIALS_PATH", "/courses/{course_id}/materials").strip()
@@ -220,6 +232,93 @@ class UppProvider(LmsProvider):
             )
         return out
 
+    def _extract_links(self, html: str, base_url: str) -> list[tuple[str, str]]:
+        links = re.findall(
+            r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        out: list[tuple[str, str]] = []
+        for href_raw, label_html in links:
+            href = urljoin(base_url, href_raw.strip())
+            label = self._clean_html_text(label_html)
+            if not href:
+                continue
+            out.append((href, label))
+        return out
+
+    def _is_semester_link(self, href: str, label: str) -> bool:
+        txt = f"{href} {label}".lower()
+        return bool(
+            re.search(r"semestre|periodo|ciclo|campa[nñ]a|t[eé]rmino|term", txt)
+            or re.search(r"20\d{2}", txt)
+            or re.search(r"\b(i|ii|iii|iv|v|vi|vii|viii)\b", txt)
+        )
+
+    def _is_course_link(self, href: str, label: str) -> bool:
+        label_l = (label or "").strip().lower()
+        if not label_l or label_l in self.portal_nav_exclude:
+            return False
+        href_l = href.lower()
+        if re.search(r"mis[_\s-]?cursos?|descargar[_\s-]?material|logout|salir", href_l):
+            return False
+        if re.search(r"silabo|s[ií]labo|contenido del curso|semana", label_l):
+            return False
+        if re.search(r"curso|course|asignatura|materia|secci[oó]n|aula", label_l):
+            return True
+        if re.search(r"[A-Z]{2,}\s*[-:]?\s*\d{2,}", label):
+            return True
+        if re.search(r"idcurso=|curso=|course_id=|id=", href_l):
+            return True
+        return False
+
+    def _discover_courses_via_mis_cursos(self, client: httpx.Client, seed_url: str) -> list[dict[str, Any]]:
+        seed_resp = client.get(seed_url)
+        seed_resp.raise_for_status()
+        links = self._extract_links(seed_resp.text, str(seed_resp.url))
+
+        mis_cursos_url: str | None = None
+        for href, label in links:
+            if "mis cursos" in label.lower() or "mis_cursos" in href.lower():
+                mis_cursos_url = href
+                break
+        if not mis_cursos_url:
+            return []
+
+        mis_resp = client.get(mis_cursos_url)
+        mis_resp.raise_for_status()
+        mis_links = self._extract_links(mis_resp.text, str(mis_resp.url))
+
+        # First, drill into semester/period links.
+        semester_links = [href for href, label in mis_links if self._is_semester_link(href, label)]
+        candidate_pages = semester_links if semester_links else [mis_cursos_url]
+
+        discovered: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for page_url in candidate_pages[:30]:
+            try:
+                page = client.get(page_url)
+                page.raise_for_status()
+            except Exception:
+                continue
+            page_links = self._extract_links(page.text, str(page.url))
+            for href, label in page_links:
+                if not self._is_course_link(href, label):
+                    continue
+                course_id = self._extract_course_id_from_url(href) or self._encode_url_ref("courseurl", href)
+                key = f"{course_id}:{label.strip().lower()}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                discovered.append(
+                    {
+                        "id": course_id,
+                        "title": label.strip() or f"UPP Course {course_id}",
+                        "url": href,
+                    }
+                )
+        return discovered
+
     def _looks_like_material_link(self, href: str, label: str) -> bool:
         href_l = href.lower()
         label_l = label.lower()
@@ -384,14 +483,26 @@ class UppProvider(LmsProvider):
                 cookies=self._login_cookies(),
                 follow_redirects=True,
             ) as client:
+                # Guided flow fallback: seed page -> "Mis Cursos" -> semester -> course links
+                for path in self.portal_courses_paths:
+                    try:
+                        seed_url = f"{self.api_url}{path}"
+                        guided = self._discover_courses_via_mis_cursos(client, seed_url)
+                        if guided:
+                            raw_courses.extend(guided)
+                            break
+                    except Exception:
+                        continue
+
                 # Moodle-like fallback
-                try:
-                    courses_url = f"{self.api_url}{self.my_courses_path}"
-                    response = client.get(courses_url)
-                    response.raise_for_status()
-                    raw_courses.extend(self._scrape_courses_from_html(response.text, str(response.url)))
-                except Exception:
-                    pass
+                if not raw_courses:
+                    try:
+                        courses_url = f"{self.api_url}{self.my_courses_path}"
+                        response = client.get(courses_url)
+                        response.raise_for_status()
+                        raw_courses.extend(self._scrape_courses_from_html(response.text, str(response.url)))
+                    except Exception:
+                        pass
 
                 # Portal fallback (UPP-specific coordinator pages)
                 if not raw_courses:
@@ -454,10 +565,35 @@ class UppProvider(LmsProvider):
                 cookies=self._login_cookies(),
                 follow_redirects=True,
             ) as client:
-                response = client.get(course_url)
-                response.raise_for_status()
-                scraped = self._scrape_materials_from_html(response.text, str(response.url), str(course_external_id))
+                # Crawl course page + content/week tab pages.
+                queue = [course_url]
+                visited: set[str] = set()
+                scraped: list[ExternalMaterial] = []
+                while queue and len(visited) < 20:
+                    page_url = queue.pop(0)
+                    if page_url in visited:
+                        continue
+                    visited.add(page_url)
+                    try:
+                        response = client.get(page_url)
+                        response.raise_for_status()
+                    except Exception:
+                        continue
+                    page_html = response.text
+                    base = str(response.url)
+                    scraped.extend(self._scrape_materials_from_html(page_html, base, str(course_external_id)))
+                    for href, label in self._extract_links(page_html, base):
+                        txt = f"{href} {label}".lower()
+                        if re.search(r"contenido del curso|semana|silabo|s[ií]labo|material|recurso|archivo", txt):
+                            if href not in visited and href not in queue:
+                                queue.append(href)
             if scraped:
+                # dedupe by external_id while preserving order
+                unique: dict[str, ExternalMaterial] = {}
+                for m in scraped:
+                    if m.external_id not in unique:
+                        unique[m.external_id] = m
+                return list(unique.values())
                 return scraped
             raise RuntimeError(
                 f"UPP materials could not be discovered from course page: {course_url}. "

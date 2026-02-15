@@ -35,8 +35,11 @@ def normalize_spanish_text(text: str) -> str:
 
 from api.core.database import get_db
 from api.models.course import Course
+from api.models.user import User
+from api.models.integration import IntegrationProviderConnection, IntegrationCourseMapping
 from api.models.session import Session as SessionModel, SessionStatus
 from api.api.mcp_executor import invoke_tool_handler
+from api.services.integrations.registry import list_supported_providers
 from api.services.speech_filter import sanitize_speech
 from api.services.tool_response import normalize_tool_result
 from api.services.context_store import ContextStore
@@ -533,6 +536,8 @@ ACTION_PATTERNS = {
         r'\bwhat\s+(live\s+)?(courses?|sessions?)\s+(are\s+)?(available|there)\b',
         r'\b(expand|open|show)\s+(the\s+)?(\w+\s+)?(dropdown|menu|list|options|select)\b',
         r'\b(show|see|view|what\s+are)\s+(the\s+)?(available\s+)?(\w+\s+)?(options|choices|items)\b',
+        r'\b(what|which)\s+(source\s+)?(providers?|provider\s+connections?|external\s+courses?|target\s+courses?|target\s+sessions?)\s+(are\s+)?(available|there|included|include|contain|contains)\b',
+        r'\b(list|show|open)\s+(the\s+)?(source\s+provider|provider\s+connection|external\s+course|target\s+course|target\s+session)\s*(dropdown|menu|list|options)?\b',
         r'\blet\s+me\s+(see|choose|pick)\b',
         # Spanish
         r'^(seleccionar|elegir|escoger)\s+(un\s+)?(curso|sesion)\.?$',
@@ -1346,6 +1351,8 @@ def generate_conversational_response(
             '/forum': 'forum',
             '/console': 'instructor console',
             '/reports': 'reports',
+            '/integrations': 'integrations',
+            '/platform-guide': 'introduction',
             '/dashboard': 'dashboard',
         }
         page_name = page_names.get(intent_value, intent_value)
@@ -3804,10 +3811,88 @@ async def execute_action(
         if action == 'ui_expand_dropdown':
             # Extract which dropdown from transcript, or default to finding any dropdown
             dropdown_hint = _extract_dropdown_hint(transcript or "")
+            is_integrations_page = bool(current_page and '/integrations' in current_page)
+            is_integration_dropdown = any(
+                key in (dropdown_hint or "")
+                for key in [
+                    "select-integration-provider",
+                    "select-provider-connection",
+                    "select-integration-mapping",
+                    "select-external-course",
+                    "select-target-course",
+                    "select-target-session",
+                ]
+            )
 
             # Fetch options based on dropdown type
             options: list[DropdownOption] = []
-            if 'course' in dropdown_hint or not dropdown_hint:
+            if is_integrations_page and (is_integration_dropdown or not dropdown_hint):
+                # Integrations page dropdowns: provide concrete verbal options.
+                if not dropdown_hint or "select-integration-provider" in dropdown_hint:
+                    providers = [p for p in list_supported_providers() if p]
+                    options = [DropdownOption(label=p.upper(), value=p) for p in providers]
+                    dropdown_hint = "select-integration-provider"
+                elif "select-provider-connection" in dropdown_hint:
+                    is_admin = bool(
+                        db.query(User.is_admin).filter(User.id == user_id).scalar()
+                    ) if user_id else False
+                    q = db.query(IntegrationProviderConnection).filter(
+                        IntegrationProviderConnection.is_active.is_(True)
+                    )
+                    if not is_admin and user_id is not None:
+                        q = q.filter(IntegrationProviderConnection.created_by == user_id)
+                    rows = q.order_by(
+                        IntegrationProviderConnection.is_default.desc(),
+                        IntegrationProviderConnection.updated_at.desc()
+                    ).limit(20).all()
+                    options = [
+                        DropdownOption(
+                            label=f"{r.provider.upper()} - {r.label}{' [default]' if r.is_default else ''}",
+                            value=str(r.id)
+                        )
+                        for r in rows
+                    ]
+                elif "select-integration-mapping" in dropdown_hint:
+                    is_admin = bool(
+                        db.query(User.is_admin).filter(User.id == user_id).scalar()
+                    ) if user_id else False
+                    q = db.query(IntegrationCourseMapping).filter(
+                        IntegrationCourseMapping.is_active.is_(True)
+                    )
+                    if not is_admin and user_id is not None:
+                        q = q.filter(IntegrationCourseMapping.created_by == user_id)
+                    rows = q.order_by(IntegrationCourseMapping.updated_at.desc()).limit(20).all()
+                    options = [
+                        DropdownOption(
+                            label=f"{(r.external_course_name or r.external_course_id)} -> course {r.target_course_id}",
+                            value=str(r.id)
+                        )
+                        for r in rows
+                    ]
+                elif "select-target-course" in dropdown_hint or "select-target-session" in dropdown_hint:
+                    result = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 20})
+                    courses = result.get("courses", []) if isinstance(result, dict) else []
+                    options = [DropdownOption(label=c.get('title', f"Course {c['id']}"), value=str(c['id'])) for c in courses]
+                    if "select-target-course" in dropdown_hint:
+                        dropdown_hint = "select-target-course"
+                elif "select-external-course" in dropdown_hint:
+                    is_admin = bool(
+                        db.query(User.is_admin).filter(User.id == user_id).scalar()
+                    ) if user_id else False
+                    q = db.query(IntegrationCourseMapping).filter(
+                        IntegrationCourseMapping.is_active.is_(True)
+                    )
+                    if not is_admin and user_id is not None:
+                        q = q.filter(IntegrationCourseMapping.created_by == user_id)
+                    rows = q.order_by(IntegrationCourseMapping.updated_at.desc()).limit(20).all()
+                    options = [
+                        DropdownOption(
+                            label=(r.external_course_name or r.external_course_id),
+                            value=r.external_course_id
+                        )
+                        for r in rows
+                    ]
+            elif 'course' in dropdown_hint or not dropdown_hint:
                 # Fetch courses - result is {"courses": [...]}
                 result = _execute_tool(db, 'list_courses', {"skip": 0, "limit": 10})
                 courses = result.get("courses", []) if isinstance(result, dict) else []

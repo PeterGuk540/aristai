@@ -271,11 +271,23 @@ class UppProvider(LmsProvider):
     def _is_course_entry_link(self, href: str, label: str) -> bool:
         h = href.lower()
         l = (label or "").lower()
+        if l.strip() in self.portal_nav_exclude:
+            return False
+        if re.search(r"calendario|notificaciones|favoritos|blog|manual", h) or re.search(
+            r"calendario|notificaciones|favoritos|blog|manual", l
+        ):
+            return False
+        # Strict course row signature for this UPP tenant.
         if "curso_cargar.asp" in h:
+            return bool(
+                re.search(r"curcodi=", h)
+                and re.search(r"ciccodi=", h)
+                and re.search(r"seccodi=", h)
+            )
+        # Fallback: label has code and query includes curcodi.
+        if re.search(r"p\d{6}-cur\d{5,}", l) and re.search(r"curcodi=", h):
             return True
-        if re.search(r"p\d{6}-cur\d{6}", l):
-            return True
-        return self._is_course_link(href, label)
+        return False
 
     def _is_course_link(self, href: str, label: str) -> bool:
         label_l = (label or "").strip().lower()

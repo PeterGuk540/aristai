@@ -1727,13 +1727,19 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         print(f"🔍 DROPDOWN STATE: Checking cancel for transcript: '{transcript}'")
         print(f"🔍 DROPDOWN STATE: active_dropdown={conv_context.active_dropdown}, options_count={len(conv_context.dropdown_options)}")
 
-        # Check for cancel/exit keywords BEFORE trying to match selection
-        cancel_words = ['cancel', 'stop', 'exit', 'quit', 'abort', 'nevermind', 'never mind', 'go back', 'no thanks', "don't want", "dont want", "no one", "nobody", "none", "no", "nope", "skip"]
-        transcript_lower = transcript.lower()
-        matched_cancel = [word for word in cancel_words if word in transcript_lower]
+        # Check for explicit cancel/exit keywords BEFORE trying to match selection.
+        # Avoid substring false positives like matching "no" inside "now".
+        transcript_lower = normalize_spanish_text(transcript.lower())
+        cancel_phrases = [
+            'cancel', 'cancelar', 'stop', 'exit', 'quit', 'abort',
+            'nevermind', 'never mind', 'go back', 'atras', 'volver',
+            'no thanks', "don't want", "dont want", 'none', 'ninguno', 'ninguna'
+        ]
+        matched_cancel = [phrase for phrase in cancel_phrases if phrase in transcript_lower]
+        explicit_short_cancel = re.fullmatch(r"\s*(no|nope|skip)\s*[.!?]*\s*", transcript_lower) is not None
         print(f"🔍 DROPDOWN STATE: Cancel words matched: {matched_cancel}")
 
-        if matched_cancel:
+        if matched_cancel or explicit_short_cancel:
             result = conversation_manager.cancel_dropdown_selection(request.user_id)
             return ConverseResponse(
                 message=sanitize_speech(result["message"]),
@@ -3005,8 +3011,46 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         # Convert to legacy format for compatibility with existing action execution
         intent_result = intent_to_legacy_format(intent)
 
-        # Handle low confidence - ask for clarification
+        # Handle low confidence - try deterministic fallbacks before clarification.
         if intent.confidence < LLM_INTENT_CONFIDENCE_THRESHOLD or intent.clarification_needed:
+            fallback_nav = detect_navigation_intent(transcript)
+            if fallback_nav:
+                message = sanitize_speech(generate_conversational_response('navigate', fallback_nav))
+                return ConverseResponse(
+                    message=message,
+                    action=ActionResponse(type='navigate', target=fallback_nav),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.navigate", "payload": {"path": fallback_nav}},
+                            {"type": "ui.toast", "payload": {"message": f"Navigating to {fallback_nav}", "type": "info"}},
+                        ]
+                    }],
+                    suggestions=get_page_suggestions(fallback_nav)
+                )
+
+            fallback_action = detect_action_intent(transcript)
+            if fallback_action:
+                result = await execute_action(
+                    fallback_action,
+                    request.user_id,
+                    request.current_page,
+                    db,
+                    transcript,
+                )
+                results_list = [result] if result and not isinstance(result, list) else result
+                return ConverseResponse(
+                    message=sanitize_speech(generate_conversational_response(
+                        'execute',
+                        fallback_action,
+                        results=result,
+                        context=request.context,
+                        current_page=request.current_page,
+                    )),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=results_list,
+                    suggestions=get_action_suggestions(fallback_action),
+                )
+
             clarification_msg = intent.clarification_message or "I'm not quite sure what you'd like to do. Could you please rephrase that?"
             return ConverseResponse(
                 message=sanitize_speech(clarification_msg),

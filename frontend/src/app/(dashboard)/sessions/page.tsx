@@ -18,6 +18,7 @@ import {
   CardContent,
   Select,
   Input,
+  Textarea,
   Badge,
   Tabs,
   TabsList,
@@ -72,6 +73,9 @@ export default function SessionsPage() {
   // Edit/Delete session state
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [editDiscussionPrompts, setEditDiscussionPrompts] = useState('');
+  const [editCaseScenario, setEditCaseScenario] = useState('');
+  const [editGoals, setEditGoals] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -309,6 +313,19 @@ export default function SessionsPage() {
   const handleEditSession = (session: Session) => {
     setEditingSession(session);
     setEditTitle(session.title);
+    // Initialize plan content fields
+    const plan = session.plan_json;
+    setEditDiscussionPrompts(plan?.discussion_prompts?.join('\n') || '');
+    setEditCaseScenario(
+      typeof plan?.case === 'string'
+        ? plan.case
+        : plan?.case?.scenario || plan?.case?.description || ''
+    );
+    setEditGoals(
+      Array.isArray(plan?.goals)
+        ? plan.goals.join('\n')
+        : plan?.goals || ''
+    );
   };
 
   const handleSaveEdit = async () => {
@@ -316,9 +333,32 @@ export default function SessionsPage() {
 
     setSaving(true);
     try {
-      await api.updateSession(editingSession.id, currentUser.id, { title: editTitle.trim() });
+      // Build updated plan_json by merging with existing plan
+      const existingPlan = editingSession.plan_json || {};
+      const updatedPlan = {
+        ...existingPlan,
+        discussion_prompts: editDiscussionPrompts.trim()
+          ? editDiscussionPrompts.split('\n').map(p => p.trim()).filter(Boolean)
+          : existingPlan.discussion_prompts,
+        case: editCaseScenario.trim()
+          ? typeof existingPlan.case === 'object'
+            ? { ...existingPlan.case, scenario: editCaseScenario.trim() }
+            : editCaseScenario.trim()
+          : existingPlan.case,
+        goals: editGoals.trim()
+          ? editGoals.split('\n').map(g => g.trim()).filter(Boolean)
+          : existingPlan.goals,
+      };
+
+      await api.updateSession(editingSession.id, currentUser.id, {
+        title: editTitle.trim(),
+        plan_json: updatedPlan,
+      });
       setEditingSession(null);
       setEditTitle('');
+      setEditDiscussionPrompts('');
+      setEditCaseScenario('');
+      setEditGoals('');
       if (selectedCourseId) {
         fetchSessions(selectedCourseId);
       }
@@ -727,8 +767,8 @@ export default function SessionsPage() {
 
                 {/* Edit Session Modal */}
                 {editingSession && (
-                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <Card variant="default" className="w-full max-w-md mx-4">
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto py-8">
+                    <Card variant="default" className="w-full max-w-2xl mx-4 my-auto">
                       <CardHeader>
                         <div className="flex items-center justify-between">
                           <CardTitle>Edit Session</CardTitle>
@@ -740,14 +780,35 @@ export default function SessionsPage() {
                           </button>
                         </div>
                       </CardHeader>
-                      <CardContent className="space-y-4">
+                      <CardContent className="space-y-4 max-h-[70vh] overflow-y-auto">
                         <Input
                           label="Session Title"
                           value={editTitle}
                           onChange={(e) => setEditTitle(e.target.value)}
                           placeholder="Enter session title"
                         />
-                        <div className="flex justify-end gap-2">
+                        <Textarea
+                          label="Goals / Learning Objectives"
+                          value={editGoals}
+                          onChange={(e) => setEditGoals(e.target.value)}
+                          placeholder="Enter learning goals (one per line)"
+                          rows={3}
+                        />
+                        <Textarea
+                          label="Discussion Prompts"
+                          value={editDiscussionPrompts}
+                          onChange={(e) => setEditDiscussionPrompts(e.target.value)}
+                          placeholder="Enter discussion prompts (one per line)"
+                          rows={4}
+                        />
+                        <Textarea
+                          label="Case Study Scenario"
+                          value={editCaseScenario}
+                          onChange={(e) => setEditCaseScenario(e.target.value)}
+                          placeholder="Enter the case study scenario"
+                          rows={5}
+                        />
+                        <div className="flex justify-end gap-2 pt-2 border-t border-neutral-200 dark:border-neutral-700">
                           <Button
                             variant="outline"
                             onClick={() => setEditingSession(null)}

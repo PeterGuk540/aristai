@@ -21,8 +21,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "015_enhanced_ai_features"
-down_revision = "014_canvas_push_tables"
+revision = "017_enhanced_ai_features"
+down_revision = "016_canvas_push"
 branch_labels = None
 depends_on = None
 

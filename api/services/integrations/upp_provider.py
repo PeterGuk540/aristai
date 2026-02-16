@@ -295,50 +295,85 @@ class UppProvider(LmsProvider):
         results: list[tuple[str, str]] = []
         seen: set[str] = set()
 
-        # Log a sample of the HTML around curso_cargar to debug regex matching
-        curso_idx = html.lower().find("curso_cargar")
-        if curso_idx >= 0:
-            sample_start = max(0, curso_idx - 100)
-            sample_end = min(len(html), curso_idx + 300)
-            html_sample = html[sample_start:sample_end].replace("\n", "\\n").replace("\r", "\\r")
-            logger.info(f"UPP HTML sample around curso_cargar: ...{html_sample}...")
+        # Pattern 1: Standard <a href="...curso_cargar.asp...">content</a>
+        # Supports both single and double quotes, and href with or without quotes
+        link_patterns = [
+            # Standard quoted href
+            re.compile(
+                r'<a\s[^>]*href\s*=\s*["\']([^"\']*curso_cargar\.asp\?[^"\']+)["\'][^>]*>(.*?)</a>',
+                flags=re.IGNORECASE | re.DOTALL,
+            ),
+            # Unquoted href (rare but possible in old HTML)
+            re.compile(
+                r'<a\s[^>]*href\s*=\s*([^\s>]*curso_cargar\.asp\?[^\s>]+)[^>]*>(.*?)</a>',
+                flags=re.IGNORECASE | re.DOTALL,
+            ),
+        ]
 
-        # Find full <a> tags containing curso_cargar.asp to get both URL and title
-        link_pattern = re.compile(
-            r'<a[^>]+href=["\']([^"\']*curso_cargar\.asp\?[^"\']+)["\'][^>]*>(.*?)</a>',
-            flags=re.IGNORECASE | re.DOTALL,
+        for pattern in link_patterns:
+            for match in pattern.finditer(html):
+                href_raw = match.group(1).replace("&amp;", "&")
+                href = urljoin(base_url, href_raw)
+                if href in seen:
+                    continue
+
+                label_html = match.group(2)
+                label = self._clean_html_text(label_html)
+                title = self._normalize_course_title(label)
+
+                logger.info(f"UPP course from <a> tag: '{title}'")
+                seen.add(href)
+                results.append((href, title))
+
+        # Pattern 2: Extract title from course header on course detail page
+        # Format: CURSO: P004103-CUR006620  CIENCIAS PARA LA INGENIERÍA I  (Sec: ...)
+        header_pattern = re.compile(
+            r'CURSO:\s*([A-Z]\d+-[A-Z]+\d+)\s*&nbsp;[&nbsp;\s]*([^<(]+)',
+            flags=re.IGNORECASE,
         )
-        a_tag_matches = list(link_pattern.finditer(html))
-        logger.info(f"UPP _extract_course_urls: Found {len(a_tag_matches)} <a> tag matches for curso_cargar.asp")
+        for match in header_pattern.finditer(html):
+            course_code = match.group(1).strip()
+            course_name = self._clean_html_text(match.group(2)).strip()
+            if course_name:
+                logger.info(f"UPP course from header: code={course_code}, name='{course_name}'")
 
-        for match in a_tag_matches:
-            href_raw = match.group(1).replace("&amp;", "&")
-            href = urljoin(base_url, href_raw)
-            label_html = match.group(2)
-            label = self._clean_html_text(label_html)
-            # Extract just the course name, removing code prefix and teacher info
-            title = self._normalize_course_title(label)
-
-            logger.info(f"UPP course extracted: label='{label[:60]}...' -> title='{title}'")
-
+        # Fallback: find curso_cargar URLs and try to extract title from surrounding context
+        fallback_pattern = re.compile(
+            r'curso_cargar\.asp\?([^"\'<>\s]+)',
+            flags=re.IGNORECASE,
+        )
+        for match in fallback_pattern.finditer(html):
+            query = match.group(1).replace("&amp;", "&")
+            href = urljoin(base_url, f"curso_cargar.asp?{query}")
             if href in seen:
                 continue
-            seen.add(href)
-            results.append((href, title))
 
-        # Fallback: find URLs without labels (less common)
-        fallback_urls = re.findall(r"curso_cargar\.asp\?[^\"'<>\s]+", html, flags=re.IGNORECASE)
-        logger.info(f"UPP _extract_course_urls: Found {len(fallback_urls)} fallback URL matches")
+            # Try to find the title near this URL by looking at surrounding text
+            start_pos = max(0, match.start() - 50)
+            end_pos = min(len(html), match.end() + 500)
+            context = html[start_pos:end_pos]
 
-        for raw in fallback_urls:
-            href = urljoin(base_url, raw.replace("&amp;", "&"))
-            if href in seen:
-                logger.info(f"UPP fallback: skipping duplicate URL")
-                continue
+            # Look for course title pattern in the context after the URL
+            # Pattern: P004103-CUR006620&nbsp;&nbsp;COURSE NAME&nbsp; (sec:...
+            title_match = re.search(
+                r'>\s*([A-Z]\d+-[A-Z]+\d+)\s*(?:&nbsp;|\s)+([^<]+?)(?:\s*\(sec:|\s*<)',
+                context,
+                flags=re.IGNORECASE,
+            )
+            if title_match:
+                raw_title = title_match.group(2)
+                title = self._clean_html_text(raw_title).strip()
+                title = self._normalize_course_title(title)
+                if title and len(title) > 3:
+                    logger.info(f"UPP course from context: '{title}'")
+                    seen.add(href)
+                    results.append((href, title))
+                    continue
+
+            # Final fallback: use query string
+            fallback_title = f"UPP Course {query}"[:180]
+            logger.info(f"UPP fallback (no title found): '{fallback_title}'")
             seen.add(href)
-            fallback_title = f"UPP Course {urlparse(href).query}"[:180]
-            logger.info(f"UPP fallback: adding course with title='{fallback_title}'")
-            # No label available, use query string as fallback
             results.append((href, fallback_title))
 
         logger.info(f"UPP _extract_course_urls: Returning {len(results)} courses")
@@ -430,10 +465,15 @@ class UppProvider(LmsProvider):
         return text if text else label
 
     def _discover_courses_via_mis_cursos(self, client: httpx.Client, seed_url: str) -> list[dict[str, Any]]:
+        import logging
+        logger = logging.getLogger(__name__)
+
         # Explicit starting point from your UPP tenant.
         mis_cursos_url = urljoin(seed_url, self.mis_cursos_path)
+        logger.info(f"UPP _discover_courses: Fetching mis_cursos_url={mis_cursos_url}")
         mis_resp = client.get(mis_cursos_url)
         mis_resp.raise_for_status()
+        logger.info(f"UPP _discover_courses: Got {len(mis_resp.text)} bytes from mis_cursos page")
         mis_links = self._extract_links(mis_resp.text, str(mis_resp.url))
 
         # Step 1: careers list

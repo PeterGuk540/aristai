@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
-from api.services.integrations.base import ExternalCourse, ExternalEnrollment, ExternalMaterial, LmsProvider
+from api.services.integrations.base import ExternalCourse, ExternalEnrollment, ExternalMaterial, ExternalSession, LmsProvider
 
 
 class UppProvider(LmsProvider):
@@ -478,7 +478,21 @@ class UppProvider(LmsProvider):
             return name
         return "material.bin"
 
-    def _scrape_materials_from_html(self, html: str, base_url: str, course_external_id: str) -> list[ExternalMaterial]:
+    def _extract_session_from_url(self, url: str, course_external_id: str) -> str | None:
+        """Extract session ID from URL with semana=X parameter."""
+        match = re.search(r'[?&]semana=(\d+)', url, flags=re.IGNORECASE)
+        if match:
+            week_num = match.group(1)
+            return f"{course_external_id}:semana:{week_num}"
+        return None
+
+    def _scrape_materials_from_html(
+        self,
+        html: str,
+        base_url: str,
+        course_external_id: str,
+        session_external_id: str | None = None,
+    ) -> list[ExternalMaterial]:
         links = re.findall(
             r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
             html,
@@ -497,6 +511,12 @@ class UppProvider(LmsProvider):
             seen.add(external_id)
             filename = self._filename_from_url(href)
             content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+            # Determine session from URL parameter or passed value
+            material_session_id = session_external_id
+            if not material_session_id:
+                material_session_id = self._extract_session_from_url(href, course_external_id)
+
             out.append(
                 ExternalMaterial(
                     provider=self.provider_name,
@@ -507,6 +527,7 @@ class UppProvider(LmsProvider):
                     content_type=content_type,
                     size_bytes=0,
                     source_url=href,
+                    session_external_id=material_session_id,
                 )
             )
         return out
@@ -692,6 +713,90 @@ class UppProvider(LmsProvider):
             )
         return courses
 
+    def _extract_sessions_from_html(self, html: str, course_external_id: str) -> list[ExternalSession]:
+        """Extract sessions/weeks (Semanas) from course page HTML.
+
+        UPP structure: Accordion panels with titles like "Semana 1", "Semana 2", etc.
+        Each session contains links with ?semana=X parameter.
+        """
+        sessions: list[ExternalSession] = []
+        seen_weeks: set[int] = set()
+
+        # Pattern 1: Look for accordion headers with "Semana X" pattern
+        # e.g., <div class="accordion-header">Semana 1</div>
+        accordion_pattern = re.findall(
+            r'(?:accordion|panel|collapse)[^>]*>.*?[Ss]emana\s*(\d+)',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        for week_num_str in accordion_pattern:
+            try:
+                week_num = int(week_num_str)
+                if week_num not in seen_weeks:
+                    seen_weeks.add(week_num)
+            except ValueError:
+                continue
+
+        # Pattern 2: Extract from links with semana=X parameter
+        semana_links = re.findall(r'[?&]semana=(\d+)', html, flags=re.IGNORECASE)
+        for week_num_str in semana_links:
+            try:
+                week_num = int(week_num_str)
+                if week_num not in seen_weeks:
+                    seen_weeks.add(week_num)
+            except ValueError:
+                continue
+
+        # Pattern 3: Look for "Semana X" text in any context
+        semana_text = re.findall(r'[Ss]emana\s*(\d+)', html)
+        for week_num_str in semana_text:
+            try:
+                week_num = int(week_num_str)
+                if week_num not in seen_weeks:
+                    seen_weeks.add(week_num)
+            except ValueError:
+                continue
+
+        # Create session objects for each discovered week
+        for week_num in sorted(seen_weeks):
+            session_id = f"{course_external_id}:semana:{week_num}"
+            sessions.append(
+                ExternalSession(
+                    provider=self.provider_name,
+                    external_id=session_id,
+                    course_external_id=str(course_external_id),
+                    title=f"Semana {week_num}",
+                    week_number=week_num,
+                )
+            )
+
+        return sessions
+
+    def list_sessions(self, course_external_id: str) -> list[ExternalSession]:
+        """List sessions/weeks for a UPP course by scraping the course page."""
+        course_url = self._decode_url_ref(str(course_external_id), "courseurl")
+
+        if course_url is None:
+            # No URL-based course ID, return empty list
+            return []
+
+        sessions: list[ExternalSession] = []
+
+        with httpx.Client(
+            timeout=self.timeout,
+            headers=self._headers(),
+            cookies=self._login_cookies(),
+            follow_redirects=True,
+        ) as client:
+            try:
+                response = client.get(course_url)
+                response.raise_for_status()
+                sessions = self._extract_sessions_from_html(response.text, str(course_external_id))
+            except Exception:
+                pass
+
+        return sessions
+
     def list_materials(self, course_external_id: str) -> list[ExternalMaterial]:
         course_url = self._decode_url_ref(str(course_external_id), "courseurl")
         raw_materials: list[dict[str, Any]] = []
@@ -716,26 +821,45 @@ class UppProvider(LmsProvider):
                 follow_redirects=True,
             ) as client:
                 # Crawl course page + content/week tab pages.
-                queue = [course_url]
+                # Track URLs with their session context: (url, session_external_id)
+                queue: list[tuple[str, str | None]] = [(course_url, None)]
                 visited: set[str] = set()
                 scraped: list[ExternalMaterial] = []
-                while queue and len(visited) < 20:
-                    page_url = queue.pop(0)
+
+                while queue and len(visited) < 40:  # Increased limit for session pages
+                    page_url, current_session_id = queue.pop(0)
                     if page_url in visited:
                         continue
                     visited.add(page_url)
+
+                    # Determine session from URL if not already set
+                    if not current_session_id:
+                        current_session_id = self._extract_session_from_url(page_url, course_external_id)
+
                     try:
                         response = client.get(page_url)
                         response.raise_for_status()
                     except Exception:
                         continue
+
                     page_html = response.text
                     base = str(response.url)
-                    scraped.extend(self._scrape_materials_from_html(page_html, base, str(course_external_id)))
+
+                    # Scrape materials from this page with session context
+                    scraped.extend(
+                        self._scrape_materials_from_html(
+                            page_html, base, str(course_external_id), current_session_id
+                        )
+                    )
+
+                    # Find more content pages to crawl
                     for href, label in self._extract_links(page_html, base):
                         if self._is_course_content_nav_link(href, label):
-                            if href not in visited and href not in queue:
-                                queue.append(href)
+                            if href not in visited:
+                                # Extract session from the link URL
+                                link_session_id = self._extract_session_from_url(href, course_external_id)
+                                queue.append((href, link_session_id or current_session_id))
+
             if scraped:
                 # dedupe by external_id while preserving order
                 unique: dict[str, ExternalMaterial] = {}
@@ -743,7 +867,7 @@ class UppProvider(LmsProvider):
                     if m.external_id not in unique:
                         unique[m.external_id] = m
                 return list(unique.values())
-                return scraped
+
             raise RuntimeError(
                 f"UPP materials could not be discovered from course page: {course_url}. "
                 "No downloadable material links were detected."

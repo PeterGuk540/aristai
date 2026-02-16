@@ -16,6 +16,17 @@ class ExternalCourse:
 
 
 @dataclass
+class ExternalSession:
+    """Represents a session/week within a course (e.g., Semana 1, Week 2)."""
+    provider: str
+    external_id: str
+    course_external_id: str
+    title: str  # e.g., "Semana 1", "Week 2"
+    week_number: int | None = None
+    description: str | None = None
+
+
+@dataclass
 class ExternalMaterial:
     provider: str
     external_id: str
@@ -26,6 +37,7 @@ class ExternalMaterial:
     size_bytes: int
     updated_at: str | None = None
     source_url: str | None = None
+    session_external_id: str | None = None  # Links material to a session/week
 
 
 @dataclass
@@ -47,6 +59,9 @@ class LmsProvider(Protocol):
 
     def list_courses(self) -> list[ExternalCourse]:
         """List courses visible to the configured account."""
+
+    def list_sessions(self, course_external_id: str) -> list[ExternalSession]:
+        """List sessions/weeks for an external course."""
 
     def list_materials(self, course_external_id: str) -> list[ExternalMaterial]:
         """List importable materials for an external course."""

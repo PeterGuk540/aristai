@@ -53,6 +53,15 @@ class ExternalCourseResponse(BaseModel):
     term: Optional[str] = None
 
 
+class ExternalSessionResponse(BaseModel):
+    provider: str
+    external_id: str
+    course_external_id: str
+    title: str
+    week_number: Optional[int] = None
+    description: Optional[str] = None
+
+
 class ExternalMaterialResponse(BaseModel):
     provider: str
     external_id: str
@@ -63,6 +72,7 @@ class ExternalMaterialResponse(BaseModel):
     size_bytes: int
     updated_at: Optional[str] = None
     source_url: Optional[str] = None
+    session_external_id: Optional[str] = None
 
 
 class IntegrationConnectionResponse(BaseModel):
@@ -975,6 +985,23 @@ def list_external_courses(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return [ExternalCourseResponse(**course.__dict__) for course in courses]
+
+
+@router.get("/{provider}/courses/{course_external_id}/sessions", response_model=list[ExternalSessionResponse])
+def list_external_sessions(
+    provider: str,
+    course_external_id: str,
+    connection_id: Optional[int] = Query(None),
+    user_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """List sessions/weeks for an external course."""
+    p = _resolve_provider(provider, db=db, connection_id=connection_id, actor_user_id=user_id)
+    try:
+        sessions = p.list_sessions(course_external_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return [ExternalSessionResponse(**s.__dict__) for s in sessions]
 
 
 @router.get("/{provider}/courses/{course_external_id}/materials", response_model=list[ExternalMaterialResponse])

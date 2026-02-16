@@ -514,6 +514,23 @@ export const api = {
       }`
     ),
 
+  getExternalSessions: (provider: string, courseExternalId: string, connectionId?: number, userId?: number) =>
+    fetchApi<Array<{
+      provider: string;
+      external_id: string;
+      course_external_id: string;
+      title: string;
+      week_number?: number;
+      description?: string;
+    }>>(
+      `/integrations/${provider}/courses/${encodeURIComponent(courseExternalId)}/sessions?${
+        [
+          connectionId ? `connection_id=${connectionId}` : '',
+          userId ? `user_id=${userId}` : '',
+        ].filter(Boolean).join('&')
+      }`
+    ),
+
   getExternalMaterials: (provider: string, courseExternalId: string, connectionId?: number, userId?: number) =>
     fetchApi<Array<{
       provider: string;
@@ -525,6 +542,7 @@ export const api = {
       size_bytes: number;
       updated_at?: string;
       source_url?: string;
+      session_external_id?: string;
     }>>(
       `/integrations/${provider}/courses/${encodeURIComponent(courseExternalId)}/materials?${
         [

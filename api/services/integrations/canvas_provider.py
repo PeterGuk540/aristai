@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from api.services.integrations.base import ExternalCourse, ExternalEnrollment, ExternalMaterial, LmsProvider
+from api.services.integrations.base import ExternalCourse, ExternalEnrollment, ExternalMaterial, ExternalSession, LmsProvider
 
 
 class CanvasProvider(LmsProvider):
@@ -76,6 +76,33 @@ class CanvasProvider(LmsProvider):
                 )
             )
         return courses
+
+    def list_sessions(self, course_external_id: str) -> list[ExternalSession]:
+        """List sessions/modules for a Canvas course.
+
+        Canvas uses 'modules' which can represent weeks/sessions.
+        """
+        try:
+            raw_modules = self._get_paginated(f"/courses/{course_external_id}/modules")
+        except Exception:
+            return []
+
+        sessions: list[ExternalSession] = []
+        for idx, m in enumerate(raw_modules, start=1):
+            module_id = m.get("id")
+            if module_id is None:
+                continue
+            sessions.append(
+                ExternalSession(
+                    provider=self.provider_name,
+                    external_id=str(module_id),
+                    course_external_id=str(course_external_id),
+                    title=m.get("name") or f"Module {idx}",
+                    week_number=m.get("position") or idx,
+                    description=None,
+                )
+            )
+        return sessions
 
     def list_materials(self, course_external_id: str) -> list[ExternalMaterial]:
         raw_files = self._get_paginated(f"/courses/{course_external_id}/files")

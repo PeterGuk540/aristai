@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText, BookOpen, Copy, LayoutTemplate, Send, Megaphone, ClipboardList } from 'lucide-react';
+import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText, BookOpen, Copy, LayoutTemplate, Send, Megaphone, ClipboardList, Pencil, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
@@ -68,6 +68,13 @@ export default function SessionsPage() {
   // Create session form
   const [newSessionTitle, setNewSessionTitle] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Edit/Delete session state
+  const [editingSession, setEditingSession] = useState<Session | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Canvas push state
   const [canvasMappings, setCanvasMappings] = useState<Array<{
@@ -296,6 +303,50 @@ export default function SessionsPage() {
     } catch (error) {
       console.error('Failed to update status:', error);
       alert('Failed to update session status');
+    }
+  };
+
+  const handleEditSession = (session: Session) => {
+    setEditingSession(session);
+    setEditTitle(session.title);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingSession || !currentUser || !editTitle.trim()) return;
+
+    setSaving(true);
+    try {
+      await api.updateSession(editingSession.id, currentUser.id, { title: editTitle.trim() });
+      setEditingSession(null);
+      setEditTitle('');
+      if (selectedCourseId) {
+        fetchSessions(selectedCourseId);
+      }
+    } catch (error: any) {
+      console.error('Failed to update session:', error);
+      alert(error.message || 'Failed to update session');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSession = async () => {
+    if (!selectedSession || !currentUser) return;
+
+    setDeleting(true);
+    try {
+      await api.deleteSession(selectedSession.id, currentUser.id);
+      setShowDeleteConfirm(false);
+      setSelectedSession(null);
+      setSelectedSessionId(null);
+      if (selectedCourseId) {
+        fetchSessions(selectedCourseId);
+      }
+    } catch (error: any) {
+      console.error('Failed to delete session:', error);
+      alert(error.message || 'Failed to delete session');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -644,12 +695,107 @@ export default function SessionsPage() {
                             </Button>
                           )}
                         </div>
+
+                        {/* Edit and Delete buttons */}
+                        <div className="flex gap-2 mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditSession(selectedSession)}
+                            data-voice-id="edit-session"
+                          >
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Edit Session
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowDeleteConfirm(true)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                            data-voice-id="delete-session"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete Session
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <p className="text-neutral-500 dark:text-neutral-400">{t('sessions.selectSession')}</p>
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Edit Session Modal */}
+                {editingSession && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <Card variant="default" className="w-full max-w-md mx-4">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle>Edit Session</CardTitle>
+                          <button
+                            onClick={() => setEditingSession(null)}
+                            className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <Input
+                          label="Session Title"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          placeholder="Enter session title"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => setEditingSession(null)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handleSaveEdit}
+                            disabled={saving || !editTitle.trim()}
+                          >
+                            {saving ? 'Saving...' : 'Save Changes'}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {/* Delete Confirmation Modal */}
+                {showDeleteConfirm && selectedSession && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <Card variant="default" className="w-full max-w-md mx-4">
+                      <CardHeader>
+                        <CardTitle className="text-red-600 dark:text-red-400">Delete Session</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <p className="text-neutral-600 dark:text-neutral-400">
+                          Are you sure you want to delete <strong>"{selectedSession.title}"</strong>? This action cannot be undone.
+                        </p>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => setShowDeleteConfirm(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="danger"
+                            onClick={handleDeleteSession}
+                            disabled={deleting}
+                          >
+                            {deleting ? 'Deleting...' : 'Delete Session'}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
 
                 {/* Push to Canvas Section */}
                 {selectedSession && (

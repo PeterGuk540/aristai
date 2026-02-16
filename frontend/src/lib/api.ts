@@ -210,6 +210,12 @@ export const api = {
   updateSessionStatus: (id: number, status: string) =>
     fetchApi<any>(`/sessions/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 
+  updateSession: (id: number, userId: number, data: { title?: string; date?: string; status?: string; plan_json?: any }) =>
+    fetchApi<any>(`/sessions/${id}?user_id=${userId}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteSession: (id: number, userId: number) =>
+    fetchApi<void>(`/sessions/${id}?user_id=${userId}`, { method: 'DELETE' }),
+
   getSessionCases: (sessionId: number) =>
     fetchApi<any[]>(`/sessions/${sessionId}/cases`),
 

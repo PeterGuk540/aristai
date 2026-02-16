@@ -357,6 +357,28 @@ ACTION_PATTERNS = {
         r'\bagendar(\s+sesion)?\b',
         r'\b(poner|marcar)\s+(como\s+)?programad[oa]\b',
     ],
+    'edit_session': [
+        r'\bedit\s+(the\s+)?(current\s+)?session\b',
+        r'\bmodify\s+(the\s+)?(current\s+)?session\b',
+        r'\bchange\s+(the\s+)?session\s+(title|name|details)\b',
+        r'\brename\s+(the\s+)?session\b',
+        r'\bupdate\s+(the\s+)?session\s+(title|name|details)\b',
+        # Spanish
+        r'\beditar\s+(la\s+)?(sesion\s+)?actual?\b',
+        r'\bmodificar\s+(la\s+)?(sesion\s+)?actual?\b',
+        r'\bcambiar\s+(el\s+)?(titulo|nombre)\s+(de\s+)?(la\s+)?sesion\b',
+        r'\brenombrar\s+(la\s+)?sesion\b',
+    ],
+    'delete_session': [
+        r'\bdelete\s+(the\s+)?(current\s+)?session\b',
+        r'\bremove\s+(the\s+)?(current\s+)?session\b',
+        r'\beliminate\s+(the\s+)?(current\s+)?session\b',
+        r'\bget\s+rid\s+of\s+(the\s+)?session\b',
+        # Spanish
+        r'\beliminar\s+(la\s+)?(sesion\s+)?actual?\b',
+        r'\bborrar\s+(la\s+)?(sesion\s+)?actual?\b',
+        r'\bquitar\s+(la\s+)?(sesion\s+)?actual?\b',
+    ],
     # Report actions - English + Spanish
     'refresh_report': [
         r'\brefresh\s+(the\s+)?report\b',
@@ -1206,6 +1228,11 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'submit': 'submit-post',
             'create course': 'create-course',
             'create session': 'create-session',
+            'edit session': 'edit-session',
+            'edit': 'edit-session',
+            'modify session': 'edit-session',
+            'delete session': 'delete-session',
+            'remove session': 'delete-session',
             # Spanish (non-accented)
             'comenzar': 'intro-get-started',
             'comandos de voz': 'intro-voice-commands',
@@ -1230,6 +1257,10 @@ def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
             'enviar': 'submit-post',
             'crear curso': 'create-course',
             'crear sesion': 'create-session',
+            'editar sesion': 'edit-session',
+            'modificar sesion': 'edit-session',
+            'eliminar sesion': 'delete-session',
+            'borrar sesion': 'delete-session',
         }
         for phrase, target in button_mappings.items():
             if phrase in text_normalized:
@@ -1461,6 +1492,12 @@ def generate_conversational_response(
 
         if intent_value == 'schedule_session':
             return "Session has been scheduled. You can go live when you're ready to start."
+
+        if intent_value == 'edit_session':
+            return "Opening the edit session dialog. You can change the session title and details."
+
+        if intent_value == 'delete_session':
+            return "Are you sure you want to delete this session? This action cannot be undone. Say yes to confirm or no to cancel."
 
         # === REPORT RESPONSES ===
         if intent_value == 'refresh_report':
@@ -3425,6 +3462,10 @@ def _extract_button_info(transcript: str) -> Dict[str, str]:
         'post case': 'post-case',
         'go live': 'go-live',
         'complete session': 'complete-session',
+        'edit session': 'edit-session',
+        'modify session': 'edit-session',
+        'delete session': 'delete-session',
+        'remove session': 'delete-session',
         'enroll': 'enroll-students',
         'upload roster': 'upload-roster',
         'submit': 'submit-post',

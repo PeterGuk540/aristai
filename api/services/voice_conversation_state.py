@@ -255,6 +255,19 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                 destructive=True,
                 confirmation_prompt="Are you sure you want to end this session?"
             ),
+            ActionButton(
+                name="Edit Session",
+                voice_id="edit-session",
+                description="Edit the selected session's title and details",
+                destructive=False
+            ),
+            ActionButton(
+                name="Delete Session",
+                voice_id="delete-session",
+                description="Delete the selected session",
+                destructive=True,
+                confirmation_prompt="Are you sure you want to delete this session? This action cannot be undone."
+            ),
         ],
     ),
 

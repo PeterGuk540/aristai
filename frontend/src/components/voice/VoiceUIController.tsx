@@ -129,6 +129,12 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'push-type-assignment': '[data-voice-id="push-type-assignment"]',
     'assignment': '[data-voice-id="push-type-assignment"]',
     'reflection': '[data-voice-id="push-type-assignment"]',
+    // Edit and delete session
+    'edit-session': '[data-voice-id="edit-session"]',
+    'editSession': '[data-voice-id="edit-session"]',
+    'delete-session': '[data-voice-id="delete-session"]',
+    'deleteSession': '[data-voice-id="delete-session"]',
+    'remove-session': '[data-voice-id="delete-session"]',
   },
   // Forum page elements
   '/forum': {

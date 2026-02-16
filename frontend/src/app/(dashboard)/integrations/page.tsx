@@ -519,7 +519,8 @@ export default function IntegrationsPage() {
     }
     setSyncing(true);
     try {
-      const result = await api.syncExternalMaterials(provider, {
+      // Use async endpoint to avoid timeout
+      const asyncResult = await api.syncExternalMaterialsAsync(provider, {
         target_course_id: selectedLocalCourse ? Number(selectedLocalCourse) : undefined,
         source_course_external_id: selectedExternalCourse,
         source_connection_id: activeConnectionId,
@@ -528,17 +529,56 @@ export default function IntegrationsPage() {
         overwrite_title_prefix: '[Canvas] ',
         mapping_id: selectedMappingId ? Number(selectedMappingId) : undefined,
       });
-      if (result.target_course_id) {
-        setSelectedLocalCourse(String(result.target_course_id));
-      }
-      setMessage(
-        `${result.created_target_course ? `Created target course: ${result.target_course_title}. ` : ''}Sync job #${result.job_id} complete. Imported ${result.imported_count}, skipped ${result.skipped_count}, failed ${result.failed_count}.`
-      );
-      await refreshProviderData();
+
+      setMessage(`Sync job #${asyncResult.job_id} started. Processing in background...`);
+
+      // Poll for completion
+      const pollInterval = 3000; // 3 seconds
+      const maxPolls = 100; // Max 5 minutes
+      let polls = 0;
+
+      const pollForCompletion = async () => {
+        try {
+          const job = await api.getIntegrationSyncJob(asyncResult.job_id);
+
+          if (job.status === 'completed' || job.status === 'failed') {
+            setSyncing(false);
+            if (job.status === 'completed') {
+              setMessage(
+                `Sync job #${job.id} complete. Imported ${job.imported_count}, skipped ${job.skipped_count}, failed ${job.failed_count}.`
+              );
+            } else {
+              setError(`Sync job #${job.id} failed: ${job.error_message || 'Unknown error'}`);
+            }
+            await refreshProviderData();
+            return;
+          }
+
+          // Still running
+          polls++;
+          if (polls < maxPolls) {
+            setMessage(
+              `Sync job #${asyncResult.job_id} in progress... (${job.status}, ${job.imported_count || 0} imported so far)`
+            );
+            setTimeout(pollForCompletion, pollInterval);
+          } else {
+            setSyncing(false);
+            setMessage(
+              `Sync job #${asyncResult.job_id} is still running in background. Check Recent Sync Jobs for status.`
+            );
+          }
+        } catch (pollError: any) {
+          setSyncing(false);
+          setError(`Error checking sync status: ${pollError?.message || 'Unknown error'}`);
+        }
+      };
+
+      // Start polling after initial delay
+      setTimeout(pollForCompletion, pollInterval);
+
     } catch (e: any) {
-      setError(e?.message || 'Sync failed.');
-    } finally {
       setSyncing(false);
+      setError(e?.message || 'Sync failed to start.');
     }
   };
 

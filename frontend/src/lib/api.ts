@@ -678,6 +678,27 @@ export const api = {
       }>;
     }>(`/integrations/${provider}/sync`, { method: 'POST', body: JSON.stringify(data) }),
 
+  // Async version - returns immediately with job_id for polling
+  syncExternalMaterialsAsync: (
+    provider: string,
+    data: {
+      target_course_id?: number;
+      source_course_external_id: string;
+      source_connection_id?: number;
+      target_session_id?: number;
+      uploaded_by?: number;
+      overwrite_title_prefix?: string;
+      mapping_id?: number;
+      material_external_ids?: string[];
+    }
+  ) =>
+    fetchApi<{
+      job_id: number;
+      task_id: string;
+      status: string;
+      message: string;
+    }>(`/integrations/${provider}/sync-async`, { method: 'POST', body: JSON.stringify(data) }),
+
   syncExternalRoster: (
     provider: string,
     data: {
@@ -726,6 +747,26 @@ export const api = {
       created_at?: string;
     }>>(`/integrations/sync-jobs?${params.toString()}`);
   },
+
+  getIntegrationSyncJob: (jobId: number) =>
+    fetchApi<{
+      id: number;
+      provider: string;
+      source_course_external_id: string;
+      source_connection_id?: number;
+      target_course_id: number;
+      target_session_id?: number;
+      triggered_by?: number;
+      status: string;
+      requested_count: number;
+      imported_count: number;
+      skipped_count: number;
+      failed_count: number;
+      error_message?: string;
+      started_at?: string;
+      completed_at?: string;
+      created_at?: string;
+    }>(`/integrations/sync-jobs/${jobId}`),
 
   // =============================================================================
   // INSTRUCTOR ENHANCEMENT FEATURES

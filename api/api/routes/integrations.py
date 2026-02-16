@@ -206,6 +206,14 @@ class SyncRequest(BaseModel):
     material_external_ids: list[str] = Field(default_factory=list, description="Optional material ids. Empty = sync all.")
 
 
+class AsyncSyncResponse(BaseModel):
+    """Response for async sync - returns job ID immediately."""
+    job_id: int
+    task_id: str
+    status: str = "queued"
+    message: str = "Sync job queued for background processing"
+
+
 class ImportItemResult(BaseModel):
     material_external_id: str
     status: str
@@ -550,46 +558,40 @@ def _sync_sessions_from_external(
     return session_mapping
 
 
-def _import_with_tracking(
+def _import_materials_batch(
     db: Session,
+    job: IntegrationSyncJob,
     provider_name: str,
     provider_obj,
-    request: ImportRequest,
+    source_course_external_id: str,
+    source_connection_id: Optional[int],
+    target_course_id: int,
+    target_session_id: Optional[int],
     actor_id: Optional[int],
     material_external_ids: list[str],
     session_mapping: Optional[dict[str, int]] = None,
     material_session_map: Optional[dict[str, str]] = None,
-) -> ImportResponse:
+    overwrite_title_prefix: Optional[str] = None,
+) -> dict:
+    """Import materials in batch, updating the provided job record.
+
+    Returns dict with imported_count, skipped_count, failed_count, results.
+    This function is used by both sync endpoint and Celery background task.
+    """
     s3_service = get_s3_service()
     if not s3_service.is_enabled():
-        raise HTTPException(status_code=503, detail="S3 is not configured. Cannot import materials.")
+        raise RuntimeError("S3 is not configured. Cannot import materials.")
 
-    prefix = request.overwrite_title_prefix.strip() if request.overwrite_title_prefix else ""
+    prefix = overwrite_title_prefix.strip() if overwrite_title_prefix else ""
 
-    job = IntegrationSyncJob(
-        provider=provider_name,
-        source_course_external_id=request.source_course_external_id,
-        source_connection_id=request.source_connection_id,
-        target_course_id=request.target_course_id,
-        target_session_id=request.target_session_id,
-        triggered_by=actor_id,
-        status="running",
-        requested_count=len(material_external_ids),
-        started_at=datetime.now(timezone.utc),
-    )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-
-    results: list[ImportItemResult] = []
+    results: list[dict] = []
     imported_count = 0
     skipped_count = 0
     failed_count = 0
 
     for external_id in material_external_ids:
         # Determine target session for this material
-        # If we have session mapping, look up the material's session_external_id
-        resolved_target_session_id = request.target_session_id
+        resolved_target_session_id = target_session_id
         if session_mapping and material_session_map:
             mat_session_ext_id = material_session_map.get(external_id)
             if mat_session_ext_id and mat_session_ext_id in session_mapping:
@@ -608,9 +610,9 @@ def _import_with_tracking(
             existing_link = db.query(IntegrationMaterialLink).filter(
                 IntegrationMaterialLink.provider == provider_name,
                 IntegrationMaterialLink.external_material_id == external_id,
-                IntegrationMaterialLink.target_course_id == request.target_course_id,
+                IntegrationMaterialLink.target_course_id == target_course_id,
                 IntegrationMaterialLink.target_session_id == resolved_target_session_id,
-                IntegrationMaterialLink.source_connection_id == request.source_connection_id,
+                IntegrationMaterialLink.source_connection_id == source_connection_id,
             ).first()
             if existing_link:
                 skipped_count += 1
@@ -619,14 +621,12 @@ def _import_with_tracking(
                 sync_item.message = msg
                 sync_item.course_material_id = existing_link.course_material_id
                 db.commit()
-                results.append(
-                    ImportItemResult(
-                        material_external_id=external_id,
-                        status="skipped",
-                        message=msg,
-                        created_material_id=existing_link.course_material_id,
-                    )
-                )
+                results.append({
+                    "material_external_id": external_id,
+                    "status": "skipped",
+                    "message": msg,
+                    "created_material_id": existing_link.course_material_id,
+                })
                 continue
 
             content_bytes, material_meta = provider_obj.download_material(external_id)
@@ -636,7 +636,7 @@ def _import_with_tracking(
             checksum = hashlib.sha256(content_bytes).hexdigest()
 
             s3_key = s3_service.generate_s3_key(
-                request.target_course_id,
+                target_course_id,
                 material_meta.filename,
                 resolved_target_session_id,
             )
@@ -652,7 +652,7 @@ def _import_with_tracking(
 
             title = f"{prefix}{material_meta.title}" if prefix else material_meta.title
             course_material = CourseMaterial(
-                course_id=request.target_course_id,
+                course_id=target_course_id,
                 session_id=resolved_target_session_id,
                 filename=material_meta.filename,
                 s3_key=s3_key,
@@ -670,9 +670,9 @@ def _import_with_tracking(
                 IntegrationMaterialLink(
                     provider=provider_name,
                     external_material_id=external_id,
-                    external_course_id=request.source_course_external_id,
-                    source_connection_id=request.source_connection_id,
-                    target_course_id=request.target_course_id,
+                    external_course_id=source_course_external_id,
+                    source_connection_id=source_connection_id,
+                    target_course_id=target_course_id,
                     target_session_id=resolved_target_session_id,
                     course_material_id=course_material.id,
                     checksum_sha256=checksum,
@@ -686,14 +686,12 @@ def _import_with_tracking(
             sync_item.course_material_id = course_material.id
             sync_item.external_material_name = material_meta.title
             db.commit()
-            results.append(
-                ImportItemResult(
-                    material_external_id=external_id,
-                    status="imported",
-                    message="Imported successfully.",
-                    created_material_id=course_material.id,
-                )
-            )
+            results.append({
+                "material_external_id": external_id,
+                "status": "imported",
+                "message": "Imported successfully.",
+                "created_material_id": course_material.id,
+            })
         except Exception as exc:
             db.rollback()
             failed_count += 1
@@ -701,28 +699,94 @@ def _import_with_tracking(
             sync_item.message = str(exc)
             db.add(sync_item)
             db.commit()
-            results.append(
-                ImportItemResult(
-                    material_external_id=external_id,
-                    status="failed",
-                    message=str(exc),
-                )
-            )
+            results.append({
+                "material_external_id": external_id,
+                "status": "failed",
+                "message": str(exc),
+            })
 
-    job.imported_count = imported_count
-    job.skipped_count = skipped_count
-    job.failed_count = failed_count
-    job.status = "failed" if failed_count and imported_count == 0 else "completed"
+    return {
+        "imported_count": imported_count,
+        "skipped_count": skipped_count,
+        "failed_count": failed_count,
+        "results": results,
+    }
+
+
+def _import_with_tracking(
+    db: Session,
+    provider_name: str,
+    provider_obj,
+    request: ImportRequest,
+    actor_id: Optional[int],
+    material_external_ids: list[str],
+    session_mapping: Optional[dict[str, int]] = None,
+    material_session_map: Optional[dict[str, str]] = None,
+) -> ImportResponse:
+    """Synchronous import with tracking - creates job and imports materials."""
+    s3_service = get_s3_service()
+    if not s3_service.is_enabled():
+        raise HTTPException(status_code=503, detail="S3 is not configured. Cannot import materials.")
+
+    # Create job record
+    job = IntegrationSyncJob(
+        provider=provider_name,
+        source_course_external_id=request.source_course_external_id,
+        source_connection_id=request.source_connection_id,
+        target_course_id=request.target_course_id,
+        target_session_id=request.target_session_id,
+        triggered_by=actor_id,
+        status="running",
+        requested_count=len(material_external_ids),
+        started_at=datetime.now(timezone.utc),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # Use shared batch import function
+    result = _import_materials_batch(
+        db=db,
+        job=job,
+        provider_name=provider_name,
+        provider_obj=provider_obj,
+        source_course_external_id=request.source_course_external_id,
+        source_connection_id=request.source_connection_id,
+        target_course_id=request.target_course_id,
+        target_session_id=request.target_session_id,
+        actor_id=actor_id,
+        material_external_ids=material_external_ids,
+        session_mapping=session_mapping,
+        material_session_map=material_session_map,
+        overwrite_title_prefix=request.overwrite_title_prefix,
+    )
+
+    # Update job completion
+    job.imported_count = result["imported_count"]
+    job.skipped_count = result["skipped_count"]
+    job.failed_count = result["failed_count"]
+    job.status = "failed" if result["failed_count"] and result["imported_count"] == 0 else "completed"
     job.completed_at = datetime.now(timezone.utc)
     db.add(job)
     db.commit()
 
+    # Convert dict results to ImportItemResult
+    results = [
+        ImportItemResult(
+            material_external_id=r["material_external_id"],
+            status=r["status"],
+            message=r["message"],
+            created_material_id=r.get("created_material_id"),
+        )
+        for r in result["results"]
+    ]
+
     return ImportResponse(
         provider=provider_name,
         job_id=job.id,
-        imported_count=imported_count,
-        skipped_count=skipped_count,
-        failed_count=failed_count,
+        imported_count=result["imported_count"],
+        skipped_count=result["skipped_count"],
+        failed_count=result["failed_count"],
         results=results,
     )
 
@@ -1331,6 +1395,35 @@ def list_sync_jobs(
     ]
 
 
+@router.get("/sync-jobs/{job_id}", response_model=SyncJobResponse)
+def get_sync_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+):
+    """Get status of a specific sync job by ID."""
+    job = db.query(IntegrationSyncJob).filter(IntegrationSyncJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Sync job not found.")
+    return SyncJobResponse(
+        id=job.id,
+        provider=job.provider,
+        source_course_external_id=job.source_course_external_id,
+        source_connection_id=job.source_connection_id,
+        target_course_id=job.target_course_id,
+        target_session_id=job.target_session_id,
+        triggered_by=job.triggered_by,
+        status=job.status,
+        requested_count=job.requested_count,
+        imported_count=job.imported_count,
+        skipped_count=job.skipped_count,
+        failed_count=job.failed_count,
+        error_message=job.error_message,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        created_at=job.created_at,
+    )
+
+
 @router.post("/{provider}/import", response_model=ImportResponse)
 def import_materials(
     provider: str,
@@ -1438,6 +1531,83 @@ def sync_materials(
     result.target_course_title = resolved_target_title
     result.created_target_course = created_target_course
     return result
+
+
+@router.post("/{provider}/sync-async", response_model=AsyncSyncResponse)
+def sync_materials_async(
+    provider: str,
+    request: SyncRequest,
+    user_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Queue a background sync job for materials import.
+
+    This endpoint returns immediately with a job_id that can be polled
+    for status via GET /integrations/sync-jobs/{job_id}.
+    """
+    from worker.tasks import sync_integration_materials_task
+
+    actor_id = request.uploaded_by if request.uploaded_by is not None else user_id
+
+    # Resolve mapping if provided
+    if request.mapping_id is not None:
+        mapping = db.query(IntegrationCourseMapping).filter(
+            IntegrationCourseMapping.id == request.mapping_id,
+            IntegrationCourseMapping.provider == provider,
+            IntegrationCourseMapping.is_active.is_(True),
+        ).first()
+        if not mapping:
+            raise HTTPException(status_code=404, detail="Mapping not found.")
+        request.source_course_external_id = mapping.external_course_id
+        request.source_connection_id = mapping.source_connection_id
+        request.target_course_id = mapping.target_course_id
+
+    # Ensure target course exists
+    p = _resolve_provider(provider, db=db, connection_id=request.source_connection_id, actor_user_id=actor_id)
+    resolved_target_course_id, _, _ = _ensure_target_course(
+        db=db,
+        provider=provider,
+        provider_obj=p,
+        source_course_external_id=request.source_course_external_id,
+        source_connection_id=request.source_connection_id,
+        target_course_id=request.target_course_id,
+        created_by=actor_id,
+    )
+    _validate_target(db, resolved_target_course_id, request.target_session_id)
+
+    # Create job record in "queued" state
+    job = IntegrationSyncJob(
+        provider=provider,
+        source_course_external_id=request.source_course_external_id,
+        source_connection_id=request.source_connection_id,
+        target_course_id=resolved_target_course_id,
+        target_session_id=request.target_session_id,
+        triggered_by=actor_id,
+        status="queued",
+        requested_count=0,  # Will be updated by worker
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # Queue Celery task
+    task = sync_integration_materials_task.delay(
+        job_id=job.id,
+        provider=provider,
+        source_course_external_id=request.source_course_external_id,
+        source_connection_id=request.source_connection_id,
+        target_course_id=resolved_target_course_id,
+        target_session_id=request.target_session_id,
+        actor_id=actor_id,
+        overwrite_title_prefix=request.overwrite_title_prefix,
+    )
+
+    return AsyncSyncResponse(
+        job_id=job.id,
+        task_id=task.id,
+        status="queued",
+        message="Sync job queued for background processing. Poll /integrations/sync-jobs for status.",
+    )
 
 
 @router.post("/{provider}/sync-roster", response_model=SyncRosterResponse)

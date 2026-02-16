@@ -295,6 +295,14 @@ class UppProvider(LmsProvider):
         results: list[tuple[str, str]] = []
         seen: set[str] = set()
 
+        # Log a sample of the HTML around curso_cargar to debug regex matching
+        curso_idx = html.lower().find("curso_cargar")
+        if curso_idx >= 0:
+            sample_start = max(0, curso_idx - 100)
+            sample_end = min(len(html), curso_idx + 300)
+            html_sample = html[sample_start:sample_end].replace("\n", "\\n").replace("\r", "\\r")
+            logger.info(f"UPP HTML sample around curso_cargar: ...{html_sample}...")
+
         # Find full <a> tags containing curso_cargar.asp to get both URL and title
         link_pattern = re.compile(
             r'<a[^>]+href=["\']([^"\']*curso_cargar\.asp\?[^"\']+)["\'][^>]*>(.*?)</a>',

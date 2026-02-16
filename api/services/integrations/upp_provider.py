@@ -136,6 +136,13 @@ class UppProvider(LmsProvider):
     @staticmethod
     def _clean_html_text(raw: str) -> str:
         text = re.sub(r"<[^>]+>", " ", raw or "")
+        # Decode common HTML entities
+        text = text.replace("&nbsp;", " ")
+        text = text.replace("&amp;", "&")
+        text = text.replace("&lt;", "<")
+        text = text.replace("&gt;", ">")
+        text = text.replace("&quot;", '"')
+        text = text.replace("&#39;", "'")
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 

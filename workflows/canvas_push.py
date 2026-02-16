@@ -25,7 +25,7 @@ from api.models.post import Post
 from api.models.user import User
 from api.models.poll import Poll, PollVote
 from api.models.integration import IntegrationCanvasPush, IntegrationProviderConnection, IntegrationCourseMapping
-from api.core.secrets import decrypt_secret
+from api.services.integrations.secrets import decrypt_secret
 from workflows.llm_utils import (
     get_llm_with_tracking,
     invoke_llm_with_metrics,

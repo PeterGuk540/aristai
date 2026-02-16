@@ -277,16 +277,42 @@ class UppProvider(LmsProvider):
             out.append(key)
         return out
 
-    def _extract_course_urls_from_raw_html(self, html: str, base_url: str) -> list[str]:
-        urls: list[str] = []
+    def _extract_course_urls_from_raw_html(self, html: str, base_url: str) -> list[tuple[str, str]]:
+        """Extract course URLs and their titles from raw HTML.
+
+        Returns list of (url, title) tuples.
+        """
+        results: list[tuple[str, str]] = []
         seen: set[str] = set()
+
+        # Find full <a> tags containing curso_cargar.asp to get both URL and title
+        link_pattern = re.compile(
+            r'<a[^>]+href=["\']([^"\']*curso_cargar\.asp\?[^"\']+)["\'][^>]*>(.*?)</a>',
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        for match in link_pattern.finditer(html):
+            href_raw = match.group(1).replace("&amp;", "&")
+            href = urljoin(base_url, href_raw)
+            label_html = match.group(2)
+            label = self._clean_html_text(label_html)
+            # Extract just the course name, removing code prefix and teacher info
+            title = self._normalize_course_title(label)
+
+            if href in seen:
+                continue
+            seen.add(href)
+            results.append((href, title))
+
+        # Fallback: find URLs without labels (less common)
         for raw in re.findall(r"curso_cargar\.asp\?[^\"'<>\s]+", html, flags=re.IGNORECASE):
             href = urljoin(base_url, raw.replace("&amp;", "&"))
             if href in seen:
                 continue
             seen.add(href)
-            urls.append(href)
-        return urls
+            # No label available, use query string as fallback
+            results.append((href, f"UPP Course {urlparse(href).query}"[:180]))
+
+        return results
 
     def _is_career_link(self, href: str) -> bool:
         h = href.lower()
@@ -347,9 +373,31 @@ class UppProvider(LmsProvider):
 
     @staticmethod
     def _normalize_course_title(label: str) -> str:
-        text = re.sub(r"\(docente:.*?\)", "", label, flags=re.IGNORECASE)
+        """Normalize course title by extracting just the course name.
+
+        Input examples:
+        - "P004103-CUR006620  CIENCIAS PARA LA INGENIERÍA I (sec: 7120)  (Docente: JAIR KANASHIRO)"
+        - "P004103-CUR006618  ORGANIZACIÓN Y ARQUITECTURA DE COMPUTADORES (sec: 7120)"
+
+        Output: "CIENCIAS PARA LA INGENIERÍA I" or "ORGANIZACIÓN Y ARQUITECTURA DE COMPUTADORES"
+        """
+        text = label
+
+        # Remove teacher info: (Docente: ...)
+        text = re.sub(r"\(docente:.*?\)", "", text, flags=re.IGNORECASE)
+
+        # Remove section info: (sec: ...) or (sec:...)
+        text = re.sub(r"\(sec:\s*\d+\s*\)", "", text, flags=re.IGNORECASE)
+
+        # Remove course code prefix: P004103-CUR006620 or similar patterns
+        # Pattern: letter + digits + hyphen + letters + digits at the start
+        text = re.sub(r"^[A-Z]\d{4,}-[A-Z]{2,}\d{4,}\s*", "", text, flags=re.IGNORECASE)
+
+        # Clean up multiple spaces and trim
         text = re.sub(r"\s+", " ", text).strip(" _-")
-        return text or label
+
+        # If we stripped everything, return original
+        return text if text else label
 
     def _discover_courses_via_mis_cursos(self, client: httpx.Client, seed_url: str) -> list[dict[str, Any]]:
         # Explicit starting point from your UPP tenant.
@@ -373,11 +421,11 @@ class UppProvider(LmsProvider):
                 continue
 
             career_links_all = self._extract_links(career_page.text, str(career_page.url))
-            for href in self._extract_course_urls_from_raw_html(career_page.text, str(career_page.url)):
-                if not self._is_course_entry_link(href, "curso"):
+            for href, extracted_title in self._extract_course_urls_from_raw_html(career_page.text, str(career_page.url)):
+                if not self._is_course_entry_link(href, extracted_title or "curso"):
                     continue
                 course_id = self._encode_url_ref("courseurl", href)
-                title = f"UPP Course {urlparse(href).query}"[:180]
+                title = extracted_title or f"UPP Course {urlparse(href).query}"[:180]
                 key = f"{course_id}:{title.lower()}"
                 if key in seen:
                     continue
@@ -418,11 +466,11 @@ class UppProvider(LmsProvider):
                 except Exception:
                     continue
                 page_links = self._extract_links(page.text, str(page.url))
-                for href in self._extract_course_urls_from_raw_html(page.text, str(page.url)):
-                    if not self._is_course_entry_link(href, "curso"):
+                for href, extracted_title in self._extract_course_urls_from_raw_html(page.text, str(page.url)):
+                    if not self._is_course_entry_link(href, extracted_title or "curso"):
                         continue
                     course_id = self._encode_url_ref("courseurl", href)
-                    title = f"UPP Course {urlparse(href).query}"[:180]
+                    title = extracted_title or f"UPP Course {urlparse(href).query}"[:180]
                     key = f"{course_id}:{title.lower()}"
                     if key in seen:
                         continue

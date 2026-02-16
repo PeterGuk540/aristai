@@ -26,6 +26,7 @@ from api.models.integration import (
     IntegrationCourseMapping,
     IntegrationMaterialLink,
     IntegrationProviderConnection,
+    IntegrationSessionLink,
     IntegrationSyncItem,
     IntegrationSyncJob,
 )
@@ -475,6 +476,80 @@ def _ensure_target_course(
     return new_course.id, new_course.title, True
 
 
+def _sync_sessions_from_external(
+    db: Session,
+    provider: str,
+    provider_obj: Any,
+    source_course_external_id: str,
+    source_connection_id: Optional[int],
+    target_course_id: int,
+) -> dict[str, int]:
+    """Sync sessions (e.g., Semanas) from external course to AristAI sessions.
+
+    Returns a mapping of external_session_id -> target_session_id for associating materials.
+    Creates sessions in AristAI if they don't exist, even if they have no materials.
+    """
+    session_mapping: dict[str, int] = {}
+
+    try:
+        external_sessions = provider_obj.list_sessions(source_course_external_id)
+    except Exception:
+        # Provider doesn't support sessions or error occurred
+        return session_mapping
+
+    if not external_sessions:
+        return session_mapping
+
+    for ext_session in external_sessions:
+        # Check if this session is already linked
+        existing_link = db.query(IntegrationSessionLink).filter(
+            IntegrationSessionLink.provider == provider,
+            IntegrationSessionLink.external_session_id == ext_session.external_id,
+            IntegrationSessionLink.target_course_id == target_course_id,
+            IntegrationSessionLink.source_connection_id == source_connection_id,
+        ).first()
+
+        if existing_link:
+            # Session already imported, use existing mapping
+            session_mapping[ext_session.external_id] = existing_link.target_session_id
+            continue
+
+        # Create a new session in AristAI
+        new_session = SessionModel(
+            course_id=target_course_id,
+            title=ext_session.title,
+            status=SessionStatus.draft,
+            plan_json={
+                "is_imported_session": True,
+                "external_provider": provider,
+                "external_session_id": ext_session.external_id,
+                "week_number": ext_session.week_number,
+                "description": ext_session.description or f"Imported from {provider.upper()}",
+            },
+        )
+        db.add(new_session)
+        db.flush()
+
+        # Create the link record
+        session_link = IntegrationSessionLink(
+            provider=provider,
+            external_session_id=ext_session.external_id,
+            external_course_id=source_course_external_id,
+            external_session_title=ext_session.title,
+            week_number=ext_session.week_number,
+            source_connection_id=source_connection_id,
+            target_course_id=target_course_id,
+            target_session_id=new_session.id,
+        )
+        db.add(session_link)
+        db.flush()
+
+        session_mapping[ext_session.external_id] = new_session.id
+
+    db.commit()
+    return session_mapping
+
+
 def _import_with_tracking(
     db: Session,
     provider_name: str,
@@ -482,6 +557,8 @@ def _import_with_tracking(
     request: ImportRequest,
     actor_id: Optional[int],
     material_external_ids: list[str],
+    session_mapping: Optional[dict[str, int]] = None,
+    material_session_map: Optional[dict[str, str]] = None,
 ) -> ImportResponse:
     s3_service = get_s3_service()
     if not s3_service.is_enabled():
@@ -510,6 +587,14 @@ def _import_with_tracking(
     failed_count = 0
 
     for external_id in material_external_ids:
+        # Determine target session for this material
+        # If we have session mapping, look up the material's session_external_id
+        resolved_target_session_id = request.target_session_id
+        if session_mapping and material_session_map:
+            mat_session_ext_id = material_session_map.get(external_id)
+            if mat_session_ext_id and mat_session_ext_id in session_mapping:
+                resolved_target_session_id = session_mapping[mat_session_ext_id]
+
         sync_item = IntegrationSyncItem(
             job_id=job.id,
             external_material_id=external_id,
@@ -524,7 +609,7 @@ def _import_with_tracking(
                 IntegrationMaterialLink.provider == provider_name,
                 IntegrationMaterialLink.external_material_id == external_id,
                 IntegrationMaterialLink.target_course_id == request.target_course_id,
-                IntegrationMaterialLink.target_session_id == request.target_session_id,
+                IntegrationMaterialLink.target_session_id == resolved_target_session_id,
                 IntegrationMaterialLink.source_connection_id == request.source_connection_id,
             ).first()
             if existing_link:
@@ -553,7 +638,7 @@ def _import_with_tracking(
             s3_key = s3_service.generate_s3_key(
                 request.target_course_id,
                 material_meta.filename,
-                request.target_session_id,
+                resolved_target_session_id,
             )
             file_like = io.BytesIO(content_bytes)
             ok, err = s3_service.upload_file(
@@ -568,7 +653,7 @@ def _import_with_tracking(
             title = f"{prefix}{material_meta.title}" if prefix else material_meta.title
             course_material = CourseMaterial(
                 course_id=request.target_course_id,
-                session_id=request.target_session_id,
+                session_id=resolved_target_session_id,
                 filename=material_meta.filename,
                 s3_key=s3_key,
                 file_size=material_meta.size_bytes or len(content_bytes),
@@ -588,7 +673,7 @@ def _import_with_tracking(
                     external_course_id=request.source_course_external_id,
                     source_connection_id=request.source_connection_id,
                     target_course_id=request.target_course_id,
-                    target_session_id=request.target_session_id,
+                    target_session_id=resolved_target_session_id,
                     course_material_id=course_material.id,
                     checksum_sha256=checksum,
                 )
@@ -1310,13 +1395,30 @@ def sync_materials(
     request.target_course_id = resolved_target_course_id
     _validate_target(db, resolved_target_course_id, request.target_session_id)
 
+    # Sync sessions first (e.g., Semanas from UPP) to create session records
+    # This creates sessions in AristAI even if they have no materials
+    session_mapping = _sync_sessions_from_external(
+        db=db,
+        provider=provider,
+        provider_obj=p,
+        source_course_external_id=request.source_course_external_id,
+        source_connection_id=request.source_connection_id,
+        target_course_id=resolved_target_course_id,
+    )
+
+    # Fetch materials and build a map of material_external_id -> session_external_id
     external_ids = request.material_external_ids
+    material_session_map: dict[str, str] = {}
     if not external_ids:
         try:
             materials = p.list_materials(request.source_course_external_id)
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         external_ids = [m.external_id for m in materials]
+        # Build the mapping from material to its session
+        for m in materials:
+            if m.session_external_id:
+                material_session_map[m.external_id] = m.session_external_id
 
     import_request = ImportRequest(
         target_course_id=request.target_course_id,
@@ -1327,7 +1429,11 @@ def sync_materials(
         uploaded_by=request.uploaded_by,
         overwrite_title_prefix=request.overwrite_title_prefix,
     )
-    result = _import_with_tracking(db, provider, p, import_request, actor_id, external_ids)
+    result = _import_with_tracking(
+        db, provider, p, import_request, actor_id, external_ids,
+        session_mapping=session_mapping,
+        material_session_map=material_session_map,
+    )
     result.target_course_id = resolved_target_course_id
     result.target_course_title = resolved_target_title
     result.created_target_course = created_target_course

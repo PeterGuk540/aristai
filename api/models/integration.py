@@ -139,6 +139,38 @@ class IntegrationSyncItem(Base):
     course_material = relationship("CourseMaterial")
 
 
+class IntegrationSessionLink(Base):
+    """Links external sessions (e.g., UPP Semanas) to AristAI Session records."""
+    __tablename__ = "integration_session_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider", "external_session_id", "target_course_id", "source_connection_id",
+            name="uq_integration_session_link_provider_external_target"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    provider = Column(String(50), nullable=False, index=True)
+    external_session_id = Column(String(255), nullable=False, index=True)
+    external_course_id = Column(String(255), nullable=False, index=True)
+    external_session_title = Column(String(500), nullable=True)
+    week_number = Column(Integer, nullable=True)
+    source_connection_id = Column(
+        Integer,
+        ForeignKey("integration_provider_connections.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    target_course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_session_id = Column(Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    target_course = relationship("Course")
+    target_session = relationship("Session")
+    source_connection = relationship("IntegrationProviderConnection")
+
+
 class IntegrationMaterialLink(Base):
     __tablename__ = "integration_material_links"
     __table_args__ = (

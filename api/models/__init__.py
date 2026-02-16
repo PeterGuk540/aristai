@@ -26,6 +26,7 @@ from api.models.integration import (
     IntegrationCourseMapping,
     IntegrationSyncJob,
     IntegrationSyncItem,
+    IntegrationSessionLink,
     IntegrationMaterialLink,
 )
 
@@ -59,5 +60,6 @@ __all__ = [
     "IntegrationCourseMapping",
     "IntegrationSyncJob",
     "IntegrationSyncItem",
+    "IntegrationSessionLink",
     "IntegrationMaterialLink",
 ]

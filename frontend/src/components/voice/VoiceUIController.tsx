@@ -118,6 +118,17 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     // Post-class summary buttons
     'send-summary-to-students': '[data-voice-id="send-summary-to-students"]',
     'generate-session-summary': '[data-voice-id="generate-session-summary"]',
+    // Push to Canvas
+    'select-canvas-connection': '[data-voice-id="select-canvas-connection"]',
+    'canvas-connection': '[data-voice-id="select-canvas-connection"]',
+    'push-to-canvas': '[data-voice-id="push-to-canvas"]',
+    'push-canvas': '[data-voice-id="push-to-canvas"]',
+    'push-summary': '[data-voice-id="push-to-canvas"]',
+    'push-type-announcement': '[data-voice-id="push-type-announcement"]',
+    'announcement': '[data-voice-id="push-type-announcement"]',
+    'push-type-assignment': '[data-voice-id="push-type-assignment"]',
+    'assignment': '[data-voice-id="push-type-assignment"]',
+    'reflection': '[data-voice-id="push-type-assignment"]',
   },
   // Forum page elements
   '/forum': {
@@ -320,6 +331,11 @@ const GLOBAL_UI_ELEMENTS: Record<string, string> = {
   'change-language': '[data-voice-id="toggle-language"]',
   'switch-language': '[data-voice-id="toggle-language"]',
   'language-button': '[data-voice-id="toggle-language"]',
+  // Push to Canvas (global so it can be triggered from anywhere)
+  'push-to-canvas': '[data-voice-id="push-to-canvas"]',
+  'push-canvas': '[data-voice-id="push-to-canvas"]',
+  'push-summary-canvas': '[data-voice-id="push-to-canvas"]',
+  'send-to-canvas': '[data-voice-id="push-to-canvas"]',
 };
 
 /**

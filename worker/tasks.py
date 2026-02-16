@@ -141,3 +141,33 @@ def sync_integration_materials_task(
         return {"job_id": job_id, "status": "failed", "error": str(e)}
     finally:
         db.close()
+
+
+@celery_app.task(bind=True, time_limit=300)
+def push_to_canvas_task(
+    self,
+    push_id: int,
+    session_id: int,
+    connection_id: int,
+    external_course_id: str,
+    push_type: str,
+    custom_title: str | None = None,
+) -> dict:
+    """Push session summary to Canvas as announcement or assignment.
+
+    This task:
+    1. Gathers session content (posts, polls, etc.)
+    2. Generates an LLM summary
+    3. Creates the announcement/assignment in Canvas
+    """
+    from workflows.canvas_push import run_canvas_push_workflow
+
+    result = run_canvas_push_workflow(
+        push_id=push_id,
+        session_id=session_id,
+        connection_id=connection_id,
+        external_course_id=external_course_id,
+        push_type=push_type,
+        custom_title=custom_title,
+    )
+    return result

@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 from api.core.database import get_db
 from api.models.session import Session as SessionModel, Case
 from api.models.intervention import Intervention
+from api.models.integration import IntegrationCanvasPush, IntegrationProviderConnection, IntegrationCourseMapping
 from api.schemas.session import (
     SessionCreate,
     SessionResponse,
@@ -16,6 +18,44 @@ from api.schemas.intervention import InterventionResponse
 from api.models.session import SessionStatus
 
 router = APIRouter()
+
+
+# ============ Canvas Push Schemas ============
+
+class CanvasPushRequest(BaseModel):
+    """Request to push session summary to Canvas."""
+    connection_id: int
+    external_course_id: str
+    push_type: str = "announcement"  # announcement or assignment
+    custom_title: Optional[str] = None
+
+
+class CanvasPushResponse(BaseModel):
+    """Response for canvas push request."""
+    push_id: int
+    task_id: str
+    status: str
+    message: str
+
+
+class CanvasPushHistoryItem(BaseModel):
+    """Single canvas push history item."""
+    id: int
+    push_type: str
+    title: str
+    status: str
+    external_id: Optional[str]
+    external_course_id: str
+    error_message: Optional[str]
+    model_name: Optional[str]
+    total_tokens: Optional[int]
+    estimated_cost_usd: Optional[str]
+    execution_time_seconds: Optional[str]
+    created_at: str
+    completed_at: Optional[str]
+
+    class Config:
+        from_attributes = True
 
 
 @router.get("/{session_id}/cases", response_model=List[CaseResponse])
@@ -172,3 +212,189 @@ def get_interventions(session_id: int, db: Session = Depends(get_db)):
         .all()
     )
     return interventions
+
+
+# ============ Canvas Push Endpoints ============
+
+@router.post("/{session_id}/push-to-canvas", response_model=CanvasPushResponse, status_code=status.HTTP_202_ACCEPTED)
+def push_session_to_canvas(
+    session_id: int,
+    request: CanvasPushRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Push session summary to Canvas as an announcement or assignment.
+
+    This endpoint:
+    1. Creates a push record
+    2. Starts a background task to generate summary and push to Canvas
+    3. Returns immediately with task ID for polling
+
+    Args:
+        session_id: ID of the session to push
+        request: Push configuration (connection_id, external_course_id, push_type)
+    """
+    # Verify session exists
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Verify connection exists and is Canvas
+    connection = db.query(IntegrationProviderConnection).filter(
+        IntegrationProviderConnection.id == request.connection_id
+    ).first()
+
+    if not connection:
+        raise HTTPException(status_code=404, detail="Canvas connection not found")
+
+    if connection.provider != "canvas":
+        raise HTTPException(status_code=400, detail="Connection is not a Canvas connection")
+
+    # Validate push_type
+    if request.push_type not in ("announcement", "assignment"):
+        raise HTTPException(status_code=400, detail="push_type must be 'announcement' or 'assignment'")
+
+    # Create push record
+    push = IntegrationCanvasPush(
+        session_id=session_id,
+        connection_id=request.connection_id,
+        external_course_id=request.external_course_id,
+        push_type=request.push_type,
+        title=request.custom_title or f"Session Summary: {session.title}",
+        status="queued",
+    )
+    db.add(push)
+    db.commit()
+    db.refresh(push)
+
+    # Start background task
+    from worker.tasks import push_to_canvas_task
+
+    task = push_to_canvas_task.delay(
+        push_id=push.id,
+        session_id=session_id,
+        connection_id=request.connection_id,
+        external_course_id=request.external_course_id,
+        push_type=request.push_type,
+        custom_title=request.custom_title,
+    )
+
+    # Update push record with task ID
+    push.celery_task_id = task.id
+    db.commit()
+
+    return CanvasPushResponse(
+        push_id=push.id,
+        task_id=task.id,
+        status="queued",
+        message=f"Canvas {request.push_type} push queued for background processing",
+    )
+
+
+@router.get("/{session_id}/canvas-pushes", response_model=List[CanvasPushHistoryItem])
+def get_canvas_push_history(session_id: int, db: Session = Depends(get_db)):
+    """Get history of Canvas pushes for a session."""
+    # Verify session exists
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    pushes = (
+        db.query(IntegrationCanvasPush)
+        .filter(IntegrationCanvasPush.session_id == session_id)
+        .order_by(IntegrationCanvasPush.created_at.desc())
+        .all()
+    )
+
+    return [
+        CanvasPushHistoryItem(
+            id=p.id,
+            push_type=p.push_type,
+            title=p.title,
+            status=p.status,
+            external_id=p.external_id,
+            external_course_id=p.external_course_id,
+            error_message=p.error_message,
+            model_name=p.model_name,
+            total_tokens=p.total_tokens,
+            estimated_cost_usd=p.estimated_cost_usd,
+            execution_time_seconds=p.execution_time_seconds,
+            created_at=p.created_at.isoformat() if p.created_at else "",
+            completed_at=p.completed_at.isoformat() if p.completed_at else None,
+        )
+        for p in pushes
+    ]
+
+
+@router.get("/canvas-pushes/{push_id}")
+def get_canvas_push_status(push_id: int, db: Session = Depends(get_db)):
+    """Get status of a specific Canvas push."""
+    push = db.query(IntegrationCanvasPush).filter(IntegrationCanvasPush.id == push_id).first()
+    if not push:
+        raise HTTPException(status_code=404, detail="Push not found")
+
+    return {
+        "id": push.id,
+        "session_id": push.session_id,
+        "push_type": push.push_type,
+        "title": push.title,
+        "status": push.status,
+        "external_id": push.external_id,
+        "external_course_id": push.external_course_id,
+        "content_summary": push.content_summary,
+        "error_message": push.error_message,
+        "model_name": push.model_name,
+        "total_tokens": push.total_tokens,
+        "estimated_cost_usd": push.estimated_cost_usd,
+        "execution_time_seconds": push.execution_time_seconds,
+        "created_at": push.created_at.isoformat() if push.created_at else None,
+        "started_at": push.started_at.isoformat() if push.started_at else None,
+        "completed_at": push.completed_at.isoformat() if push.completed_at else None,
+    }
+
+
+@router.get("/{session_id}/canvas-mappings")
+def get_canvas_mappings_for_session(session_id: int, db: Session = Depends(get_db)):
+    """
+    Get available Canvas course mappings for this session's course.
+
+    Returns list of Canvas connections and their mapped courses.
+    """
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get all Canvas connections
+    connections = (
+        db.query(IntegrationProviderConnection)
+        .filter(
+            IntegrationProviderConnection.provider == "canvas",
+            IntegrationProviderConnection.is_active == True,
+        )
+        .all()
+    )
+
+    result = []
+    for conn in connections:
+        # Find mappings for this course using this connection
+        mapping = (
+            db.query(IntegrationCourseMapping)
+            .filter(
+                IntegrationCourseMapping.target_course_id == session.course_id,
+                IntegrationCourseMapping.provider == "canvas",
+                IntegrationCourseMapping.source_connection_id == conn.id,
+                IntegrationCourseMapping.is_active == True,
+            )
+            .first()
+        )
+
+        result.append({
+            "connection_id": conn.id,
+            "connection_label": conn.label,
+            "api_base_url": conn.api_base_url,
+            "has_mapping": mapping is not None,
+            "external_course_id": mapping.external_course_id if mapping else None,
+            "external_course_name": mapping.external_course_name if mapping else None,
+        })
+
+    return result

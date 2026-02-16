@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText, BookOpen, Copy, LayoutTemplate } from 'lucide-react';
+import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText, BookOpen, Copy, LayoutTemplate, Send, Megaphone, ClipboardList } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
@@ -68,6 +68,28 @@ export default function SessionsPage() {
   // Create session form
   const [newSessionTitle, setNewSessionTitle] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Canvas push state
+  const [canvasMappings, setCanvasMappings] = useState<Array<{
+    connection_id: number;
+    connection_label: string;
+    api_base_url: string;
+    has_mapping: boolean;
+    external_course_id?: string;
+    external_course_name?: string;
+  }>>([]);
+  const [selectedCanvasConnection, setSelectedCanvasConnection] = useState<number | null>(null);
+  const [pushType, setPushType] = useState<'announcement' | 'assignment'>('announcement');
+  const [pushing, setPushing] = useState(false);
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
+  const [pushHistory, setPushHistory] = useState<Array<{
+    id: number;
+    push_type: string;
+    title: string;
+    status: string;
+    external_id?: string;
+    created_at: string;
+  }>>([]);
 
   // Handle voice-triggered tab selection
   const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
@@ -172,6 +194,79 @@ export default function SessionsPage() {
       setSelectedSession(matched);
     }
   }, [selectedSessionId, sessions]);
+
+  // Fetch Canvas mappings and push history when session is selected
+  useEffect(() => {
+    if (selectedSession && hasInstructorPrivileges) {
+      // Fetch canvas mappings
+      api.getCanvasMappingsForSession(selectedSession.id)
+        .then(mappings => {
+          setCanvasMappings(mappings);
+          // Auto-select first connection with a mapping
+          const withMapping = mappings.find(m => m.has_mapping);
+          if (withMapping) {
+            setSelectedCanvasConnection(withMapping.connection_id);
+          }
+        })
+        .catch(err => console.error('Failed to fetch canvas mappings:', err));
+
+      // Fetch push history
+      api.getCanvasPushHistory(selectedSession.id)
+        .then(history => setPushHistory(history))
+        .catch(err => console.error('Failed to fetch push history:', err));
+    }
+  }, [selectedSession, hasInstructorPrivileges]);
+
+  const handlePushToCanvas = async () => {
+    if (!selectedSession || !selectedCanvasConnection) return;
+
+    const mapping = canvasMappings.find(m => m.connection_id === selectedCanvasConnection);
+    if (!mapping || !mapping.external_course_id) {
+      setPushMessage('No Canvas course mapping found. Please set up the mapping in Integrations first.');
+      return;
+    }
+
+    setPushing(true);
+    setPushMessage(null);
+
+    try {
+      const result = await api.pushSessionToCanvas(selectedSession.id, {
+        connection_id: selectedCanvasConnection,
+        external_course_id: mapping.external_course_id,
+        push_type: pushType,
+      });
+
+      setPushMessage(`Push started! Job #${result.push_id} is processing...`);
+
+      // Poll for completion
+      const pollForCompletion = async () => {
+        try {
+          const status = await api.getCanvasPushStatus(result.push_id);
+          if (status.status === 'completed') {
+            setPushMessage(`Success! ${pushType === 'announcement' ? 'Announcement' : 'Assignment'} "${status.title}" created in Canvas.`);
+            setPushing(false);
+            // Refresh history
+            const history = await api.getCanvasPushHistory(selectedSession.id);
+            setPushHistory(history);
+          } else if (status.status === 'failed') {
+            setPushMessage(`Failed: ${status.error_message || 'Unknown error'}`);
+            setPushing(false);
+          } else {
+            // Still running, poll again
+            setTimeout(pollForCompletion, 2000);
+          }
+        } catch (err) {
+          setPushMessage('Error checking push status');
+          setPushing(false);
+        }
+      };
+
+      setTimeout(pollForCompletion, 2000);
+    } catch (error: any) {
+      setPushMessage(`Error: ${error.message || 'Failed to push to Canvas'}`);
+      setPushing(false);
+    }
+  };
 
   const handleCreateSession = async () => {
     if (!selectedCourseId || !newSessionTitle.trim()) return;
@@ -489,71 +584,229 @@ export default function SessionsPage() {
 
           {hasInstructorPrivileges && (
             <TabsContent value="manage">
-              <Card variant="default">
-                <CardHeader>
-                  <CardTitle>{t('sessions.statusControl')}</CardTitle>
-                  <CardDescription>Update lifecycle state for the selected session.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {selectedSession ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-4 p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl">
-                        <span className="font-medium text-neutral-900 dark:text-white">{selectedSession.title}</span>
-                        <Badge variant={statusColors[selectedSession.status]}>
-                          {t(`sessions.status.${selectedSession.status}`)}
-                        </Badge>
-                      </div>
+              <div className="space-y-6">
+                <Card variant="default">
+                  <CardHeader>
+                    <CardTitle>{t('sessions.statusControl')}</CardTitle>
+                    <CardDescription>Update lifecycle state for the selected session.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {selectedSession ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-4 p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl">
+                          <span className="font-medium text-neutral-900 dark:text-white">{selectedSession.title}</span>
+                          <Badge variant={statusColors[selectedSession.status]}>
+                            {t(`sessions.status.${selectedSession.status}`)}
+                          </Badge>
+                        </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        {selectedSession.status !== 'draft' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleStatusChange(selectedSession.id, 'draft')}
-                            data-voice-id="set-to-draft"
-                          >
-                            {t('sessions.setToDraft')}
-                          </Button>
-                        )}
-                        {selectedSession.status === 'draft' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleStatusChange(selectedSession.id, 'scheduled')}
-                            data-voice-id="schedule-session"
-                          >
-                            {t('sessions.schedule')}
-                          </Button>
-                        )}
-                        {(selectedSession.status === 'draft' ||
-                          selectedSession.status === 'scheduled') && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleStatusChange(selectedSession.id, 'live')}
-                            data-voice-id="go-live"
-                          >
-                            <Play className="h-4 w-4 mr-2" />
-                            {t('sessions.goLive')}
-                          </Button>
-                        )}
-                        {selectedSession.status === 'live' && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleStatusChange(selectedSession.id, 'completed')}
-                            data-voice-id="complete-session"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            {t('sessions.complete')}
-                          </Button>
-                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {selectedSession.status !== 'draft' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleStatusChange(selectedSession.id, 'draft')}
+                              data-voice-id="set-to-draft"
+                            >
+                              {t('sessions.setToDraft')}
+                            </Button>
+                          )}
+                          {selectedSession.status === 'draft' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleStatusChange(selectedSession.id, 'scheduled')}
+                              data-voice-id="schedule-session"
+                            >
+                              {t('sessions.schedule')}
+                            </Button>
+                          )}
+                          {(selectedSession.status === 'draft' ||
+                            selectedSession.status === 'scheduled') && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleStatusChange(selectedSession.id, 'live')}
+                              data-voice-id="go-live"
+                            >
+                              <Play className="h-4 w-4 mr-2" />
+                              {t('sessions.goLive')}
+                            </Button>
+                          )}
+                          {selectedSession.status === 'live' && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleStatusChange(selectedSession.id, 'completed')}
+                              data-voice-id="complete-session"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              {t('sessions.complete')}
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <p className="text-neutral-500 dark:text-neutral-400">{t('sessions.selectSession')}</p>
-                  )}
-                </CardContent>
-              </Card>
+                    ) : (
+                      <p className="text-neutral-500 dark:text-neutral-400">{t('sessions.selectSession')}</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Push to Canvas Section */}
+                {selectedSession && (
+                  <Card variant="default">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Send className="h-5 w-5 text-primary-600" />
+                        Push to Canvas
+                      </CardTitle>
+                      <CardDescription>
+                        Generate an AI summary of this session and push it to Canvas as an announcement or assignment.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {canvasMappings.length === 0 ? (
+                        <div className="text-center py-4">
+                          <p className="text-neutral-500 dark:text-neutral-400 mb-2">
+                            No Canvas connections found. Set up a Canvas integration first.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.href = '/integrations'}
+                          >
+                            Go to Integrations
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Canvas Connection Select */}
+                          <Select
+                            label="Canvas Connection"
+                            value={selectedCanvasConnection?.toString() || ''}
+                            onChange={(e) => setSelectedCanvasConnection(e.target.value ? Number(e.target.value) : null)}
+                            data-voice-id="select-canvas-connection"
+                          >
+                            <option value="">Select a Canvas connection...</option>
+                            {canvasMappings.map((mapping) => (
+                              <option key={mapping.connection_id} value={mapping.connection_id}>
+                                {mapping.connection_label}
+                                {mapping.has_mapping ? ` → ${mapping.external_course_name || mapping.external_course_id}` : ' (no course mapped)'}
+                              </option>
+                            ))}
+                          </Select>
+
+                          {/* Push Type Selection */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                              Push as
+                            </label>
+                            <div className="flex gap-4">
+                              <label className="flex items-center gap-2 cursor-pointer" data-voice-id="push-type-announcement">
+                                <input
+                                  type="radio"
+                                  name="pushType"
+                                  value="announcement"
+                                  checked={pushType === 'announcement'}
+                                  onChange={() => setPushType('announcement')}
+                                  className="text-primary-600"
+                                />
+                                <Megaphone className="h-4 w-4 text-blue-600" />
+                                <span className="text-sm">Announcement</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer" data-voice-id="push-type-assignment">
+                                <input
+                                  type="radio"
+                                  name="pushType"
+                                  value="assignment"
+                                  checked={pushType === 'assignment'}
+                                  onChange={() => setPushType('assignment')}
+                                  className="text-primary-600"
+                                />
+                                <ClipboardList className="h-4 w-4 text-green-600" />
+                                <span className="text-sm">Reflection Assignment</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Push Button */}
+                          <Button
+                            onClick={handlePushToCanvas}
+                            disabled={pushing || !selectedCanvasConnection || !canvasMappings.find(m => m.connection_id === selectedCanvasConnection)?.has_mapping}
+                            className="w-full"
+                            data-voice-id="push-to-canvas"
+                          >
+                            {pushing ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                Pushing...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-4 w-4 mr-2" />
+                                Push to Canvas
+                              </>
+                            )}
+                          </Button>
+
+                          {/* Status Message */}
+                          {pushMessage && (
+                            <div className={`p-3 rounded-lg text-sm ${
+                              pushMessage.startsWith('Success')
+                                ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                                : pushMessage.startsWith('Error') || pushMessage.startsWith('Failed')
+                                ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                                : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                            }`}>
+                              {pushMessage}
+                            </div>
+                          )}
+
+                          {/* Push History */}
+                          {pushHistory.length > 0 && (
+                            <div className="mt-4">
+                              <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                                Recent Pushes
+                              </h4>
+                              <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {pushHistory.slice(0, 5).map((push) => (
+                                  <div
+                                    key={push.id}
+                                    className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg text-sm"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      {push.push_type === 'announcement' ? (
+                                        <Megaphone className="h-4 w-4 text-blue-600" />
+                                      ) : (
+                                        <ClipboardList className="h-4 w-4 text-green-600" />
+                                      )}
+                                      <span className="font-medium truncate max-w-[200px]">{push.title}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Badge
+                                        variant={
+                                          push.status === 'completed' ? 'success' :
+                                          push.status === 'failed' ? 'danger' :
+                                          push.status === 'running' ? 'warning' : 'default'
+                                        }
+                                        size="sm"
+                                      >
+                                        {push.status}
+                                      </Badge>
+                                      <span className="text-xs text-neutral-500">
+                                        {new Date(push.created_at).toLocaleDateString()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </TabsContent>
           )}
 

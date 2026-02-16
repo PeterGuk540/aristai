@@ -200,3 +200,41 @@ class IntegrationMaterialLink(Base):
     target_session = relationship("Session")
     course_material = relationship("CourseMaterial")
     source_connection = relationship("IntegrationProviderConnection")
+
+
+class IntegrationCanvasPush(Base):
+    """Tracks push operations from AristAI sessions to Canvas (announcements/assignments)."""
+    __tablename__ = "integration_canvas_pushes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    connection_id = Column(
+        Integer,
+        ForeignKey("integration_provider_connections.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    external_course_id = Column(String(255), nullable=False, index=True)
+    push_type = Column(String(50), nullable=False)  # announcement|assignment|page
+    external_id = Column(String(255), nullable=True)  # Canvas announcement/assignment ID after creation
+    title = Column(String(500), nullable=False)
+    content_summary = Column(Text, nullable=True)  # The generated summary text
+    status = Column(String(30), nullable=False, default="pending")  # pending|running|completed|failed
+    error_message = Column(Text, nullable=True)
+    triggered_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    celery_task_id = Column(String(255), nullable=True)
+    # LLM metrics
+    model_name = Column(String(100), nullable=True)
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    estimated_cost_usd = Column(String(20), nullable=True)
+    execution_time_seconds = Column(String(20), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    session = relationship("Session")
+    connection = relationship("IntegrationProviderConnection")
+    trigger_user = relationship("User")

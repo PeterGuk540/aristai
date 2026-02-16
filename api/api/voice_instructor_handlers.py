@@ -748,6 +748,28 @@ def handle_instructor_feature(
             "requires_selection": True,
         }
 
+    # =========================================================================
+    # PUSH TO CANVAS
+    # =========================================================================
+    if action == 'push_to_canvas':
+        if not session_id:
+            return {
+                "message": sanitize_speech("Please select a session first. Go to the Sessions page and select a session to push to Canvas."),
+                "ui_actions": [
+                    {"type": "ui.navigate", "payload": {"path": "/sessions"}},
+                ]
+            }
+
+        # Navigate to sessions page, manage tab, and click push to canvas
+        return {
+            "message": sanitize_speech("Taking you to push this session to Canvas. Select a Canvas connection and click Push to Canvas."),
+            "ui_actions": [
+                {"type": "ui.navigate", "payload": {"path": "/sessions"}},
+                {"type": "ui.switchTab", "payload": {"tabName": "manage", "target": "tab-manage"}},
+                {"type": "ui.scrollTo", "payload": {"target": "push-to-canvas"}},
+            ]
+        }
+
     # Action not handled by instructor features
     return None
 

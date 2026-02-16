@@ -945,6 +945,73 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ edited_content: editedContent }),
     }),
+
+  // =============================================================================
+  // CANVAS PUSH (Push session summaries to Canvas)
+  // =============================================================================
+
+  pushSessionToCanvas: (
+    sessionId: number,
+    data: {
+      connection_id: number;
+      external_course_id: string;
+      push_type: 'announcement' | 'assignment';
+      custom_title?: string;
+    }
+  ) =>
+    fetchApi<{
+      push_id: number;
+      task_id: string;
+      status: string;
+      message: string;
+    }>(`/sessions/${sessionId}/push-to-canvas`, { method: 'POST', body: JSON.stringify(data) }),
+
+  getCanvasPushHistory: (sessionId: number) =>
+    fetchApi<Array<{
+      id: number;
+      push_type: string;
+      title: string;
+      status: string;
+      external_id?: string;
+      external_course_id: string;
+      error_message?: string;
+      model_name?: string;
+      total_tokens?: number;
+      estimated_cost_usd?: string;
+      execution_time_seconds?: string;
+      created_at: string;
+      completed_at?: string;
+    }>>(`/sessions/${sessionId}/canvas-pushes`),
+
+  getCanvasPushStatus: (pushId: number) =>
+    fetchApi<{
+      id: number;
+      session_id: number;
+      push_type: string;
+      title: string;
+      status: string;
+      external_id?: string;
+      external_course_id: string;
+      content_summary?: string;
+      error_message?: string;
+      model_name?: string;
+      total_tokens?: number;
+      estimated_cost_usd?: string;
+      execution_time_seconds?: string;
+      created_at?: string;
+      started_at?: string;
+      completed_at?: string;
+    }>(`/sessions/canvas-pushes/${pushId}`),
+
+  getCanvasMappingsForSession: (sessionId: number) =>
+    fetchApi<Array<{
+      connection_id: number;
+      connection_label: string;
+      api_base_url: string;
+      has_mapping: boolean;
+      external_course_id?: string;
+      external_course_name?: string;
+    }>>(`/sessions/${sessionId}/canvas-mappings`),
 };
 
 export { ApiError };

@@ -139,6 +139,8 @@ class ControlType(str, Enum):
     APPROVE_AI_DRAFT = "approve_ai_draft"
     REJECT_AI_DRAFT = "reject_ai_draft"
     SEND_SESSION_SUMMARY = "send_session_summary"
+    # Canvas integration
+    PUSH_TO_CANVAS = "push_to_canvas"
 
 
 class ConfirmationType(str, Enum):
@@ -364,7 +366,7 @@ Actions: start_copilot, stop_copilot, toggle_theme, go_live, end_session,
          open_user_menu, undo_action, clear_context, start_timer, pause_timer,
          resume_timer, stop_timer, create_breakout_groups, dissolve_breakout_groups,
          save_template, clone_session, generate_ai_draft, approve_ai_draft, reject_ai_draft,
-         send_session_summary
+         send_session_summary, push_to_canvas
 
 Examples:
 - "start the copilot" / "iniciar el copilot"
@@ -379,6 +381,8 @@ Examples:
 - "clone this session" / "clonar esta sesion"
 - "draft a response to that question" / "escribir una respuesta a esa pregunta"
 - "send the session summary to students" / "enviar el resumen a los estudiantes"
+- "push to canvas" / "push this session to canvas" / "enviar a canvas" / "publicar en canvas" → push_to_canvas
+- "create a canvas announcement" / "post to canvas" / "send to canvas" → push_to_canvas
 
 ### CONFIRM (category: "confirm")
 User is confirming or denying a pending action.
@@ -772,6 +776,8 @@ INTENT_TO_LEGACY_ACTION = {
     "approve_ai_draft": "approve_ai_draft",
     "reject_ai_draft": "reject_ai_draft",
     "send_session_summary": "send_session_summary",
+    # Canvas integration
+    "push_to_canvas": "push_to_canvas",
 }
 
 # Navigation targets

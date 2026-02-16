@@ -86,6 +86,15 @@ Format as HTML suitable for Canvas (use <p>, <ul>, <li>, <strong>, <em> tags).
 
 # ============ Canvas API Helpers ============
 
+def _normalize_canvas_base_url(api_base_url: str) -> str:
+    """Normalize Canvas base URL to ensure no duplicate /api/v1."""
+    base = api_base_url.strip().rstrip("/")
+    # Remove /api/v1 suffix if present (it will be added in endpoint URLs)
+    if base.endswith("/api/v1"):
+        base = base[:-7]
+    return base
+
+
 def create_canvas_announcement(
     api_base_url: str,
     api_token: str,
@@ -94,7 +103,8 @@ def create_canvas_announcement(
     message: str,
 ) -> Dict[str, Any]:
     """Create an announcement in a Canvas course."""
-    url = f"{api_base_url}/api/v1/courses/{course_id}/discussion_topics"
+    base = _normalize_canvas_base_url(api_base_url)
+    url = f"{base}/api/v1/courses/{course_id}/discussion_topics"
     headers = {"Authorization": f"Bearer {api_token}"}
 
     data = {
@@ -120,7 +130,8 @@ def create_canvas_assignment(
     submission_types: List[str] = None,
 ) -> Dict[str, Any]:
     """Create an assignment in a Canvas course."""
-    url = f"{api_base_url}/api/v1/courses/{course_id}/assignments"
+    base = _normalize_canvas_base_url(api_base_url)
+    url = f"{base}/api/v1/courses/{course_id}/assignments"
     headers = {"Authorization": f"Bearer {api_token}"}
 
     if submission_types is None:

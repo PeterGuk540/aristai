@@ -11,9 +11,12 @@ from api.schemas.session import (
     SessionCreate,
     SessionResponse,
     SessionStatusUpdate,
+    SessionUpdate,
     CaseCreate,
     CaseResponse,
 )
+from api.models.course import Course
+from api.models.user import User
 from api.schemas.intervention import InterventionResponse
 from api.models.session import SessionStatus
 
@@ -89,6 +92,98 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@router.put("/{session_id}", response_model=SessionResponse)
+def update_session(
+    session_id: int,
+    session_update: SessionUpdate,
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Update a session.
+    - Admin: Can update any session
+    - Instructor: Can only update sessions in courses they created
+    """
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get the parent course to check ownership
+    course = db.query(Course).filter(Course.id == session.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Parent course not found")
+
+    # Check permissions
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.is_admin and course.created_by != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to edit this session"
+        )
+
+    try:
+        # Update only provided fields
+        update_data = session_update.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            if field == "status" and value is not None:
+                # Convert status string to enum
+                session.status = SessionStatus(value)
+            else:
+                setattr(session, field, value)
+
+        db.commit()
+        db.refresh(session)
+        return session
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid value: {str(e)}")
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_session(
+    session_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Delete a session.
+    - Admin: Can delete any session
+    - Instructor: Can only delete sessions in courses they created
+    """
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get the parent course to check ownership
+    course = db.query(Course).filter(Course.id == session.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Parent course not found")
+
+    # Check permissions
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.is_admin and course.created_by != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to delete this session"
+        )
+
+    try:
+        db.delete(session)
+        db.commit()
+        return None
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 @router.patch("/{session_id}/status", response_model=SessionResponse)

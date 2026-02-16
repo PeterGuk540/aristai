@@ -123,6 +123,7 @@ export default function IntegrationsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncingRoster, setSyncingRoster] = useState(false);
   const [importingCourse, setImportingCourse] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -143,6 +144,7 @@ export default function IntegrationsPage() {
   const refreshBaseData = async () => {
     setError('');
     setMessage('');
+    setRefreshing(true);
     try {
       const [providerData, myCourses] = await Promise.all([
         api.getIntegrationProviders(),
@@ -152,6 +154,29 @@ export default function IntegrationsPage() {
       setLocalCourses((myCourses || []).map((c: any) => ({ id: c.id, title: c.title })));
     } catch (e: any) {
       setError(e?.message || 'Failed to load integration data.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const refreshAll = async () => {
+    setError('');
+    setMessage('');
+    setRefreshing(true);
+    try {
+      const [providerData, myCourses] = await Promise.all([
+        api.getIntegrationProviders(),
+        api.getCourses(currentUser?.id),
+      ]);
+      setProviders(providerData);
+      setLocalCourses((myCourses || []).map((c: any) => ({ id: c.id, title: c.title })));
+      // Also refresh provider-specific data (external courses, connections, etc.)
+      await refreshProviderData();
+      setMessage('Data refreshed successfully.');
+    } catch (e: any) {
+      setError(e?.message || 'Failed to refresh integration data.');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -637,12 +662,13 @@ export default function IntegrationsPage() {
           </p>
         </div>
         <button
-          onClick={() => void refreshBaseData()}
+          onClick={() => void refreshAll()}
+          disabled={refreshing}
           data-voice-id="refresh-integrations"
-          className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-900/30"
+          className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
         >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
+          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          {refreshing ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 

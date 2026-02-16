@@ -16,6 +16,14 @@ class SessionStatusUpdate(BaseModel):
     status: Literal["draft", "scheduled", "live", "completed"]
 
 
+class SessionUpdate(BaseModel):
+    """Update session details."""
+    title: Optional[str] = None
+    date: Optional[datetime] = None
+    status: Optional[Literal["draft", "scheduled", "live", "completed"]] = None
+    plan_json: Optional[Any] = None
+
+
 class CaseCreate(BaseModel):
     prompt: str
     attachments: Optional[List[str]] = None

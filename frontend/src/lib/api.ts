@@ -1018,6 +1018,372 @@ export const api = {
       external_course_id?: string;
       external_course_name?: string;
     }>>(`/sessions/${sessionId}/canvas-mappings`),
+
+  // =============================================================================
+  // ENHANCED AI FEATURES
+  // =============================================================================
+
+  // Feature 1: Live Discussion Summary
+  getLiveSummary: (sessionId: number) =>
+    fetchApi<{
+      id: number;
+      session_id: number;
+      summary_text: string;
+      key_themes?: string[];
+      unanswered_questions?: string[];
+      misconceptions?: Array<{ concept: string; misconception: string; correction: string }>;
+      engagement_pulse?: string;
+      posts_analyzed?: number;
+      created_at: string;
+    }>(`/enhanced/sessions/${sessionId}/live-summary`),
+
+  generateLiveSummary: (sessionId: number) =>
+    fetchApi<{ message: string; task_id: string }>(`/enhanced/sessions/${sessionId}/live-summary/generate`, { method: 'POST' }),
+
+  getLiveSummaryHistory: (sessionId: number, limit: number = 10) =>
+    fetchApi<Array<{
+      id: number;
+      summary_text: string;
+      key_themes?: string[];
+      engagement_pulse?: string;
+      created_at: string;
+    }>>(`/enhanced/sessions/${sessionId}/live-summary/history?limit=${limit}`),
+
+  // Feature 2: AI-Powered Student Grouping
+  generateStudentGroups: (sessionId: number, data: {
+    group_type?: string;
+    num_groups?: number;
+    topics?: string[];
+  }) =>
+    fetchApi<{ message: string; task_id: string }>(`/enhanced/sessions/${sessionId}/groups/generate`, {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, ...data }),
+    }),
+
+  getStudentGroups: (sessionId: number) =>
+    fetchApi<Array<{
+      id: number;
+      session_id: number;
+      name: string;
+      group_type: string;
+      topic?: string;
+      rationale?: string;
+      members: Array<{ user_id: number; name: string; role?: string }>;
+      created_at: string;
+    }>>(`/enhanced/sessions/${sessionId}/groups`),
+
+  deleteStudentGroup: (groupId: number) =>
+    fetchApi<{ message: string }>(`/enhanced/groups/${groupId}`, { method: 'DELETE' }),
+
+  // Feature 3: Personalized Follow-up Generator
+  generateFollowups: (sessionId: number, studentIds?: number[]) =>
+    fetchApi<{ message: string; task_id: string }>(`/enhanced/sessions/${sessionId}/followups/generate`, {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, student_ids: studentIds }),
+    }),
+
+  getSessionFollowups: (sessionId: number, status?: string) =>
+    fetchApi<Array<{
+      id: number;
+      session_id: number;
+      user_id: number;
+      user_name?: string;
+      strengths?: string[];
+      improvements?: string[];
+      key_takeaways?: string[];
+      suggested_resources?: Array<{ title: string; type: string; url?: string }>;
+      custom_message?: string;
+      status: string;
+      sent_at?: string;
+      created_at: string;
+    }>>(`/enhanced/sessions/${sessionId}/followups${status ? `?status=${status}` : ''}`),
+
+  sendFollowup: (followupId: number, sendVia: string = 'canvas', customMessage?: string) =>
+    fetchApi<{ message: string }>(`/enhanced/followups/${followupId}/send`, {
+      method: 'POST',
+      body: JSON.stringify({ followup_id: followupId, send_via: sendVia, custom_message: customMessage }),
+    }),
+
+  sendAllFollowups: (sessionId: number, sendVia: string = 'canvas') =>
+    fetchApi<{ message: string }>(`/enhanced/followups/send-all?session_id=${sessionId}&send_via=${sendVia}`, { method: 'POST' }),
+
+  // Feature 4: Question Bank Builder
+  generateQuestions: (sessionId: number, data: {
+    question_types?: string[];
+    num_questions?: number;
+    difficulty?: string;
+  }) =>
+    fetchApi<{ message: string; task_id: string }>(`/enhanced/sessions/${sessionId}/questions/generate`, {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, ...data }),
+    }),
+
+  getQuestionBank: (courseId: number, options?: {
+    session_id?: number;
+    question_type?: string;
+    difficulty?: string;
+    status?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.session_id) params.append('session_id', String(options.session_id));
+    if (options?.question_type) params.append('question_type', options.question_type);
+    if (options?.difficulty) params.append('difficulty', options.difficulty);
+    if (options?.status) params.append('status', options.status);
+    return fetchApi<Array<{
+      id: number;
+      course_id: number;
+      session_id?: number;
+      question_type: string;
+      question_text: string;
+      options?: string[];
+      correct_answer?: string;
+      explanation?: string;
+      difficulty?: string;
+      learning_objective?: string;
+      tags?: string[];
+      times_used: number;
+      status: string;
+      created_at: string;
+    }>>(`/enhanced/courses/${courseId}/question-bank?${params.toString()}`);
+  },
+
+  updateQuestion: (questionId: number, data: {
+    question_text?: string;
+    options?: string[];
+    correct_answer?: string;
+    explanation?: string;
+    difficulty?: string;
+    status?: string;
+  }) =>
+    fetchApi<any>(`/enhanced/questions/${questionId}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  deleteQuestion: (questionId: number) =>
+    fetchApi<{ message: string }>(`/enhanced/questions/${questionId}`, { method: 'DELETE' }),
+
+  // Feature 5: Participation Insights
+  getCourseParticipation: (courseId: number) =>
+    fetchApi<{
+      course_id: number;
+      total_students: number;
+      active_students: number;
+      at_risk_students: number;
+      avg_posts_per_student: number;
+      participation_rate: number;
+      alerts: Array<{
+        id: number;
+        alert_type: string;
+        severity: string;
+        message: string;
+        user_name?: string;
+        acknowledged: boolean;
+        created_at: string;
+      }>;
+    }>(`/enhanced/courses/${courseId}/participation`),
+
+  getSessionParticipation: (sessionId: number) =>
+    fetchApi<Array<{
+      user_id: number;
+      user_name: string;
+      post_count: number;
+      reply_count: number;
+      quality_score?: number;
+      engagement_level?: string;
+      at_risk: boolean;
+      risk_factors?: string[];
+    }>>(`/enhanced/sessions/${sessionId}/participation`),
+
+  acknowledgeAlert: (alertId: number, actionTaken?: string) =>
+    fetchApi<{ message: string }>(`/enhanced/alerts/${alertId}/acknowledge?${actionTaken ? `action_taken=${encodeURIComponent(actionTaken)}` : ''}`, { method: 'POST' }),
+
+  analyzeParticipation: (courseId: number) =>
+    fetchApi<{ message: string; task_id: string }>(`/enhanced/courses/${courseId}/participation/analyze`, { method: 'POST' }),
+
+  // Feature 6: AI Teaching Assistant
+  askAIAssistant: (sessionId: number, userId: number, question: string, postId?: number) =>
+    fetchApi<{ message: string; task_id: string }>(`/enhanced/sessions/${sessionId}/ai-assistant/ask?user_id=${userId}`, {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, question, post_id: postId }),
+    }),
+
+  getAIAssistantMessages: (sessionId: number, status?: string) =>
+    fetchApi<Array<{
+      id: number;
+      session_id: number;
+      student_id: number;
+      student_name?: string;
+      student_question: string;
+      ai_response: string;
+      confidence_score?: number;
+      status: string;
+      reviewed_by?: number;
+      created_at: string;
+    }>>(`/enhanced/sessions/${sessionId}/ai-assistant/messages${status ? `?status=${status}` : ''}`),
+
+  reviewAIResponse: (messageId: number, userId: number, action: string, editedResponse?: string) =>
+    fetchApi<{ message: string }>(`/enhanced/ai-assistant/messages/${messageId}/review?user_id=${userId}`, {
+      method: 'POST',
+      body: JSON.stringify({ message_id: messageId, action, edited_response: editedResponse }),
+    }),
+
+  // Feature 7: Session Recording & Transcript
+  uploadRecording: (sessionId: number, data: { recording_type: string; file_url: string }) =>
+    fetchApi<{
+      id: number;
+      session_id: number;
+      recording_type: string;
+      file_url?: string;
+      status: string;
+      created_at: string;
+    }>(`/enhanced/sessions/${sessionId}/recordings`, { method: 'POST', body: JSON.stringify({ session_id: sessionId, ...data }) }),
+
+  getSessionRecordings: (sessionId: number) =>
+    fetchApi<Array<{
+      id: number;
+      session_id: number;
+      recording_type: string;
+      file_url?: string;
+      duration_seconds?: number;
+      status: string;
+      key_moments?: Array<{ timestamp: number; description: string }>;
+      topics_discussed?: string[];
+      created_at: string;
+    }>>(`/enhanced/sessions/${sessionId}/recordings`),
+
+  getRecordingTranscript: (recordingId: number) =>
+    fetchApi<{
+      transcript_text?: string;
+      transcript_segments?: Array<{ start: number; end: number; text: string; speaker?: string }>;
+      key_moments?: Array<{ timestamp: number; description: string }>;
+      topics_discussed?: string[];
+      status?: string;
+      message?: string;
+    }>(`/enhanced/recordings/${recordingId}/transcript`),
+
+  getTranscriptPostLinks: (recordingId: number) =>
+    fetchApi<Array<{
+      post_id: number;
+      post_content?: string;
+      start_seconds: number;
+      end_seconds?: number;
+      transcript_snippet?: string;
+      relevance_score?: number;
+    }>>(`/enhanced/recordings/${recordingId}/post-links`),
+
+  // Feature 8: Learning Objective Coverage
+  getObjectiveCoverage: (courseId: number) =>
+    fetchApi<{
+      course_id: number;
+      total_objectives: number;
+      fully_covered: number;
+      partially_covered: number;
+      not_covered: number;
+      objectives: Array<{
+        objective_text: string;
+        objective_index?: number;
+        coverage_level?: string;
+        coverage_score?: number;
+        coverage_summary?: string;
+        gaps_identified?: string[];
+        sessions_covered: number[];
+      }>;
+      recommended_topics: string[];
+    }>(`/enhanced/courses/${courseId}/objective-coverage`),
+
+  analyzeObjectiveCoverage: (courseId: number) =>
+    fetchApi<{ message: string; task_id: string }>(`/enhanced/courses/${courseId}/objective-coverage/analyze`, { method: 'POST' }),
+
+  // Feature 9: Peer Review Workflow
+  createPeerReviews: (sessionId: number, data: {
+    submission_post_ids?: number[];
+    reviews_per_submission?: number;
+  }) =>
+    fetchApi<{ message: string; task_id: string }>(`/enhanced/sessions/${sessionId}/peer-reviews/create`, {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, ...data }),
+    }),
+
+  getSessionPeerReviews: (sessionId: number) =>
+    fetchApi<Array<{
+      id: number;
+      session_id: number;
+      submission_post_id: number;
+      author_name: string;
+      reviewer_name: string;
+      status: string;
+      due_at?: string;
+      submitted_at?: string;
+      feedback?: {
+        overall_rating?: number;
+        strengths?: string[];
+        areas_for_improvement?: string[];
+        specific_comments?: string;
+      };
+    }>>(`/enhanced/sessions/${sessionId}/peer-reviews`),
+
+  getUserAssignedReviews: (userId: number) =>
+    fetchApi<Array<{
+      id: number;
+      author_name: string;
+      submission_content?: string;
+      due_at?: string;
+      status: string;
+    }>>(`/enhanced/users/${userId}/peer-reviews/assigned`),
+
+  submitPeerReview: (assignmentId: number, data: {
+    overall_rating: number;
+    strengths: string[];
+    areas_for_improvement: string[];
+    specific_comments?: string;
+  }) =>
+    fetchApi<{ message: string }>(`/enhanced/peer-reviews/${assignmentId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ assignment_id: assignmentId, ...data }),
+    }),
+
+  // Feature 10: Multi-Language Support
+  translatePost: (postId: number, targetLanguage: string) =>
+    fetchApi<{
+      post_id: number;
+      source_language: string;
+      target_language: string;
+      original_content: string;
+      translated_content: string;
+      confidence_score?: number;
+    } | { message: string; task_id: string }>(`/enhanced/posts/${postId}/translate`, {
+      method: 'POST',
+      body: JSON.stringify({ post_id: postId, target_language: targetLanguage }),
+    }),
+
+  getPostTranslations: (postId: number) =>
+    fetchApi<{
+      post_id: number;
+      original_content: string;
+      translations: Array<{
+        target_language: string;
+        translated_content: string;
+        confidence_score?: number;
+      }>;
+    }>(`/enhanced/posts/${postId}/translations`),
+
+  getUserLanguagePreference: (userId: number) =>
+    fetchApi<{
+      preferred_language: string;
+      auto_translate: boolean;
+      show_original: boolean;
+    }>(`/enhanced/users/${userId}/language-preference`),
+
+  updateUserLanguagePreference: (userId: number, data: {
+    preferred_language: string;
+    auto_translate?: boolean;
+    show_original?: boolean;
+  }) =>
+    fetchApi<{ message: string }>(`/enhanced/users/${userId}/language-preference`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  translateAllSessionPosts: (sessionId: number, targetLanguage: string) =>
+    fetchApi<{ message: string; task_id: string }>(`/enhanced/sessions/${sessionId}/translate-all?target_language=${encodeURIComponent(targetLanguage)}`, { method: 'POST' }),
 };
 
 export { ApiError };

@@ -171,3 +171,156 @@ def push_to_canvas_task(
         custom_title=custom_title,
     )
     return result
+
+
+# ============ Enhanced AI Features Tasks ============
+
+@celery_app.task(bind=True, time_limit=300)
+def generate_live_summary_task(self, session_id: int) -> dict:
+    """Generate a live discussion summary for a session."""
+    from workflows.enhanced_features import generate_live_summary
+
+    result = generate_live_summary(session_id)
+    return {"session_id": session_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=300)
+def generate_student_groups_task(
+    self,
+    session_id: int,
+    group_type: str = "mixed_participation",
+    num_groups: int = 4,
+    topics: list | None = None,
+) -> dict:
+    """Generate AI-powered student groups for a session."""
+    from workflows.enhanced_features import generate_student_groups
+
+    result = generate_student_groups(
+        session_id=session_id,
+        group_type=group_type,
+        num_groups=num_groups,
+        topics=topics,
+    )
+    return {"session_id": session_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=600)
+def generate_followups_task(
+    self,
+    session_id: int,
+    student_ids: list | None = None,
+) -> dict:
+    """Generate personalized follow-up messages for students."""
+    from workflows.enhanced_features import generate_followups
+
+    result = generate_followups(
+        session_id=session_id,
+        student_ids=student_ids,
+    )
+    return {"session_id": session_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=300)
+def generate_questions_task(
+    self,
+    session_id: int,
+    question_types: list | None = None,
+    num_questions: int = 5,
+    difficulty: str | None = None,
+) -> dict:
+    """Generate quiz questions from session discussion."""
+    from workflows.enhanced_features import generate_questions
+
+    if question_types is None:
+        question_types = ["mcq", "short_answer"]
+
+    result = generate_questions(
+        session_id=session_id,
+        question_types=question_types,
+        num_questions=num_questions,
+        difficulty=difficulty,
+    )
+    return {"session_id": session_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=600)
+def analyze_participation_task(self, course_id: int) -> dict:
+    """Analyze participation metrics for a course."""
+    from workflows.enhanced_features import analyze_participation
+
+    result = analyze_participation(course_id)
+    return {"course_id": course_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=300)
+def generate_ai_assistant_response_task(
+    self,
+    session_id: int,
+    student_id: int,
+    question: str,
+    post_id: int | None = None,
+) -> dict:
+    """Generate AI teaching assistant response to a student question."""
+    from workflows.enhanced_features import generate_ai_assistant_response
+
+    result = generate_ai_assistant_response(
+        session_id=session_id,
+        student_id=student_id,
+        question=question,
+        post_id=post_id,
+    )
+    return {"session_id": session_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=1800)
+def transcribe_recording_task(self, recording_id: int) -> dict:
+    """Transcribe and analyze a session recording."""
+    from workflows.enhanced_features import transcribe_recording
+
+    result = transcribe_recording(recording_id)
+    return {"recording_id": recording_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=600)
+def analyze_objective_coverage_task(self, course_id: int) -> dict:
+    """Analyze learning objective coverage for a course."""
+    from workflows.enhanced_features import analyze_objective_coverage
+
+    result = analyze_objective_coverage(course_id)
+    return {"course_id": course_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=300)
+def create_peer_review_assignments_task(
+    self,
+    session_id: int,
+    submission_post_ids: list | None = None,
+    reviews_per_submission: int = 2,
+) -> dict:
+    """Create AI-matched peer review assignments."""
+    from workflows.enhanced_features import create_peer_review_assignments
+
+    result = create_peer_review_assignments(
+        session_id=session_id,
+        submission_post_ids=submission_post_ids,
+        reviews_per_submission=reviews_per_submission,
+    )
+    return {"session_id": session_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=120)
+def translate_post_task(self, post_id: int, target_language: str) -> dict:
+    """Translate a single post to a target language."""
+    from workflows.enhanced_features import translate_post
+
+    result = translate_post(post_id, target_language)
+    return {"post_id": post_id, "status": "completed", "result": result}
+
+
+@celery_app.task(bind=True, time_limit=1800)
+def translate_session_posts_task(self, session_id: int, target_language: str) -> dict:
+    """Translate all posts in a session to a target language."""
+    from workflows.enhanced_features import translate_session_posts
+
+    result = translate_session_posts(session_id, target_language)
+    return {"session_id": session_id, "status": "completed", "result": result}

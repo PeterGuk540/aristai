@@ -97,6 +97,15 @@ class QueryType(str, Enum):
     GET_COURSE_ANALYTICS = "get_course_analytics"
     GET_TIMER_STATUS = "get_timer_status"
     GET_AI_DRAFTS = "get_ai_drafts"
+    # Enhanced AI Features
+    GET_LIVE_SUMMARY = "get_live_summary"
+    GET_QUESTION_BANK = "get_question_bank"
+    GET_PARTICIPATION_INSIGHTS = "get_participation_insights"
+    GET_OBJECTIVE_COVERAGE = "get_objective_coverage"
+    GET_PEER_REVIEWS = "get_peer_reviews"
+    GET_MY_PEER_REVIEWS = "get_my_peer_reviews"
+    GET_FOLLOWUPS = "get_followups"
+    GET_AI_ASSISTANT_MESSAGES = "get_ai_assistant_messages"
     # Open-ended questions that require LLM reasoning
     OPEN_QUESTION = "open_question"
 
@@ -141,6 +150,16 @@ class ControlType(str, Enum):
     SEND_SESSION_SUMMARY = "send_session_summary"
     # Canvas integration
     PUSH_TO_CANVAS = "push_to_canvas"
+    # Enhanced AI Features
+    GENERATE_LIVE_SUMMARY = "generate_live_summary"
+    GENERATE_AI_GROUPS = "generate_ai_groups"
+    GENERATE_FOLLOWUPS = "generate_followups"
+    GENERATE_QUESTIONS = "generate_questions"
+    ANALYZE_PARTICIPATION = "analyze_participation"
+    ANALYZE_OBJECTIVES = "analyze_objectives"
+    CREATE_PEER_REVIEWS = "create_peer_reviews"
+    TRANSLATE_POSTS = "translate_posts"
+    ASK_AI_ASSISTANT = "ask_ai_assistant"
 
 
 class ConfirmationType(str, Enum):
@@ -317,6 +336,8 @@ Actions: class_status, who_needs_help, get_scores, get_participation, get_miscon
          suggest_next_student, get_poll_suggestions, list_templates, get_student_progress,
          get_class_progress, get_breakout_groups, get_preclass_status, get_session_summary,
          get_unresolved_topics, compare_sessions, get_course_analytics, get_timer_status, get_ai_drafts,
+         get_live_summary, get_question_bank, get_participation_insights, get_objective_coverage,
+         get_peer_reviews, get_my_peer_reviews, get_followups, get_ai_assistant_messages,
          open_question
 
 Examples:
@@ -338,6 +359,14 @@ Examples:
 - "show me breakout groups" / "take me to breakout groups" → get_breakout_groups
 - "show facilitation suggestions" / "who should speak next?" → get_facilitation_suggestions
 - "show me AI drafts" / "draft responses" → get_ai_drafts
+- "show the live summary" / "what's the discussion about?" / "mostrar resumen en vivo" → get_live_summary
+- "show the question bank" / "quiz questions" / "mostrar banco de preguntas" → get_question_bank
+- "show participation insights" / "participation analysis" / "analisis de participacion" → get_participation_insights
+- "show learning objective coverage" / "how well are we covering objectives?" / "cobertura de objetivos" → get_objective_coverage
+- "show peer reviews" / "peer review assignments" / "revisiones de pares" → get_peer_reviews
+- "my peer reviews" / "reviews assigned to me" / "mis revisiones" → get_my_peer_reviews
+- "show student followups" / "personalized feedback" / "seguimientos personalizados" → get_followups
+- "show AI assistant messages" / "student questions to AI" / "mensajes del asistente" → get_ai_assistant_messages
 
 For questions about the platform, features, capabilities, or general knowledge that don't fit
 into specific data queries above, use action "open_question":
@@ -366,7 +395,9 @@ Actions: start_copilot, stop_copilot, toggle_theme, go_live, end_session,
          open_user_menu, undo_action, clear_context, start_timer, pause_timer,
          resume_timer, stop_timer, create_breakout_groups, dissolve_breakout_groups,
          save_template, clone_session, generate_ai_draft, approve_ai_draft, reject_ai_draft,
-         send_session_summary, push_to_canvas
+         send_session_summary, push_to_canvas, generate_live_summary, generate_ai_groups,
+         generate_followups, generate_questions, analyze_participation, analyze_objectives,
+         create_peer_reviews, translate_posts, ask_ai_assistant
 
 Examples:
 - "start the copilot" / "iniciar el copilot"
@@ -383,6 +414,15 @@ Examples:
 - "send the session summary to students" / "enviar el resumen a los estudiantes"
 - "push to canvas" / "push this session to canvas" / "enviar a canvas" / "publicar en canvas" → push_to_canvas
 - "create a canvas announcement" / "post to canvas" / "send to canvas" → push_to_canvas
+- "generate a live summary" / "update the summary" / "generar resumen en vivo" → generate_live_summary
+- "create AI groups" / "group students by AI" / "crear grupos con IA" → generate_ai_groups
+- "generate followups" / "create personalized feedback" / "generar seguimientos" → generate_followups
+- "generate quiz questions" / "create questions from discussion" / "generar preguntas" → generate_questions
+- "analyze participation" / "check participation metrics" / "analizar participacion" → analyze_participation
+- "analyze objective coverage" / "check learning objectives" / "analizar cobertura" → analyze_objectives
+- "create peer review assignments" / "set up peer reviews" / "crear revisiones de pares" → create_peer_reviews
+- "translate the posts" / "translate to Spanish" / "traducir publicaciones" → translate_posts
+- "ask the AI assistant" / "ask the teaching assistant" / "preguntar al asistente" → ask_ai_assistant
 
 ### CONFIRM (category: "confirm")
 User is confirming or denying a pending action.

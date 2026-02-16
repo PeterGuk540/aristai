@@ -289,6 +289,9 @@ class UppProvider(LmsProvider):
 
         Returns list of (url, title) tuples.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         results: list[tuple[str, str]] = []
         seen: set[str] = set()
 
@@ -297,7 +300,10 @@ class UppProvider(LmsProvider):
             r'<a[^>]+href=["\']([^"\']*curso_cargar\.asp\?[^"\']+)["\'][^>]*>(.*?)</a>',
             flags=re.IGNORECASE | re.DOTALL,
         )
-        for match in link_pattern.finditer(html):
+        a_tag_matches = list(link_pattern.finditer(html))
+        logger.info(f"UPP _extract_course_urls: Found {len(a_tag_matches)} <a> tag matches for curso_cargar.asp")
+
+        for match in a_tag_matches:
             href_raw = match.group(1).replace("&amp;", "&")
             href = urljoin(base_url, href_raw)
             label_html = match.group(2)
@@ -305,20 +311,29 @@ class UppProvider(LmsProvider):
             # Extract just the course name, removing code prefix and teacher info
             title = self._normalize_course_title(label)
 
+            logger.info(f"UPP course extracted: label='{label[:60]}...' -> title='{title}'")
+
             if href in seen:
                 continue
             seen.add(href)
             results.append((href, title))
 
         # Fallback: find URLs without labels (less common)
-        for raw in re.findall(r"curso_cargar\.asp\?[^\"'<>\s]+", html, flags=re.IGNORECASE):
+        fallback_urls = re.findall(r"curso_cargar\.asp\?[^\"'<>\s]+", html, flags=re.IGNORECASE)
+        logger.info(f"UPP _extract_course_urls: Found {len(fallback_urls)} fallback URL matches")
+
+        for raw in fallback_urls:
             href = urljoin(base_url, raw.replace("&amp;", "&"))
             if href in seen:
+                logger.info(f"UPP fallback: skipping duplicate URL")
                 continue
             seen.add(href)
+            fallback_title = f"UPP Course {urlparse(href).query}"[:180]
+            logger.info(f"UPP fallback: adding course with title='{fallback_title}'")
             # No label available, use query string as fallback
-            results.append((href, f"UPP Course {urlparse(href).query}"[:180]))
+            results.append((href, fallback_title))
 
+        logger.info(f"UPP _extract_course_urls: Returning {len(results)} courses")
         return results
 
     def _is_career_link(self, href: str) -> bool:

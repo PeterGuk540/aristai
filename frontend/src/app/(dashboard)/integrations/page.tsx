@@ -671,7 +671,7 @@ export default function IntegrationsPage() {
               data-voice-id={`provider-${p.name}`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-medium capitalize">{p.name}</span>
+                <span className="font-medium">{p.name.toUpperCase()}</span>
                 {p.enabled ? (
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                 ) : (

@@ -78,19 +78,25 @@ def parse_syllabus(state: PlanningState) -> PlanningState:
     """Node 1: Parse syllabus and extract structure."""
     logger.info(f"ParseSyllabus: Processing course {state['course_id']}")
 
+    # Check if total_sessions was pre-set (e.g., from imported sessions)
+    preset_sessions = state.get("total_sessions", 0)
+    if preset_sessions > 0:
+        logger.info(f"ParseSyllabus: Using pre-set session count of {preset_sessions} (from imported sessions)")
+
     llm, model_name = get_llm_with_tracking()
     if not llm:
         state["errors"].append("No LLM API key configured")
         state["used_fallback"] = True
         # Fallback to reasonable defaults
+        fallback_sessions = preset_sessions if preset_sessions > 0 else 8
         state["parsed_syllabus"] = {
             "course_summary": f"Course: {state['course_title']}",
-            "total_sessions": 8,
+            "total_sessions": fallback_sessions,
             "main_topics": state["objectives"][:5] if state["objectives"] else ["Introduction"],
             "key_concepts": [],
             "objectives_breakdown": [{"objective": obj, "related_topics": []} for obj in state["objectives"]],
         }
-        state["total_sessions"] = 8
+        state["total_sessions"] = fallback_sessions
         state["model_name"] = "fallback"
         return state
 
@@ -109,21 +115,27 @@ def parse_syllabus(state: PlanningState) -> PlanningState:
         parsed = parse_json_response(response.content)
         if parsed:
             state["parsed_syllabus"] = parsed
-            # Guard against zero/None: ensure at least 1 session
-            state["total_sessions"] = max(parsed.get("total_sessions", 8) or 1, 1)
-            logger.info(f"ParseSyllabus: Determined {state['total_sessions']} sessions")
+            # If we have pre-set sessions (from imports), use that count; otherwise use LLM suggestion
+            if preset_sessions > 0:
+                state["total_sessions"] = preset_sessions
+                logger.info(f"ParseSyllabus: Using {preset_sessions} sessions (from imported sessions)")
+            else:
+                # Guard against zero/None: ensure at least 1 session
+                state["total_sessions"] = max(parsed.get("total_sessions", 8) or 1, 1)
+                logger.info(f"ParseSyllabus: Determined {state['total_sessions']} sessions from LLM")
             return state
 
     # Fallback if LLM failed
     state["errors"].append("Failed to parse syllabus response")
+    fallback_sessions = preset_sessions if preset_sessions > 0 else 8
     state["parsed_syllabus"] = {
         "course_summary": state["course_title"],
-        "total_sessions": 8,
+        "total_sessions": fallback_sessions,
         "main_topics": state["objectives"][:5] if state["objectives"] else [],
         "key_concepts": [],
         "objectives_breakdown": [],
     }
-    state["total_sessions"] = 8
+    state["total_sessions"] = fallback_sessions
 
     logger.info(f"ParseSyllabus: Determined {state['total_sessions']} sessions")
     return state
@@ -325,6 +337,9 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
 
     Pipeline: ParseSyllabus -> PlanPerSession -> DesignFlow -> ConsistencyCheck
 
+    If sessions already exist (e.g., imported from UPP), the workflow will UPDATE
+    those sessions with generated plan content rather than creating new ones.
+
     Args:
         course_id: ID of the course to generate plans for
 
@@ -342,17 +357,20 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
 
         logger.info(f"Starting planning workflow for course {course_id}: {course.title}")
 
-        # Only delete auto-generated sessions (preserves manual sessions)
-        # Manual sessions have model_name = None; auto-generated have a model name
-        deleted_count = db.query(SessionModel).filter(
-            SessionModel.course_id == course_id,
-            SessionModel.status == "draft",
-            SessionModel.plan_json.isnot(None),
-            SessionModel.model_name.isnot(None),  # Only delete if model_name is set (auto-generated)
-        ).delete(synchronize_session='fetch')
+        # Check for existing sessions (e.g., imported from UPP/Canvas)
+        existing_sessions = db.query(SessionModel).filter(
+            SessionModel.course_id == course_id
+        ).order_by(SessionModel.id).all()
 
-        if deleted_count > 0:
-            logger.info(f"Deleted {deleted_count} existing draft sessions")
+        # Separate imported sessions (no plan_json or no model_name) from auto-generated ones
+        imported_sessions = [s for s in existing_sessions if s.model_name is None]
+        auto_generated_sessions = [s for s in existing_sessions if s.model_name is not None]
+
+        # Delete only previously auto-generated sessions (keeps imported sessions)
+        if auto_generated_sessions:
+            for session in auto_generated_sessions:
+                db.delete(session)
+            logger.info(f"Deleted {len(auto_generated_sessions)} existing auto-generated sessions")
             db.commit()
 
         # Prepare initial state
@@ -377,6 +395,12 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
             "used_fallback": False,
         }
 
+        # If we have imported sessions, use their count as the target
+        if imported_sessions:
+            logger.info(f"Found {len(imported_sessions)} imported sessions - will update them with plans")
+            # Override total_sessions in parsed_syllabus to match imported count
+            initial_state["total_sessions"] = len(imported_sessions)
+
         # Run LangGraph workflow
         graph = build_planning_graph()
         final_state = graph.invoke(initial_state)
@@ -388,26 +412,55 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
         # Persist session plans to database with observability fields
         version = f"v_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
 
+        sessions_updated = 0
+        sessions_created = 0
+
         for plan in final_state["sessions_with_flow"]:
-            db_session = SessionModel(
-                course_id=course_id,
-                title=plan.get("title", f"Session {plan.get('session_number', '?')}"),
-                plan_json=plan,
-                plan_version=version,
-                model_name=final_state["model_name"],
-                prompt_version=final_state["prompt_version"],
-                # Observability fields (Milestone 6)
-                planning_execution_time_seconds=execution_time,
-                planning_total_tokens=aggregated.total_tokens if aggregated.total_tokens > 0 else None,
-                planning_estimated_cost_usd=aggregated.estimated_cost_usd if aggregated.estimated_cost_usd > 0 else None,
-                planning_used_fallback=1 if final_state["used_fallback"] else 0,
-            )
-            db.add(db_session)
+            session_num = plan.get("session_number", 0)
+
+            # Try to find a matching imported session to update
+            matching_session = None
+            if imported_sessions and session_num > 0 and session_num <= len(imported_sessions):
+                matching_session = imported_sessions[session_num - 1]
+
+            if matching_session:
+                # UPDATE existing imported session with the generated plan
+                matching_session.plan_json = plan
+                matching_session.plan_version = version
+                matching_session.model_name = final_state["model_name"]
+                matching_session.prompt_version = final_state["prompt_version"]
+                matching_session.planning_execution_time_seconds = execution_time
+                matching_session.planning_total_tokens = aggregated.total_tokens if aggregated.total_tokens > 0 else None
+                matching_session.planning_estimated_cost_usd = aggregated.estimated_cost_usd if aggregated.estimated_cost_usd > 0 else None
+                matching_session.planning_used_fallback = 1 if final_state["used_fallback"] else 0
+                # Optionally update title if it's generic (like "Semana 1")
+                if matching_session.title and matching_session.title.lower().startswith("semana"):
+                    # Keep original title but could enhance it
+                    pass
+                sessions_updated += 1
+                logger.info(f"Updated existing session {matching_session.id} ({matching_session.title}) with plan")
+            else:
+                # CREATE new session (no matching imported session)
+                db_session = SessionModel(
+                    course_id=course_id,
+                    title=plan.get("title", f"Session {plan.get('session_number', '?')}"),
+                    plan_json=plan,
+                    plan_version=version,
+                    model_name=final_state["model_name"],
+                    prompt_version=final_state["prompt_version"],
+                    # Observability fields (Milestone 6)
+                    planning_execution_time_seconds=execution_time,
+                    planning_total_tokens=aggregated.total_tokens if aggregated.total_tokens > 0 else None,
+                    planning_estimated_cost_usd=aggregated.estimated_cost_usd if aggregated.estimated_cost_usd > 0 else None,
+                    planning_used_fallback=1 if final_state["used_fallback"] else 0,
+                )
+                db.add(db_session)
+                sessions_created += 1
 
         db.commit()
 
         logger.info(
-            f"Planning workflow complete: {len(final_state['sessions_with_flow'])} sessions created, "
+            f"Planning workflow complete: {sessions_updated} updated, {sessions_created} created, "
             f"tokens={aggregated.total_tokens}, cost=${aggregated.estimated_cost_usd:.4f}"
         )
 
@@ -416,6 +469,8 @@ def run_planning_workflow(course_id: int) -> Dict[str, Any]:
             "course_id": course_id,
             "course_title": course.title,
             "sessions_generated": len(final_state["sessions_with_flow"]),
+            "sessions_updated": sessions_updated,
+            "sessions_created": sessions_created,
             "sessions": final_state["sessions_with_flow"],
             "consistency_report": final_state["consistency_report"],
             "model_name": final_state["model_name"],

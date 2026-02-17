@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Textarea } from '@/components/ui/Textarea';
 import {
   Loader2, Plus, Users, FileText, Star, Send, CheckCircle
 } from 'lucide-react';
@@ -235,7 +235,7 @@ export function PeerReviewPanelComponent({ sessionId, userId, isInstructor = fal
               <Send className="w-4 h-4 mr-2" />
               Submit Review
             </Button>
-            <Button variant="outline" onClick={() => setSelectedReview(null)}>
+            <Button variant="secondary" onClick={() => setSelectedReview(null)}>
               Cancel
             </Button>
           </div>

@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import {
   Loader2, Plus, Trash2, Edit, CheckCircle, XCircle,
   HelpCircle, ListChecks, FileText, ToggleLeft
@@ -220,7 +220,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
                           {question.difficulty}
                         </Badge>
                       )}
-                      <Badge variant={question.status === 'approved' ? 'default' : 'secondary'}>
+                      <Badge variant={question.status === 'approved' ? 'success' : 'default'}>
                         {question.status}
                       </Badge>
                     </div>
@@ -248,7 +248,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
                     {question.tags && question.tags.length > 0 && (
                       <div className="flex gap-1 mt-2">
                         {question.tags.map((tag, idx) => (
-                          <Badge key={idx} variant="outline" className="text-xs">
+                          <Badge key={idx} variant="default" className="text-xs">
                             {tag}
                           </Badge>
                         ))}

@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { Loader2, RefreshCw, AlertCircle, CheckCircle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 interface LiveSummaryProps {
@@ -109,7 +109,7 @@ export function LiveSummaryComponent({ sessionId }: LiveSummaryProps) {
             </CardDescription>
           </div>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={generateSummary}
             disabled={generating}
@@ -151,7 +151,7 @@ export function LiveSummaryComponent({ sessionId }: LiveSummaryProps) {
                 <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Key Themes</h4>
                 <div className="flex flex-wrap gap-2">
                   {summary.key_themes.map((theme, idx) => (
-                    <Badge key={idx} variant="secondary">{theme}</Badge>
+                    <Badge key={idx} variant="default">{theme}</Badge>
                   ))}
                 </div>
               </div>

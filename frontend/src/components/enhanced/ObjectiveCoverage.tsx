@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Progress } from '@/components/ui/Progress';
 import {
   Loader2, RefreshCw, Target, CheckCircle, AlertCircle, Circle
 } from 'lucide-react';
@@ -111,7 +111,7 @@ export function ObjectiveCoverageComponent({ courseId }: ObjectiveCoverageProps)
             </CardDescription>
           </div>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={analyzeCoverage}
             disabled={analyzing}
@@ -240,7 +240,7 @@ export function ObjectiveCoverageComponent({ courseId }: ObjectiveCoverageProps)
                 <h4 className="text-sm font-medium mb-2">Recommended Topics for Future Sessions</h4>
                 <div className="flex flex-wrap gap-2">
                   {report.recommended_topics.map((topic, idx) => (
-                    <Badge key={idx} variant="outline">
+                    <Badge key={idx} variant="default">
                       {topic}
                     </Badge>
                   ))}

@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import {
   Loader2, RefreshCw, AlertTriangle, CheckCircle, Users,
   TrendingUp, TrendingDown, Activity, Bell
@@ -138,7 +138,7 @@ export function ParticipationInsightsComponent({ courseId, sessionId }: Particip
               </CardDescription>
             </div>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={analyzeParticipation}
               disabled={analyzing}
@@ -202,7 +202,7 @@ export function ParticipationInsightsComponent({ courseId, sessionId }: Particip
                           <div className="flex items-center gap-2">
                             <AlertTriangle className="w-4 h-4" />
                             <span className="font-medium">{alert.user_name || 'Unknown Student'}</span>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="default" className="text-xs">
                               {alert.alert_type.replace('_', ' ')}
                             </Badge>
                           </div>

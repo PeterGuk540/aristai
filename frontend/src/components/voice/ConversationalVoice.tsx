@@ -3,8 +3,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Conversation } from '@elevenlabs/client';
-import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles } from 'lucide-react';
+import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles, Globe } from 'lucide-react';
 import { useUser } from '@/lib/context';
+import { useLanguage } from '@/lib/i18n-provider';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { executeUiAction, UiAction } from '@/lib/ui-actions';
@@ -55,6 +56,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     className,
   } = props;
   const { currentUser, isInstructor } = useUser();
+  const { locale, setLocale } = useLanguage();
   const router = useRouter();
   
   // Core state - start as 'disconnected' so user can click Start button
@@ -566,6 +568,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         transcript,
         user_id: currentUser?.id,
         current_page: currentPage,
+        language: locale,
       });
 
       console.log('📦 Backend response:', JSON.stringify(response, null, 2));
@@ -847,6 +850,15 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             </div>
             
             <div className="flex items-center gap-1">
+              {/* Language Toggle */}
+              <button
+                onClick={() => setLocale(locale === 'en' ? 'es' : 'en')}
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
+                title={`Language: ${locale === 'en' ? 'English' : 'Spanish'} (click to switch)`}
+              >
+                <Globe className="w-4 h-4" />
+                <span className="text-xs font-medium uppercase">{locale}</span>
+              </button>
               <button
                 onClick={toggleExpand}
                 className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"

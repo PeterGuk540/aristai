@@ -108,6 +108,7 @@ class ConverseRequest(BaseModel):
     context: Optional[List[str]] = None
     user_id: Optional[int] = None
     current_page: Optional[str] = None
+    language: Optional[str] = "en"  # 'en' or 'es' - determines response language
 
 
 class ActionResponse(BaseModel):
@@ -121,6 +122,214 @@ class ConverseResponse(BaseModel):
     action: Optional[ActionResponse] = None
     results: Optional[List[Any]] = None
     suggestions: Optional[List[str]] = None
+
+
+# =============================================================================
+# BILINGUAL RESPONSE TEMPLATES
+# =============================================================================
+# These templates are used to generate responses in the user's selected language.
+# The language is passed from the frontend and determines which template to use.
+
+RESPONSE_TEMPLATES = {
+    'en': {
+        # Navigation
+        'navigate_to': "Taking you to {destination} now.",
+        'navigate_open': "Opening {destination} for you.",
+        'switch_tab': "Switching to the {tab} tab.",
+        'switching_tabs': "Switching tabs.",
+
+        # Courses
+        'no_courses': "You don't have any courses yet. Would you like me to help you create one?",
+        'one_course': "You have one course: {name}. Would you like me to open it?",
+        'few_courses': "You have {count} courses: {names}. Which one would you like to work with?",
+        'many_courses': "You have {count} courses, including {names}, and {more} more. Would you like to see them all?",
+        'create_course': "Opening course creation. Tell me the course title, or I can help you set it up step by step.",
+        'select_course': "Opening {name}. What would you like to do with it?",
+        'selecting_course': "Selecting the course for you.",
+
+        # Sessions
+        'no_sessions': "No sessions found. Would you like to create a new session?",
+        'live_sessions': "There {verb} {count} live session{plural}: {names}. Would you like to join one?",
+        'sessions_none_live': "You have {count} sessions. None are live right now. Would you like to start one?",
+        'create_session': "Opening session creation. What topic will this session cover?",
+        'select_session': "Opening {name}. Status: {status}.",
+        'selecting_session': "Selecting the session for you.",
+        'session_live': "Session is now live! Students can join and start participating.",
+        'session_ended': "Session has ended. Would you like me to generate a report?",
+        'session_draft': "Session has been set to draft. You can edit it or go live when ready.",
+        'session_completed': "Session has been marked as completed.",
+        'session_scheduled': "Session has been scheduled.",
+
+        # Actions
+        'click_button': "Clicking {button}.",
+        'clicking_button': "Clicking the button.",
+        'opening_materials': "Opening the course materials. You can view and download uploaded files here.",
+
+        # Confirmations
+        'confirm_proceed': "Would you like me to proceed?",
+        'confirm_yes': "Done!",
+        'confirm_cancel': "Okay, cancelled.",
+
+        # Errors
+        'error_generic': "Sorry, there was an issue: {reason}",
+        'error_not_found': "I couldn't find that. Please try again.",
+
+        # Greetings
+        'greeting': "Hello! How can I help you?",
+        'ready': "I'm ready to help. What would you like to do?",
+
+        # Dropdown
+        'dropdown_options': "Your options are: {options}. Which would you like to select?",
+        'dropdown_selected': "Selected {name}.",
+
+        # Forum
+        'forum_post_offer': "Would you like me to help you post something?",
+        'forum_posting': "Posting to the forum.",
+
+        # Polls
+        'poll_create_offer': "Would you like to create a poll?",
+        'poll_creating': "Creating the poll.",
+
+        # AI Features
+        'generating_summary': "Generating a summary of the discussion.",
+        'generating_questions': "Generating quiz questions from the discussion.",
+        'creating_groups': "Creating AI-powered student groups.",
+    },
+    'es': {
+        # Navigation
+        'navigate_to': "Llevandote a {destination} ahora.",
+        'navigate_open': "Abriendo {destination} para ti.",
+        'switch_tab': "Cambiando a la pestana {tab}.",
+        'switching_tabs': "Cambiando de pestana.",
+
+        # Courses
+        'no_courses': "Aun no tienes cursos. Te gustaria que te ayude a crear uno?",
+        'one_course': "Tienes un curso: {name}. Te gustaria que lo abra?",
+        'few_courses': "Tienes {count} cursos: {names}. Con cual te gustaria trabajar?",
+        'many_courses': "Tienes {count} cursos, incluyendo {names}, y {more} mas. Te gustaria ver todos?",
+        'create_course': "Abriendo creacion de curso. Dime el titulo del curso, o puedo ayudarte paso a paso.",
+        'select_course': "Abriendo {name}. Que te gustaria hacer con el?",
+        'selecting_course': "Seleccionando el curso para ti.",
+
+        # Sessions
+        'no_sessions': "No se encontraron sesiones. Te gustaria crear una nueva?",
+        'live_sessions': "Hay {count} sesion{plural} en vivo: {names}. Te gustaria unirte a una?",
+        'sessions_none_live': "Tienes {count} sesiones. Ninguna esta en vivo ahora. Te gustaria iniciar una?",
+        'create_session': "Abriendo creacion de sesion. Cual sera el tema de esta sesion?",
+        'select_session': "Abriendo {name}. Estado: {status}.",
+        'selecting_session': "Seleccionando la sesion para ti.",
+        'session_live': "La sesion esta en vivo! Los estudiantes pueden unirse y participar.",
+        'session_ended': "La sesion ha terminado. Te gustaria que genere un reporte?",
+        'session_draft': "La sesion se ha establecido como borrador. Puedes editarla o ponerla en vivo cuando estes listo.",
+        'session_completed': "La sesion ha sido marcada como completada.",
+        'session_scheduled': "La sesion ha sido programada.",
+
+        # Actions
+        'click_button': "Haciendo clic en {button}.",
+        'clicking_button': "Haciendo clic en el boton.",
+        'opening_materials': "Abriendo los materiales del curso. Puedes ver y descargar archivos aqui.",
+
+        # Confirmations
+        'confirm_proceed': "Te gustaria que proceda?",
+        'confirm_yes': "Listo!",
+        'confirm_cancel': "Esta bien, cancelado.",
+
+        # Errors
+        'error_generic': "Lo siento, hubo un problema: {reason}",
+        'error_not_found': "No pude encontrar eso. Por favor intenta de nuevo.",
+
+        # Greetings
+        'greeting': "Hola! Como puedo ayudarte?",
+        'ready': "Estoy listo para ayudar. Que te gustaria hacer?",
+
+        # Dropdown
+        'dropdown_options': "Tus opciones son: {options}. Cual te gustaria seleccionar?",
+        'dropdown_selected': "Seleccionado {name}.",
+
+        # Forum
+        'forum_post_offer': "Te gustaria que te ayude a publicar algo?",
+        'forum_posting': "Publicando en el foro.",
+
+        # Polls
+        'poll_create_offer': "Te gustaria crear una encuesta?",
+        'poll_creating': "Creando la encuesta.",
+
+        # AI Features
+        'generating_summary': "Generando un resumen de la discusion.",
+        'generating_questions': "Generando preguntas del cuestionario de la discusion.",
+        'creating_groups': "Creando grupos de estudiantes con IA.",
+    }
+}
+
+# Page names in both languages
+PAGE_NAMES = {
+    'en': {
+        '/courses': 'courses',
+        '/sessions': 'sessions',
+        '/forum': 'forum',
+        '/console': 'instructor console',
+        '/reports': 'reports',
+        '/integrations': 'integrations',
+        '/platform-guide': 'introduction',
+        '/dashboard': 'dashboard',
+    },
+    'es': {
+        '/courses': 'cursos',
+        '/sessions': 'sesiones',
+        '/forum': 'foro',
+        '/console': 'consola del instructor',
+        '/reports': 'reportes',
+        '/integrations': 'integraciones',
+        '/platform-guide': 'introduccion',
+        '/dashboard': 'panel principal',
+    }
+}
+
+# Status translations
+STATUS_NAMES = {
+    'en': {
+        'draft': 'draft',
+        'live': 'live',
+        'completed': 'completed',
+        'scheduled': 'scheduled',
+    },
+    'es': {
+        'draft': 'borrador',
+        'live': 'en vivo',
+        'completed': 'completada',
+        'scheduled': 'programada',
+    }
+}
+
+
+def get_response(key: str, language: str = 'en', **kwargs) -> str:
+    """Get a response template in the specified language with formatting."""
+    lang = language if language in RESPONSE_TEMPLATES else 'en'
+    templates = RESPONSE_TEMPLATES[lang]
+
+    if key not in templates:
+        # Fall back to English if key not found in target language
+        templates = RESPONSE_TEMPLATES['en']
+
+    if key not in templates:
+        return kwargs.get('fallback', f"[Missing template: {key}]")
+
+    try:
+        return templates[key].format(**kwargs)
+    except KeyError:
+        return templates[key]
+
+
+def get_page_name(path: str, language: str = 'en') -> str:
+    """Get page name in the specified language."""
+    lang = language if language in PAGE_NAMES else 'en'
+    return PAGE_NAMES[lang].get(path, path)
+
+
+def get_status_name(status: str, language: str = 'en') -> str:
+    """Get status name in the specified language."""
+    lang = language if language in STATUS_NAMES else 'en'
+    return STATUS_NAMES[lang].get(status, status)
 
 
 # Navigation intent patterns - expanded for better coverage (English + Spanish)
@@ -1372,27 +1581,23 @@ def generate_conversational_response(
     results: Optional[Any] = None,
     context: Optional[List[str]] = None,
     current_page: Optional[str] = None,
+    language: str = 'en',
 ) -> str:
-    """Generate a natural conversational response for various intents."""
+    """Generate a natural conversational response for various intents.
+
+    Args:
+        intent_type: Type of intent ('navigate', 'execute', etc.)
+        intent_value: The specific intent value
+        results: Optional results from action execution
+        context: Optional conversation context
+        current_page: Current page path
+        language: Response language ('en' or 'es')
+    """
+    lang = language if language in ['en', 'es'] else 'en'
 
     if intent_type == 'navigate':
-        page_names = {
-            '/courses': 'courses',
-            '/sessions': 'sessions',
-            '/forum': 'forum',
-            '/console': 'instructor console',
-            '/reports': 'reports',
-            '/integrations': 'integrations',
-            '/platform-guide': 'introduction',
-            '/dashboard': 'dashboard',
-        }
-        page_name = page_names.get(intent_value, intent_value)
-        responses = [
-            f"Taking you to {page_name} now.",
-            f"Opening {page_name} for you.",
-            f"Let me open the {page_name} page.",
-        ]
-        return responses[hash(intent_value) % len(responses)]
+        page_name = get_page_name(intent_value, lang)
+        return get_response('navigate_to', lang, destination=page_name)
 
     if intent_type == 'execute':
         # Handle result that might be a dict with message/error
@@ -1400,98 +1605,98 @@ def generate_conversational_response(
             if results.get("message"):
                 return results["message"]
             if results.get("error"):
-                return f"Sorry, there was an issue: {results['error']}"
+                return get_response('error_generic', lang, reason=results['error'])
 
         # === UI INTERACTION RESPONSES ===
         if intent_value == 'ui_select_course':
-            if isinstance(results, dict):
-                available = results.get("available_options", [])
-                if available and len(available) > 0:
-                    return f"Selecting the course. You have {len(available)} courses available."
-            return "Selecting the course for you."
+            return get_response('selecting_course', lang)
 
         if intent_value == 'ui_select_session':
-            return "Selecting the session for you."
+            return get_response('selecting_session', lang)
 
         if intent_value == 'ui_switch_tab':
             if isinstance(results, dict):
                 tab_name = results.get("ui_actions", [{}])[0].get("payload", {}).get("tabName", "")
                 if tab_name:
-                    return f"Switching to the {tab_name} tab."
-            return "Switching tabs."
+                    return get_response('switch_tab', lang, tab=tab_name)
+            return get_response('switching_tabs', lang)
 
         if intent_value == 'ui_click_button':
             if isinstance(results, dict):
                 button_label = results.get("ui_actions", [{}])[0].get("payload", {}).get("buttonLabel", "")
                 if button_label:
-                    return f"Clicking {button_label}."
-            return "Clicking the button."
+                    return get_response('click_button', lang, button=button_label)
+            return get_response('clicking_button', lang)
 
         # === COURSE RESPONSES ===
         if intent_value == 'list_courses':
             if isinstance(results, list) and len(results) > 0:
                 course_names = [c.get('title', 'Untitled') for c in results[:5]]
                 if len(results) == 1:
-                    return f"You have one course: {course_names[0]}. Would you like me to open it?"
+                    return get_response('one_course', lang, name=course_names[0])
                 elif len(results) <= 3:
-                    return f"You have {len(results)} courses: {', '.join(course_names)}. Which one would you like to work with?"
+                    return get_response('few_courses', lang, count=len(results), names=', '.join(course_names))
                 else:
-                    return f"You have {len(results)} courses, including {', '.join(course_names[:3])}, and {len(results) - 3} more. Would you like to see them all?"
-            return "You don't have any courses yet. Would you like me to help you create one?"
+                    return get_response('many_courses', lang, count=len(results), names=', '.join(course_names[:3]), more=len(results) - 3)
+            return get_response('no_courses', lang)
 
         if intent_value == 'create_course':
-            return "Opening course creation. Tell me the course title, or I can help you set it up step by step."
+            return get_response('create_course', lang)
 
         if intent_value == 'select_course':
             if isinstance(results, dict) and results.get("course"):
                 course = results["course"]
-                return f"Opening {course.get('title', 'the course')}. What would you like to do with it?"
-            return "I'll open the first course for you. You can also say 'open second course' or specify a course name."
+                return get_response('select_course', lang, name=course.get('title', 'the course'))
+            return get_response('selecting_course', lang)
 
         if intent_value == 'view_course_details':
             if isinstance(results, dict) and results.get("title"):
                 return f"Here's {results['title']}. It has {results.get('session_count', 0)} sessions."
-            return "I couldn't find the course details. Make sure you're on a course page."
+            return get_response('error_not_found', lang)
 
         # === SESSION RESPONSES ===
         if intent_value == 'list_sessions':
             if isinstance(results, list) and len(results) > 0:
                 live = [s for s in results if s.get('status') == 'live']
                 if live:
-                    return f"There {'is' if len(live) == 1 else 'are'} {len(live)} live session{'s' if len(live) > 1 else ''}: {', '.join(s.get('title', 'Untitled') for s in live[:3])}. Would you like to join one?"
-                return f"You have {len(results)} sessions. None are live right now. Would you like to start one?"
-            return "No sessions found. Would you like to create a new session?"
+                    verb = 'is' if lang == 'en' else ''
+                    plural = 'es' if len(live) > 1 else ''
+                    names = ', '.join(s.get('title', 'Untitled') for s in live[:3])
+                    return get_response('live_sessions', lang, verb=verb, count=len(live), plural=plural, names=names)
+                return get_response('sessions_none_live', lang, count=len(results))
+            return get_response('no_sessions', lang)
 
         if intent_value == 'create_session':
-            return "Opening session creation. What topic will this session cover?"
+            return get_response('create_session', lang)
 
         if intent_value == 'select_session':
             if isinstance(results, dict) and results.get("session"):
                 session = results["session"]
-                return f"Opening {session.get('title', 'the session')}. Status: {session.get('status', 'unknown')}."
-            return "Opening the first session. You can also say 'open second session' or specify a session name."
+                status = get_status_name(session.get('status', 'unknown'), lang)
+                return get_response('select_session', lang, name=session.get('title', 'the session'), status=status)
+            return get_response('selecting_session', lang)
 
         if intent_value == 'go_live':
-            return "Session is now live! Students can join and start participating. The copilot is ready when you need it."
+            return get_response('session_live', lang)
 
         if intent_value == 'end_session':
-            return "Session has ended. Would you like me to generate a report?"
+            return get_response('session_ended', lang)
 
         if intent_value == 'view_materials':
-            return "Opening the course materials. You can view and download uploaded files here."
+            return get_response('opening_materials', lang)
 
         # === SESSION STATUS MANAGEMENT RESPONSES ===
         if intent_value == 'set_session_draft':
-            return "Session has been set to draft. You can edit it or go live when ready."
+            return get_response('session_draft', lang)
 
         if intent_value == 'set_session_live':
-            return "Session is now live! Students can join and start participating."
+            return get_response('session_live', lang)
 
         if intent_value == 'set_session_completed':
-            return "Session has been completed. You can now generate a report for this session."
+            return get_response('session_completed', lang)
 
         if intent_value == 'schedule_session':
-            return "Session has been scheduled. You can go live when you're ready to start."
+            return get_response('session_scheduled', lang)
 
         if intent_value == 'edit_session':
             return "Opening the edit session dialog. You can change the session title and details."
@@ -1681,11 +1886,14 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
     6. Template-based summary (no LLM)
     """
     transcript = request.transcript.strip()
+    language = request.language or 'en'  # Default to English
 
     if not transcript:
+        no_catch_msg = get_response('error_not_found', language) if language == 'es' else "I didn't catch that. Could you say it again?"
+        suggestions = ["Mostrar mis cursos", "Iniciar sesion", "Abrir foro"] if language == 'es' else ["Show my courses", "Start a session", "Open forum"]
         return ConverseResponse(
-            message=sanitize_speech("I didn't catch that. Could you say it again?"),
-            suggestions=["Show my courses", "Start a session", "Open forum"]
+            message=sanitize_speech(no_catch_msg),
+            suggestions=suggestions
         )
 
     # === CHECK CONVERSATION STATE FIRST ===
@@ -1744,7 +1952,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     message=sanitize_speech(result["message"]),
                     action=ActionResponse(type='execute', executed=True),
                     results=[action_result] if action_result else None,
-                    suggestions=get_action_suggestions(result["action"]),
+                    suggestions=get_action_suggestions(result["action"], language),
                 )
             else:
                 return ConverseResponse(
@@ -1788,7 +1996,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         nav_path = detect_navigation_intent(transcript)
         if nav_path:
             conversation_manager.cancel_dropdown_selection(request.user_id)
-            message = sanitize_speech(f"Cancelling selection. {generate_conversational_response('navigate', nav_path)}")
+            message = sanitize_speech(f"Cancelling selection. {generate_conversational_response('navigate', nav_path, language=language)}")
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
@@ -1854,7 +2062,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             if nav_path:
                 # User wants to navigate - cancel form and navigate
                 conversation_manager.cancel_form(request.user_id)
-                message = sanitize_speech(f"Cancelling form. {generate_conversational_response('navigate', nav_path)}")
+                message = sanitize_speech(f"Cancelling form. {generate_conversational_response('navigate', nav_path, language=language)}")
                 return ConverseResponse(
                     message=message,
                     action=ActionResponse(type='navigate', target=nav_path),
@@ -1863,7 +2071,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                             {"type": "ui.navigate", "payload": {"path": nav_path}},
                         ]
                     }],
-                    suggestions=get_page_suggestions(nav_path)
+                    suggestions=get_page_suggestions(nav_path, language)
                 )
 
             # Check for tab switching intent (e.g., "go to manage status tab")
@@ -2045,7 +2253,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         nav_path = detect_navigation_intent(transcript)
         if nav_path:
             conversation_manager.reset_post_offer(request.user_id)
-            message = sanitize_speech(f"Cancelling post. {generate_conversational_response('navigate', nav_path)}")
+            message = sanitize_speech(f"Cancelling post. {generate_conversational_response('navigate', nav_path, language=language)}")
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
@@ -2054,7 +2262,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         {"type": "ui.navigate", "payload": {"path": nav_path}},
                     ]
                 }],
-                suggestions=get_page_suggestions(nav_path)
+                suggestions=get_page_suggestions(nav_path, language)
             )
 
         # Check for cancel keywords
@@ -2232,7 +2440,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         nav_path = detect_navigation_intent(transcript)
         if nav_path:
             conversation_manager.reset_poll_offer(request.user_id)
-            message = sanitize_speech(f"Cancelling poll creation. {generate_conversational_response('navigate', nav_path)}")
+            message = sanitize_speech(f"Cancelling poll creation. {generate_conversational_response('navigate', nav_path, language=language)}")
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
@@ -2241,7 +2449,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         {"type": "ui.navigate", "payload": {"path": nav_path}},
                     ]
                 }],
-                suggestions=get_page_suggestions(nav_path)
+                suggestions=get_page_suggestions(nav_path, language)
             )
 
         # Check for cancel keywords
@@ -2278,7 +2486,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         nav_path = detect_navigation_intent(transcript)
         if nav_path:
             conversation_manager.reset_poll_offer(request.user_id)
-            message = sanitize_speech(f"Cancelling poll creation. {generate_conversational_response('navigate', nav_path)}")
+            message = sanitize_speech(f"Cancelling poll creation. {generate_conversational_response('navigate', nav_path, language=language)}")
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
@@ -2287,7 +2495,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         {"type": "ui.navigate", "payload": {"path": nav_path}},
                     ]
                 }],
-                suggestions=get_page_suggestions(nav_path)
+                suggestions=get_page_suggestions(nav_path, language)
             )
 
         # Check for cancel keywords
@@ -2449,7 +2657,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         nav_path = detect_navigation_intent(transcript)
         if nav_path:
             conversation_manager.reset_case_offer(request.user_id)
-            message = sanitize_speech(f"Cancelling case creation. {generate_conversational_response('navigate', nav_path)}")
+            message = sanitize_speech(f"Cancelling case creation. {generate_conversational_response('navigate', nav_path, language=language)}")
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
@@ -2458,7 +2666,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         {"type": "ui.navigate", "payload": {"path": nav_path}},
                     ]
                 }],
-                suggestions=get_page_suggestions(nav_path)
+                suggestions=get_page_suggestions(nav_path, language)
             )
 
         # Check for cancel keywords
@@ -3052,7 +3260,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         if intent.confidence < LLM_INTENT_CONFIDENCE_THRESHOLD or intent.clarification_needed:
             fallback_nav = detect_navigation_intent(transcript)
             if fallback_nav:
-                message = sanitize_speech(generate_conversational_response('navigate', fallback_nav))
+                message = sanitize_speech(generate_conversational_response('navigate', fallback_nav, language=language))
                 return ConverseResponse(
                     message=message,
                     action=ActionResponse(type='navigate', target=fallback_nav),
@@ -3062,7 +3270,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                             {"type": "ui.toast", "payload": {"message": f"Navigating to {fallback_nav}", "type": "info"}},
                         ]
                     }],
-                    suggestions=get_page_suggestions(fallback_nav)
+                    suggestions=get_page_suggestions(fallback_nav, language=language)
                 )
 
             fallback_action = detect_action_intent(transcript)
@@ -3082,23 +3290,24 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         results=result,
                         context=request.context,
                         current_page=request.current_page,
+                        language=language,
                     )),
                     action=ActionResponse(type='execute', executed=True),
                     results=results_list,
-                    suggestions=get_action_suggestions(fallback_action),
+                    suggestions=get_action_suggestions(fallback_action, language),
                 )
 
-            clarification_msg = intent.clarification_message or "I'm not quite sure what you'd like to do. Could you please rephrase that?"
+            clarification_msg = intent.clarification_message or ("No estoy seguro de lo que te gustaria hacer. Puedes reformularlo?" if language == 'es' else "I'm not quite sure what you'd like to do. Could you please rephrase that?")
             return ConverseResponse(
                 message=sanitize_speech(clarification_msg),
                 action=ActionResponse(type='info'),
-                suggestions=get_page_suggestions(request.current_page),
+                suggestions=get_page_suggestions(request.current_page, language),
             )
 
         # Handle navigation intent
         if intent_result["type"] == "navigate":
             nav_path = intent_result["value"]
-            message = sanitize_speech(generate_conversational_response('navigate', nav_path))
+            message = sanitize_speech(generate_conversational_response('navigate', nav_path, language=language))
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
@@ -3108,7 +3317,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         {"type": "ui.toast", "payload": {"message": f"Navigating to {nav_path}", "type": "info"}},
                     ]
                 }],
-                suggestions=get_page_suggestions(nav_path)
+                suggestions=get_page_suggestions(nav_path, language)
             )
 
         # Handle action intent (UI actions, queries, creates, controls)
@@ -3125,10 +3334,11 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     results=result,
                     context=request.context,
                     current_page=request.current_page,
+                    language=language,
                 )),
                 action=ActionResponse(type='execute', executed=True),
                 results=results_list,
-                suggestions=get_action_suggestions(action),
+                suggestions=get_action_suggestions(action, language),
             )
 
         # Handle confirmation intent (yes/no/cancel/skip)
@@ -3137,16 +3347,17 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         if intent_result["type"] == "confirm":
             confirm_type = intent_result["value"]
             if confirm_type == "yes":
+                ready_msg = "Estoy listo para ayudar. Que te gustaria que confirme?" if language == 'es' else "I'm ready to help. What would you like me to confirm?"
                 return ConverseResponse(
-                    message=sanitize_speech("I'm ready to help. What would you like me to confirm?"),
+                    message=sanitize_speech(ready_msg),
                     action=ActionResponse(type='info'),
-                    suggestions=get_page_suggestions(request.current_page),
+                    suggestions=get_page_suggestions(request.current_page, language),
                 )
             elif confirm_type in ["no", "cancel"]:
                 return ConverseResponse(
                     message=sanitize_speech("Okay, cancelled. What else can I help you with?"),
                     action=ActionResponse(type='info'),
-                    suggestions=get_page_suggestions(request.current_page),
+                    suggestions=get_page_suggestions(request.current_page, language),
                 )
 
         # Handle dictation intent
@@ -3170,7 +3381,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         # 1. Check for navigation intent first (fast regex - instant)
         nav_path = detect_navigation_intent(transcript)
         if nav_path:
-            message = sanitize_speech(generate_conversational_response('navigate', nav_path))
+            message = sanitize_speech(generate_conversational_response('navigate', nav_path, language=language))
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
@@ -3180,7 +3391,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         {"type": "ui.toast", "payload": {"message": f"Navigating to {nav_path}", "type": "info"}},
                     ]
                 }],
-                suggestions=get_page_suggestions(nav_path)
+                suggestions=get_page_suggestions(nav_path, language=language)
             )
 
         # 2. Check for action intent via regex
@@ -3195,17 +3406,18 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     results=result,
                     context=request.context,
                     current_page=request.current_page,
+                    language=language,
                 )),
                 action=ActionResponse(type='execute', executed=True),
                 results=results_list,
-                suggestions=get_action_suggestions(action),
+                suggestions=get_action_suggestions(action, language=language),
             )
 
         # 3. No clear intent - provide helpful fallback
-        fallback_message = generate_fallback_response(transcript, request.context, request.current_page)
+        fallback_message = generate_fallback_response(transcript, request.context, request.current_page, language)
 
     # Get page-specific suggestions instead of generic ones
-    page_suggestions = get_page_suggestions(request.current_page)
+    page_suggestions = get_page_suggestions(request.current_page, language)
 
     return ConverseResponse(
         message=sanitize_speech(fallback_message),
@@ -5770,21 +5982,32 @@ async def _handle_open_question(question: str, current_page: Optional[str] = Non
         }
 
 
-def get_page_suggestions(path: str) -> List[str]:
-    """Get contextual suggestions for a page"""
+def get_page_suggestions(path: str, language: str = 'en') -> List[str]:
+    """Get contextual suggestions for a page in the specified language"""
     suggestions = {
-        '/courses': ["Create a new course", "Generate session plans", "View enrollments"],
-        '/sessions': ["Start a session", "View session details", "Check copilot status"],
-        '/forum': ["Post a case study", "View recent posts", "Pin a post"],
-        '/console': ["Start copilot", "Create a poll", "View suggestions"],
-        '/reports': ["Generate a report", "View participation", "Check scores"],
+        'en': {
+            '/courses': ["Create a new course", "Generate session plans", "View enrollments"],
+            '/sessions': ["Start a session", "View session details", "Check copilot status"],
+            '/forum': ["Post a case study", "View recent posts", "Pin a post"],
+            '/console': ["Start copilot", "Create a poll", "View suggestions"],
+            '/reports': ["Generate a report", "View participation", "Check scores"],
+        },
+        'es': {
+            '/courses': ["Crear un curso", "Generar planes de sesion", "Ver inscripciones"],
+            '/sessions': ["Iniciar sesion", "Ver detalles", "Ver estado del copiloto"],
+            '/forum': ["Publicar caso de estudio", "Ver publicaciones recientes", "Fijar publicacion"],
+            '/console': ["Iniciar copiloto", "Crear encuesta", "Ver sugerencias"],
+            '/reports': ["Generar reporte", "Ver participacion", "Ver calificaciones"],
+        }
     }
-    return suggestions.get(path, ["How can I help?"])
+    lang = language if language in suggestions else 'en'
+    default = ["Como puedo ayudarte?"] if lang == 'es' else ["How can I help?"]
+    return suggestions[lang].get(path, default)
 
 
-def get_action_suggestions(action: str) -> List[str]:
-    """Get follow-up suggestions after an action"""
-    suggestions = {
+def get_action_suggestions(action: str, language: str = 'en') -> List[str]:
+    """Get follow-up suggestions after an action in the specified language"""
+    suggestions_en = {
         # UI interaction suggestions
         'ui_select_course': ["Select a session", "Go to advanced tab", "Generate report"],
         'ui_select_session': ["Go live", "Start copilot", "View forum"],
@@ -5838,14 +6061,43 @@ def get_action_suggestions(action: str) -> List[str]:
         'copilot_suggestions': ["Create suggested poll", "Post to discussion", "Who needs help?"],
         'student_lookup': ["Check another student", "Who needs help?", "View participation"],
     }
-    return suggestions.get(action, ["What else can I help with?"])
+
+    suggestions_es = {
+        # UI interaction suggestions
+        'ui_select_course': ["Seleccionar sesion", "Ir a pestana avanzada", "Generar reporte"],
+        'ui_select_session': ["Iniciar en vivo", "Iniciar copiloto", "Ver foro"],
+        'ui_switch_tab': ["Que hay en esta pagina?", "Volver", "Ayudame"],
+        'ui_click_button': ["Que paso?", "Que sigue?", "Ir a otra pagina"],
+        # Course suggestions
+        'list_courses': ["Abrir un curso", "Crear curso nuevo", "Ver sesiones"],
+        'create_course': ["Agregar programa", "Definir objetivos", "Agregar estudiantes"],
+        'select_course': ["Ver sesiones", "Gestionar inscripciones", "Crear sesion"],
+        # Session suggestions
+        'list_sessions': ["Iniciar sesion", "Ir en vivo", "Ver detalles"],
+        'create_session': ["Ir en vivo", "Programar", "Ver sesiones"],
+        'select_session': ["Ir en vivo", "Ver detalles", "Iniciar copiloto"],
+        'go_live': ["Iniciar copiloto", "Crear encuesta", "Publicar caso"],
+        'end_session': ["Generar reporte", "Ver publicaciones", "Crear nueva sesion"],
+        # Copilot suggestions
+        'start_copilot': ["Ver sugerencias", "Crear encuesta", "Publicar caso"],
+        'stop_copilot': ["Generar reporte", "Ver intervenciones", "Ir al foro"],
+        # Poll suggestions
+        'create_poll': ["Ver respuestas", "Crear otra encuesta", "Publicar caso"],
+        # Report suggestions
+        'generate_report': ["Ver analiticas", "Exportar reporte", "Nueva sesion"],
+    }
+
+    if language == 'es':
+        return suggestions_es.get(action, ["En que mas puedo ayudarte?"])
+    return suggestions_en.get(action, ["What else can I help with?"])
 
 
-def generate_fallback_response(transcript: str, context: Optional[List[str]], current_page: Optional[str] = None) -> str:
+def generate_fallback_response(transcript: str, context: Optional[List[str]], current_page: Optional[str] = None, language: str = 'en') -> str:
     """Generate a helpful response when intent is unclear.
 
     Provides page-specific suggestions based on the user's current location.
     """
+    lang = language if language in ['en', 'es'] else 'en'
     # Normalize transcript for matching
     transcript_lower = normalize_spanish_text(transcript.lower())
 
@@ -5853,29 +6105,53 @@ def generate_fallback_response(transcript: str, context: Optional[List[str]], cu
     greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon',
                  'hola', 'buenos dias', 'buenas tardes', 'buenas noches']
     if any(g in transcript_lower for g in greetings):
-        suggestions = get_page_suggestions(current_page)
+        suggestions = get_page_suggestions(current_page, lang)
+        if lang == 'es':
+            return f"Hola! Como puedo ayudarte hoy? En esta pagina puedes: {', '.join(suggestions)}."
         return f"Hello! How can I help you today? On this page you can: {', '.join(suggestions)}."
 
     # Check for thanks (English + Spanish)
     thanks = ['thank', 'thanks', 'appreciate', 'gracias', 'muchas gracias']
     if any(t in transcript_lower for t in thanks):
+        if lang == 'es':
+            return "De nada! Hay algo mas en que pueda ayudarte?"
         return "You're welcome! Is there anything else I can help you with?"
 
     # Check for help (English + Spanish)
     help_words = ['help', 'ayuda', 'ayudame']
     if any(h in transcript_lower for h in help_words):
-        suggestions = get_page_suggestions(current_page)
+        suggestions = get_page_suggestions(current_page, lang)
+        if lang == 'es':
+            return f"En esta pagina puedes: {', '.join(suggestions)}. Que te gustaria hacer?"
         return f"On this page, you can: {', '.join(suggestions)}. What would you like to do?"
 
     # Page-specific fallback suggestions
     page_specific_hints = {
-        '/courses': "Try saying 'create a course', 'show my courses', or 'view materials'.",
-        '/sessions': "Try saying 'create a session', 'go live', or 'select a session'.",
-        '/forum': "Try saying 'post to discussion', 'view posts', or 'switch to case studies'.",
-        '/console': "Try saying 'start copilot', 'create a poll', or 'view roster'.",
-        '/reports': "Try saying 'generate report', 'view participation', or 'check scores'.",
-        '/dashboard': "Try saying 'go to courses', 'go to sessions', or 'go to forum'.",
+        'en': {
+            '/courses': "Try saying 'create a course', 'show my courses', or 'view materials'.",
+            '/sessions': "Try saying 'create a session', 'go live', or 'select a session'.",
+            '/forum': "Try saying 'post to discussion', 'view posts', or 'switch to case studies'.",
+            '/console': "Try saying 'start copilot', 'create a poll', or 'view roster'.",
+            '/reports': "Try saying 'generate report', 'view participation', or 'check scores'.",
+            '/dashboard': "Try saying 'go to courses', 'go to sessions', or 'go to forum'.",
+        },
+        'es': {
+            '/courses': "Intenta decir 'crear un curso', 'mostrar mis cursos', o 'ver materiales'.",
+            '/sessions': "Intenta decir 'crear una sesion', 'iniciar transmision', o 'seleccionar sesion'.",
+            '/forum': "Intenta decir 'publicar en discusion', 'ver publicaciones', o 'cambiar a casos'.",
+            '/console': "Intenta decir 'iniciar copilot', 'crear encuesta', o 'ver lista'.",
+            '/reports': "Intenta decir 'generar informe', 'ver participacion', o 'ver puntuaciones'.",
+            '/dashboard': "Intenta decir 'ir a cursos', 'ir a sesiones', o 'ir a foro'.",
+        }
     }
 
-    hint = page_specific_hints.get(current_page, "Try saying 'show my courses', 'go to forum', or 'start copilot'.")
+    default_hint = {
+        'en': "Try saying 'show my courses', 'go to forum', or 'start copilot'.",
+        'es': "Intenta decir 'mostrar mis cursos', 'ir a foro', o 'iniciar copilot'.",
+    }
+
+    hint = page_specific_hints.get(lang, {}).get(current_page, default_hint.get(lang, default_hint['en']))
+
+    if lang == 'es':
+        return f"Escuche '{transcript}', pero no estoy seguro de que te gustaria que hiciera. {hint}"
     return f"I heard '{transcript}', but I'm not sure what you'd like me to do. {hint}"

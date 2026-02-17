@@ -95,6 +95,7 @@ export const api = {
     context?: string[];
     user_id?: number;
     current_page?: string;
+    language?: 'en' | 'es';
   }): Promise<{
     message: string;
     action?: { type: 'navigate' | 'execute' | 'info'; target?: string; executed?: boolean };

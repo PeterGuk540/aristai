@@ -14,26 +14,37 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Any, Dict, Tuple
 import re
-import unicodedata
 
 from sqlalchemy.orm import Session
 
-
-def normalize_spanish_text(text: str) -> str:
-    """
-    Normalize Spanish text by removing accents and diacritics.
-    This allows voice transcripts (which often lack accents) to match patterns.
-    E.g., "sesión" -> "sesion", "llévame" -> "llevame"
-    """
-    if not text:
-        return text
-    # Normalize to decomposed form (NFD), then remove combining marks
-    normalized = unicodedata.normalize('NFD', text)
-    # Remove combining diacritical marks (accents)
-    without_accents = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
-    return without_accents
-
 from api.core.database import get_db
+
+# Phase 3: Import from modular components
+from api.api.voice_responses import (
+    RESPONSE_TEMPLATES,
+    PAGE_NAMES,
+    STATUS_NAMES,
+    get_response,
+    get_page_name,
+    get_status_name,
+)
+from api.api.voice_extraction import (
+    normalize_spanish_text,
+    extract_dictated_content as _extract_dictated_content,
+    extract_universal_dictation as _extract_universal_dictation,
+    extract_dropdown_hint as _extract_dropdown_hint,
+    extract_button_info as _extract_button_info,
+    extract_search_query as _extract_search_query,
+    extract_student_name as _extract_student_name,
+    extract_tab_info as _extract_tab_info,
+    extract_dropdown_selection as _extract_dropdown_selection,
+    is_confirmation,
+)
+from api.api.voice_helpers import (
+    get_page_suggestions,
+    get_action_suggestions,
+    generate_fallback_response,
+)
 from api.models.course import Course
 from api.models.user import User
 from api.models.integration import IntegrationProviderConnection, IntegrationCourseMapping
@@ -74,13 +85,97 @@ conversation_manager = VoiceConversationManager()
 # ============================================================================
 # CONFIGURATION: LLM-based Intent Detection
 # ============================================================================
-# Set to True to enable LLM-first intent detection (natural language understanding)
-# Set to False to use legacy regex-based pattern matching (faster but less flexible)
-USE_LLM_INTENT_DETECTION = True
+# LLM-first intent detection is now the ONLY mode (Phase 1 refactor)
+# Regex patterns are deprecated and kept only for reference
+USE_LLM_INTENT_DETECTION = True  # Always True - regex fallback removed
 
 # Confidence threshold for LLM intent detection
-# If confidence is below this, ask for clarification
-LLM_INTENT_CONFIDENCE_THRESHOLD = 0.6
+# If confidence is below this, ask for clarification (no regex fallback)
+LLM_INTENT_CONFIDENCE_THRESHOLD = 0.5  # Lowered from 0.6 - trust LLM more
+
+# ============================================================================
+# Phase 2.5: AUTO-NAVIGATION FOR CROSS-PAGE COMMANDS
+# ============================================================================
+# Maps actions to the page(s) they can be executed from.
+# If user issues a command from a different page, navigate first then execute.
+
+ACTION_REQUIRED_PAGES: Dict[str, List[str]] = {
+    # Course actions - require /courses or /courses/* pages
+    "create_course": ["/courses"],
+    "create_course_flow": ["/courses"],
+
+    # Session actions - require session or course context
+    "create_session": ["/courses/", "/sessions"],
+    "start_session": ["/sessions/"],
+    "end_session": ["/sessions/"],
+    "go_live": ["/sessions/"],
+
+    # Forum actions - require /forum page
+    "create_forum_post": ["/forum", "/courses/"],
+    "post_to_forum": ["/forum", "/courses/"],
+
+    # Poll/Quiz actions - require session context
+    "create_poll": ["/sessions/"],
+    "launch_poll": ["/sessions/"],
+    "create_quiz": ["/sessions/", "/courses/"],
+
+    # AI features - typically require session context
+    "generate_summary": ["/sessions/"],
+    "start_copilot": ["/sessions/"],
+    "stop_copilot": ["/sessions/"],
+
+    # Assignment actions - require course context
+    "create_assignment": ["/courses/"],
+    "grade_submissions": ["/courses/", "/assignments/"],
+}
+
+# Maps actions to their target navigation page when auto-navigation is needed
+ACTION_TARGET_PAGES: Dict[str, str] = {
+    "create_course": "/courses",
+    "create_course_flow": "/courses",
+    "create_forum_post": "/forum",
+    "post_to_forum": "/forum",
+    # Session actions require course context first
+    "create_session": "/courses",
+    # Other actions that need specific pages
+    "create_assignment": "/courses",
+}
+
+
+def get_auto_navigation(action: str, current_page: Optional[str]) -> Optional[str]:
+    """
+    Check if the current action requires navigation to a different page.
+
+    Returns:
+        Target path to navigate to, or None if no navigation needed.
+    """
+    if not action or not current_page:
+        return None
+
+    required_pages = ACTION_REQUIRED_PAGES.get(action)
+    if not required_pages:
+        # Action doesn't have page requirements - can execute anywhere
+        return None
+
+    # Check if current page matches any required page pattern
+    for required in required_pages:
+        if required.endswith("/"):
+            # Prefix match (e.g., "/courses/" matches "/courses/123")
+            if current_page.startswith(required) or current_page == required.rstrip("/"):
+                return None
+        else:
+            # Exact or prefix match
+            if current_page == required or current_page.startswith(required + "/"):
+                return None
+
+    # Need to navigate - get target page
+    target = ACTION_TARGET_PAGES.get(action)
+    if not target:
+        # Use first required page as fallback
+        target = required_pages[0].rstrip("/")
+
+    return target
+
 
 # Import your existing dependencies
 # from .auth import get_current_user
@@ -103,12 +198,84 @@ async def voice_logout(request: LogoutRequest):
     return {"message": "Voice context cleared"}
 
 
+class PendingActionRequest(BaseModel):
+    user_id: Optional[int] = None
+    current_page: Optional[str] = None
+    language: Optional[str] = "en"
+
+
+class PendingActionResponse(BaseModel):
+    has_pending: bool
+    action: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+    transcript: Optional[str] = None
+    message: Optional[str] = None
+
+
+@router.post("/pending-action")
+async def check_pending_action(request: PendingActionRequest, db: Session = Depends(get_db)):
+    """
+    Check for and execute any pending action after navigation.
+
+    Phase 2.5: When a user issues a command from a wrong page, we navigate first
+    and store the action. After navigation completes, frontend calls this endpoint
+    to execute the pending action.
+    """
+    pending = conversation_manager.get_pending_action(request.user_id)
+
+    if not pending:
+        return PendingActionResponse(has_pending=False)
+
+    # Execute the pending action
+    action = pending["action"]
+    parameters = pending.get("parameters", {})
+    transcript = pending.get("transcript", "")
+    language = request.language or "en"
+
+    print(f"🔄 Executing pending action: {action} with params: {parameters}")
+
+    # Execute the action
+    result = await execute_action(
+        action,
+        request.user_id,
+        request.current_page,
+        db,
+        transcript,
+        parameters,
+    )
+
+    # Generate a message for the action
+    message = generate_conversational_response(
+        'execute',
+        action,
+        results=result,
+        context=None,
+        current_page=request.current_page,
+        language=language,
+    )
+
+    return PendingActionResponse(
+        has_pending=True,
+        action=action,
+        parameters=parameters,
+        transcript=transcript,
+        message=sanitize_speech(message),
+    )
+
+
 class ConverseRequest(BaseModel):
     transcript: str
     context: Optional[List[str]] = None
     user_id: Optional[int] = None
     current_page: Optional[str] = None
     language: Optional[str] = "en"  # 'en' or 'es' - determines response language
+    # Phase 2: Rich page context for smarter LLM intent detection
+    available_tabs: Optional[List[str]] = None  # e.g., ["create", "manage", "sessions", "advanced"]
+    available_buttons: Optional[List[str]] = None  # e.g., ["create-course", "go-live", "submit"]
+    active_course_name: Optional[str] = None  # e.g., "Statistics 101"
+    active_session_name: Optional[str] = None  # e.g., "Week 3 Discussion"
+    is_session_live: Optional[bool] = None  # Whether current session is live
+    copilot_active: Optional[bool] = None  # Whether AI copilot is running
 
 
 class ActionResponse(BaseModel):
@@ -194,6 +361,37 @@ RESPONSE_TEMPLATES = {
         'generating_summary': "Generating a summary of the discussion.",
         'generating_questions': "Generating quiz questions from the discussion.",
         'creating_groups': "Creating AI-powered student groups.",
+
+        # Form filling
+        'form_cancelled': "Form cancelled. What would you like to do?",
+        'form_complete': "I've filled in all the required fields. Would you like me to submit the form?",
+        'confirm_yes_no': "Please say 'yes' to confirm or 'no' to cancel.",
+        'got_it_continue': "Got it! {prompt}",
+        'skipped_syllabus_offer': "Skipped. Now for the syllabus. Would you like me to generate one, or would you prefer to dictate it? You can also say 'skip'.",
+        'skipped_objectives_offer': "Skipped. Now for learning objectives. Would you like me to generate them, or would you prefer to dictate? You can also say 'skip'.",
+        'skipped_session_plan_offer': "Skipped. Now for the session description. Would you like me to generate a session plan, or would you prefer to dictate it?",
+        'syllabus_generate_offer': "I can generate a syllabus for '{course_name}'. Would you like me to create one?",
+        'objectives_generate_offer': "I can generate learning objectives for '{course_name}'. Would you like me to create them?",
+        'session_plan_generate_offer': "I can generate a session plan for '{topic}' including discussion prompts and a case study. Would you like me to create it?",
+        'syllabus_dictate': "Okay, please dictate the syllabus now. Say what you'd like to include.",
+        'objectives_dictate': "Okay, please dictate the learning objectives now.",
+        'syllabus_generate_confirm': "Would you like me to generate a syllabus for you? Say 'yes' to generate, 'no' to dictate it yourself, or 'skip' to move on.",
+        'objectives_generate_confirm': "Would you like me to generate learning objectives? Say 'yes' to generate, 'no' to dictate, or 'skip' to move on.",
+        'syllabus_saved': "Syllabus saved! {next_prompt}",
+        'syllabus_saved_objectives_offer': "Syllabus saved! Now for learning objectives. Would you like me to generate learning objectives based on the syllabus?",
+        'syllabus_saved_ready': "Syllabus saved! The form is ready to submit. Would you like me to create the course?",
+        'objectives_saved': "Objectives saved! {next_prompt}",
+        'objectives_saved_ready': "Objectives saved! The course is ready to create. Would you like me to create it now and generate session plans?",
+        'syllabus_edit': "The syllabus is in the form. You can edit it manually, or dictate a new one. Say 'done' when finished or 'skip' to move on.",
+        'post_cancelled': "Post cancelled. What else can I help you with?",
+        'poll_confirm': "Would you like to create a poll? Say yes or no.",
+        'poll_cancelled': "Poll creation cancelled. What else can I help you with?",
+        'cancelling_selection': "Cancelling selection. {nav_message}",
+        'cancelling_form': "Cancelling form. {nav_message}",
+        'cancelling_post': "Cancelling post. {nav_message}",
+        'cancelling_poll': "Cancelling poll creation. {nav_message}",
+        'cancelling_case': "Cancelling case creation. {nav_message}",
+        'submitting_form': "Submitting the form. Clicking {button}.",
     },
     'es': {
         # Navigation
@@ -258,6 +456,37 @@ RESPONSE_TEMPLATES = {
         'generating_summary': "Generando un resumen de la discusion.",
         'generating_questions': "Generando preguntas del cuestionario de la discusion.",
         'creating_groups': "Creando grupos de estudiantes con IA.",
+
+        # Form filling
+        'form_cancelled': "Formulario cancelado. Que te gustaria hacer?",
+        'form_complete': "He completado todos los campos requeridos. Te gustaria que envie el formulario?",
+        'confirm_yes_no': "Por favor di 'si' para confirmar o 'no' para cancelar.",
+        'got_it_continue': "Entendido! {prompt}",
+        'skipped_syllabus_offer': "Saltado. Ahora el programa de estudios. Te gustaria que genere uno, o prefieres dictarlo? Tambien puedes decir 'saltar'.",
+        'skipped_objectives_offer': "Saltado. Ahora los objetivos de aprendizaje. Te gustaria que los genere, o prefieres dictarlos? Tambien puedes decir 'saltar'.",
+        'skipped_session_plan_offer': "Saltado. Ahora la descripcion de la sesion. Te gustaria que genere un plan de sesion, o prefieres dictarlo?",
+        'syllabus_generate_offer': "Puedo generar un programa de estudios para '{course_name}'. Te gustaria que cree uno?",
+        'objectives_generate_offer': "Puedo generar objetivos de aprendizaje para '{course_name}'. Te gustaria que los cree?",
+        'session_plan_generate_offer': "Puedo generar un plan de sesion para '{topic}' incluyendo temas de discusion y un caso de estudio. Te gustaria que lo cree?",
+        'syllabus_dictate': "Bien, por favor dicta el programa de estudios ahora. Di lo que te gustaria incluir.",
+        'objectives_dictate': "Bien, por favor dicta los objetivos de aprendizaje ahora.",
+        'syllabus_generate_confirm': "Te gustaria que genere un programa de estudios? Di 'si' para generar, 'no' para dictarlo tu mismo, o 'saltar' para continuar.",
+        'objectives_generate_confirm': "Te gustaria que genere objetivos de aprendizaje? Di 'si' para generar, 'no' para dictar, o 'saltar' para continuar.",
+        'syllabus_saved': "Programa guardado! {next_prompt}",
+        'syllabus_saved_objectives_offer': "Programa guardado! Ahora los objetivos de aprendizaje. Te gustaria que genere objetivos basados en el programa?",
+        'syllabus_saved_ready': "Programa guardado! El formulario esta listo para enviar. Te gustaria que cree el curso?",
+        'objectives_saved': "Objetivos guardados! {next_prompt}",
+        'objectives_saved_ready': "Objetivos guardados! El curso esta listo para crear. Te gustaria que lo cree ahora y genere planes de sesion?",
+        'syllabus_edit': "El programa esta en el formulario. Puedes editarlo manualmente, o dictar uno nuevo. Di 'listo' cuando termines o 'saltar' para continuar.",
+        'post_cancelled': "Publicacion cancelada. En que mas puedo ayudarte?",
+        'poll_confirm': "Te gustaria crear una encuesta? Di si o no.",
+        'poll_cancelled': "Creacion de encuesta cancelada. En que mas puedo ayudarte?",
+        'cancelling_selection': "Cancelando seleccion. {nav_message}",
+        'cancelling_form': "Cancelando formulario. {nav_message}",
+        'cancelling_post': "Cancelando publicacion. {nav_message}",
+        'cancelling_poll': "Cancelando creacion de encuesta. {nav_message}",
+        'cancelling_case': "Cancelando creacion de caso. {nav_message}",
+        'submitting_form': "Enviando el formulario. Haciendo clic en {button}.",
     }
 }
 
@@ -335,7 +564,16 @@ def get_status_name(status: str, language: str = 'en') -> str:
 # Navigation intent patterns - expanded for better coverage (English + Spanish)
 # NOTE: Spanish patterns use non-accented characters because speech-to-text often omits accents.
 # The input text is normalized via normalize_spanish_text() before matching.
+# =============================================================================
+# DEPRECATED: REGEX-BASED PATTERN MATCHING
+# =============================================================================
+# These patterns are NO LONGER USED for intent detection as of Phase 1 refactor.
+# The system now uses LLM-only intent detection via voice_intent_classifier.py
+# These are kept for reference only and will be removed in a future cleanup.
+# =============================================================================
+
 NAVIGATION_PATTERNS = {
+    # DEPRECATED - kept for reference only
     # Courses - English
     r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(courses?|course list|my courses)\b': '/courses',
     r'\bcourses?\s*page\b': '/courses',
@@ -2117,19 +2355,83 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             if any(word in transcript.lower() for word in cancel_words):
                 conversation_manager.cancel_form(request.user_id)
                 return ConverseResponse(
-                    message=sanitize_speech("Form cancelled. What would you like to do?"),
+                    message=sanitize_speech(get_response('form_cancelled', language)),
                     action=ActionResponse(type='info'),
-                    suggestions=["Create course", "Create session", "Go to forum"],
+                    suggestions=get_page_suggestions(request.current_page, language),
                 )
 
             # Check for skip/next keywords
             skip_words = ['skip', 'next', 'pass', 'later', 'none', 'nothing']
             if any(word in transcript.lower() for word in skip_words):
                 skip_result = conversation_manager.skip_current_field(request.user_id)
+                # Check if next field supports AI generation and offer it
+                next_field = conversation_manager.get_current_field(request.user_id)
+                if next_field:
+                    if next_field.voice_id == "syllabus":
+                        conv_context = conversation_manager.get_context(request.user_id)
+                        conv_context.state = ConversationState.AWAITING_SYLLABUS_GENERATION_CONFIRM
+                        conversation_manager.save_context(request.user_id, conv_context)
+                        return ConverseResponse(
+                            message=sanitize_speech(get_response('skipped_syllabus_offer', language)),
+                            action=ActionResponse(type='info'),
+                            suggestions=["Yes, generate it", "No, I'll dictate", "Skip"] if language == 'en' else ["Si, generalo", "No, lo dictare", "Saltar"],
+                        )
+                    elif next_field.voice_id == "learning-objectives":
+                        conv_context = conversation_manager.get_context(request.user_id)
+                        conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
+                        conversation_manager.save_context(request.user_id, conv_context)
+                        return ConverseResponse(
+                            message=sanitize_speech(get_response('skipped_objectives_offer', language)),
+                            action=ActionResponse(type='info'),
+                            suggestions=["Yes, generate them", "No, I'll dictate", "Skip"] if language == 'en' else ["Si, generalos", "No, los dictare", "Saltar"],
+                        )
+                    elif next_field.voice_id == "textarea-session-description":
+                        conv_context = conversation_manager.get_context(request.user_id)
+                        conv_context.state = ConversationState.AWAITING_SESSION_PLAN_GENERATION_CONFIRM
+                        conversation_manager.save_context(request.user_id, conv_context)
+                        return ConverseResponse(
+                            message=sanitize_speech(get_response('skipped_session_plan_offer', language)),
+                            action=ActionResponse(type='info'),
+                            suggestions=["Yes, generate it", "No, I'll dictate", "Skip"] if language == 'en' else ["Si, generalo", "No, lo dictare", "Saltar"],
+                        )
                 return ConverseResponse(
                     message=sanitize_speech(skip_result["message"]),
                     action=ActionResponse(type='info'),
                     suggestions=["Continue", "Cancel form", "Help"],
+                )
+
+            # --- INTELLIGENT CONFIRMATION VS CONTENT DETECTION ---
+            # Detect if user is just confirming/agreeing rather than providing actual content
+            # This prevents "yes", "sure", "okay" from being used as field values
+            transcript_lower = transcript.lower().strip()
+            transcript_cleaned = transcript_lower.rstrip('.!?,')
+
+            # Pure confirmation phrases (these should NEVER be field values)
+            pure_confirmations = [
+                'yes', 'yeah', 'yep', 'yup', 'sure', 'okay', 'ok', 'alright', 'right',
+                'go ahead', 'proceed', 'continue', 'do it', "let's do it", "let's go",
+                'sounds good', 'perfect', 'great', 'fine', 'absolutely', 'definitely',
+                'of course', 'please', 'yes please', 'sure thing', 'you bet',
+                # Spanish confirmations
+                'si', 'sí', 'claro', 'vale', 'bueno', 'de acuerdo', 'por supuesto',
+                'adelante', 'continua', 'hazlo', 'perfecto', 'genial',
+            ]
+
+            # Check if the transcript is ONLY a confirmation (not part of actual content)
+            is_pure_confirmation = transcript_cleaned in pure_confirmations
+
+            # Also check for short confirmations that start a sentence
+            starts_with_confirmation = any(
+                transcript_cleaned.startswith(conf + ' ') or transcript_cleaned == conf
+                for conf in ['yes', 'yeah', 'sure', 'okay', 'ok', 'si', 'sí', 'claro']
+            ) and len(transcript_cleaned.split()) <= 3
+
+            if is_pure_confirmation or starts_with_confirmation:
+                # User is just confirming - re-prompt for actual content
+                return ConverseResponse(
+                    message=sanitize_speech(get_response('got_it_continue', language, prompt=current_field.prompt)),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Skip", "Cancel form", "Help"] if language == 'en' else ["Saltar", "Cancelar formulario", "Ayuda"],
                 )
 
             # Check if this is the course title field - save it for later generation
@@ -2149,9 +2451,9 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     conv_context.state = ConversationState.AWAITING_SYLLABUS_GENERATION_CONFIRM
                     conversation_manager.save_context(request.user_id, conv_context)
                     return ConverseResponse(
-                        message=sanitize_speech(f"I can generate a syllabus for '{course_name}'. Would you like me to create one?"),
+                        message=sanitize_speech(get_response('syllabus_generate_offer', language, course_name=course_name)),
                         action=ActionResponse(type='info'),
-                        suggestions=["Yes, generate it", "No, I'll dictate", "Skip"],
+                        suggestions=["Yes, generate it", "No, I'll dictate", "Skip"] if language == 'en' else ["Si, generalo", "No, lo dictare", "Saltar"],
                     )
 
             # Check if we're on the learning objectives field - offer AI generation
@@ -2164,9 +2466,9 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
                     conversation_manager.save_context(request.user_id, conv_context)
                     return ConverseResponse(
-                        message=sanitize_speech(f"I can generate learning objectives for '{course_name}'. Would you like me to create them?"),
+                        message=sanitize_speech(get_response('objectives_generate_offer', language, course_name=course_name)),
                         action=ActionResponse(type='info'),
-                        suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
+                        suggestions=["Yes, generate them", "No, I'll dictate", "Skip"] if language == 'en' else ["Si, generalos", "No, los dictare", "Saltar"],
                     )
 
             # Check if we're on session description field - offer AI session plan generation
@@ -2178,9 +2480,9 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     conv_context.state = ConversationState.AWAITING_SESSION_PLAN_GENERATION_CONFIRM
                     conversation_manager.save_context(request.user_id, conv_context)
                     return ConverseResponse(
-                        message=sanitize_speech(f"I can generate a session plan for '{session_topic}' including discussion prompts and a case study. Would you like me to create it?"),
+                        message=sanitize_speech(get_response('session_plan_generate_offer', language, topic=session_topic)),
                         action=ActionResponse(type='info'),
-                        suggestions=["Yes, generate it", "No, I'll dictate", "Skip"],
+                        suggestions=["Yes, generate it", "No, I'll dictate", "Skip"] if language == 'en' else ["Si, generalo", "No, lo dictare", "Saltar"],
                     )
 
             # Record the user's answer and fill the field
@@ -2818,6 +3120,16 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             # User wants to dictate or skip
             if 'skip' in transcript_lower:
                 skip_result = conversation_manager.skip_current_field(request.user_id)
+                # Check if next field is learning-objectives and offer AI generation
+                next_field = conversation_manager.get_current_field(request.user_id)
+                if next_field and next_field.voice_id == "learning-objectives":
+                    conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
+                    conversation_manager.save_context(request.user_id, conv_context)
+                    return ConverseResponse(
+                        message=sanitize_speech("Skipped syllabus. Would you like me to generate learning objectives for this course?"),
+                        action=ActionResponse(type='info'),
+                        suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
+                    )
                 return ConverseResponse(
                     message=sanitize_speech(skip_result["message"]),
                     action=ActionResponse(type='info'),
@@ -2885,6 +3197,21 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             skip_result = conversation_manager.skip_current_field(request.user_id)
             conv_context.generated_syllabus = ""
             conversation_manager.save_context(request.user_id, conv_context)
+            # Check if next field is learning-objectives and offer AI generation
+            next_field = conversation_manager.get_current_field(request.user_id)
+            if next_field and next_field.voice_id == "learning-objectives":
+                conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
+                conversation_manager.save_context(request.user_id, conv_context)
+                return ConverseResponse(
+                    message=sanitize_speech("Skipped syllabus. Would you like me to generate learning objectives for this course?"),
+                    action=ActionResponse(type='info'),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.clearInput", "payload": {"target": "syllabus"}},
+                        ]
+                    }],
+                    suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
+                )
             return ConverseResponse(
                 message=sanitize_speech(skip_result["message"]),
                 action=ActionResponse(type='info'),
@@ -3244,10 +3571,15 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         # This approach understands user intent regardless of exact phrasing.
         # "I want to go to the course page" works just as well as "go to courses"
 
-        # Build page context for smarter decisions
+        # Build page context for smarter decisions (Phase 2: rich context from frontend)
         page_context = build_page_context(
             current_page=request.current_page,
-            # TODO: Pass available tabs, buttons from frontend for even smarter detection
+            available_tabs=request.available_tabs,
+            available_buttons=request.available_buttons,
+            active_course_name=request.active_course_name,
+            active_session_name=request.active_session_name,
+            is_session_live=request.is_session_live,
+            copilot_active=request.copilot_active,
         )
 
         # Classify intent using LLM (fast confirmations checked first via regex)
@@ -3256,52 +3588,32 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         # Convert to legacy format for compatibility with existing action execution
         intent_result = intent_to_legacy_format(intent)
 
-        # Handle low confidence - try deterministic fallbacks before clarification.
+        # Handle low confidence - ask for intelligent clarification (no regex fallback)
+        # Phase 1: Trust LLM fully, provide helpful context-aware suggestions
         if intent.confidence < LLM_INTENT_CONFIDENCE_THRESHOLD or intent.clarification_needed:
-            fallback_nav = detect_navigation_intent(transcript)
-            if fallback_nav:
-                message = sanitize_speech(generate_conversational_response('navigate', fallback_nav, language=language))
-                return ConverseResponse(
-                    message=message,
-                    action=ActionResponse(type='navigate', target=fallback_nav),
-                    results=[{
-                        "ui_actions": [
-                            {"type": "ui.navigate", "payload": {"path": fallback_nav}},
-                            {"type": "ui.toast", "payload": {"message": f"Navigating to {fallback_nav}", "type": "info"}},
-                        ]
-                    }],
-                    suggestions=get_page_suggestions(fallback_nav, language=language)
-                )
+            # Build helpful suggestions based on what the LLM partially understood
+            suggestions = []
+            if intent.category == IntentCategory.NAVIGATE:
+                suggestions = ["Go to courses", "Go to sessions", "Go to forum"] if language == 'en' else ["Ir a cursos", "Ir a sesiones", "Ir a foro"]
+            elif intent.category == IntentCategory.CREATE:
+                suggestions = ["Create a course", "Create a session", "Create a poll"] if language == 'en' else ["Crear un curso", "Crear una sesion", "Crear una encuesta"]
+            elif intent.category == IntentCategory.QUERY:
+                suggestions = ["Show my courses", "Who needs help?", "Class status"] if language == 'en' else ["Mostrar mis cursos", "Quien necesita ayuda?", "Estado de la clase"]
+            else:
+                suggestions = get_page_suggestions(request.current_page, language)
 
-            fallback_action = detect_action_intent(transcript)
-            if fallback_action:
-                result = await execute_action(
-                    fallback_action,
-                    request.user_id,
-                    request.current_page,
-                    db,
-                    transcript,
-                )
-                results_list = [result] if result and not isinstance(result, list) else result
-                return ConverseResponse(
-                    message=sanitize_speech(generate_conversational_response(
-                        'execute',
-                        fallback_action,
-                        results=result,
-                        context=request.context,
-                        current_page=request.current_page,
-                        language=language,
-                    )),
-                    action=ActionResponse(type='execute', executed=True),
-                    results=results_list,
-                    suggestions=get_action_suggestions(fallback_action, language),
-                )
+            # Provide context-aware clarification message
+            if intent.clarification_message:
+                clarification_msg = intent.clarification_message
+            elif language == 'es':
+                clarification_msg = f"Escuche '{transcript}'. No estoy completamente seguro de lo que te gustaria hacer. ¿Podrias ser mas especifico?"
+            else:
+                clarification_msg = f"I heard '{transcript}'. I'm not quite sure what you'd like to do. Could you be more specific?"
 
-            clarification_msg = intent.clarification_message or ("No estoy seguro de lo que te gustaria hacer. Puedes reformularlo?" if language == 'es' else "I'm not quite sure what you'd like to do. Could you please rephrase that?")
             return ConverseResponse(
                 message=sanitize_speech(clarification_msg),
                 action=ActionResponse(type='info'),
-                suggestions=get_page_suggestions(request.current_page, language),
+                suggestions=suggestions,
             )
 
         # Handle navigation intent
@@ -3323,6 +3635,42 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         # Handle action intent (UI actions, queries, creates, controls)
         if intent_result["type"] == "action":
             action = intent_result["value"]
+
+            # Phase 2.5: Check if auto-navigation is needed for cross-page commands
+            nav_target = get_auto_navigation(action, request.current_page)
+            if nav_target:
+                # User is on wrong page - navigate first, then store action for after navigation
+                # Store the pending action in conversation state so it executes after navigation
+                conversation_manager.set_pending_action(
+                    request.user_id,
+                    action=action,
+                    parameters=intent_result.get("parameters"),
+                    transcript=transcript,
+                )
+
+                # Build navigation message with action context
+                action_name = action.replace("_", " ").replace("flow", "").strip()
+                if language == 'es':
+                    nav_message = f"Llevándote a {nav_target} para {action_name}. Un momento."
+                else:
+                    nav_message = f"Taking you to {nav_target} to {action_name}. One moment."
+
+                return ConverseResponse(
+                    message=sanitize_speech(nav_message),
+                    action=ActionResponse(type='navigate', target=nav_target),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.navigate", "payload": {"path": nav_target}},
+                            {"type": "ui.toast", "payload": {"message": nav_message, "type": "info"}},
+                        ],
+                        "pending_action": {
+                            "action": action,
+                            "parameters": intent_result.get("parameters"),
+                        }
+                    }],
+                    suggestions=[],  # No suggestions during auto-navigation
+                )
+
             # Pass extracted parameters to execute_action via transcript context
             # The LLM has already extracted tab names, button names, etc.
             result = await execute_action(action, request.user_id, request.current_page, db, transcript, intent_result.get("parameters"))
@@ -3370,51 +3718,11 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             )
 
         # Fallback for unclear intent
-        fallback_message = generate_fallback_response(transcript, request.context, request.current_page)
-
-    else:
-        # =====================================================================
-        # LEGACY REGEX-BASED INTENT DETECTION (Fast but rigid)
-        # =====================================================================
-        # This approach uses pattern matching - fast but requires exact phrasing.
-
-        # 1. Check for navigation intent first (fast regex - instant)
-        nav_path = detect_navigation_intent(transcript)
-        if nav_path:
-            message = sanitize_speech(generate_conversational_response('navigate', nav_path, language=language))
-            return ConverseResponse(
-                message=message,
-                action=ActionResponse(type='navigate', target=nav_path),
-                results=[{
-                    "ui_actions": [
-                        {"type": "ui.navigate", "payload": {"path": nav_path}},
-                        {"type": "ui.toast", "payload": {"message": f"Navigating to {nav_path}", "type": "info"}},
-                    ]
-                }],
-                suggestions=get_page_suggestions(nav_path, language=language)
-            )
-
-        # 2. Check for action intent via regex
-        action = detect_action_intent(transcript)
-        if action:
-            result = await execute_action(action, request.user_id, request.current_page, db, transcript)
-            results_list = [result] if result and not isinstance(result, list) else result
-            return ConverseResponse(
-                message=sanitize_speech(generate_conversational_response(
-                    'execute',
-                    action,
-                    results=result,
-                    context=request.context,
-                    current_page=request.current_page,
-                    language=language,
-                )),
-                action=ActionResponse(type='execute', executed=True),
-                results=results_list,
-                suggestions=get_action_suggestions(action, language=language),
-            )
-
-        # 3. No clear intent - provide helpful fallback
         fallback_message = generate_fallback_response(transcript, request.context, request.current_page, language)
+
+    # NOTE: Legacy regex-based intent detection (else branch) has been removed in Phase 1 refactor.
+    # The system now uses LLM-only intent detection for better natural language understanding.
+    # USE_LLM_INTENT_DETECTION is always True - regex patterns are deprecated.
 
     # Get page-specific suggestions instead of generic ones
     page_suggestions = get_page_suggestions(request.current_page, language)

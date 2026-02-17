@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Conversation } from '@elevenlabs/client';
 import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, MessageSquare, Sparkles, Globe } from 'lucide-react';
 import { useUser } from '@/lib/context';
@@ -48,6 +48,91 @@ interface ConversationalVoiceProps {
 // MCP_RESPONSE_PREFIX removed - not needed with Option A architecture
 // ElevenLabs agent handles all responses, backend only executes UI actions
 
+// Prefix used to send MCP responses through ElevenLabs
+const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
+
+/**
+ * Phase 2: Collect rich page context for smarter LLM intent detection
+ * Scans the DOM for available UI elements that can be voice-controlled
+ */
+function collectPageContext(): {
+  available_tabs: string[];
+  available_buttons: string[];
+  active_course_name?: string;
+  active_session_name?: string;
+  is_session_live?: boolean;
+  copilot_active?: boolean;
+} {
+  const context: {
+    available_tabs: string[];
+    available_buttons: string[];
+    active_course_name?: string;
+    active_session_name?: string;
+    is_session_live?: boolean;
+    copilot_active?: boolean;
+  } = {
+    available_tabs: [],
+    available_buttons: [],
+  };
+
+  if (typeof window === 'undefined') return context;
+
+  // Collect tabs from elements with data-voice-tab or role="tab"
+  const tabs = document.querySelectorAll('[data-voice-tab], [role="tab"], [data-state]');
+  tabs.forEach((tab) => {
+    const tabName =
+      tab.getAttribute('data-voice-tab') ||
+      tab.getAttribute('data-value') ||
+      tab.textContent?.trim();
+    if (tabName && tabName.length < 50) {
+      context.available_tabs.push(tabName);
+    }
+  });
+
+  // Collect clickable buttons with data-voice-id or visible text
+  const buttons = document.querySelectorAll('[data-voice-id], button:not([disabled]), [role="button"]');
+  buttons.forEach((btn) => {
+    const btnId = btn.getAttribute('data-voice-id');
+    const btnText = btn.textContent?.trim();
+    const ariaLabel = btn.getAttribute('aria-label');
+    const name = btnId || ariaLabel || btnText;
+    if (name && name.length < 50 && !name.includes('\n')) {
+      context.available_buttons.push(name);
+    }
+  });
+
+  // Deduplicate
+  context.available_tabs = Array.from(new Set(context.available_tabs));
+  context.available_buttons = Array.from(new Set(context.available_buttons)).slice(0, 20); // Limit to 20 buttons
+
+  // Check for active course/session name in page header or breadcrumb
+  const pageTitle = document.querySelector('h1, [data-voice-context="course-name"], [data-voice-context="session-name"]');
+  if (pageTitle) {
+    const titleText = pageTitle.textContent?.trim();
+    const pathname = window.location.pathname;
+    if (pathname.includes('/courses/') && titleText) {
+      context.active_course_name = titleText;
+    }
+    if (pathname.includes('/sessions/') && titleText) {
+      context.active_session_name = titleText;
+    }
+  }
+
+  // Check if session is live
+  const liveIndicator = document.querySelector('[data-voice-context="session-live"], .live-indicator, [data-state="live"]');
+  if (liveIndicator) {
+    context.is_session_live = true;
+  }
+
+  // Check if copilot is active
+  const copilotIndicator = document.querySelector('[data-voice-context="copilot-active"], .copilot-active');
+  if (copilotIndicator) {
+    context.copilot_active = true;
+  }
+
+  return context;
+}
+
 export function ConversationalVoice(props: ConversationalVoiceProps) {
   const {
     onActiveChange,
@@ -58,6 +143,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const { currentUser, isInstructor } = useUser();
   const { locale, setLocale } = useLanguage();
   const router = useRouter();
+  const pathname = usePathname();
   
   // Core state - start as 'disconnected' so user can click Start button
   const [state, setState] = useState<ConversationState>('disconnected');
@@ -85,6 +171,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const lastMcpResponseTimeRef = useRef<number>(0); // Track when MCP_RESPONSE was sent to filter duplicate AI responses
   const lastMcpResponseContentRef = useRef<string>(''); // Track MCP_RESPONSE content to detect duplicates
   const mcpResponseDisplayedRef = useRef<boolean>(false); // Track if MCP_RESPONSE has been displayed already
+  const previousPathnameRef = useRef<string | null>(null); // Phase 2.5: Track pathname for pending action detection
 
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = Number.MAX_SAFE_INTEGER;
@@ -100,6 +187,55 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       cleanup();
     };
   }, []);
+
+  // Phase 2.5: Check for pending actions after page navigation
+  // When user issues a cross-page command, we navigate first and store the action.
+  // After navigation completes, this effect executes the pending action.
+  useEffect(() => {
+    const checkPendingAction = async () => {
+      // Only check if pathname actually changed and we have a user
+      if (previousPathnameRef.current === pathname || !currentUser?.id) {
+        previousPathnameRef.current = pathname;
+        return;
+      }
+
+      const prevPath = previousPathnameRef.current;
+      previousPathnameRef.current = pathname;
+
+      // If this is the initial load (prevPath was null), skip
+      if (!prevPath) {
+        return;
+      }
+
+      console.log('🔄 Page changed from', prevPath, 'to', pathname, '- checking for pending actions');
+
+      try {
+        const pendingResult = await api.voiceCheckPendingAction({
+          user_id: currentUser.id,
+          current_page: pathname,
+          language: locale,
+        });
+
+        if (pendingResult.has_pending && pendingResult.message) {
+          console.log('✅ Executing pending action:', pendingResult.action);
+
+          // Speak the response through ElevenLabs
+          if (conversationRef.current) {
+            conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${pendingResult.message}`);
+          }
+
+          // Add to chat messages
+          addAssistantMessage(pendingResult.message);
+        }
+      } catch (error) {
+        console.error('❌ Failed to check/execute pending action:', error);
+      }
+    };
+
+    // Small delay to allow page to fully render
+    const timeoutId = setTimeout(checkPendingAction, 500);
+    return () => clearTimeout(timeoutId);
+  }, [pathname, currentUser?.id, locale]);
 
   // Auto-start removed - user must click Start button manually
   // This prevents unwanted auto-starting and flipping behavior
@@ -410,7 +546,19 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             const isGenericDenial = message && genericDenials.some(p => message.toLowerCase().includes(p));
 
             if (message && message.length > 5 && !isAck && !isGenericDenial) {
-              addAssistantMessage(message);
+              // Strip MCP_RESPONSE: prefix if ElevenLabs echoed it back
+              let cleanMessage = message;
+              if (cleanMessage.startsWith('MCP_RESPONSE:')) {
+                cleanMessage = cleanMessage.substring('MCP_RESPONSE:'.length).trim();
+              }
+              // Also handle case where it might be lowercase or have spaces
+              const mcpPrefixMatch = cleanMessage.match(/^mcp[_\s]?response[:\s]*/i);
+              if (mcpPrefixMatch) {
+                cleanMessage = cleanMessage.substring(mcpPrefixMatch[0].length).trim();
+              }
+              if (cleanMessage.length > 0) {
+                addAssistantMessage(cleanMessage);
+              }
             }
           }
         },
@@ -564,11 +712,22 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       const currentPage = typeof window !== 'undefined' ? window.location.pathname : undefined;
       console.log('📍 Current page:', currentPage);
 
+      // Phase 2: Collect rich page context for smarter LLM intent detection
+      const pageContext = collectPageContext();
+      console.log('📋 Page context:', pageContext);
+
       const response = await api.voiceConverse({
         transcript,
         user_id: currentUser?.id,
         current_page: currentPage,
         language: locale,
+        // Phase 2: Rich page context
+        available_tabs: pageContext.available_tabs,
+        available_buttons: pageContext.available_buttons,
+        active_course_name: pageContext.active_course_name,
+        active_session_name: pageContext.active_session_name,
+        is_session_live: pageContext.is_session_live,
+        copilot_active: pageContext.copilot_active,
       });
 
       console.log('📦 Backend response:', JSON.stringify(response, null, 2));

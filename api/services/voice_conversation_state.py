@@ -648,6 +648,60 @@ class VoiceConversationManager:
         context.retry_count = 0
         self.save_context(user_id, context)
 
+    # === Phase 2.5: Pending Action for Cross-Page Navigation ===
+
+    def set_pending_action(
+        self,
+        user_id: Optional[int],
+        action: str,
+        parameters: Optional[Dict[str, Any]] = None,
+        transcript: Optional[str] = None,
+    ) -> None:
+        """
+        Store a pending action to execute after navigation completes.
+
+        This is used when a user issues a command from a different page
+        (e.g., "create course" from /forum). The system navigates first,
+        then executes the action on the target page.
+        """
+        context = self.get_context(user_id)
+        context.pending_action = action
+        context.pending_action_data = {
+            "parameters": parameters or {},
+            "transcript": transcript or "",
+            "timestamp": time.time(),
+        }
+        self.save_context(user_id, context)
+
+    def get_pending_action(self, user_id: Optional[int]) -> Optional[Dict[str, Any]]:
+        """
+        Get and clear any pending action for the user.
+
+        Returns:
+            Dict with 'action', 'parameters', 'transcript' keys, or None.
+        """
+        context = self.get_context(user_id)
+        if not context.pending_action:
+            return None
+
+        result = {
+            "action": context.pending_action,
+            "parameters": context.pending_action_data.get("parameters", {}),
+            "transcript": context.pending_action_data.get("transcript", ""),
+        }
+
+        # Clear the pending action
+        context.pending_action = None
+        context.pending_action_data = {}
+        self.save_context(user_id, context)
+
+        return result
+
+    def has_pending_action(self, user_id: Optional[int]) -> bool:
+        """Check if user has a pending action without clearing it."""
+        context = self.get_context(user_id)
+        return context.pending_action is not None
+
     # === Page Structure ===
 
     def get_page_structure(self, path: str) -> Optional[PageStructure]:

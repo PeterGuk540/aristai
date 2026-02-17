@@ -96,6 +96,13 @@ export const api = {
     user_id?: number;
     current_page?: string;
     language?: 'en' | 'es';
+    // Phase 2: Rich page context for smarter LLM intent detection
+    available_tabs?: string[];       // e.g., ["create", "manage", "sessions", "advanced"]
+    available_buttons?: string[];    // e.g., ["create-course", "go-live", "submit"]
+    active_course_name?: string;     // e.g., "Statistics 101"
+    active_session_name?: string;    // e.g., "Week 3 Discussion"
+    is_session_live?: boolean;       // Whether current session is live
+    copilot_active?: boolean;        // Whether AI copilot is running
   }): Promise<{
     message: string;
     action?: { type: 'navigate' | 'execute' | 'info'; target?: string; executed?: boolean };
@@ -103,6 +110,24 @@ export const api = {
     suggestions?: string[];
   }> => {
     return fetchApi('/voice-converse/voice/converse', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  // Phase 2.5: Check and execute pending action after cross-page navigation
+  voiceCheckPendingAction: async (request: {
+    user_id?: number;
+    current_page?: string;
+    language?: 'en' | 'es';
+  }): Promise<{
+    has_pending: boolean;
+    action?: string;
+    parameters?: Record<string, any>;
+    transcript?: string;
+    message?: string;
+  }> => {
+    return fetchApi('/voice-converse/voice/pending-action', {
       method: 'POST',
       body: JSON.stringify(request),
     });

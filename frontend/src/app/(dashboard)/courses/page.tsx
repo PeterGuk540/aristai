@@ -67,7 +67,15 @@ export default function CoursesPage() {
   const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
     const { tab } = event.detail || {};
     if (tab) {
-      setActiveTab(tab === 'enrollment' || tab === 'instructor' ? 'advanced' : tab);
+      // Map normalized tab names (without hyphens) to actual tab values
+      const tabLower = tab.toLowerCase();
+      if (tabLower === 'enrollment' || tabLower === 'instructor') {
+        setActiveTab('advanced');
+      } else if (tabLower === 'aiinsights' || tabLower === 'ai-insights') {
+        setActiveTab('ai-insights');
+      } else {
+        setActiveTab(tab);
+      }
     }
   }, []);
 

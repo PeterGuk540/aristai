@@ -111,7 +111,18 @@ export default function SessionsPage() {
   const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
     const { tab } = event.detail || {};
     if (tab) {
-      setActiveTab(tab);
+      // Map normalized tab names (without hyphens) to actual tab values
+      const tabMap: Record<string, string> = {
+        'aifeatures': 'ai-features',
+        'ai-features': 'ai-features',
+        'sessions': 'sessions',
+        'materials': 'materials',
+        'create': 'create',
+        'manage': 'manage',
+        'insights': 'insights',
+      };
+      const mappedTab = tabMap[tab.toLowerCase()] || tab;
+      setActiveTab(mappedTab);
     }
   }, []);
 

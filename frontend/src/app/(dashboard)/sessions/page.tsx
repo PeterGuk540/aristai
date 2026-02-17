@@ -32,6 +32,11 @@ import { PreClassInsightsComponent } from '@/components/instructor/PreClassInsig
 import { PostClassSummaryComponent } from '@/components/instructor/PostClassSummary';
 import { StudentProgressComponent } from '@/components/instructor/StudentProgress';
 
+// Enhanced AI Features
+import { LiveSummaryComponent } from '@/components/enhanced/LiveSummary';
+import { QuestionBankComponent } from '@/components/enhanced/QuestionBank';
+import { PeerReviewPanelComponent } from '@/components/enhanced/PeerReviewPanel';
+
 const statusIcons: Record<SessionStatus, any> = {
   draft: FileEdit,
   scheduled: Clock,
@@ -517,6 +522,11 @@ export default function SessionsPage() {
             {hasInstructorPrivileges && (
               <TabsTrigger value="insights" data-voice-id="tab-insights">
                 Insights
+              </TabsTrigger>
+            )}
+            {hasInstructorPrivileges && (
+              <TabsTrigger value="ai-features" data-voice-id="tab-ai-features">
+                AI Features
               </TabsTrigger>
             )}
           </TabsList>
@@ -1115,6 +1125,66 @@ export default function SessionsPage() {
                         <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
                       </div>
                       <p className="text-neutral-600 dark:text-neutral-400">Select a session to view insights</p>
+                    </div>
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
+          )}
+
+          {hasInstructorPrivileges && (
+            <TabsContent value="ai-features">
+              <div className="space-y-6">
+                {selectedSession ? (
+                  <>
+                    {/* Live Discussion Summary */}
+                    {(selectedSession.status === 'live' || selectedSession.status === 'completed') && (
+                      <LiveSummaryComponent sessionId={selectedSession.id} />
+                    )}
+
+                    {/* Question Bank */}
+                    {selectedCourseId && (
+                      <QuestionBankComponent
+                        courseId={selectedCourseId}
+                        sessionId={selectedSession.id}
+                      />
+                    )}
+
+                    {/* Peer Review Panel */}
+                    {currentUser && (
+                      <PeerReviewPanelComponent
+                        sessionId={selectedSession.id}
+                        userId={currentUser.id}
+                        isInstructor={hasInstructorPrivileges}
+                      />
+                    )}
+
+                    {/* Voice Command Hints for AI Features */}
+                    <Card variant="ghost" padding="md">
+                      <h3 className="font-semibold text-neutral-900 dark:text-white mb-3">AI Feature Voice Commands</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          'Generate live summary',
+                          'Create quiz questions',
+                          'Show participation insights',
+                          'Create peer review assignments',
+                          'Analyze objective coverage',
+                          'Generate follow-ups for struggling students'
+                        ].map((cmd) => (
+                          <span key={cmd} className="px-3 py-1.5 text-sm bg-white dark:bg-neutral-700 rounded-full text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-600">
+                            "{cmd}"
+                          </span>
+                        ))}
+                      </div>
+                    </Card>
+                  </>
+                ) : (
+                  <Card variant="default" padding="lg">
+                    <div className="text-center py-8">
+                      <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                        <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+                      </div>
+                      <p className="text-neutral-600 dark:text-neutral-400">Select a session to access AI features</p>
                     </div>
                   </Card>
                 )}

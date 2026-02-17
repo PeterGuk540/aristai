@@ -589,43 +589,58 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         console.log('ℹ️ No UI actions needed');
       }
 
-      // MCP is the authoritative brain. Speak backend message when available.
-      // The backend provides data-driven responses (dropdown options, course lists, etc.)
-      // that ElevenLabs agent doesn't have access to, so we MUST speak these.
+      // OPTION B: Only speak MCP responses when they contain DATA that ElevenLabs
+      // doesn't have access to (dropdown options, course lists, student names, etc.)
+      // For simple confirmations (navigation, tab switching), ElevenLabs' response is sufficient.
+      //
+      // This prevents double responses - ElevenLabs speaks the conversational part,
+      // MCP only speaks when it has unique data to share.
       //
       // IMPORTANT: Do NOT call addAssistantMessage here!
       // The message will be added to chatbox when ElevenLabs speaks it and fires onMessage.
-      // Adding it here AND in onMessage causes duplicate messages in the chatbox.
       if (response?.message) {
-        // Check if ElevenLabs already gave a substantive response
-        // Brief acks like "One moment" don't count
-        const agentResponse = lastAgentResponseRef.current?.toLowerCase() || '';
-        const briefAcks = ['one moment', 'let me check', 'checking', 'doing that', 'un momento'];
-        const agentGaveSubstantiveResponse = agentResponse.length > 20 &&
-          !briefAcks.some(ack => agentResponse.includes(ack));
-
-        // Check if MCP response is just a simple confirmation
         const mcpMessage = response.message.toLowerCase();
-        const isSimpleConfirmation = mcpMessage.includes('taking you to') ||
-          mcpMessage.includes('opening') ||
-          mcpMessage.includes('switching to') ||
-          mcpMessage.includes('navigating to') ||
-          (mcpMessage.startsWith('selected') && mcpMessage.length < 50);
 
-        // If agent already responded substantively AND MCP is just confirming, skip MCP
-        // But if MCP has data (like dropdown options), always speak it
-        const mcpHasData = mcpMessage.includes('options are') ||
+        // Detect if MCP response contains DATA that ElevenLabs doesn't have
+        // These are dynamic values from the database that only MCP can provide
+        const mcpHasData =
+          // Numbered lists (dropdown options, course lists, etc.)
+          /\b\d+\.\s/.test(mcpMessage) ||
+          // Explicit data indicators
+          mcpMessage.includes('options are') ||
+          mcpMessage.includes('available options') ||
           mcpMessage.includes('your courses') ||
+          mcpMessage.includes('your sessions') ||
           mcpMessage.includes('which would you like') ||
-          mcpMessage.includes('1.') ||
-          mcpMessage.includes('2.');
+          mcpMessage.includes('please choose') ||
+          mcpMessage.includes('please select') ||
+          mcpMessage.includes('here are') ||
+          mcpMessage.includes('i found') ||
+          mcpMessage.includes('there are') ||
+          // Form field prompts (conversational flow data)
+          mcpMessage.includes('what is the') ||
+          mcpMessage.includes('please provide') ||
+          mcpMessage.includes('please enter') ||
+          mcpMessage.includes('what would you like to') ||
+          // Error messages with specific details
+          mcpMessage.includes('error:') ||
+          mcpMessage.includes('failed to') ||
+          // Summary/report data
+          mcpMessage.includes('summary:') ||
+          mcpMessage.includes('report:') ||
+          mcpMessage.includes('students') ||
+          mcpMessage.includes('participants') ||
+          // Question/confirmation requiring user response
+          mcpMessage.includes('would you like me to') ||
+          mcpMessage.includes('should i') ||
+          mcpMessage.includes('do you want');
 
-        if (agentGaveSubstantiveResponse && isSimpleConfirmation && !mcpHasData) {
-          console.log('ℹ️ Skipping MCP confirmation - agent already responded:', agentResponse.substring(0, 50));
-        } else {
-          console.log('📢 Speaking MCP-authoritative response via ElevenLabs');
-          // Only send to ElevenLabs - the onMessage handler will add to chatbox when spoken
+        if (mcpHasData) {
+          console.log('📢 Speaking MCP data response via ElevenLabs');
           speakViaElevenLabs(response.message);
+        } else {
+          // Skip simple confirmations - ElevenLabs already handled them
+          console.log('ℹ️ Skipping MCP simple confirmation (no unique data):', mcpMessage.substring(0, 60));
         }
       } else {
         console.log('ℹ️ No backend message to speak');

@@ -9,6 +9,7 @@ or exact wording, making voice interactions more natural and intuitive.
 """
 
 from typing import Optional, Dict, Any, List
+from dataclasses import dataclass
 from pydantic import BaseModel, Field
 from enum import Enum
 import json
@@ -968,4 +969,861 @@ def build_page_context(
         is_session_live=is_session_live,
         copilot_active=copilot_active,
     )
+
+
+# ============================================================================
+# INPUT TYPE CLASSIFICATION FOR FORM FILLING
+# ============================================================================
+# This classifier determines whether user input during form-filling is:
+# - CONTENT: actual data to be entered into a field
+# - META: meta-conversation (hesitation, thinking, questions about process)
+# - COMMAND: commands like cancel, skip, navigate
+# - CONFIRM: yes/no confirmation responses
+
+class InputType(str, Enum):
+    """Types of user input during form-filling"""
+    CONTENT = "content"  # Actual field content to be saved
+    META = "meta"        # Meta-conversation: hesitation, questions, thinking
+    COMMAND = "command"  # Commands: cancel, skip, help, navigate
+    CONFIRM = "confirm"  # Confirmation: yes/no
+
+
+class InputTypeResult(BaseModel):
+    """Result of input type classification"""
+    input_type: InputType
+    confidence: float = Field(ge=0.0, le=1.0)
+    command: Optional[str] = None  # If COMMAND: cancel, skip, help, etc.
+    confirm_value: Optional[str] = None  # If CONFIRM: yes, no
+    reason: Optional[str] = None  # Explanation for the classification
+
+
+INPUT_TYPE_CLASSIFICATION_PROMPT = '''You are an intelligent input classifier for a voice-driven form-filling system.
+The user is currently being asked to provide content for a form field. Your job is to determine
+whether their response is:
+
+1. **CONTENT** - They are providing actual content/data for the field
+2. **META** - They are NOT providing content, but instead:
+   - Hesitating ("let me think", "um", "hold on")
+   - Asking about the process ("what should I say?", "can you repeat that?")
+   - Thinking out loud ("I'm not sure", "let me consider")
+   - Stalling ("give me a second", "wait a moment")
+3. **COMMAND** - They want to give a command instead of content:
+   - Cancel/abort ("cancel", "I don't want to", "never mind", "forget it")
+   - Skip ("skip this", "next", "move on")
+   - Help ("help", "what can I say?", "what are my options?")
+   - Navigate ("go back", "take me to courses")
+   - Undo ("undo", "go back")
+4. **CONFIRM** - They are responding yes/no to something:
+   - Yes ("yes", "yeah", "sure", "okay")
+   - No ("no", "nope", "not yet")
+
+## Context:
+- The user is being asked: "{field_prompt}"
+- Field type: {field_type} (e.g., course title, syllabus, description)
+- Current form/workflow: {workflow_name}
+
+## User Input:
+"{user_input}"
+
+## Key Distinctions:
+
+### CONTENT vs META
+- "Let me think about it" → META (hesitation, not providing a title)
+- "Introduction to AI" → CONTENT (actual course title)
+- "Let me consider it" → META (not a course title)
+- "What should I put here?" → META (question about process)
+- "Machine Learning Fundamentals" → CONTENT (actual course title)
+- "Hmm, I'm not sure yet" → META (thinking)
+- "Give me a moment" → META (stalling)
+
+### CONTENT vs COMMAND
+- "I don't want to do this now" → COMMAND (cancel intent)
+- "I don't want to miss any details" → could be CONTENT for objectives
+- "Cancel" → COMMAND
+- "Calculus" → CONTENT (could be a course name)
+- "Skip this part" → COMMAND
+- "Let's skip to the main topics" → could be CONTENT for syllabus
+
+### Important Context Clues:
+- Very short responses (<5 words) that aren't proper nouns are likely META or COMMAND
+- Responses with filler words (um, uh, well, hmm) are likely META
+- Responses phrased as questions are likely META
+- Responses with clear hesitation markers are META
+- Responses with task-related verbs (cancel, skip, help, go to) are COMMAND
+
+## Response Format:
+Return a JSON object:
+{{
+    "input_type": "content" | "meta" | "command" | "confirm",
+    "confidence": 0.0 to 1.0,
+    "command": "cancel" | "skip" | "help" | "navigate" | "undo" | null,
+    "confirm_value": "yes" | "no" | null,
+    "reason": "Brief explanation of why this classification"
+}}
+
+Respond with only the JSON object.
+'''
+
+
+class FormInputClassifier:
+    """
+    LLM-based classifier for determining input type during form-filling.
+
+    This is more intelligent than pattern matching because it understands context:
+    - "Let me consider it" in a course name field = META (hesitation)
+    - "Consider All Options" in a course name field = CONTENT (actual title)
+    """
+
+    def __init__(self):
+        self._llm = None
+        self._model_name = None
+
+    def _ensure_llm(self):
+        """Lazy-load the LLM"""
+        if self._llm is None:
+            llm_result = get_llm_with_tracking()
+            if llm_result[0] is None:
+                logger.error("[FormInputClassifier] No LLM available - check API keys")
+                return False
+            self._llm, self._model_name = llm_result
+            logger.info(f"[FormInputClassifier] Initialized with model: {self._model_name}")
+        return True
+
+    def classify_input(
+        self,
+        user_input: str,
+        field_prompt: str,
+        field_type: str,
+        workflow_name: str = "form_filling"
+    ) -> InputTypeResult:
+        """
+        Classify whether user input is actual content or meta-conversation.
+
+        Args:
+            user_input: What the user said
+            field_prompt: The prompt shown to the user (e.g., "What would you like to name your course?")
+            field_type: Type of field (e.g., "course_title", "syllabus", "description")
+            workflow_name: Name of the current workflow
+
+        Returns:
+            InputTypeResult with classification
+        """
+        logger.info(f"[FormInputClassifier] Classifying: '{user_input}' for field '{field_type}'")
+
+        # Quick checks for obvious cases before using LLM
+        quick_result = self._quick_classify(user_input)
+        if quick_result:
+            logger.info(f"[FormInputClassifier] Quick classification: {quick_result.input_type}")
+            return quick_result
+
+        # Use LLM for ambiguous cases
+        if not self._ensure_llm():
+            # Fallback: assume content if LLM unavailable
+            return InputTypeResult(
+                input_type=InputType.CONTENT,
+                confidence=0.5,
+                reason="LLM unavailable, defaulting to content"
+            )
+
+        prompt = INPUT_TYPE_CLASSIFICATION_PROMPT.format(
+            field_prompt=field_prompt,
+            field_type=field_type,
+            workflow_name=workflow_name,
+            user_input=user_input,
+        )
+
+        try:
+            response = invoke_llm_with_metrics(self._llm, prompt, self._model_name)
+
+            if not response.success:
+                logger.warning(f"[FormInputClassifier] LLM call failed: {response.metrics.error_message}")
+                return self._fallback_result(user_input)
+
+            parsed = parse_json_response(response.content or "")
+            if not parsed:
+                logger.warning(f"[FormInputClassifier] Failed to parse: {response.content}")
+                return self._fallback_result(user_input)
+
+            result = InputTypeResult(
+                input_type=InputType(parsed.get("input_type", "content")),
+                confidence=float(parsed.get("confidence", 0.7)),
+                command=parsed.get("command"),
+                confirm_value=parsed.get("confirm_value"),
+                reason=parsed.get("reason"),
+            )
+
+            logger.info(f"[FormInputClassifier] Result: {result.input_type} (confidence: {result.confidence}) - {result.reason}")
+            return result
+
+        except Exception as e:
+            logger.error(f"[FormInputClassifier] Error: {e}", exc_info=True)
+            return self._fallback_result(user_input)
+
+    def _quick_classify(self, user_input: str) -> Optional[InputTypeResult]:
+        """
+        Quick pattern-based classification for obvious cases.
+        Returns None if ambiguous (needs LLM).
+        """
+        text = user_input.lower().strip()
+
+        # Very short single-word confirmations
+        if len(text.split()) <= 2:
+            # Clear confirmations
+            if text in {'yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'si', 'sí', 'claro', 'dale'}:
+                return InputTypeResult(
+                    input_type=InputType.CONFIRM,
+                    confidence=0.95,
+                    confirm_value="yes",
+                    reason="Clear affirmative response"
+                )
+            if text in {'no', 'nope', 'nah', 'not yet', 'no gracias'}:
+                return InputTypeResult(
+                    input_type=InputType.CONFIRM,
+                    confidence=0.95,
+                    confirm_value="no",
+                    reason="Clear negative response"
+                )
+
+            # Clear commands
+            if text in {'cancel', 'cancelar', 'abort', 'stop', 'quit', 'exit'}:
+                return InputTypeResult(
+                    input_type=InputType.COMMAND,
+                    confidence=0.95,
+                    command="cancel",
+                    reason="Clear cancel command"
+                )
+            if text in {'skip', 'next', 'pass', 'saltar', 'siguiente'}:
+                return InputTypeResult(
+                    input_type=InputType.COMMAND,
+                    confidence=0.95,
+                    command="skip",
+                    reason="Clear skip command"
+                )
+            if text in {'help', 'ayuda', 'help me'}:
+                return InputTypeResult(
+                    input_type=InputType.COMMAND,
+                    confidence=0.95,
+                    command="help",
+                    reason="Clear help request"
+                )
+
+            # Clear hesitation fillers
+            if text in {'um', 'uh', 'hmm', 'umm', 'uhh', 'eh', 'este', 'pues'}:
+                return InputTypeResult(
+                    input_type=InputType.META,
+                    confidence=0.95,
+                    reason="Filler word/hesitation"
+                )
+
+        # None = needs LLM classification
+        return None
+
+    def _fallback_result(self, user_input: str) -> InputTypeResult:
+        """Fallback when LLM fails - conservative approach"""
+        # If we can't classify, lean toward treating as content
+        # but with low confidence so caller can decide to re-prompt
+        return InputTypeResult(
+            input_type=InputType.CONTENT,
+            confidence=0.4,
+            reason="Classification failed, assuming content with low confidence"
+        )
+
+
+# Global form input classifier instance
+_form_input_classifier: Optional[FormInputClassifier] = None
+
+
+def get_form_input_classifier() -> FormInputClassifier:
+    """Get or create the global form input classifier"""
+    global _form_input_classifier
+    if _form_input_classifier is None:
+        _form_input_classifier = FormInputClassifier()
+    return _form_input_classifier
+
+
+def classify_form_input(
+    user_input: str,
+    field_prompt: str,
+    field_type: str = "text",
+    workflow_name: str = "form_filling"
+) -> InputTypeResult:
+    """
+    Convenience function to classify form input.
+
+    Usage:
+        result = classify_form_input(
+            user_input="Let me think about it",
+            field_prompt="What would you like to name your course?",
+            field_type="course_title",
+            workflow_name="create_course"
+        )
+
+        if result.input_type == InputType.META:
+            # Re-prompt the user, don't use this as the field value
+            pass
+        elif result.input_type == InputType.CONTENT:
+            # Use as field value
+            pass
+        elif result.input_type == InputType.COMMAND:
+            # Handle command (cancel, skip, etc.)
+            pass
+    """
+    classifier = get_form_input_classifier()
+    return classifier.classify_input(user_input, field_prompt, field_type, workflow_name)
+
+
+# =============================================================================
+# PHASE 6: LLM-BASED UI INTERACTION CLASSIFIERS
+# =============================================================================
+# These classifiers use LLM to intelligently identify UI elements without
+# relying on hard-coded pattern matching.
+
+class UIElementType(str, Enum):
+    """Types of UI elements that can be identified"""
+    TAB = "tab"
+    BUTTON = "button"
+    DROPDOWN = "dropdown"
+    INPUT = "input"
+    NAVIGATION = "navigation"
+    NONE = "none"
+
+
+@dataclass
+class UIElementResult:
+    """Result of UI element identification"""
+    element_type: UIElementType
+    element_name: Optional[str] = None  # The identified element (e.g., "advanced", "create poll")
+    confidence: float = 0.0
+    voice_id: Optional[str] = None  # The data-voice-id if known
+    reason: Optional[str] = None
+
+
+TAB_IDENTIFICATION_PROMPT = '''You are identifying tab names from voice commands in an educational platform.
+
+Available tabs on the current page:
+{available_tabs}
+
+User's voice command: "{user_input}"
+
+Determine if the user wants to switch to a specific tab.
+
+Examples:
+- "go to the advanced tab" → tab: "advanced"
+- "switch to manage status" → tab: "manage" (matches "manage status")
+- "open the discussion section" → tab: "discussion"
+- "let me see the polling" → tab: "polls"
+- "show me the roster" → tab: "roster"
+- "ir a la pestaña avanzada" → tab: "advanced" (Spanish)
+- "cambiar a discusión" → tab: "discussion" (Spanish)
+
+Respond with ONLY valid JSON:
+{{
+    "identified": true/false,
+    "tab_name": "exact_tab_name_from_list" or null,
+    "confidence": 0.0-1.0,
+    "reason": "brief explanation"
+}}
+
+If the user is NOT trying to switch tabs, set identified=false.'''
+
+
+BUTTON_IDENTIFICATION_PROMPT = '''You are identifying button actions from voice commands in an educational platform.
+
+Available buttons on the current page:
+{available_buttons}
+
+User's voice command: "{user_input}"
+
+Determine if the user wants to click a specific button.
+
+Examples:
+- "click create course" → button: "create-course"
+- "submit the form" → button matching "submit" or "create"
+- "go live" → button: "go-live" or "start-session"
+- "launch the poll" → button: "launch-poll" or "create-poll"
+- "crear curso" → button: "create-course" (Spanish)
+- "publicar caso" → button: "post-case" (Spanish)
+
+Respond with ONLY valid JSON:
+{{
+    "identified": true/false,
+    "button_name": "exact_button_voice_id" or null,
+    "confidence": 0.0-1.0,
+    "reason": "brief explanation"
+}}
+
+If the user is NOT trying to click a button, set identified=false.'''
+
+
+DROPDOWN_SELECTION_PROMPT = '''You are selecting dropdown options from voice commands in an educational platform.
+
+Dropdown: {dropdown_name}
+Available options:
+{available_options}
+
+User's voice command: "{user_input}"
+
+Determine which option the user wants to select.
+
+Examples:
+- "the first one" → ordinal selection (1st item)
+- "select Introduction to AI" → match by name
+- "pick the third option" → ordinal selection (3rd item)
+- "el segundo" → ordinal selection (2nd, Spanish)
+- "seleccionar el curso de matemáticas" → match by name (Spanish)
+
+Respond with ONLY valid JSON:
+{{
+    "identified": true/false,
+    "selection_type": "ordinal" or "name" or null,
+    "ordinal_index": 0-based index or null,
+    "matched_name": "exact option name" or null,
+    "confidence": 0.0-1.0,
+    "reason": "brief explanation"
+}}
+
+If the user is NOT making a selection, set identified=false.'''
+
+
+class UIElementClassifier:
+    """LLM-based classifier for UI elements."""
+
+    def __init__(self):
+        self._llm = None
+        self._model_name = None
+
+    def _ensure_llm(self) -> bool:
+        """Ensure LLM is initialized."""
+        if self._llm is None:
+            self._llm, self._model_name = get_llm_with_tracking()
+        return self._llm is not None
+
+    def identify_tab(
+        self,
+        user_input: str,
+        available_tabs: List[str],
+        language: str = "en"
+    ) -> UIElementResult:
+        """
+        Identify which tab the user wants to switch to.
+
+        Args:
+            user_input: The user's voice command
+            available_tabs: List of tab names available on the current page
+            language: Current language for context
+
+        Returns:
+            UIElementResult with identified tab
+        """
+        if not available_tabs:
+            return UIElementResult(element_type=UIElementType.NONE, reason="No tabs available")
+
+        if not self._ensure_llm():
+            return UIElementResult(element_type=UIElementType.NONE, reason="LLM unavailable")
+
+        tabs_str = "\n".join([f"- {tab}" for tab in available_tabs])
+        prompt = TAB_IDENTIFICATION_PROMPT.format(
+            available_tabs=tabs_str,
+            user_input=user_input
+        )
+
+        try:
+            response = invoke_llm_with_metrics(self._llm, prompt, self._model_name)
+            if not response.success:
+                return UIElementResult(element_type=UIElementType.NONE, reason="LLM call failed")
+
+            parsed = parse_json_response(response.content or "")
+            if not parsed or not parsed.get("identified"):
+                return UIElementResult(element_type=UIElementType.NONE, reason="Not a tab switch request")
+
+            tab_name = parsed.get("tab_name")
+            if tab_name and tab_name in available_tabs:
+                return UIElementResult(
+                    element_type=UIElementType.TAB,
+                    element_name=tab_name,
+                    confidence=float(parsed.get("confidence", 0.7)),
+                    reason=parsed.get("reason")
+                )
+
+            # Fuzzy match - find closest tab
+            tab_lower = (tab_name or "").lower()
+            for avail_tab in available_tabs:
+                if tab_lower in avail_tab.lower() or avail_tab.lower() in tab_lower:
+                    return UIElementResult(
+                        element_type=UIElementType.TAB,
+                        element_name=avail_tab,
+                        confidence=float(parsed.get("confidence", 0.6)),
+                        reason=f"Fuzzy matched '{tab_name}' to '{avail_tab}'"
+                    )
+
+            return UIElementResult(element_type=UIElementType.NONE, reason="Tab not found in available options")
+
+        except Exception as e:
+            logger.error(f"[UIElementClassifier] Tab identification error: {e}", exc_info=True)
+            return UIElementResult(element_type=UIElementType.NONE, reason=str(e))
+
+    def identify_button(
+        self,
+        user_input: str,
+        available_buttons: List[Dict[str, str]],  # [{"voice_id": "...", "label": "..."}]
+        language: str = "en"
+    ) -> UIElementResult:
+        """
+        Identify which button the user wants to click.
+
+        Args:
+            user_input: The user's voice command
+            available_buttons: List of button info with voice_id and label
+            language: Current language for context
+
+        Returns:
+            UIElementResult with identified button
+        """
+        if not available_buttons:
+            return UIElementResult(element_type=UIElementType.NONE, reason="No buttons available")
+
+        if not self._ensure_llm():
+            return UIElementResult(element_type=UIElementType.NONE, reason="LLM unavailable")
+
+        buttons_str = "\n".join([
+            f"- {btn.get('voice_id', 'unknown')}: {btn.get('label', btn.get('voice_id', ''))}"
+            for btn in available_buttons
+        ])
+        prompt = BUTTON_IDENTIFICATION_PROMPT.format(
+            available_buttons=buttons_str,
+            user_input=user_input
+        )
+
+        try:
+            response = invoke_llm_with_metrics(self._llm, prompt, self._model_name)
+            if not response.success:
+                return UIElementResult(element_type=UIElementType.NONE, reason="LLM call failed")
+
+            parsed = parse_json_response(response.content or "")
+            if not parsed or not parsed.get("identified"):
+                return UIElementResult(element_type=UIElementType.NONE, reason="Not a button click request")
+
+            button_name = parsed.get("button_name")
+            # Find matching button by voice_id
+            for btn in available_buttons:
+                if btn.get("voice_id") == button_name:
+                    return UIElementResult(
+                        element_type=UIElementType.BUTTON,
+                        element_name=btn.get("label", button_name),
+                        voice_id=button_name,
+                        confidence=float(parsed.get("confidence", 0.7)),
+                        reason=parsed.get("reason")
+                    )
+
+            # Fuzzy match
+            btn_lower = (button_name or "").lower()
+            for btn in available_buttons:
+                voice_id = btn.get("voice_id", "").lower()
+                label = btn.get("label", "").lower()
+                if btn_lower in voice_id or btn_lower in label or voice_id in btn_lower:
+                    return UIElementResult(
+                        element_type=UIElementType.BUTTON,
+                        element_name=btn.get("label"),
+                        voice_id=btn.get("voice_id"),
+                        confidence=float(parsed.get("confidence", 0.6)),
+                        reason=f"Fuzzy matched to '{btn.get('voice_id')}'"
+                    )
+
+            return UIElementResult(element_type=UIElementType.NONE, reason="Button not found")
+
+        except Exception as e:
+            logger.error(f"[UIElementClassifier] Button identification error: {e}", exc_info=True)
+            return UIElementResult(element_type=UIElementType.NONE, reason=str(e))
+
+    def identify_dropdown_selection(
+        self,
+        user_input: str,
+        dropdown_name: str,
+        available_options: List[Dict[str, str]],  # [{"value": "...", "label": "..."}]
+        language: str = "en"
+    ) -> UIElementResult:
+        """
+        Identify which dropdown option the user wants to select.
+
+        Args:
+            user_input: The user's voice command
+            dropdown_name: Name of the dropdown (e.g., "course", "session")
+            available_options: List of option info with value and label
+            language: Current language for context
+
+        Returns:
+            UIElementResult with selection info
+        """
+        if not available_options:
+            return UIElementResult(element_type=UIElementType.NONE, reason="No options available")
+
+        if not self._ensure_llm():
+            return UIElementResult(element_type=UIElementType.NONE, reason="LLM unavailable")
+
+        options_str = "\n".join([
+            f"{i+1}. {opt.get('label', opt.get('value', 'Unknown'))}"
+            for i, opt in enumerate(available_options)
+        ])
+        prompt = DROPDOWN_SELECTION_PROMPT.format(
+            dropdown_name=dropdown_name,
+            available_options=options_str,
+            user_input=user_input
+        )
+
+        try:
+            response = invoke_llm_with_metrics(self._llm, prompt, self._model_name)
+            if not response.success:
+                return UIElementResult(element_type=UIElementType.NONE, reason="LLM call failed")
+
+            parsed = parse_json_response(response.content or "")
+            if not parsed or not parsed.get("identified"):
+                return UIElementResult(element_type=UIElementType.NONE, reason="Not a selection request")
+
+            selection_type = parsed.get("selection_type")
+
+            if selection_type == "ordinal":
+                idx = parsed.get("ordinal_index")
+                if idx is not None and 0 <= idx < len(available_options):
+                    selected = available_options[idx]
+                    return UIElementResult(
+                        element_type=UIElementType.DROPDOWN,
+                        element_name=selected.get("label"),
+                        voice_id=selected.get("value"),
+                        confidence=float(parsed.get("confidence", 0.8)),
+                        reason=f"Ordinal selection: item {idx + 1}"
+                    )
+
+            elif selection_type == "name":
+                matched_name = parsed.get("matched_name", "").lower()
+                for opt in available_options:
+                    if matched_name in opt.get("label", "").lower():
+                        return UIElementResult(
+                            element_type=UIElementType.DROPDOWN,
+                            element_name=opt.get("label"),
+                            voice_id=opt.get("value"),
+                            confidence=float(parsed.get("confidence", 0.7)),
+                            reason=f"Name matched: {opt.get('label')}"
+                        )
+
+            return UIElementResult(element_type=UIElementType.NONE, reason="Could not match selection")
+
+        except Exception as e:
+            logger.error(f"[UIElementClassifier] Dropdown selection error: {e}", exc_info=True)
+            return UIElementResult(element_type=UIElementType.NONE, reason=str(e))
+
+
+# Global UI element classifier instance
+_ui_element_classifier: Optional[UIElementClassifier] = None
+
+
+def get_ui_element_classifier() -> UIElementClassifier:
+    """Get or create the global UI element classifier"""
+    global _ui_element_classifier
+    if _ui_element_classifier is None:
+        _ui_element_classifier = UIElementClassifier()
+    return _ui_element_classifier
+
+
+def classify_tab_switch(
+    user_input: str,
+    available_tabs: List[str],
+    language: str = "en"
+) -> UIElementResult:
+    """
+    Convenience function to identify tab switch intent.
+
+    Usage:
+        result = classify_tab_switch(
+            user_input="go to the advanced settings",
+            available_tabs=["create", "manage", "advanced", "instructor"],
+            language="en"
+        )
+
+        if result.element_type == UIElementType.TAB:
+            switch_to_tab(result.element_name)
+    """
+    classifier = get_ui_element_classifier()
+    return classifier.identify_tab(user_input, available_tabs, language)
+
+
+def classify_button_click(
+    user_input: str,
+    available_buttons: List[Dict[str, str]],
+    language: str = "en"
+) -> UIElementResult:
+    """
+    Convenience function to identify button click intent.
+
+    Usage:
+        result = classify_button_click(
+            user_input="click create course",
+            available_buttons=[
+                {"voice_id": "create-course", "label": "Create Course"},
+                {"voice_id": "import-course", "label": "Import Course"}
+            ],
+            language="en"
+        )
+
+        if result.element_type == UIElementType.BUTTON:
+            click_button(result.voice_id)
+    """
+    classifier = get_ui_element_classifier()
+    return classifier.identify_button(user_input, available_buttons, language)
+
+
+def classify_dropdown_selection(
+    user_input: str,
+    dropdown_name: str,
+    available_options: List[Dict[str, str]],
+    language: str = "en"
+) -> UIElementResult:
+    """
+    Convenience function to identify dropdown selection.
+
+    Usage:
+        result = classify_dropdown_selection(
+            user_input="the second one",
+            dropdown_name="course",
+            available_options=[
+                {"value": "1", "label": "Introduction to AI"},
+                {"value": "2", "label": "Machine Learning Basics"}
+            ],
+            language="en"
+        )
+
+        if result.element_type == UIElementType.DROPDOWN:
+            select_option(result.voice_id, result.element_name)
+    """
+    classifier = get_ui_element_classifier()
+    return classifier.identify_dropdown_selection(user_input, dropdown_name, available_options, language)
+
+
+# =============================================================================
+# PHASE 6: LLM-BASED RESPONSE GENERATOR
+# =============================================================================
+# Instead of hardcoded response templates, use LLM to generate natural responses
+# in the user's selected language.
+
+RESPONSE_GENERATION_PROMPT = '''You are a friendly voice assistant for AristAI, a classroom management platform.
+Generate a natural, conversational response for the given situation.
+
+CRITICAL: You MUST respond ONLY in {language_name}. The user has selected this language.
+Do NOT mix languages. Every word must be in {language_name}.
+
+Situation: {situation}
+Context: {context}
+Data: {data}
+
+Requirements:
+1. Keep the response concise (1-2 sentences max for voice)
+2. Be friendly and helpful
+3. Use natural spoken language (this will be read aloud by text-to-speech)
+4. Include relevant details from the data if provided
+5. If suggesting next actions, limit to 2-3 options
+
+Respond with ONLY the message text, no JSON or formatting.'''
+
+
+class LLMResponseGenerator:
+    """LLM-based response generator for voice commands."""
+
+    def __init__(self):
+        self._llm = None
+        self._model_name = None
+
+    def _ensure_llm(self) -> bool:
+        """Ensure LLM is initialized."""
+        if self._llm is None:
+            self._llm, self._model_name = get_llm_with_tracking()
+        return self._llm is not None
+
+    def generate_response(
+        self,
+        situation: str,
+        language: str = "en",
+        context: Optional[str] = None,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """
+        Generate a natural language response using LLM.
+
+        Args:
+            situation: Description of what happened or needs to be communicated
+            language: Target language code ('en' or 'es')
+            context: Additional context about the conversation
+            data: Any relevant data to include in the response
+
+        Returns:
+            Generated response string in the target language
+        """
+        if not self._ensure_llm():
+            # Fallback to simple response if LLM unavailable
+            return situation
+
+        language_name = "Spanish" if language == "es" else "English"
+
+        prompt = RESPONSE_GENERATION_PROMPT.format(
+            language_name=language_name,
+            situation=situation,
+            context=context or "Voice assistant interaction",
+            data=json.dumps(data) if data else "None"
+        )
+
+        try:
+            response = invoke_llm_with_metrics(self._llm, prompt, self._model_name)
+            if response.success and response.content:
+                return response.content.strip()
+            return situation  # Fallback
+        except Exception as e:
+            logger.error(f"[LLMResponseGenerator] Error: {e}", exc_info=True)
+            return situation  # Fallback
+
+
+# Global response generator instance
+_response_generator: Optional[LLMResponseGenerator] = None
+
+
+def get_response_generator() -> LLMResponseGenerator:
+    """Get or create the global response generator"""
+    global _response_generator
+    if _response_generator is None:
+        _response_generator = LLMResponseGenerator()
+    return _response_generator
+
+
+def generate_llm_response(
+    situation: str,
+    language: str = "en",
+    context: Optional[str] = None,
+    data: Optional[Dict[str, Any]] = None,
+) -> str:
+    """
+    Convenience function to generate LLM-based responses.
+
+    Usage:
+        # Simple response
+        response = generate_llm_response(
+            situation="User wants to navigate to the courses page",
+            language="es"
+        )
+        # → "Llevándote a la página de cursos."
+
+        # Response with data
+        response = generate_llm_response(
+            situation="Tell the user about their courses",
+            language="en",
+            data={"count": 3, "names": ["Statistics 101", "AI Basics", "Data Science"]}
+        )
+        # → "You have 3 courses: Statistics 101, AI Basics, and Data Science. Which would you like to open?"
+
+        # Response with context
+        response = generate_llm_response(
+            situation="Confirm the action was completed",
+            language="es",
+            context="User just created a new course"
+        )
+        # → "¡Listo! El curso ha sido creado exitosamente."
+    """
+    generator = get_response_generator()
+    return generator.generate_response(situation, language, context, data)
 

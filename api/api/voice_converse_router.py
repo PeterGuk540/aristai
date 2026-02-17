@@ -27,6 +27,18 @@ from api.api.voice_responses import (
     get_response,
     get_page_name,
     get_status_name,
+    # LLM-based response generation
+    generate_voice_response,
+    build_navigation_situation,
+    build_tab_switch_situation,
+    build_confirmation_request_situation,
+    build_form_cancelled_situation,
+    build_error_situation,
+    build_hesitation_situation,
+    build_skipped_field_situation,
+    build_generate_offer_situation,
+    build_content_saved_situation,
+    build_poll_situation,
 )
 from api.api.voice_extraction import (
     normalize_spanish_text,
@@ -71,6 +83,18 @@ from api.api.voice_intent_classifier import (
     fast_confirmation_check,
     IntentCategory,
     PageContext,
+    # Form input classification for distinguishing content vs meta-conversation
+    classify_form_input,
+    InputType,
+    InputTypeResult,
+    # Phase 6: LLM-based UI element identification
+    classify_tab_switch,
+    classify_button_click,
+    classify_dropdown_selection,
+    UIElementType,
+    UIElementResult,
+    # Phase 6: LLM-based response generation
+    generate_llm_response,
 )
 
 # Instructor enhancement features voice handlers
@@ -561,965 +585,29 @@ def get_status_name(status: str, language: str = 'en') -> str:
     return STATUS_NAMES[lang].get(status, status)
 
 
-# Navigation intent patterns - expanded for better coverage (English + Spanish)
-# NOTE: Spanish patterns use non-accented characters because speech-to-text often omits accents.
-# The input text is normalized via normalize_spanish_text() before matching.
 # =============================================================================
-# DEPRECATED: REGEX-BASED PATTERN MATCHING
+# DEPRECATED PATTERNS REMOVED - Phase 5 Cleanup
 # =============================================================================
-# These patterns are NO LONGER USED for intent detection as of Phase 1 refactor.
-# The system now uses LLM-only intent detection via voice_intent_classifier.py
-# These are kept for reference only and will be removed in a future cleanup.
+# NAVIGATION_PATTERNS and ACTION_PATTERNS have been removed.
+# The system now uses 100% LLM-based intent detection via voice_intent_classifier.py
+# For navigation, use: detect_navigation_intent_llm()
+# For actions, use: classify_intent() from voice_intent_classifier
 # =============================================================================
 
-NAVIGATION_PATTERNS = {
-    # DEPRECATED - kept for reference only
-    # Courses - English
-    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(courses?|course list|my courses)\b': '/courses',
-    r'\bcourses?\s*page\b': '/courses',
-    # Courses - Spanish (non-accented: llevame instead of llévame)
-    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(los\s+)?(cursos?|lista de cursos|mis cursos)\b': '/courses',
-    r'\bpagina\s+de\s+cursos?\b': '/courses',
-    # Sessions - English
-    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(sessions?|session list|class)\b': '/sessions',
-    r'\bsessions?\s*page\b': '/sessions',
-    # Sessions - Spanish (non-accented: sesion/sesiones instead of sesión/sesiones)
-    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(las\s+)?(sesiones?|lista de sesiones|clase)\b': '/sessions',
-    r'\bpagina\s+de\s+sesiones?\b': '/sessions',
-    # Forum - English
-    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(forum|discussion|discussions|posts)\b': '/forum',
-    r'\bforum\s*page\b': '/forum',
-    # Forum - Spanish (non-accented: discusion instead of discusión)
-    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(el\s+)?(foro|discusion|discusiones|publicaciones)\b': '/forum',
-    r'\bpagina\s+del?\s+foro\b': '/forum',
-    # Console - English
-    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(console|instructor console|control panel)\b': '/console',
-    r'\bconsole\s*page\b': '/console',
-    # Console - Spanish
-    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(la\s+)?(consola|consola del instructor|panel de control)\b': '/console',
-    r'\bpagina\s+de\s+(la\s+)?consola\b': '/console',
-    # Reports - English
-    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(reports?|report page|analytics)\b': '/reports',
-    r'\breports?\s*page\b': '/reports',
-    # Integrations - English
-    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(integrations?|lms integrations?|canvas integrations?)\b': '/integrations',
-    r'\bintegrations?\s*page\b': '/integrations',
-    # Introduction / Platform Guide - English
-    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(introduction|intro|platform guide|guide)\b': '/platform-guide',
-    r'\bintroduction\s*page\b': '/platform-guide',
-    r'\bplatform\s+guide\s*page\b': '/platform-guide',
-    # Introduction / Platform Guide - Spanish (non-accented: introduccion)
-    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(la\s+)?(introduccion|guia|guia de plataforma)\b': '/platform-guide',
-    r'\bpagina\s+de\s+(la\s+)?introduccion\b': '/platform-guide',
-    # Reports - Spanish (non-accented: analiticas instead of analíticas)
-    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(los\s+)?(reportes?|informes?|pagina de reportes|analiticas?)\b': '/reports',
-    r'\bpagina\s+de\s+reportes?\b': '/reports',
-    # Integrations - Spanish
-    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(las\s+)?(integraciones?|integraciones de lms|integracion con canvas)\b': '/integrations',
-    r'\bpagina\s+de\s+integraciones?\b': '/integrations',
-    # Dashboard - English
-    r'\b(go to|open|show|navigate to|take me to|view)\s+(the\s+)?(dashboard|home|main)\b': '/dashboard',
-    r'\bdashboard\s*page\b': '/dashboard',
-    # Dashboard - Spanish
-    r'\b(ir a|abrir|mostrar|ver|llevame a)\s+(el\s+)?(tablero|inicio|principal)\b': '/dashboard',
-    r'\bpagina\s+(de\s+)?inicio\b': '/dashboard',
-}
-
-# Action intent patterns - expanded for better voice command coverage (English + Spanish)
-# IMPORTANT: Specific domain actions MUST come BEFORE generic UI actions
-# because detect_action_intent returns the first match
-# NOTE: Spanish patterns use non-accented characters because speech-to-text often omits accents.
-# The input text is normalized via normalize_spanish_text() before matching.
-ACTION_PATTERNS = {
-    # === SPECIFIC DOMAIN ACTIONS (check these FIRST) ===
-    # Course actions - English
-    'create_course': [
-        r'\bcreate\s+(a\s+)?(new\s+)?course\b',
-        r'\bmake\s+(a\s+)?(new\s+)?course\b',
-        r'\badd\s+(a\s+)?(new\s+)?course\b',
-        r'\bnew\s+course\b',
-        r'\bset\s*up\s+(a\s+)?course\b',
-        r'\bstart\s+(a\s+)?new\s+course\b',
-        # Spanish (non-accented: anadir instead of añadir)
-        r'\bcrear\s+(un\s+)?(nuevo\s+)?curso\b',
-        r'\bhacer\s+(un\s+)?(nuevo\s+)?curso\b',
-        r'\banadir\s+(un\s+)?(nuevo\s+)?curso\b',
-        r'\bnuevo\s+curso\b',
-        r'\bconfigurar\s+(un\s+)?curso\b',
-    ],
-    'list_courses': [
-        r'\b(list|show|get|what are|display|see)\s+(all\s+)?(my\s+)?courses\b',
-        r'\bmy courses\b',
-        r'\bcourse list\b',
-        r'\bwhat courses\b',
-        r'\bhow many courses\b',
-        # Spanish (non-accented: cuales, que, cuantos)
-        r'\b(listar|mostrar|ver|cuales son)\s+(todos\s+)?(mis\s+)?cursos\b',
-        r'\bmis cursos\b',
-        r'\blista de cursos\b',
-        r'\bque cursos\b',
-        r'\bcuantos cursos\b',
-    ],
-    # Session actions - English + Spanish
-    'create_session': [
-        r'\bcreate\s+(a\s+)?(new\s+)?session\b',
-        r'\bmake\s+(a\s+)?(new\s+)?session\b',
-        r'\badd\s+(a\s+)?(new\s+)?session\b',
-        r'\bnew\s+session\b',
-        r'\bschedule\s+(a\s+)?session\b',
-        r'\bset\s*up\s+(a\s+)?session\b',
-        # Spanish (non-accented: sesion, anadir)
-        r'\bcrear\s+(una\s+)?(nueva\s+)?sesion\b',
-        r'\bhacer\s+(una\s+)?(nueva\s+)?sesion\b',
-        r'\banadir\s+(una\s+)?(nueva\s+)?sesion\b',
-        r'\bnueva\s+sesion\b',
-        r'\bprogramar\s+(una\s+)?sesion\b',
-    ],
-    'go_live': [
-        r'\bgo\s+live\b',
-        r'\bstart\s+(the\s+)?(live\s+)?session\b',
-        r'\bbegin\s+(the\s+)?session\b',
-        r'\blaunch\s+(the\s+)?session\b',
-        r'\bmake\s+(the\s+)?session\s+live\b',
-        r'\bactivate\s+(the\s+)?session\b',
-        # Spanish (non-accented: sesion)
-        r'\b(iniciar|comenzar|empezar)\s+(la\s+)?sesion(\s+en\s+vivo)?\b',
-        r'\bponer\s+(la\s+)?sesion\s+en\s+vivo\b',
-        r'\bactivar\s+(la\s+)?sesion\b',
-        r'\ben\s+vivo\b',
-    ],
-    'end_session': [
-        r'\bend\s+(the\s+)?(live\s+)?session\b',
-        r'\bstop\s+(the\s+)?session\b',
-        r'\bclose\s+(the\s+)?session\b',
-        r'\bfinish\s+(the\s+)?session\b',
-        r'\bterminate\s+(the\s+)?session\b',
-        # Spanish (non-accented: sesion)
-        r'\b(terminar|finalizar|cerrar)\s+(la\s+)?sesion\b',
-        r'\bdetener\s+(la\s+)?sesion\b',
-        r'\bacabar\s+(la\s+)?sesion\b',
-    ],
-    # Materials actions - English + Spanish
-    'view_materials': [
-        r'\b(view|show|open|see)\s+(the\s+)?(course\s+)?materials?\b',
-        r'\bmaterials?\s+(tab|page|section)\b',
-        r'\b(go\s+to|open)\s+(the\s+)?materials?\b',
-        r'\bshow\s+(me\s+)?(the\s+)?materials?\b',
-        r'\b(view|see)\s+(the\s+)?(uploaded\s+)?(files?|documents?|readings?)\b',
-        r'\bcourse\s+(files?|documents?|readings?)\b',
-        # Spanish (non-accented: pestana, pagina, seccion, muestrame)
-        r'\b(ver|mostrar|abrir)\s+(los\s+)?materiales?\b',
-        r'\bmateriales?\s+(pestana|pagina|seccion)\b',
-        r'\b(ir a|abrir)\s+(los\s+)?materiales?\b',
-        r'\bmuestrame\s+(los\s+)?materiales?\b',
-        r'\b(ver|mostrar)\s+(los\s+)?(archivos?|documentos?|lecturas?)\b',
-    ],
-    # Copilot actions - English + Spanish
-    'start_copilot': [
-        r'\bstart\s+(the\s+)?copilot\b',
-        r'\bactivate\s+(the\s+)?copilot\b',
-        r'\bturn on\s+(the\s+)?copilot\b',
-        r'\benable\s+(the\s+)?copilot\b',
-        r'\blaunch\s+(the\s+)?copilot\b',
-        r'\bcopilot\s+on\b',
-        r'\bbegin\s+(the\s+)?copilot\b',
-        # Spanish
-        r'\b(iniciar|activar|encender)\s+(el\s+)?copilot\b',
-        r'\bhabilitar\s+(el\s+)?copilot\b',
-        r'\bcopilot\s+(encendido|activado)\b',
-        r'\b(iniciar|activar)\s+(el\s+)?asistente\b',
-    ],
-    'stop_copilot': [
-        r'\bstop\s+(the\s+)?copilot\b',
-        r'\bdeactivate\s+(the\s+)?copilot\b',
-        r'\bturn off\s+(the\s+)?copilot\b',
-        r'\bdisable\s+(the\s+)?copilot\b',
-        r'\bcopilot\s+off\b',
-        r'\bend\s+(the\s+)?copilot\b',
-        r'\bpause\s+(the\s+)?copilot\b',
-        # Spanish
-        r'\b(detener|desactivar|apagar)\s+(el\s+)?copilot\b',
-        r'\bdeshabilitar\s+(el\s+)?copilot\b',
-        r'\bcopilot\s+(apagado|desactivado)\b',
-        r'\bpausar\s+(el\s+)?copilot\b',
-    ],
-    'refresh_interventions': [
-        r'\brefresh\s+(the\s+)?interventions?\b',
-        r'\bupdate\s+(the\s+)?interventions?\b',
-        r'\breload\s+(the\s+)?interventions?\b',
-        r'\bget\s+(new\s+)?interventions?\b',
-        r'\bfetch\s+(the\s+)?interventions?\b',
-        r'\bcheck\s+(for\s+)?(new\s+)?interventions?\b',
-        r'\binterventions?\s+refresh\b',
-        # Spanish
-        r'\b(actualizar|refrescar)\s+(las\s+)?intervenciones?\b',
-        r'\brecargar\s+(las\s+)?intervenciones?\b',
-        r'\bobtener\s+(nuevas?\s+)?intervenciones?\b',
-        r'\bver\s+(las\s+)?intervenciones?\b',
-    ],
-    # Session status management - English + Spanish
-    'set_session_draft': [
-        r'\bset\s+(to\s+)?draft\b',
-        r'\b(change|switch)\s+(to\s+)?draft\b',
-        r'\bdraft\s+(the\s+)?session\b',
-        r'\bmake\s+(it\s+)?draft\b',
-        r'\brevert\s+to\s+draft\b',
-        r'\bback\s+to\s+draft\b',
-        # Spanish
-        r'\bponer\s+(en\s+)?borrador\b',
-        r'\b(cambiar|pasar)\s+(a\s+)?borrador\b',
-        r'\bvolver\s+a\s+borrador\b',
-    ],
-    'set_session_live': [
-        r'\bgo\s+live\b',
-        r'\bset\s+(to\s+)?live\b',
-        r'\b(change|switch)\s+(to\s+)?live\b',
-        r'\bstart\s+(the\s+)?session\b',
-        r'\bmake\s+(it\s+)?live\b',
-        r'\blaunch\s+(the\s+)?session\b',
-        # Spanish (non-accented: sesion)
-        r'\bponer\s+en\s+vivo\b',
-        r'\b(cambiar|pasar)\s+a\s+en\s+vivo\b',
-        r'\bactivar\s+(la\s+)?sesion\b',
-    ],
-    'set_session_completed': [
-        r'\bcomplete(\s+session)?\b',
-        r'\bset\s+(to\s+)?complete(d)?\b',
-        r'\b(change|switch)\s+(to\s+)?complete(d)?\b',
-        r'\bend\s+(the\s+)?session\b',
-        r'\bfinish\s+(the\s+)?session\b',
-        r'\bmark\s+(as\s+)?complete(d)?\b',
-        # Spanish (non-accented: sesion)
-        r'\bcompletar(\s+sesion)?\b',
-        r'\b(marcar|poner)\s+(como\s+)?completad[oa]\b',
-        r'\bterminar\s+(la\s+)?sesion\b',
-        r'\bfinalizar\s+(la\s+)?sesion\b',
-    ],
-    'schedule_session': [
-        r'\bschedule(\s+session)?\b',
-        r'\bset\s+(to\s+)?schedule(d)?\b',
-        r'\b(change|switch)\s+(to\s+)?schedule(d)?\b',
-        # Spanish (non-accented: sesion)
-        r'\bprogramar(\s+sesion)?\b',
-        r'\bagendar(\s+sesion)?\b',
-        r'\b(poner|marcar)\s+(como\s+)?programad[oa]\b',
-    ],
-    'edit_session': [
-        r'\bedit\s+(the\s+)?(current\s+)?session\b',
-        r'\bmodify\s+(the\s+)?(current\s+)?session\b',
-        r'\bchange\s+(the\s+)?session\s+(title|name|details)\b',
-        r'\brename\s+(the\s+)?session\b',
-        r'\bupdate\s+(the\s+)?session\s+(title|name|details)\b',
-        # Spanish
-        r'\beditar\s+(la\s+)?(sesion\s+)?actual?\b',
-        r'\bmodificar\s+(la\s+)?(sesion\s+)?actual?\b',
-        r'\bcambiar\s+(el\s+)?(titulo|nombre)\s+(de\s+)?(la\s+)?sesion\b',
-        r'\brenombrar\s+(la\s+)?sesion\b',
-    ],
-    'delete_session': [
-        r'\bdelete\s+(the\s+)?(current\s+)?session\b',
-        r'\bremove\s+(the\s+)?(current\s+)?session\b',
-        r'\beliminate\s+(the\s+)?(current\s+)?session\b',
-        r'\bget\s+rid\s+of\s+(the\s+)?session\b',
-        # Spanish
-        r'\beliminar\s+(la\s+)?(sesion\s+)?actual?\b',
-        r'\bborrar\s+(la\s+)?(sesion\s+)?actual?\b',
-        r'\bquitar\s+(la\s+)?(sesion\s+)?actual?\b',
-    ],
-    # Report actions - English + Spanish
-    'refresh_report': [
-        r'\brefresh\s+(the\s+)?report\b',
-        r'\breload\s+(the\s+)?report\b',
-        r'\bupdate\s+(the\s+)?report\b',
-        r'\bget\s+(the\s+)?(latest|new)\s+report\b',
-        # Spanish
-        r'\b(actualizar|refrescar)\s+(el\s+)?reporte\b',
-        r'\brecargar\s+(el\s+)?reporte\b',
-        r'\b(actualizar|refrescar)\s+(el\s+)?informe\b',
-    ],
-    'regenerate_report': [
-        r'\bregenerate\s+(the\s+)?report\b',
-        r'\bgenerate\s+(a\s+)?(new\s+)?report\b',
-        r'\bcreate\s+(a\s+)?(new\s+)?report\b',
-        r'\brebuild\s+(the\s+)?report\b',
-        r'\bredo\s+(the\s+)?report\b',
-        # Spanish
-        r'\bregenerar\s+(el\s+)?reporte\b',
-        r'\bgenerar\s+(un\s+)?(nuevo\s+)?reporte\b',
-        r'\bcrear\s+(un\s+)?(nuevo\s+)?reporte\b',
-        r'\brehacer\s+(el\s+)?reporte\b',
-    ],
-    # Theme and user menu actions - English + Spanish
-    'toggle_theme': [
-        r'\b(toggle|switch|change)\s+(the\s+)?(theme|mode)\b',
-        r'\b(dark|light)\s+mode\b',
-        r'\b(enable|disable|turn\s+on|turn\s+off)\s+(dark|light)\s+mode\b',
-        r'\bswitch\s+to\s+(dark|light)\b',
-        # Spanish
-        r'\b(cambiar|alternar)\s+(el\s+)?(tema|modo)\b',
-        r'\bmodo\s+(oscuro|claro)\b',
-        r'\b(activar|desactivar)\s+(el\s+)?modo\s+(oscuro|claro)\b',
-    ],
-    'open_user_menu': [
-        r'\b(open|show)\s+(the\s+)?(user\s+)?menu\b',
-        r'\b(open|show)\s+(the\s+)?account(\s+menu)?\b',
-        r'\bmy\s+account\b',
-        # Spanish
-        r'\b(abrir|mostrar)\s+(el\s+)?menu(\s+de\s+usuario)?\b',
-        r'\bmi\s+cuenta\b',
-    ],
-    'view_voice_guide': [
-        r'\b(view|show|open)\s+(the\s+)?voice\s+(guide|commands?)\b',
-        r'\bvoice\s+(guide|commands?)\b',
-        r'\bhelp\s+with\s+voice\b',
-        r'\bshow\s+(me\s+)?(voice\s+)?commands?\b',
-        r'\bwhat\s+can\s+i\s+say\b',
-        r'\blist\s+commands?\b',
-        # Spanish
-        r'\b(ver|mostrar|abrir)\s+(la\s+)?guia\s+de\s+voz\b',
-        r'\bcomandos\s+de\s+voz\b',
-        r'\bque\s+puedo\s+decir\b',
-        r'\bayuda\s+de\s+voz\b',
-    ],
-    'forum_instructions': [
-        r'\b(view|show|open)\s+(the\s+)?(forum|platform)\s+instructions?\b',
-        r'\b(forum|platform)\s+instructions?\b',
-        r'\b(forum|platform)\s+guide\b',
-        r'\bhow\s+to\s+use\s+(the\s+)?(forum|platform|app)\b',
-        r'\bplatform\s+help\b',
-        # Spanish
-        r'\b(ver|mostrar)\s+(las\s+)?instrucciones\s+(del\s+)?(foro|plataforma)\b',
-        r'\bguia\s+(del\s+)?(foro|plataforma)\b',
-        r'\bcomo\s+usar\s+(el\s+)?(foro|la\s+plataforma|la\s+aplicacion)\b',
-    ],
-    'open_profile': [
-        r'\b(open|view|show)\s+(my\s+)?profile\b',
-        r'\b(go\s+to|view)\s+(my\s+)?settings\b',
-        r'\bmy\s+profile\b',
-        r'\baccount\s+settings\b',
-        # Spanish
-        r'\b(abrir|ver|mostrar)\s+(mi\s+)?perfil\b',
-        r'\bmi\s+perfil\b',
-        r'\bconfiguracion\s+(de\s+cuenta)?\b',
-    ],
-    'sign_out': [
-        r'\b(sign|log)\s*(out|off)\b',
-        r'\blogout\b',
-        r'\bsignout\b',
-        r'\bexit\s+(the\s+)?app\b',
-        # Spanish
-        r'\bcerrar\s+sesion\b',
-        r'\bsalir\b',
-        r'\bdesconectar(me)?\b',
-    ],
-    'close_modal': [
-        r'\bgot\s+it\b',
-        r'\bi\s+got\s+it\b',
-        r'\bokay\b',
-        r'\bok\b',
-        r'\bclose\s+(this|the)?\s*(window|modal|dialog|guide)?\b',
-        r'\bdismiss\b',
-        r'\bdone\b',
-        # Spanish
-        r'\bentendido\b',
-        r'\bya\s+entendi\b',
-        r'\bcerrar\b',
-        r'\blisto\b',
-    ],
-    # Poll actions - English + Spanish
-    'create_poll': [
-        r'\bcreate\s+(a\s+)?poll\b',
-        r'\bmake\s+(a\s+)?poll\b',
-        r'\bstart\s+(a\s+)?poll\b',
-        r'\bnew\s+poll\b',
-        r'\badd\s+(a\s+)?poll\b',
-        r'\blaunch\s+(a\s+)?poll\b',
-        r'\bquick\s+poll\b',
-        r'\bask\s+(the\s+)?(class|students)\s+(a\s+)?question\b',
-        # Spanish
-        r'\bcrear\s+(una\s+)?encuesta\b',
-        r'\bhacer\s+(una\s+)?encuesta\b',
-        r'\bnueva\s+encuesta\b',
-        r'\biniciar\s+(una\s+)?encuesta\b',
-        r'\bpreguntar\s+(a\s+)?(la\s+clase|los\s+estudiantes)\b',
-    ],
-    # Forum actions - English + Spanish
-    'post_case': [
-        r'\bpost\s+(a\s+)?case(\s+study)?\b',
-        r'\bcreate\s+(a\s+)?case(\s+study)?\b',
-        r'\badd\s+(a\s+)?case(\s+study)?\b',
-        r'\bnew\s+case(\s+study)?\b',
-        r'\bshare\s+(a\s+)?case\b',
-        # Spanish
-        r'\bpublicar\s+(un\s+)?caso(\s+de\s+estudio)?\b',
-        r'\bcrear\s+(un\s+)?caso(\s+de\s+estudio)?\b',
-        r'\bnuevo\s+caso(\s+de\s+estudio)?\b',
-        r'\bcompartir\s+(un\s+)?caso\b',
-    ],
-    # Post to forum discussion (different from post_case which is for case studies) - English + Spanish
-    'post_to_discussion': [
-        r'\bpost\s+(to\s+)?(the\s+)?discussion\b',
-        r'\b(make|create|write|add)\s+(a\s+)?(forum\s+)?post\b',
-        r'\b(i\s+)?(want\s+to|would\s+like\s+to|let\s+me)\s+post\b',
-        r'\bpost\s+something\b',
-        r'\bshare\s+(my\s+)?(thoughts?|response|comment)\b',
-        r'\b(write|add)\s+(a\s+)?(comment|response|reply)\b',
-        r'\bcontribute\s+to\s+(the\s+)?discussion\b',
-        # Spanish
-        r'\bpublicar\s+(en\s+)?(la\s+)?discusion\b',
-        r'\b(hacer|crear|escribir)\s+(una?\s+)?(publicacion|post)\b',
-        r'\bquiero\s+publicar\b',
-        r'\bcompartir\s+(mis?\s+)?(pensamientos?|comentario|respuesta)\b',
-        r'\b(escribir|agregar)\s+(un\s+)?(comentario|respuesta)\b',
-        r'\bcontribuir\s+(a\s+)?(la\s+)?discusion\b',
-    ],
-    # Report actions - English + Spanish
-    'generate_report': [
-        r'\bgenerate\s+(a\s+)?(session\s+)?report\b',
-        r'\bcreate\s+(a\s+)?(session\s+)?report\b',
-        r'\bmake\s+(a\s+)?(session\s+)?report\b',
-        r'\bbuild\s+(a\s+)?report\b',
-        r'\bget\s+(the\s+)?report\b',
-        r'\bshow\s+(the\s+)?report\b',
-        r'\breport\s+(please|now)\b',
-        r'\bsession\s+summary\b',
-        r'\bclass\s+report\b',
-        # Spanish
-        r'\bgenerar\s+(un\s+)?(reporte|informe)(\s+de\s+sesion)?\b',
-        r'\bcrear\s+(un\s+)?(reporte|informe)\b',
-        r'\bhacer\s+(un\s+)?(reporte|informe)\b',
-        r'\bmostrar\s+(el\s+)?(reporte|informe)\b',
-        r'\bresumen\s+de\s+(la\s+)?sesion\b',
-        r'\breporte\s+de\s+(la\s+)?clase\b',
-    ],
-
-    # === UNIVERSAL UI ELEMENT INTERACTIONS (check these AFTER specific actions) ===
-    # Universal dropdown expansion - MUST come BEFORE ui_select_dropdown
-    # Matches "select course", "select another course", "change course", "show options", "expand dropdown"
-    'ui_expand_dropdown': [
-        # Simple "select course" / "select session" / "select live session" (user wants to see options)
-        r'^(select|choose|pick)\s+(a\s+)?(live\s+)?(course|session)\.?$',
-        r'\b(select|choose|pick)\s+(the\s+)?(live\s+)?session\b',
-        r'\b(select|choose|pick)\s+(another|a\s+different|other)\s+(live\s+)?(course|session)\b',
-        r'\b(change|switch)\s+(the\s+)?(live\s+)?(course|session)\b',
-        r'\bwhat\s+(live\s+)?(courses?|sessions?)\s+(are\s+)?(available|there)\b',
-        r'\b(expand|open|show)\s+(the\s+)?(\w+\s+)?(dropdown|menu|list|options|select)\b',
-        r'\b(show|see|view|what\s+are)\s+(the\s+)?(available\s+)?(\w+\s+)?(options|choices|items)\b',
-        r'\b(what|which)\s+(source\s+)?(providers?|provider\s+connections?|external\s+courses?|target\s+courses?|target\s+sessions?)\s+(are\s+)?(available|there|included|include|contain|contains)\b',
-        r'\b(list|show|open)\s+(the\s+)?(source\s+provider|provider\s+connection|external\s+course|target\s+course|target\s+session)\s*(dropdown|menu|list|options)?\b',
-        r'\blet\s+me\s+(see|choose|pick)\b',
-        # Spanish
-        r'^(seleccionar|elegir|escoger)\s+(un\s+)?(curso|sesion)\.?$',
-        r'\b(seleccionar|elegir|escoger)\s+(la\s+)?sesion(\s+en\s+vivo)?\b',
-        r'\b(seleccionar|elegir|escoger)\s+(otro|otra|diferente)\s+(curso|sesion)\b',
-        r'\b(cambiar|cambio)\s+(de\s+)?(curso|sesion)\b',
-        r'\bque\s+(cursos?|sesiones?)\s+(hay|estan|tengo)\s*(disponibles?)?\b',
-        r'\b(expandir|abrir|mostrar)\s+(el\s+)?(\w+\s+)?(menu|lista|opciones)\b',
-        r'\b(mostrar|ver|cuales\s+son)\s+(las\s+)?(opciones|alternativas)\s*(disponibles)?\b',
-        r'\bdejame\s+(ver|elegir|escoger)\b',
-    ],
-    # Universal dropdown selection - direct selection like "select the first course"
-    'ui_select_dropdown': [
-        r'\b(select|choose|pick)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+(\w+)\b',
-        r'\buse\s+(the\s+)?(\w+)\s+(.+)',
-        # Spanish
-        r'\b(seleccionar|elegir|escoger)\s+(el|la\s+)?(primero?|segundo?|tercero?|cuarto?|ultimo?|ultima?)\s+(\w+)\b',
-        r'\b(usar|utilizar)\s+(el|la\s+)?(\w+)\s+(.+)',
-        r'\b(el|la)\s+(primero?|segundo?|tercero?|ultimo?|ultima?)\b',
-    ],
-    'ui_search_navigate': [
-        r'\b(search|find|look\s+for)\s+(for\s+)?(.+)\b',
-        r'\b(go\s+to|open)\s+(.+)\s+(using\s+)?search\b',
-        r'\b(busca|buscar)\s+(.+)\b',
-        r'\b(abrir|ir\s+a)\s+(.+)\s+(con\s+)?busqueda\b',
-    ],
-    # Universal tab switching - works for ANY tab name
-    'ui_switch_tab': [
-        # With "tab/panel/section" suffix
-        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(.+?)\s*(tab|panel|section)\b',
-        r'\b(.+?)\s+(tab|panel|section)\b',
-        # Without suffix - for known tab names (must list explicitly to avoid false matches)
-        # Note: "ai copilot" and "ai assistant" added for voice recognition of "AI Copilot" tab
-        # Note: Both "poll" and "polls" supported for voice recognition
-        r'\b(go\s+to|open|show|switch\s+to|view)\s+(the\s+)?(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|instructor\s+tools|tools|features|integrations?|lms\s+integrations?|create|manage|sessions|courses|ai\s+copilot|ai\s+assistant|copilot|polls?|requests|roster)\b',
-        # Simple "switch to X" for common tabs
-        r'^(switch\s+to|go\s+to)\s+(discussion|cases|case\s+studies|summary|participation|scoring|advanced|enrollment|instructor|instructor\s+tools|tools|features|integrations?|lms\s+integrations?|create|manage|sessions|ai\s+copilot|copilot|polls?)$',
-        # Spanish - with tab/panel/section suffix (pestana, panel, seccion)
-        r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(.+?)\s*(pestana|panel|seccion)\b',
-        r'\b(.+?)\s+(pestana|panel|seccion)\b',
-        # Spanish - known tab names (discusion, casos, resumen, participacion, puntuacion, inscripcion, encuestas, solicitudes, lista)
-        r'\b(ir\s+a|abrir|mostrar|cambiar\s+a|ver)\s+(la\s+)?(discusion|casos|estudios\s+de\s+caso|resumen|participacion|puntuacion|avanzado|inscripcion|herramientas|herramientas\s+del\s+instructor|crear|administrar|sesiones|cursos|copilot|asistente\s+de\s+ia|encuestas?|solicitudes|lista)\b',
-        r'^(cambiar\s+a|ir\s+a)\s+(discusion|casos|resumen|participacion|puntuacion|avanzado|inscripcion|herramientas|crear|administrar|sesiones|copilot|encuestas?)$',
-    ],
-    # Universal button clicks - works for ANY button
-    # Also handles form submission triggers like "submit", "create it", "post it"
-    'ui_click_button': [
-        r'\b(click|press|hit|tap)\s+(the\s+)?(.+?)\s*(button)?\b',
-        r'\b(click|press)\s+(on\s+)?(.+)\b',
-        r'\b(open|show)\s+(the\s+)?(notifications?|notification\s+panel)\b',
-        r'\b(change|switch|toggle)\s+(the\s+)?(language|idioma)\b',
-        r'\b(get\s+started|start\s+now)\b',
-        r'\b(submit|confirm|send|post)\s*(it|this|the\s+form|now)?\s*$',
-        r'\b(create|make)\s+(it|this|the\s+course|the\s+session|the\s+poll)\s*$',
-        r'\byes,?\s*(submit|create|post|do\s+it)\b',
-        # Spanish
-        r'\b(hacer\s+clic|presionar|pulsar|tocar)\s+(el\s+)?(.+?)\s*(boton)?\b',
-        r'\b(hacer\s+clic|presionar)\s+(en\s+)?(.+)\b',
-        r'\b(abrir|mostrar)\s+(las\s+)?(notificaciones?)\b',
-        r'\b(cambiar|alternar)\s+(el\s+)?idioma\b',
-        r'\b(comenzar|empezar)\s+ahora\b',
-        r'\b(enviar|confirmar|publicar)\s*(lo|esto|el\s+formulario|ahora)?\s*$',
-        r'\b(crear|hacer)\s+(lo|esto|el\s+curso|la\s+sesion|la\s+encuesta)\s*$',
-        r'\bsi,?\s*(enviar|crear|publicar|hazlo)\b',
-    ],
-    # === UNIVERSAL FORM DICTATION ===
-    # Detects when user is providing content for ANY input field
-    'ui_dictate_input': [
-        # "the title is Introduction to AI"
-        r'\b(the\s+)?(\w+)\s+(is|should\s+be|will\s+be)\s+(.+)',
-        # "set title to Introduction to AI"
-        r'\b(set|make|change)\s+(the\s+)?(\w+)\s+(to|as)\s+(.+)',
-        # "title: Introduction to AI"
-        r'^(\w+):\s*(.+)$',
-        # "for title, use Introduction to AI"
-        r'\bfor\s+(the\s+)?(\w+),?\s+(use|put|enter|type|write)\s+(.+)',
-        # "type Introduction to AI"
-        r'\b(type|enter|write|put|input)\s+(.+)',
-        # "fill in Introduction to AI"
-        r'\b(fill\s+in|fill)\s+(.+)',
-        # Spanish
-        # "el titulo es Introduccion a la IA"
-        r'\b(el|la\s+)?(\w+)\s+(es|sera|debe\s+ser)\s+(.+)',
-        # "poner titulo como Introduccion a la IA"
-        r'\b(poner|establecer|cambiar)\s+(el|la\s+)?(\w+)\s+(a|como)\s+(.+)',
-        # "para el titulo, usar Introduccion a la IA"
-        r'\bpara\s+(el|la\s+)?(\w+),?\s+(usar|poner|escribir|ingresar)\s+(.+)',
-        # "escribir Introduccion a la IA"
-        r'\b(escribir|ingresar|poner|teclear)\s+(.+)',
-        # "llenar con Introduccion a la IA"
-        r'\b(llenar\s+con|rellenar)\s+(.+)',
-    ],
-    # === CONTEXT/STATUS ACTIONS ===
-    'get_status': [
-        r'\b(what|where)\s+(am\s+I|is\s+this|page)\b',
-        r'\b(current|this)\s+(page|status|state)\b',
-        r'\bwhat\s+can\s+I\s+do\b',
-        r'\bwhat\'?s\s+(happening|going\s+on)\b',
-        r'\bstatus\s+update\b',
-        r'\bgive\s+me\s+(a\s+)?summary\b',
-        # Spanish
-        r'\b(que|donde)\s+(estoy|es\s+esto|pagina)\b',
-        r'\b(esta|actual)\s+(pagina|estado)\b',
-        r'\bque\s+puedo\s+hacer\b',
-        r'\bque\s+(esta\s+)?pasando\b',
-        r'\bactualizacion\s+de\s+estado\b',
-        r'\bdame\s+(un\s+)?resumen\b',
-    ],
-    'get_help': [
-        r'\bhelp(\s+me)?\b',
-        r'\bwhat\s+can\s+you\s+do\b',
-        r'\bwhat\s+are\s+(my|the)\s+options\b',
-        r'\bshow\s+(me\s+)?(the\s+)?commands\b',
-        # Spanish
-        r'\bayuda(\s+me)?\b',
-        r'\bque\s+puedes\s+hacer\b',
-        r'\bcuales\s+son\s+(mis|las)\s+opciones\b',
-        r'\bmostrar\s+(me\s+)?(los\s+)?comandos\b',
-        r'\bnecesito\s+ayuda\b',
-    ],
-    # === UNDO/CONTEXT ACTIONS ===
-    'undo_action': [
-        r'\bundo\b',
-        r'\bundo\s+(that|this|the\s+last|last\s+action)\b',
-        r'\brevert\b',
-        r'\bgo\s+back\b',
-        r'\bcancel\s+(that|this|the\s+last)\b',
-        r'\bnever\s*mind\b',
-        r'\btake\s+(that|it)\s+back\b',
-        # Spanish
-        r'\bdeshacer\b',
-        r'\bdeshacer\s+(eso|esto|lo\s+ultimo|la\s+ultima\s+accion)\b',
-        r'\brevertir\b',
-        r'\bvolver\s+atras\b',
-        r'\bcancelar\s+(eso|esto|lo\s+ultimo)\b',
-        r'\bolvidalo\b',
-        r'\bno\s+importa\b',
-        r'\bquitar\s+(eso|esto)\b',
-    ],
-    'get_context': [
-        r'\bwhat\s+(course|session)\s+(am\s+I|is)\s+(on|in|using|selected)\b',
-        r'\bwhich\s+(course|session)\s+(is\s+)?(active|selected|current)\b',
-        r'\bmy\s+(current|active)\s+(course|session)\b',
-        r'\bwhat\'?s\s+my\s+context\b',
-        # Spanish
-        r'\bque\s+(curso|sesion)\s+(estoy|esta)\s+(en|usando|seleccionado)\b',
-        r'\bcual\s+(curso|sesion)\s+(esta\s+)?(activo|seleccionado|actual)\b',
-        r'\bmi\s+(curso|sesion)\s+(actual|activo)\b',
-        r'\bcual\s+es\s+mi\s+contexto\b',
-    ],
-    'clear_context': [
-        r'\b(clear|reset)\s+(my\s+)?(context|selection|choices)\b',
-        r'\bstart\s+(fresh|over|again)\b',
-        r'\bforget\s+(everything|all|my\s+selections)\b',
-        # Spanish
-        r'\b(limpiar|borrar|resetear)\s+(mi\s+)?(contexto|seleccion|opciones)\b',
-        r'\bempezar\s+(de\s+nuevo|otra\s+vez|de\s+cero)\b',
-        r'\bolvidar\s+(todo|mis\s+selecciones)\b',
-    ],
-    # === ADDITIONAL COURSE ACTIONS ===
-    'select_course': [
-        r'\b(select|choose|pick|open)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+course\b',
-        r'\b(select|choose|pick|open)\s+course\s+(\d+|one|two|three)\b',
-        r'\bgo\s+(to|into)\s+(the\s+)?(first|second|third|last)\s+course\b',
-        # Spanish
-        r'\b(seleccionar|elegir|escoger|abrir)\s+(el\s+)?(primero?|segundo?|tercero?|ultimo?)\s+curso\b',
-        r'\b(seleccionar|elegir|escoger|abrir)\s+curso\s+(\d+|uno|dos|tres)\b',
-        r'\bir\s+(a|al)\s+(el\s+)?(primero?|segundo?|tercero?|ultimo?)\s+curso\b',
-    ],
-    'view_course_details': [
-        r'\b(view|show|see|display)\s+(the\s+)?course\s+(details?|info|information)\b',
-        r'\bcourse\s+(details?|info|information)\b',
-        r'\babout\s+(this|the)\s+course\b',
-        # Spanish
-        r'\b(ver|mostrar|visualizar)\s+(los\s+)?detalles?\s+(del\s+)?curso\b',
-        r'\b(informacion|detalles?)\s+(del\s+)?curso\b',
-        r'\bsobre\s+(este|el)\s+curso\b',
-    ],
-    # === SESSION ACTIONS ===
-    'list_sessions': [
-        r'\b(list|show|get|what are|display|see)\s+(the\s+)?(live\s+)?sessions\b',
-        r'\blive sessions\b',
-        r'\bactive sessions\b',
-        r'\bcurrent sessions?\b',
-        r'\bwhat sessions\b',
-        # Spanish
-        r'\b(listar|mostrar|obtener|cuales son|ver)\s+(las\s+)?(sesiones)(\s+en\s+vivo)?\b',
-        r'\bsesiones\s+en\s+vivo\b',
-        r'\bsesiones\s+activas\b',
-        r'\bsesiones?\s+actuales?\b',
-        r'\bque\s+sesiones\b',
-    ],
-    'select_session': [
-        r'\b(select|choose|pick|open)\s+(the\s+)?(first|second|third|last|\d+(?:st|nd|rd|th)?)\s+session\b',
-        r'\b(select|choose|pick|open)\s+session\s+(\d+|one|two|three)\b',
-        r'\bgo\s+(to|into)\s+(the\s+)?(first|second|third|last)\s+session\b',
-        # Spanish
-        r'\b(seleccionar|elegir|escoger|abrir)\s+(la\s+)?(primera|segunda|tercera|ultima)\s+sesion\b',
-        r'\b(seleccionar|elegir|escoger|abrir)\s+sesion\s+(\d+|uno|dos|tres)\b',
-        r'\bir\s+(a|a\s+la)\s+(primera|segunda|tercera|ultima)\s+sesion\b',
-    ],
-    # === COPILOT ACTIONS ===
-    'get_interventions': [
-        r'\b(show|get|what are|display)\s+(the\s+)?(copilot\s+)?suggestions\b',
-        r'\binterventions\b',
-        r'\bconfusion points\b',
-        r'\bcopilot\s+(suggestions|insights|recommendations)\b',
-        r'\bwhat does\s+(the\s+)?copilot\s+(suggest|recommend|say)\b',
-        r'\bany\s+suggestions\b',
-        # Spanish
-        r'\b(mostrar|obtener|cuales son|ver)\s+(las\s+)?(sugerencias)(\s+del\s+copilot)?\b',
-        r'\bintervenciones\b',
-        r'\bpuntos\s+de\s+confusion\b',
-        r'\bsugerencias\s+(del\s+)?(copilot|asistente)\b',
-        r'\bque\s+(sugiere|recomienda|dice)\s+(el\s+)?copilot\b',
-        r'\balguna\s+sugerencia\b',
-        r'\bhay\s+sugerencias\b',
-    ],
-    # === ENROLLMENT ACTIONS ===
-    'list_enrollments': [
-        r'\b(list|show|who are|display|get)\s+(the\s+)?(enrolled\s+)?students\b',
-        r'\benrollment\s+(list|status)\b',
-        r'\bhow many students\b',
-        r'\bstudent\s+(list|count|roster)\b',
-        r'\bwho\s+is\s+enrolled\b',
-        r'\bclass\s+roster\b',
-        # Spanish
-        r'\b(listar|mostrar|quienes son|ver|obtener)\s+(los\s+)?(estudiantes)(\s+inscritos)?\b',
-        r'\b(lista|estado)\s+de\s+inscripcion\b',
-        r'\bcuantos\s+estudiantes\b',
-        r'\b(lista|cantidad|registro)\s+de\s+estudiantes\b',
-        r'\bquien\s+esta\s+inscrito\b',
-        r'\bregistro\s+de\s+(la\s+)?clase\b',
-    ],
-    'manage_enrollments': [
-        r'\bmanage\s+(the\s+)?(student\s+)?enrollments?\b',
-        r'\benroll\s+(new\s+)?students?\b',
-        r'\badd\s+students?\s+(to|into)\b',
-        r'\bstudent\s+management\b',
-        r'\benrollment\s+management\b',
-        # Spanish
-        r'\badministrar\s+(las\s+)?inscripciones?(\s+de\s+estudiantes)?\b',
-        r'\binscribir\s+(nuevos\s+)?estudiantes?\b',
-        r'\bagregar\s+estudiantes?\s+(a|en)\b',
-        r'\bgestion\s+de\s+estudiantes\b',
-        r'\badministracion\s+de\s+inscripciones?\b',
-    ],
-    'list_student_pool': [
-        r'\b(select|choose|pick)\s+(a\s+)?student\s+(from\s+)?(the\s+)?(student\s+)?pool\b',
-        r'\b(show|list|see)\s+(the\s+)?(student\s+)?pool\b',
-        r'\b(available|unenrolled)\s+students\b',
-        r'\bwho\s+(can|is available to)\s+enroll\b',
-        r'\bstudent\s+pool\b',
-        # Spanish
-        r'\b(seleccionar|elegir|escoger)\s+(un\s+)?estudiante\s+(del?\s+)?(grupo|lista)\b',
-        r'\b(mostrar|listar|ver)\s+(el\s+)?(grupo|lista)\s+de\s+estudiantes\b',
-        r'\bestudiantes\s+(disponibles|no\s+inscritos)\b',
-        r'\bquien\s+puede\s+inscribirse\b',
-        r'\bgrupo\s+de\s+estudiantes\b',
-    ],
-    'enroll_selected': [
-        r'\b(click\s+)?(enroll|add)\s+(the\s+)?selected(\s+students?)?\b',
-        r'\benroll\s+selected\b',
-        r'\badd\s+selected\s+students?\b',
-        # Spanish
-        r'\b(hacer\s+clic\s+)?(inscribir|agregar)\s+(los\s+)?seleccionados?\b',
-        r'\binscribir\s+seleccionados\b',
-        r'\bagregar\s+estudiantes?\s+seleccionados?\b',
-    ],
-    'enroll_all': [
-        r'\b(click\s+)?(enroll|add)\s+all(\s+students?)?\b',
-        r'\benroll\s+all\b',
-        r'\badd\s+all\s+students?\b',
-        # Spanish
-        r'\b(hacer\s+clic\s+)?(inscribir|agregar)\s+todos?(\s+los\s+estudiantes)?\b',
-        r'\binscribir\s+a\s+todos\b',
-        r'\bagregar\s+todos\s+los\s+estudiantes\b',
-    ],
-    'select_student': [
-        r'\b(select|choose|pick|click|check)\s+(the\s+)?student\s+(.+)\b',
-        r'\b(select|choose|pick|click|check)\s+(.+?)\s+(from|in)\s+(the\s+)?(student\s+)?pool\b',
-        # Spanish
-        r'\b(seleccionar|elegir|escoger|hacer\s+clic|marcar)\s+(al\s+)?estudiante\s+(.+)\b',
-        r'\b(seleccionar|elegir|escoger|hacer\s+clic|marcar)\s+(.+?)\s+(del?|en)\s+(el\s+)?(grupo|lista)\s+de\s+estudiantes\b',
-    ],
-    # === FORUM ACTIONS ===
-    'view_posts': [
-        r'\b(show|view|see|display)\s+(the\s+)?(forum\s+)?posts\b',
-        r'\b(show|view|see)\s+(the\s+)?discussions?\b',
-        r'\bwhat\s+(are\s+)?(students|people)\s+(saying|discussing|posting)\b',
-        r'\brecent\s+posts\b',
-        r'\blatest\s+posts\b',
-        # Spanish
-        r'\b(mostrar|ver|visualizar)\s+(las\s+)?(publicaciones)(\s+del\s+foro)?\b',
-        r'\b(mostrar|ver)\s+(las\s+)?discusiones?\b',
-        r'\bque\s+(estan\s+)?(diciendo|discutiendo|publicando)\s+(los\s+)?(estudiantes|la\s+gente)\b',
-        r'\bpublicaciones\s+recientes\b',
-        r'\bultimas\s+publicaciones\b',
-    ],
-    'get_pinned_posts': [
-        r'\b(show|view|get|what are)\s+(the\s+)?pinned\s+(posts|discussions)?\b',
-        r'\bpinned\s+(posts|content|discussions)\b',
-        r'\bimportant\s+posts\b',
-        # Spanish
-        r'\b(mostrar|ver|obtener|cuales son)\s+(las\s+)?publicaciones\s+fijadas?\b',
-        r'\bpublicaciones\s+(fijadas?|importantes)\b',
-        r'\bcontenido\s+fijado\b',
-        r'\bpublicaciones\s+importantes\b',
-    ],
-    'summarize_discussion': [
-        r'\bsummarize\s+(the\s+)?(forum|discussion|posts)\b',
-        r'\b(discussion|forum)\s+summary\b',
-        r'\bwhat\s+are\s+(students|people)\s+talking\s+about\b',
-        r'\bkey\s+(points|themes|topics)\b',
-        r'\bmain\s+(discussion|points)\b',
-        # Spanish
-        r'\bresume\s+(el\s+)?(foro|discusion|publicaciones)\b',
-        r'\bresumen\s+(de\s+)?(la\s+)?(discusion|foro)\b',
-        r'\bde\s+que\s+(estan\s+)?(hablando|discutiendo)\s+(los\s+)?(estudiantes|la\s+gente)\b',
-        r'\bpuntos\s+(clave|principales|importantes)\b',
-        r'\b(puntos|temas)\s+principales\b',
-    ],
-    'get_student_questions': [
-        r'\b(show|what are|any)\s+(student\s+)?questions\b',
-        r'\bquestions\s+from\s+(students|class)\b',
-        r'\bany\s+(confusion|misconceptions)\b',
-        r'\bwhat\s+(do\s+)?students\s+(need|want|ask)\b',
-        # Spanish
-        r'\b(mostrar|cuales son|hay)\s+(preguntas)(\s+de\s+estudiantes)?\b',
-        r'\bpreguntas\s+de\s+(los\s+)?(estudiantes|la\s+clase)\b',
-        r'\bhay\s+(confusion|confusiones|malentendidos)\b',
-        r'\bque\s+(necesitan|quieren|preguntan)\s+(los\s+)?estudiantes\b',
-    ],
-    # === NEW HIGH-IMPACT VOICE FEATURES ===
-    # Class status overview - "How's the class doing?"
-    'class_status': [
-        r'\bhow\'?s\s+(the\s+)?(class|session|discussion)\s+(doing|going)\b',
-        r'\bclass\s+(status|overview|update)\b',
-        r'\bhow\s+(is|are)\s+(the\s+)?(students?|class|everyone)\s+(doing|performing)\b',
-        r'\bgive\s+me\s+(a\s+)?(quick\s+)?(status|update|overview)\b',
-        r'\bquick\s+(status|update|overview)\b',
-        r'\bsession\s+(status|overview)\b',
-        r'\bwhat\'?s\s+happening\s+(in\s+)?(the\s+)?(class|session|discussion)\b',
-        r'\bsituation\s+report\b',
-        r'\bsitrep\b',
-        # Spanish
-        r'\bcomo\s+(va|esta)\s+(la\s+)?(clase|sesion|discusion)\b',
-        r'\b(estado|resumen|actualizacion)\s+de\s+(la\s+)?clase\b',
-        r'\bcomo\s+(estan|van)\s+(los\s+)?(estudiantes|la\s+clase|todos)\b',
-        r'\bdame\s+(un\s+)?(rapido\s+)?(estado|actualizacion|resumen)\b',
-        r'\b(estado|actualizacion|resumen)\s+rapido\b',
-        r'\b(estado|resumen)\s+de\s+(la\s+)?sesion\b',
-        r'\bque\s+(esta\s+)?pasando\s+(en\s+)?(la\s+)?(clase|sesion|discusion)\b',
-        r'\binforme\s+de\s+situacion\b',
-    ],
-    # Who needs help - identify struggling students
-    'who_needs_help': [
-        r'\bwho\s+(needs|requires)\s+help\b',
-        r'\bwho\'?s\s+struggling\b',
-        r'\bstruggling\s+students\b',
-        r'\bstudents?\s+(who\s+)?(need|needs|requiring)\s+(help|attention|support)\b',
-        r'\bwho\s+(is|are)\s+confused\b',
-        r'\bconfused\s+students\b',
-        r'\bwho\s+(hasn\'?t|have\s*n\'?t|has\s+not)\s+(participated|posted)\b',
-        r'\bnon[-\s]?participants\b',
-        r'\bwho\'?s\s+behind\b',
-        r'\bat[-\s]?risk\s+students\b',
-        r'\bwho\s+should\s+i\s+(help|focus\s+on|pay\s+attention\s+to)\b',
-        # Spanish
-        r'\bquien\s+(necesita|requiere)\s+ayuda\b',
-        r'\bquien\s+esta\s+(teniendo\s+)?dificultades\b',
-        r'\bestudiantes\s+(con\s+)?dificultades\b',
-        r'\bestudiantes?\s+(que\s+)?(necesitan?|requieren?)\s+(ayuda|atencion|apoyo)\b',
-        r'\bquien\s+esta\s+confundido\b',
-        r'\bestudiantes\s+confundidos\b',
-        r'\bquien\s+no\s+ha\s+(participado|publicado)\b',
-        r'\bno\s+participantes\b',
-        r'\bquien\s+esta\s+atrasado\b',
-        r'\bestudiantes\s+en\s+riesgo\b',
-        r'\ba\s+quien\s+debo\s+(ayudar|prestar\s+atencion)\b',
-    ],
-    # Report Q&A - ask about misconceptions
-    'ask_misconceptions': [
-        r'\bwhat\s+(were|are)\s+(the\s+)?(main\s+)?misconceptions?\b',
-        r'\bwhat\s+did\s+students\s+get\s+wrong\b',
-        r'\bcommon\s+(mistakes?|errors?|misconceptions?)\b',
-        r'\bwhat\s+(concepts?|topics?)\s+confused\s+(them|students)\b',
-        r'\bwhere\s+did\s+(students|they)\s+(struggle|fail|have\s+trouble)\b',
-        r'\bmisunderstandings?\b',
-        # Spanish
-        r'\bcuales\s+(fueron|son)\s+(los\s+)?(principales\s+)?malentendidos\b',
-        r'\bque\s+entendieron\s+mal\s+(los\s+)?estudiantes\b',
-        r'\berrores\s+(comunes|frecuentes)\b',
-        r'\bque\s+(conceptos?|temas?)\s+confundieron\s+(a\s+)?(los\s+)?estudiantes\b',
-        r'\bdonde\s+(tuvieron\s+)?dificultades\s+(los\s+)?estudiantes\b',
-        r'\bmalentendidos\b',
-        r'\bconceptos\s+erroneos\b',
-    ],
-    # Report Q&A - ask about scores
-    'ask_scores': [
-        r'\bhow\s+did\s+(students|the\s+class|everyone)\s+(do|perform|score)\b',
-        r'\bwhat\s+(were|are)\s+(the\s+)?scores?\b',
-        r'\bstudent\s+scores?\b',
-        r'\bclass\s+(performance|scores?|results?)\b',
-        r'\baverage\s+score\b',
-        r'\bwho\s+(scored|did)\s+(best|highest|lowest|worst)\b',
-        r'\btop\s+(performers?|students?|scores?)\b',
-        r'\blow\s+(performers?|students?|scores?)\b',
-        r'\bgrade\s+(distribution|breakdown)\b',
-        # Spanish
-        r'\bcomo\s+les\s+fue\s+(a\s+)?(los\s+)?(estudiantes|la\s+clase|todos)\b',
-        r'\bcuales\s+(fueron|son)\s+(los\s+)?puntajes?\b',
-        r'\bpuntajes?\s+de\s+(los\s+)?estudiantes\b',
-        r'\b(rendimiento|puntajes?|resultados?)\s+de\s+(la\s+)?clase\b',
-        r'\bpuntaje\s+promedio\b',
-        r'\bquien\s+(obtuvo|tuvo)\s+(el\s+)?(mejor|peor|mas\s+alto|mas\s+bajo)\s+(puntaje)?\b',
-        r'\b(mejores|peores)\s+(estudiantes|puntajes?)\b',
-        r'\bdistribucion\s+de\s+(notas|calificaciones|puntajes)\b',
-    ],
-    # Report Q&A - ask about participation
-    'ask_participation': [
-        r'\bhow\s+(was|is)\s+(the\s+)?participation\b',
-        r'\bparticipation\s+(rate|stats?|statistics?)\b',
-        r'\bhow\s+many\s+(students\s+)?(participated|posted)\b',
-        r'\bwho\s+(participated|posted)\b',
-        r'\bwho\s+(didn\'?t|did\s+not)\s+(participate|post)\b',
-        r'\bparticipation\s+(level|overview)\b',
-        r'\bengagement\s+(level|rate|stats?)\b',
-        # Spanish
-        r'\bcomo\s+(fue|esta|estuvo)\s+(la\s+)?participacion\b',
-        r'\b(tasa|estadisticas?)\s+de\s+participacion\b',
-        r'\bcuantos\s+(estudiantes\s+)?(participaron|publicaron)\b',
-        r'\bquien\s+(participo|publico)\b',
-        r'\bquien\s+no\s+(participo|publico)\b',
-        r'\bnivel\s+de\s+participacion\b',
-        r'\bnivel\s+de\s+(compromiso|participacion)\b',
-    ],
-    # Read latest posts aloud
-    'read_posts': [
-        r'\bread\s+(the\s+)?(latest|recent|last)\s+(posts?|comments?|messages?)\b',
-        r'\bread\s+(me\s+)?(the\s+)?posts?\b',
-        r'\bwhat\s+(are\s+)?(the\s+)?(latest|recent)\s+posts?\b',
-        r'\bwhat\s+did\s+(students|they)\s+(post|say|write)\b',
-        r'\blatest\s+(from\s+)?(the\s+)?discussion\b',
-        r'\brecent\s+(activity|posts?|comments?)\b',
-        r'\bshow\s+(me\s+)?(the\s+)?recent\s+(posts?|activity)\b',
-        # Spanish
-        r'\bleer\s+(las\s+)?(ultimas?|recientes?)\s+(publicaciones?|comentarios?|mensajes?)\b',
-        r'\bleer\s+(me\s+)?(las\s+)?publicaciones?\b',
-        r'\bcuales\s+son\s+(las\s+)?(ultimas?|recientes?)\s+publicaciones?\b',
-        r'\bque\s+(publicaron|dijeron|escribieron)\s+(los\s+)?(estudiantes|ellos)\b',
-        r'\blo\s+ultimo\s+de\s+(la\s+)?discusion\b',
-        r'\b(actividad|publicaciones?|comentarios?)\s+recientes?\b',
-        r'\bmostrar\s+(me\s+)?(las\s+)?(publicaciones?|actividad)\s+recientes?\b',
-    ],
-    # What did copilot suggest
-    'copilot_suggestions': [
-        r'\bwhat\s+(did|does)\s+(the\s+)?copilot\s+(suggest|recommend|say|think)\b',
-        r'\bcopilot\s+(suggestions?|recommendations?|insights?)\b',
-        r'\bwhat\s+(are\s+)?(the\s+)?copilot\'?s?\s+(suggestions?|thoughts?)\b',
-        r'\bai\s+(suggestions?|recommendations?|insights?)\b',
-        r'\bwhat\s+should\s+i\s+(do|say|ask)\s+next\b',
-        r'\bany\s+(teaching\s+)?(suggestions?|recommendations?|tips?)\b',
-        r'\bcopilot\s+update\b',
-        r'\bteaching\s+(tips?|suggestions?|advice)\b',
-        # Spanish
-        r'\bque\s+(sugirio|sugiere|recomienda|dijo|piensa)\s+(el\s+)?copilot\b',
-        r'\bsugerencias?\s+(del\s+)?copilot\b',
-        r'\bcuales\s+son\s+(las\s+)?sugerencias?\s+(del\s+)?copilot\b',
-        r'\bsugerencias?\s+de\s+(la\s+)?ia\b',
-        r'\bque\s+debo\s+(hacer|decir|preguntar)\s+ahora\b',
-        r'\balguna\s+(sugerencia|recomendacion|consejo)\s+(de\s+ensenanza)?\b',
-        r'\bactualizacion\s+del\s+copilot\b',
-        r'\bconsejos?\s+de\s+ensenanza\b',
-    ],
-    # Student performance lookup
-    'student_lookup': [
-        r'\bhow\s+is\s+(\w+)\s+(doing|performing)\b',
-        r'\btell\s+me\s+about\s+(\w+)\'?s?\s+(performance|participation|scores?)\b',
-        r'\bwhat\s+about\s+(\w+)\b',
-        r'\b(\w+)\'?s?\s+(score|performance|participation|status)\b',
-        r'\bcheck\s+(on\s+)?(\w+)\b',
-        r'\blook\s+up\s+(\w+)\b',
-        # Spanish
-        r'\bcomo\s+(esta|le\s+va)\s+(a\s+)?(\w+)\b',
-        r'\bdime\s+sobre\s+(el\s+)?(rendimiento|participacion|puntaje)\s+de\s+(\w+)\b',
-        r'\bque\s+tal\s+(\w+)\b',
-        r'\b(puntaje|rendimiento|participacion|estado)\s+de\s+(\w+)\b',
-        r'\brevisar\s+(a\s+)?(\w+)\b',
-        r'\bbuscar\s+(a\s+)?(\w+)\b',
-    ],
-}
-
-CONFIRMATION_PATTERNS = (
-    # English confirmations
-    r"\b(yes|yeah|yep|confirm|confirmed|approve|approved|proceed|go ahead|do it|sounds good|ok|okay|"
-    # Spanish confirmations (non-accented: si instead of sí)
-    r"si|claro|por supuesto|adelante|hazlo|confirmado|confirmar|de acuerdo|esta bien)\b"
-)
+# Legacy placeholder for backward compatibility (to be fully removed) 
+# ACTION_PATTERNS and CONFIRMATION_PATTERNS have been removed in Phase 5 cleanup.
+# The system now uses 100% LLM-based intent detection.
+ACTION_PATTERNS = {}  # Empty - kept for backward compatibility only
 
 
-def detect_navigation_intent(text: str) -> Optional[str]:
-    """Detect if user wants to navigate somewhere.
+def detect_navigation_intent(text: str, context: Optional[List[str]] = None, current_page: Optional[str] = None) -> Optional[str]:
+    """Detect if user wants to navigate somewhere using LLM.
 
-    Normalizes text to handle Spanish accents (e.g., sesión -> sesion)
-    since speech-to-text often omits diacritics.
+    This function has been updated to use LLM-based detection instead of regex patterns.
+    The old NAVIGATION_PATTERNS have been removed in Phase 5 cleanup.
     """
-    # Normalize to handle both accented and non-accented Spanish
-    text_normalized = normalize_spanish_text(text.lower())
-    for pattern, path in NAVIGATION_PATTERNS.items():
-        if re.search(pattern, text_normalized):
-            return path
-    return None
+    # Use LLM-based navigation detection
+    return detect_navigation_intent_llm(text, context, current_page)
 
 
 def detect_action_intent(text: str) -> Optional[str]:
@@ -1821,7 +909,11 @@ def generate_conversational_response(
     current_page: Optional[str] = None,
     language: str = 'en',
 ) -> str:
-    """Generate a natural conversational response for various intents.
+    """Generate a natural conversational response using LLM.
+
+    This function uses LLM to generate responses in the user's selected language,
+    ensuring all responses are properly localized regardless of what language
+    the user spoke in.
 
     Args:
         intent_type: Type of intent ('navigate', 'execute', etc.)
@@ -1833,280 +925,254 @@ def generate_conversational_response(
     """
     lang = language if language in ['en', 'es'] else 'en'
 
+    # Build situation description for LLM
+    situation = _build_response_situation(intent_type, intent_value, results)
+
+    # Build context string
+    context_str = f"Page: {current_page or 'unknown'}"
+    if context:
+        context_str += f", Recent: {', '.join(context[:3])}"
+
+    # Build data dict for LLM
+    data = None
+    if isinstance(results, dict):
+        data = results
+    elif isinstance(results, list):
+        data = {"items": results[:5], "total_count": len(results)}
+
+    # Use LLM to generate response in the correct language
+    return generate_llm_response(
+        situation=situation,
+        language=lang,
+        context=context_str,
+        data=data
+    )
+
+
+def _build_response_situation(intent_type: str, intent_value: str, results: Any) -> str:
+    """Build a situation description for LLM response generation.
+
+    Returns a description of what happened that the LLM will use to generate
+    a natural language response in the user's selected language.
+    """
+
     if intent_type == 'navigate':
-        page_name = get_page_name(intent_value, lang)
-        return get_response('navigate_to', lang, destination=page_name)
+        return f"User is being navigated to the {intent_value} page. Confirm the navigation."
 
     if intent_type == 'execute':
         # Handle result that might be a dict with message/error
         if isinstance(results, dict):
-            if results.get("message"):
-                return results["message"]
             if results.get("error"):
-                return get_response('error_generic', lang, reason=results['error'])
+                return f"An error occurred: {results['error']}"
 
-        # === UI INTERACTION RESPONSES ===
+        # === UI INTERACTIONS ===
         if intent_value == 'ui_select_course':
-            return get_response('selecting_course', lang)
-
+            return "Selecting a course for the user"
         if intent_value == 'ui_select_session':
-            return get_response('selecting_session', lang)
-
+            return "Selecting a session for the user"
         if intent_value == 'ui_switch_tab':
+            tab_name = ""
             if isinstance(results, dict):
                 tab_name = results.get("ui_actions", [{}])[0].get("payload", {}).get("tabName", "")
-                if tab_name:
-                    return get_response('switch_tab', lang, tab=tab_name)
-            return get_response('switching_tabs', lang)
-
+            return f"Switching to the {tab_name or 'requested'} tab"
         if intent_value == 'ui_click_button':
+            button_label = ""
             if isinstance(results, dict):
                 button_label = results.get("ui_actions", [{}])[0].get("payload", {}).get("buttonLabel", "")
-                if button_label:
-                    return get_response('click_button', lang, button=button_label)
-            return get_response('clicking_button', lang)
+            return f"Clicking the {button_label or 'requested'} button"
 
-        # === COURSE RESPONSES ===
+        # === COURSES ===
         if intent_value == 'list_courses':
-            if isinstance(results, list) and len(results) > 0:
-                course_names = [c.get('title', 'Untitled') for c in results[:5]]
-                if len(results) == 1:
-                    return get_response('one_course', lang, name=course_names[0])
-                elif len(results) <= 3:
-                    return get_response('few_courses', lang, count=len(results), names=', '.join(course_names))
-                else:
-                    return get_response('many_courses', lang, count=len(results), names=', '.join(course_names[:3]), more=len(results) - 3)
-            return get_response('no_courses', lang)
-
+            if isinstance(results, list):
+                if len(results) == 0:
+                    return "User has no courses yet. Offer to help create one."
+                names = [c.get('title', 'Untitled') for c in results[:5]]
+                return f"User has {len(results)} courses: {', '.join(names)}. Ask which one they want to work with."
+            return "Unable to retrieve courses"
         if intent_value == 'create_course':
-            return get_response('create_course', lang)
-
+            return "Opening course creation form. Ask user for the course title."
         if intent_value == 'select_course':
             if isinstance(results, dict) and results.get("course"):
                 course = results["course"]
-                return get_response('select_course', lang, name=course.get('title', 'the course'))
-            return get_response('selecting_course', lang)
-
+                return f"Opening course '{course.get('title', 'the course')}'. Ask what they want to do with it."
+            return "Selecting the course"
         if intent_value == 'view_course_details':
             if isinstance(results, dict) and results.get("title"):
-                return f"Here's {results['title']}. It has {results.get('session_count', 0)} sessions."
-            return get_response('error_not_found', lang)
+                return f"Showing course '{results['title']}' which has {results.get('session_count', 0)} sessions"
+            return "Could not find the course"
 
-        # === SESSION RESPONSES ===
+        # === SESSIONS ===
         if intent_value == 'list_sessions':
-            if isinstance(results, list) and len(results) > 0:
+            if isinstance(results, list):
+                if len(results) == 0:
+                    return "No sessions found. Offer to create a new one."
                 live = [s for s in results if s.get('status') == 'live']
                 if live:
-                    verb = 'is' if lang == 'en' else ''
-                    plural = 'es' if len(live) > 1 else ''
-                    names = ', '.join(s.get('title', 'Untitled') for s in live[:3])
-                    return get_response('live_sessions', lang, verb=verb, count=len(live), plural=plural, names=names)
-                return get_response('sessions_none_live', lang, count=len(results))
-            return get_response('no_sessions', lang)
-
+                    names = [s.get('title', 'Untitled') for s in live[:3]]
+                    return f"Found {len(live)} live sessions: {', '.join(names)}. Ask if they want to join one."
+                return f"User has {len(results)} sessions, but none are live. Offer to start one."
+            return "Unable to retrieve sessions"
         if intent_value == 'create_session':
-            return get_response('create_session', lang)
-
+            return "Opening session creation. Ask what topic the session will cover."
         if intent_value == 'select_session':
             if isinstance(results, dict) and results.get("session"):
                 session = results["session"]
-                status = get_status_name(session.get('status', 'unknown'), lang)
-                return get_response('select_session', lang, name=session.get('title', 'the session'), status=status)
-            return get_response('selecting_session', lang)
-
+                return f"Opening session '{session.get('title', 'the session')}' with status '{session.get('status', 'unknown')}'"
+            return "Selecting the session"
         if intent_value == 'go_live':
-            return get_response('session_live', lang)
-
+            return "Session is now live! Students can join and participate."
         if intent_value == 'end_session':
-            return get_response('session_ended', lang)
-
+            return "Session has ended. Offer to generate a report."
         if intent_value == 'view_materials':
-            return get_response('opening_materials', lang)
+            return "Opening course materials where user can view and download files."
 
-        # === SESSION STATUS MANAGEMENT RESPONSES ===
+        # === SESSION STATUS ===
         if intent_value == 'set_session_draft':
-            return get_response('session_draft', lang)
-
+            return "Session has been set to draft mode. User can edit it or go live when ready."
         if intent_value == 'set_session_live':
-            return get_response('session_live', lang)
-
+            return "Session is now live! Students can join and start participating."
         if intent_value == 'set_session_completed':
-            return get_response('session_completed', lang)
-
+            return "Session has been marked as completed."
         if intent_value == 'schedule_session':
-            return get_response('session_scheduled', lang)
-
+            return "Session has been scheduled."
         if intent_value == 'edit_session':
-            return "Opening the edit session dialog. You can change the session title and details."
-
+            return "Opening the edit session dialog where user can change session title and details."
         if intent_value == 'delete_session':
-            return "Are you sure you want to delete this session? This action cannot be undone. Say yes to confirm or no to cancel."
+            return "User wants to delete session. Ask for confirmation - this cannot be undone."
 
-        # === REPORT RESPONSES ===
+        # === REPORTS ===
         if intent_value == 'refresh_report':
             return "Refreshing the report to show the latest data."
-
         if intent_value == 'regenerate_report':
-            return "Regenerating the report. This may take a moment to complete."
+            return "Regenerating the report, which may take a moment."
+        if intent_value == 'generate_report':
+            return "Generating the session report by analyzing all discussion posts."
 
-        # === THEME AND USER MENU RESPONSES ===
+        # === THEME/UI ===
         if intent_value == 'toggle_theme':
             return "Toggling between light and dark mode."
-
         if intent_value == 'open_user_menu':
             return "Opening the user menu."
-
         if intent_value == 'view_voice_guide':
-            return "Opening the voice command guide to show all available voice commands."
-
+            return "Opening the voice command guide to show available voice commands."
         if intent_value == 'forum_instructions':
             return "Opening the platform instructions to show how to use AristAI."
-
         if intent_value == 'open_profile':
-            return "Opening your profile settings."
-
+            return "Opening user's profile settings."
         if intent_value == 'sign_out':
-            return "Signing you out. Goodbye!"
-
+            return "Signing the user out. Say goodbye."
         if intent_value == 'close_modal':
-            return "Closing the window."
+            return "Closing the window/modal."
 
-        # === COPILOT RESPONSES ===
+        # === COPILOT ===
         if intent_value == 'start_copilot':
-            return "Copilot is now active! It will monitor the discussion and provide suggestions every 90 seconds."
-
+            return "Copilot is now active and will monitor discussion and provide suggestions every 90 seconds."
         if intent_value == 'stop_copilot':
-            return "Copilot has been stopped. You can restart it anytime by saying 'start copilot'."
-
+            return "Copilot has been stopped. User can restart it anytime."
         if intent_value == 'refresh_interventions':
             return "Refreshing interventions from the copilot."
-
         if intent_value == 'get_interventions':
             if isinstance(results, list) and len(results) > 0:
                 latest = results[0]
                 suggestion = latest.get('suggestion_json', {})
                 summary = suggestion.get('rolling_summary', '')
                 confusion = suggestion.get('confusion_points', [])
-                response = f"Here's the copilot insight: {summary}" if summary else "I have suggestions from the copilot."
+                details = f"Summary: {summary}" if summary else "Has suggestions"
                 if confusion:
-                    response += f" Detected {len(confusion)} confusion point{'s' if len(confusion) > 1 else ''}: {confusion[0].get('issue', 'Unknown')}."
-                return response
-            return "No suggestions yet. The copilot analyzes every 90 seconds when active."
+                    details += f". {len(confusion)} confusion points detected."
+                return f"Copilot insight: {details}"
+            return "No suggestions yet. Copilot analyzes every 90 seconds when active."
 
-        # === POLL RESPONSES ===
+        # === POLLS ===
         if intent_value == 'create_poll':
-            return "Great! What question would you like to ask in the poll?"
+            return "Starting poll creation. Ask what question they want to ask in the poll."
 
-        # === REPORT RESPONSES ===
-        if intent_value == 'generate_report':
-            return "Generating the session report. This takes a moment to analyze all discussion posts."
-
-        # === ENROLLMENT RESPONSES ===
+        # === ENROLLMENT ===
         if intent_value == 'list_enrollments':
             if isinstance(results, list):
-                return f"There are {len(results)} students enrolled. Would you like me to list them or show participation stats?"
-            return "I couldn't retrieve the enrollment information."
-
+                return f"There are {len(results)} students enrolled. Offer to list them or show participation stats."
+            return "Could not retrieve enrollment information."
         if intent_value == 'manage_enrollments':
-            return "Opening enrollment management. You can add students by email or upload a roster."
-
+            return "Opening enrollment management where user can add students by email or upload a roster."
         if intent_value == 'list_student_pool':
             if isinstance(results, dict) and results.get("students"):
                 count = len(results.get("students", []))
-                return f"There are {count} students available in the pool. Say a student's name to select them."
-            return "I'll show you the available students."
-
+                return f"There are {count} students available in the pool. Ask user to say a name to select."
+            return "Showing available students."
         if intent_value == 'select_student':
-            return "Student selected. Say another name to select more, or 'enroll selected' to enroll them."
-
+            return "Student selected. User can say another name to select more, or 'enroll selected' to enroll them."
         if intent_value == 'enroll_selected':
             return "Enrolling the selected students."
-
         if intent_value == 'enroll_all':
             return "Enrolling all available students."
 
-        # === FORUM RESPONSES ===
+        # === FORUM ===
         if intent_value == 'post_case':
-            return "Opening case study creation. What scenario would you like students to discuss?"
-
+            return "Opening case study creation. Ask what scenario students should discuss."
         if intent_value == 'post_to_discussion':
             if isinstance(results, dict):
-                if results.get("post_offer"):
-                    return results.get("message", "Would you like to post something to the discussion?")
                 if results.get("error") == "no_session":
-                    return results.get("message", "Please select a live session first.")
-            return "Would you like to post something to the discussion?"
-
+                    return "Cannot post - need to select a live session first."
+            return "Ask if user wants to post something to the discussion."
         if intent_value == 'view_posts':
             if isinstance(results, dict) and results.get("posts"):
                 posts = results["posts"]
                 if len(posts) > 0:
-                    return f"There are {len(posts)} posts in the forum. The latest is about: {posts[0].get('content', '')[:50]}..."
+                    preview = posts[0].get('content', '')[:50]
+                    return f"There are {len(posts)} forum posts. Latest is about: {preview}..."
             return "No posts yet in this session's forum."
-
         if intent_value == 'get_pinned_posts':
             if isinstance(results, dict):
                 count = results.get("count", 0)
                 if count > 0:
-                    return f"There are {count} pinned posts. These are the important discussions highlighted by the instructor."
-                return "No pinned posts yet. You can pin important posts to highlight them."
+                    return f"There are {count} pinned posts - important discussions highlighted by the instructor."
+                return "No pinned posts yet. User can pin important posts to highlight them."
             return "No pinned posts found."
-
         if intent_value == 'summarize_discussion':
             if isinstance(results, dict):
                 if results.get("summary"):
-                    return results["summary"]
+                    return f"Discussion summary: {results['summary']}"
                 if results.get("error"):
-                    return results["error"]
-            return "I couldn't summarize the discussion. Make sure you're in a live session."
-
+                    return f"Could not summarize: {results['error']}"
+            return "Could not summarize discussion. Need to be in a live session."
         if intent_value == 'get_student_questions':
             if isinstance(results, dict):
                 count = results.get("count", 0)
                 if count > 0:
                     questions = results.get("questions", [])
                     first_q = questions[0].get('content', '')[:80] if questions else ""
-                    return f"Found {count} questions. The most recent: {first_q}..."
+                    return f"Found {count} questions from students. Most recent: {first_q}..."
                 return "No questions from students yet."
-            return "I couldn't find any questions."
+            return "Could not find any questions."
 
+        # === STATUS/HELP ===
         if intent_value == 'get_status':
             if isinstance(results, dict):
                 message = results.get("message", "")
                 actions = results.get("available_actions", [])
                 if actions:
-                    return f"{message} You can: {', '.join(actions[:4])}."
+                    return f"Status: {message}. Available actions: {', '.join(actions[:4])}"
                 return message
-            return "I'm not sure what page you're on."
-
+            return "Not sure what page user is on."
         if intent_value == 'get_help':
+            return "User needs help. Explain what the voice assistant can help with: navigation, courses, sessions, polls, forum, reports."
+
+        # === UNDO/CONTEXT ===
+        if intent_value == 'undo_action':
             if isinstance(results, dict) and results.get("message"):
                 return results["message"]
-            return "I can help with navigation, courses, sessions, polls, forum, and reports."
-
-        # === UNDO/CONTEXT RESPONSES ===
-        if intent_value == 'undo_action':
-            if isinstance(results, dict):
-                if results.get("error"):
-                    return results["error"]
-                if results.get("message"):
-                    return results["message"]
-            return "I've undone the last action."
-
+            return "Undid the last action."
         if intent_value == 'get_context':
             if isinstance(results, dict):
-                if results.get("message"):
-                    return results["message"]
                 course = results.get("course_name", "none")
                 session = results.get("session_name", "none")
-                return f"Your active course is {course} and session is {session}."
-            return "You don't have any active context."
-
+                return f"Active course: {course}, Active session: {session}"
+            return "No active context set."
         if intent_value == 'clear_context':
             return "Context cleared! Starting fresh."
 
     # Default fallback
-    return "I can help you navigate pages, manage courses and sessions, create polls, generate reports, and more. What would you like to do?"
+    return "Voice assistant ready to help with navigation, courses, sessions, polls, reports, and more."
 
 
 @router.post("/converse", response_model=ConverseResponse)
@@ -2164,8 +1230,13 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     print(f"🔘 action_data: {action_data}")
 
                     conversation_manager.reset_retry_count(request.user_id)
+                    submit_msg = generate_voice_response(
+                        f"Submitting the form by clicking the {button_label} button. Confirm the action.",
+                        language=language
+                    )
+                    suggestions = ["What's next?", "Go to another page"] if language == 'en' else ["¿Qué sigue?", "Ir a otra página"]
                     return ConverseResponse(
-                        message=sanitize_speech(f"Submitting the form. Clicking {button_label}."),
+                        message=sanitize_speech(submit_msg),
                         action=ActionResponse(type='execute', executed=True),
                         results=[{
                             "action": "click_button",
@@ -2174,7 +1245,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                                 {"type": "ui.toast", "payload": {"message": f"{button_label} submitted", "type": "success"}},
                             ],
                         }],
-                        suggestions=["What's next?", "Go to another page"],
+                        suggestions=suggestions,
                     )
 
                 # For other actions, use execute_action
@@ -2193,16 +1264,22 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     suggestions=get_action_suggestions(result["action"], language),
                 )
             else:
+                suggestions = ["Show my courses", "Go to forum", "What can I do?"] if language == 'en' else ["Mostrar mis cursos", "Ir al foro", "¿Qué puedo hacer?"]
                 return ConverseResponse(
                     message=sanitize_speech(result["message"]),
                     action=ActionResponse(type='info'),
-                    suggestions=["Show my courses", "Go to forum", "What can I do?"],
+                    suggestions=suggestions,
                 )
         # If not clear confirmation/denial, ask again
+        confirm_msg = generate_voice_response(
+            "Ask user to confirm or cancel. Tell them to say 'yes' to confirm or 'no' to cancel.",
+            language=language
+        )
+        suggestions = ["Yes, proceed", "No, cancel"] if language == 'en' else ["Sí, continuar", "No, cancelar"]
         return ConverseResponse(
-            message=sanitize_speech("Please say 'yes' to confirm or 'no' to cancel."),
+            message=sanitize_speech(confirm_msg),
             action=ActionResponse(type='info'),
-            suggestions=["Yes, proceed", "No, cancel"],
+            suggestions=suggestions,
         )
 
     # --- Handle dropdown selection state ---
@@ -2231,7 +1308,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             )
 
         # Check for navigation intent - user wants to go somewhere else
-        nav_path = detect_navigation_intent(transcript)
+        nav_path = detect_navigation_intent(transcript, request.context, request.current_page)
         if nav_path:
             conversation_manager.cancel_dropdown_selection(request.user_id)
             message = sanitize_speech(f"Cancelling selection. {generate_conversational_response('navigate', nav_path, language=language)}")
@@ -2296,7 +1373,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         if current_field:
             # FIRST: Check if user wants to navigate away or switch tabs (escape from form)
             # Check for navigation intent
-            nav_path = detect_navigation_intent(transcript)
+            nav_path = detect_navigation_intent(transcript, request.context, request.current_page)
             if nav_path:
                 # User wants to navigate - cancel form and navigate
                 conversation_manager.cancel_form(request.user_id)
@@ -2312,43 +1389,52 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     suggestions=get_page_suggestions(nav_path, language)
                 )
 
-            # Check for tab switching intent (e.g., "go to manage status tab")
-            tab_patterns = [
-                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(manage\s*status|management)\s*(tab)?\b', 'manage'),
-                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(create|creation)\s*(tab)?\b', 'create'),
-                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(view|sessions?|list)\s*(tab)?\b', 'sessions'),
-                (r'\b(go\s+to|switch\s+to|open)\s+(the\s+)?(advanced|enrollment|enroll|instructor)\s*(tab)?\b', 'advanced'),
-            ]
-            for pattern, tab_name in tab_patterns:
-                if re.search(pattern, transcript.lower()):
-                    # User wants to switch tabs - cancel form and switch
-                    conversation_manager.cancel_form(request.user_id)
+            # Check for tab switching intent using LLM-based classification
+            # Available tabs depend on the page - using common course/session tabs
+            available_tabs = ['create', 'manage', 'sessions', 'advanced', 'instructor', 'enrollment']
+            tab_result = classify_tab_switch(transcript, available_tabs, language)
+            if tab_result.element_type == UIElementType.TAB and tab_result.element_name:
+                tab_name = tab_result.element_name
+                # User wants to switch tabs - cancel form and switch
+                conversation_manager.cancel_form(request.user_id)
 
-                    # Special handling for manage status tab - offer status options
-                    if tab_name == 'manage':
-                        return ConverseResponse(
-                            message=sanitize_speech("Cancelling form. Switching to manage status tab. You can say 'go live', 'set to draft', 'complete', or 'schedule' to change the session status."),
-                            action=ActionResponse(type='execute', executed=True),
-                            results=[{
-                                "ui_actions": [
-                                    {"type": "ui.switchTab", "payload": {"tabName": tab_name}},
-                                    {"type": "ui.toast", "payload": {"message": "Switched to manage status", "type": "info"}},
-                                ]
-                            }],
-                            suggestions=["Go live", "Set to draft", "Complete session", "Schedule"],
-                        )
-
+                # Special handling for manage status tab - offer status options
+                if tab_name == 'manage':
+                    manage_msg = generate_voice_response(
+                        "Form cancelled. Switching to manage status tab. Tell user they can say 'go live', 'set to draft', 'complete', or 'schedule' to change session status.",
+                        language=language
+                    )
+                    toast_msg = "Switched to manage status" if language == 'en' else "Cambiado a administrar estado"
+                    suggestions = ["Go live", "Set to draft", "Complete session", "Schedule"] if language == 'en' else ["Iniciar en vivo", "Establecer borrador", "Completar sesión", "Programar"]
                     return ConverseResponse(
-                        message=sanitize_speech(f"Cancelling form. Switching to {tab_name} tab."),
+                        message=sanitize_speech(manage_msg),
                         action=ActionResponse(type='execute', executed=True),
                         results=[{
                             "ui_actions": [
                                 {"type": "ui.switchTab", "payload": {"tabName": tab_name}},
-                                {"type": "ui.toast", "payload": {"message": f"Switched to {tab_name}", "type": "info"}},
+                                {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
                             ]
                         }],
-                        suggestions=["Go live", "View sessions", "Create session"],
+                        suggestions=suggestions,
                     )
+
+                switch_msg = generate_voice_response(
+                    f"Form cancelled. Switching to {tab_name} tab. Confirm briefly.",
+                    language=language
+                )
+                toast_msg = f"Switched to {tab_name}" if language == 'en' else f"Cambiado a {tab_name}"
+                suggestions = ["Go live", "View sessions", "Create session"] if language == 'en' else ["Iniciar en vivo", "Ver sesiones", "Crear sesión"]
+                return ConverseResponse(
+                    message=sanitize_speech(switch_msg),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.switchTab", "payload": {"tabName": tab_name}},
+                            {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
+                        ]
+                    }],
+                    suggestions=suggestions,
+                )
 
             # Check for cancel/exit keywords
             cancel_words = ['cancel', 'stop', 'exit', 'quit', 'abort', 'nevermind', 'never mind']
@@ -2400,39 +1486,97 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     suggestions=["Continue", "Cancel form", "Help"],
                 )
 
-            # --- INTELLIGENT CONFIRMATION VS CONTENT DETECTION ---
-            # Detect if user is just confirming/agreeing rather than providing actual content
-            # This prevents "yes", "sure", "okay" from being used as field values
-            transcript_lower = transcript.lower().strip()
-            transcript_cleaned = transcript_lower.rstrip('.!?,')
+            # --- LLM-BASED INTELLIGENT INPUT CLASSIFICATION ---
+            # Use the LLM to determine if the user's input is:
+            # - CONTENT: actual data to be entered into the field
+            # - META: meta-conversation (hesitation, thinking, questions)
+            # - COMMAND: commands (cancel, skip, help, navigate)
+            # - CONFIRM: yes/no confirmations
+            #
+            # This is smarter than pattern matching because it understands context.
+            # "Let me consider it" = META (hesitation), not a course title
+            # "Consider All Options" = CONTENT (could be a valid course title)
 
-            # Pure confirmation phrases (these should NEVER be field values)
-            pure_confirmations = [
-                'yes', 'yeah', 'yep', 'yup', 'sure', 'okay', 'ok', 'alright', 'right',
-                'go ahead', 'proceed', 'continue', 'do it', "let's do it", "let's go",
-                'sounds good', 'perfect', 'great', 'fine', 'absolutely', 'definitely',
-                'of course', 'please', 'yes please', 'sure thing', 'you bet',
-                # Spanish confirmations
-                'si', 'sí', 'claro', 'vale', 'bueno', 'de acuerdo', 'por supuesto',
-                'adelante', 'continua', 'hazlo', 'perfecto', 'genial',
-            ]
+            field_prompt = current_field.prompt if hasattr(current_field, 'prompt') else f"provide {current_field.name}"
+            field_type = current_field.voice_id if hasattr(current_field, 'voice_id') else current_field.name
+            workflow_name = conv_context.action if hasattr(conv_context, 'action') else "form_filling"
 
-            # Check if the transcript is ONLY a confirmation (not part of actual content)
-            is_pure_confirmation = transcript_cleaned in pure_confirmations
+            input_classification = classify_form_input(
+                user_input=transcript,
+                field_prompt=field_prompt,
+                field_type=field_type,
+                workflow_name=workflow_name
+            )
 
-            # Also check for short confirmations that start a sentence
-            starts_with_confirmation = any(
-                transcript_cleaned.startswith(conf + ' ') or transcript_cleaned == conf
-                for conf in ['yes', 'yeah', 'sure', 'okay', 'ok', 'si', 'sí', 'claro']
-            ) and len(transcript_cleaned.split()) <= 3
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[FormInputClassification] Input: '{transcript}' -> Type: {input_classification.input_type}, Confidence: {input_classification.confidence}, Reason: {input_classification.reason}")
 
-            if is_pure_confirmation or starts_with_confirmation:
+            # Handle based on classification
+            if input_classification.input_type == InputType.COMMAND:
+                # User wants to execute a command instead of providing content
+                command = input_classification.command or "cancel"
+
+                if command == "cancel":
+                    conversation_manager.cancel_form(request.user_id)
+                    if language == 'es':
+                        cancel_msg = "Entendido. He cancelado el formulario. Dime cuando quieras continuar o hacer algo más."
+                    else:
+                        cancel_msg = "Understood. I've cancelled the form. Let me know when you're ready to continue or do something else."
+                    return ConverseResponse(
+                        message=sanitize_speech(cancel_msg),
+                        action=ActionResponse(type='info'),
+                        suggestions=get_page_suggestions(request.current_page, language),
+                    )
+                elif command == "skip":
+                    skip_result = conversation_manager.skip_current_field(request.user_id)
+                    return ConverseResponse(
+                        message=sanitize_speech(skip_result["message"]),
+                        action=ActionResponse(type='info'),
+                        suggestions=["Continue", "Cancel form", "Help"],
+                    )
+                elif command == "help":
+                    if language == 'es':
+                        help_msg = f"Estoy esperando que proporciones: {field_prompt}. Puedes decirlo directamente, o decir 'saltar' para omitir este campo, o 'cancelar' para salir del formulario."
+                    else:
+                        help_msg = f"I'm waiting for you to provide: {field_prompt}. You can say it directly, or say 'skip' to skip this field, or 'cancel' to exit the form."
+                    return ConverseResponse(
+                        message=sanitize_speech(help_msg),
+                        action=ActionResponse(type='info'),
+                        suggestions=["Skip", "Cancel", "Continue"] if language == 'en' else ["Saltar", "Cancelar", "Continuar"],
+                    )
+                else:
+                    # Other commands (navigate, etc.) - cancel form and let main handler process
+                    conversation_manager.cancel_form(request.user_id)
+                    if language == 'es':
+                        cancel_msg = "He cancelado el formulario para procesar tu comando."
+                    else:
+                        cancel_msg = "I've cancelled the form to process your command."
+                    # Don't return here - let the main intent handler process the command
+                    # This is a fallthrough case
+
+            elif input_classification.input_type == InputType.META:
+                # User is hesitating, thinking, or asking about the process - re-prompt
+                if language == 'es':
+                    hesitation_response = f"Tómate tu tiempo. Cuando estés listo, dime {field_prompt.lower()}. O di 'cancelar' para salir, o 'saltar' para omitir este campo."
+                else:
+                    hesitation_response = f"Take your time. When you're ready, tell me {field_prompt.lower()}. Or say 'cancel' to exit, or 'skip' to skip this field."
+                return ConverseResponse(
+                    message=sanitize_speech(hesitation_response),
+                    action=ActionResponse(type='info'),
+                    suggestions=["Skip", "Cancel", "Help"] if language == 'en' else ["Saltar", "Cancelar", "Ayuda"],
+                )
+
+            elif input_classification.input_type == InputType.CONFIRM:
                 # User is just confirming - re-prompt for actual content
                 return ConverseResponse(
-                    message=sanitize_speech(get_response('got_it_continue', language, prompt=current_field.prompt)),
+                    message=sanitize_speech(get_response('got_it_continue', language, prompt=field_prompt)),
                     action=ActionResponse(type='info'),
                     suggestions=["Skip", "Cancel form", "Help"] if language == 'en' else ["Saltar", "Cancelar formulario", "Ayuda"],
                 )
+
+            # If we get here, input_classification.input_type == InputType.CONTENT
+            # Continue with normal field value recording below
 
             # Check if this is the course title field - save it for later generation
             if current_field.voice_id == "course-title":
@@ -2517,42 +1661,100 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
     # --- Handle forum post offer response state ---
     if conv_context.state == ConversationState.AWAITING_POST_OFFER_RESPONSE:
-        # Check if user accepted or declined
-        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please', 'go ahead', "i'd like to", "i would like"]
-        decline_words = ['no', 'nope', 'not now', 'hold on', 'wait', 'no thanks', 'later', 'nevermind', 'never mind']
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Would you like to post something to the discussion?",
+            field_type="post_offer_response",
+            workflow_name="forum_post"
+        )
 
-        transcript_lower = transcript.lower()
-        accepted = any(word in transcript_lower for word in accept_words)
-        declined = any(word in transcript_lower for word in decline_words)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[PostOfferResponse] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        if accepted and not declined:
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                result = conversation_manager.handle_post_offer_response(request.user_id, False)
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
+
+        # Handle META type
+        if input_classification.input_type == InputType.META:
+            if language == 'es':
+                hesitation_msg = "Tómate tu tiempo. Di 'sí' si quieres publicar algo, o 'no' si no."
+            else:
+                hesitation_msg = generate_voice_response(
+                    "User is hesitating. Gently ask if they'd like to post to the discussion. Tell them to say 'yes' to post or 'no' if not.",
+                    language=language
+                )
+            suggestions = ["Yes, I'd like to post", "No thanks", "Cancel"] if language == 'en' else ["Sí, quiero publicar", "No gracias", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(hesitation_msg),
+                action=ActionResponse(type='info'),
+                suggestions=suggestions,
+            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                result = conversation_manager.handle_post_offer_response(request.user_id, True)
+                suggestions = ["I'm done", "Cancel"] if language == 'en' else ["Terminé", "Cancelar"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+            else:
+                result = conversation_manager.handle_post_offer_response(request.user_id, False)
+                suggestions = ["Switch to case studies", "Select another session", "Go to courses"] if language == 'en' else ["Cambiar a casos de estudio", "Seleccionar otra sesión", "Ir a cursos"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - user might be starting to dictate the post directly
+        if input_classification.input_type == InputType.CONTENT:
+            # Accept offer and use this as the first part of the post
             result = conversation_manager.handle_post_offer_response(request.user_id, True)
-            return ConverseResponse(
-                message=sanitize_speech(result["message"]),
-                action=ActionResponse(type='info'),
-                suggestions=["I'm done", "Cancel"],
+            # Record this content as part of the post
+            conv_context.partial_post_content = transcript
+            conversation_manager.save_context(request.user_id, conv_context)
+            continue_msg = generate_voice_response(
+                "Got the start of user's post. Tell them to continue dictating or say 'done' when finished.",
+                language=language
             )
-        elif declined:
-            result = conversation_manager.handle_post_offer_response(request.user_id, False)
+            suggestions = ["I'm done", "Cancel"] if language == 'en' else ["Terminé", "Cancelar"]
             return ConverseResponse(
-                message=sanitize_speech(result["message"]),
+                message=sanitize_speech(continue_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Switch to case studies", "Select another session", "Go to courses"],
+                suggestions=suggestions,
             )
-        else:
-            # Unclear response - ask again
-            return ConverseResponse(
-                message=sanitize_speech("Would you like to post something to the discussion? Say yes or no."),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, I'd like to post", "No thanks"],
-            )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user if they want to post to the discussion. Tell them to say 'yes' or 'no'.",
+            language=language
+        )
+        suggestions = ["Yes, I'd like to post", "No thanks"] if language == 'en' else ["Sí, quiero publicar", "No gracias"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle forum post dictation state ---
     if conv_context.state == ConversationState.AWAITING_POST_DICTATION:
         transcript_lower = transcript.lower().strip()
 
         # Check for navigation/escape intent first
-        nav_path = detect_navigation_intent(transcript)
+        nav_path = detect_navigation_intent(transcript, request.context, request.current_page)
         if nav_path:
             conversation_manager.reset_post_offer(request.user_id)
             message = sanitize_speech(f"Cancelling post. {generate_conversational_response('navigate', nav_path, language=language)}")
@@ -2571,15 +1773,20 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         cancel_words = ['cancel', 'stop', 'abort', 'quit', 'nevermind', 'never mind']
         if any(word in transcript_lower for word in cancel_words):
             conversation_manager.reset_post_offer(request.user_id)
+            cancel_msg = generate_voice_response(
+                "Post has been cancelled. Ask what else user would like to do.",
+                language=language
+            )
+            suggestions = ["Switch to case studies", "Select another session"] if language == 'en' else ["Cambiar a casos de estudio", "Seleccionar otra sesión"]
             return ConverseResponse(
-                message=sanitize_speech("Post cancelled. What else can I help you with?"),
+                message=sanitize_speech(cancel_msg),
                 action=ActionResponse(type='execute', executed=True),
                 results=[{
                     "ui_actions": [
                         {"type": "ui.clearInput", "payload": {"target": "textarea-post-content"}},
                     ]
                 }],
-                suggestions=["Switch to case studies", "Select another session"],
+                suggestions=suggestions,
             )
 
         # Check for "I'm done" / "finished" patterns
@@ -2648,98 +1855,189 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
     # --- Handle forum post submit confirmation state ---
     if conv_context.state == ConversationState.AWAITING_POST_SUBMIT_CONFIRMATION:
-        transcript_lower = transcript.lower()
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Should I post this?",
+            field_type="post_submit_confirm",
+            workflow_name="forum_post"
+        )
 
-        # Check for confirmation or denial
-        # English + Spanish confirmation words
-        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'post it', 'submit', 'go ahead', 'do it',
-                         'si', 'claro', 'publicar', 'enviar', 'adelante', 'hazlo', 'de acuerdo']
-        # English + Spanish denial words
-        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind',
-                      'stop', 'quit', 'abort',  # Added stop/quit/abort
-                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo', 'parar', 'detener']
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[PostSubmitConfirm] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        transcript_normalized = normalize_spanish_text(transcript_lower)
-        confirmed = any(word in transcript_normalized for word in confirm_words)
-        denied = any(word in transcript_normalized for word in deny_words)
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                conversation_manager.handle_post_submit_response(request.user_id, False)
+                cleared_msg = generate_voice_response(
+                    "Post cleared/cancelled. Acknowledge briefly.",
+                    language=language
+                )
+                return ConverseResponse(
+                    message=sanitize_speech(cleared_msg),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[{"ui_actions": [{"type": "ui.clearInput", "payload": {"target": "textarea-post-content"}}]}],
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
 
-        if confirmed and not denied:
-            result = conversation_manager.handle_post_submit_response(request.user_id, True)
-            # Click the submit button
-            return ConverseResponse(
-                message=sanitize_speech(result["message"]),
-                action=ActionResponse(type='execute', executed=True),
-                results=[{
-                    "ui_actions": [
-                        {"type": "ui.clickButton", "payload": {"target": "submit-post"}},
-                        {"type": "ui.toast", "payload": {"message": "Post submitted!", "type": "success"}},
-                    ]
-                }],
-                suggestions=["View posts", "Switch to case studies", "Select another session"],
+        # Handle META type
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating about posting. Gently ask if they want to post or cancel.",
+                language=language
             )
-        elif denied:
-            # Don't fully reset - ask if they want to try again
-            conversation_manager.handle_post_submit_response(request.user_id, False)
-            # Set state back to offer response so they can say yes/no to try again
-            offer_prompt = conversation_manager.offer_forum_post(request.user_id)
-            # Clear the textarea and ask if they want to try again
+            suggestions = ["Yes, post it", "No, cancel"] if language == 'en' else ["Sí, publicar", "No, cancelar"]
             return ConverseResponse(
-                message=sanitize_speech("Okay, I've cleared the post. Would you like to try again?"),
-                action=ActionResponse(type='execute', executed=True),
-                results=[{
-                    "ui_actions": [
-                        {"type": "ui.clearInput", "payload": {"target": "textarea-post-content"}},
-                        {"type": "ui.toast", "payload": {"message": "Post cleared", "type": "info"}},
-                    ]
-                }],
-                suggestions=["Yes, let me try again", "No thanks"],
-            )
-        else:
-            # Unclear response - ask again
-            return ConverseResponse(
-                message=sanitize_speech("Should I post this? Say yes to post or no to cancel."),
+                message=sanitize_speech(hesitation_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Yes, post it", "No, cancel"],
+                suggestions=suggestions,
             )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                result = conversation_manager.handle_post_submit_response(request.user_id, True)
+                toast_msg = "Post submitted!" if language == 'en' else "¡Publicación enviada!"
+                suggestions = ["View posts", "Switch to case studies", "Select another session"] if language == 'en' else ["Ver publicaciones", "Cambiar a casos", "Seleccionar otra sesión"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.clickButton", "payload": {"target": "submit-post"}},
+                            {"type": "ui.toast", "payload": {"message": toast_msg, "type": "success"}},
+                        ]
+                    }],
+                    suggestions=suggestions,
+                )
+            else:
+                conversation_manager.handle_post_submit_response(request.user_id, False)
+                offer_prompt = conversation_manager.offer_forum_post(request.user_id)
+                cleared_msg = generate_voice_response(
+                    "Post cleared. Ask if user wants to try again.",
+                    language=language
+                )
+                toast_msg = "Post cleared" if language == 'en' else "Publicación borrada"
+                suggestions = ["Yes, let me try again", "No thanks"] if language == 'en' else ["Sí, intentar de nuevo", "No gracias"]
+                return ConverseResponse(
+                    message=sanitize_speech(cleared_msg),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.clearInput", "payload": {"target": "textarea-post-content"}},
+                            {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
+                        ]
+                    }],
+                    suggestions=suggestions,
+                )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user to confirm posting. Tell them to say 'yes' to post or 'no' to cancel.",
+            language=language
+        )
+        suggestions = ["Yes, post it", "No, cancel"] if language == 'en' else ["Sí, publicar", "No, cancelar"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle poll offer response state ---
     if conv_context.state == ConversationState.AWAITING_POLL_OFFER_RESPONSE:
-        # Check if user accepted or declined
-        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please', 'go ahead', "i'd like to", "i would like", "let's do it", "create one"]
-        decline_words = ['no', 'nope', 'not now', 'hold on', 'wait', 'no thanks', 'later', 'nevermind', 'never mind']
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Would you like to create a poll?",
+            field_type="poll_offer_response",
+            workflow_name="create_poll"
+        )
 
-        transcript_lower = transcript.lower()
-        accepted = any(word in transcript_lower for word in accept_words)
-        declined = any(word in transcript_lower for word in decline_words)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[PollOfferResponse] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        if accepted and not declined:
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                result = conversation_manager.handle_poll_offer_response(request.user_id, False)
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
+
+        # Handle META type
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating. Gently ask if they'd like to create a poll. Tell them to say 'yes' to create or 'no' if not.",
+                language=language
+            )
+            suggestions = ["Yes, create a poll", "No thanks", "Cancel"] if language == 'en' else ["Sí, crear encuesta", "No gracias", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(hesitation_msg),
+                action=ActionResponse(type='info'),
+                suggestions=suggestions,
+            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                result = conversation_manager.handle_poll_offer_response(request.user_id, True)
+                suggestions = ["Cancel"] if language == 'en' else ["Cancelar"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+            else:
+                result = conversation_manager.handle_poll_offer_response(request.user_id, False)
+                suggestions = ["Switch to copilot", "Switch to roster", "Go to courses"] if language == 'en' else ["Cambiar a copiloto", "Cambiar a lista", "Ir a cursos"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - user might be providing a poll question directly
+        if input_classification.input_type == InputType.CONTENT:
+            # Accept offer and use this as the poll question
             result = conversation_manager.handle_poll_offer_response(request.user_id, True)
-            return ConverseResponse(
-                message=sanitize_speech(result["message"]),
-                action=ActionResponse(type='info'),
-                suggestions=["Cancel"],
+            conv_context.poll_question = transcript
+            conversation_manager.save_context(request.user_id, conv_context)
+            question_msg = generate_voice_response(
+                f"Got user's poll question: '{transcript}'. Now ask for the first option.",
+                language=language
             )
-        elif declined:
-            result = conversation_manager.handle_poll_offer_response(request.user_id, False)
+            suggestions = ["Cancel"] if language == 'en' else ["Cancelar"]
             return ConverseResponse(
-                message=sanitize_speech(result["message"]),
+                message=sanitize_speech(question_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Switch to copilot", "Switch to roster", "Go to courses"],
+                suggestions=suggestions,
             )
-        else:
-            # Unclear response - ask again
-            return ConverseResponse(
-                message=sanitize_speech("Would you like to create a poll? Say yes or no."),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, create a poll", "No thanks"],
-            )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user if they want to create a poll. Tell them to say 'yes' or 'no'.",
+            language=language
+        )
+        suggestions = ["Yes, create a poll", "No thanks"] if language == 'en' else ["Sí, crear encuesta", "No gracias"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle poll question state ---
     if conv_context.state == ConversationState.AWAITING_POLL_QUESTION:
         transcript_lower = transcript.lower().strip()
 
         # Check for navigation/escape intent first
-        nav_path = detect_navigation_intent(transcript)
+        nav_path = detect_navigation_intent(transcript, request.context, request.current_page)
         if nav_path:
             conversation_manager.reset_poll_offer(request.user_id)
             message = sanitize_speech(f"Cancelling poll creation. {generate_conversational_response('navigate', nav_path, language=language)}")
@@ -2758,10 +2056,15 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         cancel_words = ['cancel', 'stop', 'abort', 'quit', 'nevermind', 'never mind']
         if any(word in transcript_lower for word in cancel_words):
             conversation_manager.reset_poll_offer(request.user_id)
+            cancel_msg = generate_voice_response(
+                "Poll creation cancelled. Ask what else user would like to do.",
+                language=language
+            )
+            suggestions = ["Switch to copilot", "Switch to roster"] if language == 'en' else ["Cambiar a copiloto", "Cambiar a lista"]
             return ConverseResponse(
-                message=sanitize_speech("Poll creation cancelled. What else can I help you with?"),
+                message=sanitize_speech(cancel_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Switch to copilot", "Switch to roster"],
+                suggestions=suggestions,
             )
 
         # This is the poll question
@@ -2785,7 +2088,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         transcript_lower = transcript.lower().strip()
 
         # Check for navigation/escape intent first
-        nav_path = detect_navigation_intent(transcript)
+        nav_path = detect_navigation_intent(transcript, request.context, request.current_page)
         if nav_path:
             conversation_manager.reset_poll_offer(request.user_id)
             message = sanitize_speech(f"Cancelling poll creation. {generate_conversational_response('navigate', nav_path, language=language)}")
@@ -2804,10 +2107,15 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         cancel_words = ['cancel', 'stop', 'abort', 'quit', 'nevermind', 'never mind']
         if any(word in transcript_lower for word in cancel_words):
             conversation_manager.reset_poll_offer(request.user_id)
+            cancel_msg = generate_voice_response(
+                "Poll creation cancelled. Ask what else user would like to do.",
+                language=language
+            )
+            suggestions = ["Switch to copilot", "Switch to roster"] if language == 'en' else ["Cambiar a copiloto", "Cambiar a lista"]
             return ConverseResponse(
-                message=sanitize_speech("Poll creation cancelled. What else can I help you with?"),
+                message=sanitize_speech(cancel_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Switch to copilot", "Switch to roster"],
+                suggestions=suggestions,
             )
 
         # This is a poll option
@@ -2819,9 +2127,14 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 "payload": {"target": action_item["voiceId"], "value": action_item.get("value", "")}
             })
 
-        suggestions = ["Cancel"]
-        if result.get("ask_for_more"):
-            suggestions = ["Yes, add more", "No, that's enough", "Cancel"]
+        if language == 'en':
+            suggestions = ["Cancel"]
+            if result.get("ask_for_more"):
+                suggestions = ["Yes, add more", "No, that's enough", "Cancel"]
+        else:
+            suggestions = ["Cancelar"]
+            if result.get("ask_for_more"):
+                suggestions = ["Sí, agregar más", "No, es suficiente", "Cancelar"]
 
         return ConverseResponse(
             message=sanitize_speech(result["message"]),
@@ -2832,131 +2145,292 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
     # --- Handle poll more options response state ---
     if conv_context.state == ConversationState.AWAITING_POLL_MORE_OPTIONS:
-        transcript_lower = transcript.lower()
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Would you like to add another poll option?",
+            field_type="poll_more_options",
+            workflow_name="create_poll"
+        )
 
-        # Check for yes/no response
-        yes_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'another', 'more', 'add more', 'one more']
-        no_words = ['no', 'nope', 'enough', "that's it", 'that is it', "that's enough", 'that is enough', 'done', "i'm done", 'finished', 'no more']
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[PollMoreOptions] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        wants_more = any(word in transcript_lower for word in yes_words)
-        is_done = any(word in transcript_lower for word in no_words)
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                conversation_manager.reset_poll_offer(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Poll creation cancelled. Acknowledge briefly.",
+                    language=language
+                )
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
+            elif command == "skip":
+                # Treat skip as "no more options"
+                result = conversation_manager.handle_more_options_response(request.user_id, False)
+                suggestions = ["Yes, create it", "No, cancel"] if language == 'en' else ["Sí, créala", "No, cancelar"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
 
-        if wants_more and not is_done:
-            result = conversation_manager.handle_more_options_response(request.user_id, True)
+        # Handle META type
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating about adding another poll option. Gently ask if they want to add more or if they're done.",
+                language=language
+            )
+            suggestions = ["Yes, add more", "No, that's enough", "Cancel"] if language == 'en' else ["Sí, agregar más", "No, es suficiente", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(hesitation_msg),
+                action=ActionResponse(type='info'),
+                suggestions=suggestions,
+            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                result = conversation_manager.handle_more_options_response(request.user_id, True)
+                ui_actions = []
+                for action_item in result.get("ui_actions", []):
+                    ui_actions.append({
+                        "type": f"ui.{action_item['action']}",
+                        "payload": {"target": action_item["voiceId"]}
+                    })
+                suggestions = ["Cancel"] if language == 'en' else ["Cancelar"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[{"ui_actions": ui_actions}],
+                    suggestions=suggestions,
+                )
+            else:
+                result = conversation_manager.handle_more_options_response(request.user_id, False)
+                suggestions = ["Yes, create it", "No, cancel"] if language == 'en' else ["Sí, créala", "No, cancelar"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - user is providing the next poll option directly
+        if input_classification.input_type == InputType.CONTENT:
+            result = conversation_manager.add_poll_option(request.user_id, transcript)
             ui_actions = []
             for action_item in result.get("ui_actions", []):
                 ui_actions.append({
                     "type": f"ui.{action_item['action']}",
-                    "payload": {"target": action_item["voiceId"]}
+                    "payload": {"target": action_item["voiceId"], "value": action_item.get("value", "")}
                 })
-
+            suggestions = ["Cancel"]
+            if result.get("ask_for_more"):
+                suggestions = ["Yes, add more", "No, that's enough", "Cancel"]
             return ConverseResponse(
                 message=sanitize_speech(result["message"]),
                 action=ActionResponse(type='execute', executed=True),
                 results=[{"ui_actions": ui_actions}],
-                suggestions=["Cancel"],
+                suggestions=suggestions,
             )
-        elif is_done:
-            result = conversation_manager.handle_more_options_response(request.user_id, False)
-            return ConverseResponse(
-                message=sanitize_speech(result["message"]),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, create it", "No, cancel"],
-            )
-        else:
-            # Unclear response - ask again
-            return ConverseResponse(
-                message=sanitize_speech("Would you like to add another option? Say yes or no."),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, add more", "No, that's enough"],
-            )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user if they want to add another poll option. Tell them to say 'yes' or 'no'.",
+            language=language
+        )
+        suggestions = ["Yes, add more", "No, that's enough"] if language == 'en' else ["Sí, agregar más", "No, es suficiente"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle poll confirmation state ---
     if conv_context.state == ConversationState.AWAITING_POLL_CONFIRM:
-        transcript_lower = transcript.lower()
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Should I create this poll?",
+            field_type="poll_confirm",
+            workflow_name="create_poll"
+        )
 
-        # Check for confirmation or denial
-        # English + Spanish confirmation words
-        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'create it', 'submit', 'go ahead', 'do it', 'post it',
-                         'si', 'claro', 'crealo', 'publicar', 'enviar', 'adelante', 'hazlo', 'de acuerdo']
-        # English + Spanish denial words
-        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind',
-                      'stop', 'quit', 'abort',  # Added stop/quit/abort
-                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo', 'parar', 'detener']
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[PollConfirm] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        transcript_normalized = normalize_spanish_text(transcript_lower)
-        confirmed = any(word in transcript_normalized for word in confirm_words)
-        denied = any(word in transcript_normalized for word in deny_words)
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                conversation_manager.reset_poll_offer(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Poll creation cancelled. Ask what else user would like to do.",
+                    language=language
+                )
+                suggestions = ["Create a new poll", "Switch to copilot", "View roster"] if language == 'en' else ["Crear nueva encuesta", "Cambiar a copiloto", "Ver lista"]
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
 
-        if confirmed and not denied:
-            result = conversation_manager.handle_poll_confirm(request.user_id, True)
-            ui_actions = []
-            for action_item in result.get("ui_actions", []):
-                ui_actions.append({
-                    "type": f"ui.{action_item['action']}",
-                    "payload": {"target": action_item["voiceId"]}
-                })
-            ui_actions.append({"type": "ui.toast", "payload": {"message": "Poll created!", "type": "success"}})
-
-            return ConverseResponse(
-                message=sanitize_speech(result["message"]),
-                action=ActionResponse(type='execute', executed=True),
-                results=[{"ui_actions": ui_actions}],
-                suggestions=["Create another poll", "Switch to copilot", "View roster"],
+        # Handle META type
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating about poll creation. Gently ask if they want to create it or cancel.",
+                language=language
             )
-        elif denied:
-            conversation_manager.reset_poll_offer(request.user_id)
+            suggestions = ["Yes, create it", "No, cancel"] if language == 'en' else ["Sí, créala", "No, cancelar"]
             return ConverseResponse(
-                message=sanitize_speech("Okay, poll creation cancelled. What else can I help you with?"),
+                message=sanitize_speech(hesitation_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Create a new poll", "Switch to copilot", "View roster"],
+                suggestions=suggestions,
             )
-        else:
-            # Unclear response - ask again
-            return ConverseResponse(
-                message=sanitize_speech("Should I create this poll? Say yes to create or no to cancel."),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, create it", "No, cancel"],
-            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                result = conversation_manager.handle_poll_confirm(request.user_id, True)
+                ui_actions = []
+                for action_item in result.get("ui_actions", []):
+                    ui_actions.append({
+                        "type": f"ui.{action_item['action']}",
+                        "payload": {"target": action_item["voiceId"]}
+                    })
+                toast_msg = "Poll created!" if language == 'en' else "¡Encuesta creada!"
+                ui_actions.append({"type": "ui.toast", "payload": {"message": toast_msg, "type": "success"}})
+                suggestions = ["Create another poll", "Switch to copilot", "View roster"] if language == 'en' else ["Crear otra encuesta", "Cambiar a copiloto", "Ver lista"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[{"ui_actions": ui_actions}],
+                    suggestions=suggestions,
+                )
+            else:
+                conversation_manager.reset_poll_offer(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Poll creation cancelled. Ask what else user would like to do.",
+                    language=language
+                )
+                suggestions = ["Create a new poll", "Switch to copilot", "View roster"] if language == 'en' else ["Crear nueva encuesta", "Cambiar a copiloto", "Ver lista"]
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - unclear in this context, re-prompt
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user to confirm poll creation. Tell them to say 'yes' to create or 'no' to cancel.",
+            language=language
+        )
+        suggestions = ["Yes, create it", "No, cancel"] if language == 'en' else ["Sí, créala", "No, cancelar"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle case offer response state ---
     if conv_context.state == ConversationState.AWAITING_CASE_OFFER_RESPONSE:
-        # Check if user accepted or declined
-        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please', 'go ahead', "i'd like to", "i would like", "let's do it", "create one", "post one"]
-        decline_words = ['no', 'nope', 'not now', 'hold on', 'wait', 'no thanks', 'later', 'nevermind', 'never mind']
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Would you like to post a case study?",
+            field_type="case_offer_response",
+            workflow_name="post_case"
+        )
 
-        transcript_lower = transcript.lower()
-        accepted = any(word in transcript_lower for word in accept_words)
-        declined = any(word in transcript_lower for word in decline_words)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[CaseOfferResponse] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        if accepted and not declined:
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                result = conversation_manager.handle_case_offer_response(request.user_id, False)
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
+
+        # Handle META type
+        if input_classification.input_type == InputType.META:
+            if language == 'es':
+                hesitation_msg = generate_voice_response(
+                    "User is hesitating. Gently ask if they'd like to post a case study. Tell them to say 'yes' or 'no'.",
+                    language=language
+                )
+            suggestions = ["Yes, post a case", "No thanks", "Cancel"] if language == 'en' else ["Sí, publicar caso", "No gracias", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(hesitation_msg),
+                action=ActionResponse(type='info'),
+                suggestions=suggestions,
+            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                result = conversation_manager.handle_case_offer_response(request.user_id, True)
+                suggestions = ["Cancel"] if language == 'en' else ["Cancelar"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+            else:
+                result = conversation_manager.handle_case_offer_response(request.user_id, False)
+                suggestions = ["Switch to polls", "Switch to copilot", "Go to forum"] if language == 'en' else ["Cambiar a encuestas", "Cambiar a copiloto", "Ir al foro"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - user might be providing case content directly
+        if input_classification.input_type == InputType.CONTENT:
             result = conversation_manager.handle_case_offer_response(request.user_id, True)
-            return ConverseResponse(
-                message=sanitize_speech(result["message"]),
-                action=ActionResponse(type='info'),
-                suggestions=["Cancel"],
+            conv_context.partial_case_content = transcript
+            conversation_manager.save_context(request.user_id, conv_context)
+            continue_msg = generate_voice_response(
+                "Got the start of user's case study. Tell them to continue dictating or say 'done' when finished.",
+                language=language
             )
-        elif declined:
-            result = conversation_manager.handle_case_offer_response(request.user_id, False)
+            suggestions = ["I'm done", "Cancel"] if language == 'en' else ["Terminé", "Cancelar"]
             return ConverseResponse(
-                message=sanitize_speech(result["message"]),
+                message=sanitize_speech(continue_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Switch to polls", "Switch to copilot", "Go to forum"],
+                suggestions=suggestions,
             )
-        else:
-            # Unclear response - ask again
-            return ConverseResponse(
-                message=sanitize_speech("Would you like to post a case study? Say yes or no."),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, post a case", "No thanks"],
-            )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user if they want to post a case study. Tell them to say 'yes' or 'no'.",
+            language=language
+        )
+        suggestions = ["Yes, post a case", "No thanks"] if language == 'en' else ["Sí, publicar caso", "No gracias"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle case prompt dictation state ---
     if conv_context.state == ConversationState.AWAITING_CASE_PROMPT:
         transcript_lower = transcript.lower().strip()
 
         # Check for navigation/escape intent first
-        nav_path = detect_navigation_intent(transcript)
+        nav_path = detect_navigation_intent(transcript, request.context, request.current_page)
         if nav_path:
             conversation_manager.reset_case_offer(request.user_id)
             message = sanitize_speech(f"Cancelling case creation. {generate_conversational_response('navigate', nav_path, language=language)}")
@@ -2975,10 +2449,15 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         cancel_words = ['cancel', 'stop', 'abort', 'quit', 'nevermind', 'never mind']
         if any(word in transcript_lower for word in cancel_words):
             conversation_manager.reset_case_offer(request.user_id)
+            cancel_msg = generate_voice_response(
+                "Case creation cancelled. Ask what else user would like to do.",
+                language=language
+            )
+            suggestions = ["Switch to polls", "Switch to copilot"] if language == 'en' else ["Cambiar a encuestas", "Cambiar a copiloto"]
             return ConverseResponse(
-                message=sanitize_speech("Case creation cancelled. What else can I help you with?"),
+                message=sanitize_speech(cancel_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Switch to polls", "Switch to copilot"],
+                suggestions=suggestions,
             )
 
         # Check for "done" or "finished" keywords to finish dictation
@@ -3018,393 +2497,886 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
     # --- Handle case confirmation state ---
     if conv_context.state == ConversationState.AWAITING_CASE_CONFIRM:
-        transcript_lower = transcript.lower()
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Should I post this case study?",
+            field_type="case_confirm",
+            workflow_name="post_case"
+        )
 
-        # Check for confirmation or denial
-        # English + Spanish confirmation words
-        confirm_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'post it', 'submit', 'go ahead', 'do it', 'create it',
-                         'si', 'claro', 'publicar', 'crealo', 'enviar', 'adelante', 'hazlo', 'de acuerdo']
-        # English + Spanish denial words
-        deny_words = ['no', 'nope', 'cancel', 'delete', 'clear', 'no thanks', 'nevermind', 'never mind',
-                      'stop', 'quit', 'abort',  # Added stop/quit/abort
-                      'cancelar', 'borrar', 'eliminar', 'no gracias', 'dejalo', 'parar', 'detener']
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[CaseConfirm] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        transcript_normalized = normalize_spanish_text(transcript_lower)
-        confirmed = any(word in transcript_normalized for word in confirm_words)
-        denied = any(word in transcript_normalized for word in deny_words)
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                conversation_manager.reset_case_offer(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Case posting cancelled. Tell user the content is still in the form if they want to edit it.",
+                    language=language
+                )
+                suggestions = ["Post a new case", "Switch to polls", "View forum"] if language == 'en' else ["Publicar nuevo caso", "Cambiar a encuestas", "Ver foro"]
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
 
-        if confirmed and not denied:
-            result = conversation_manager.handle_case_confirm(request.user_id, True)
-            ui_actions = []
-            for action_item in result.get("ui_actions", []):
-                ui_actions.append({
-                    "type": f"ui.{action_item['action']}",
-                    "payload": {"target": action_item["voiceId"]}
-                })
-            ui_actions.append({"type": "ui.toast", "payload": {"message": "Case study posted!", "type": "success"}})
-
-            return ConverseResponse(
-                message=sanitize_speech(result["message"]),
-                action=ActionResponse(type='execute', executed=True),
-                results=[{"ui_actions": ui_actions}],
-                suggestions=["Post another case", "Switch to polls", "View forum"],
+        # Handle META type
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating about posting the case study. Gently ask if they want to post it or cancel.",
+                language=language
             )
-        elif denied:
-            conversation_manager.reset_case_offer(request.user_id)
+            suggestions = ["Yes, post it", "No, cancel"] if language == 'en' else ["Sí, publicar", "No, cancelar"]
             return ConverseResponse(
-                message=sanitize_speech("Okay, case posting cancelled. The content is still in the form if you want to edit it."),
+                message=sanitize_speech(hesitation_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Post a new case", "Switch to polls", "View forum"],
+                suggestions=suggestions,
             )
-        else:
-            # Unclear response - ask again
-            return ConverseResponse(
-                message=sanitize_speech("Should I post this case study? Say yes to post or no to cancel."),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, post it", "No, cancel"],
-            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                result = conversation_manager.handle_case_confirm(request.user_id, True)
+                ui_actions = []
+                for action_item in result.get("ui_actions", []):
+                    ui_actions.append({
+                        "type": f"ui.{action_item['action']}",
+                        "payload": {"target": action_item["voiceId"]}
+                    })
+                toast_msg = "Case study posted!" if language == 'en' else "¡Caso de estudio publicado!"
+                ui_actions.append({"type": "ui.toast", "payload": {"message": toast_msg, "type": "success"}})
+                suggestions = ["Post another case", "Switch to polls", "View forum"] if language == 'en' else ["Publicar otro caso", "Cambiar a encuestas", "Ver foro"]
+                return ConverseResponse(
+                    message=sanitize_speech(result["message"]),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[{"ui_actions": ui_actions}],
+                    suggestions=suggestions,
+                )
+            else:
+                conversation_manager.reset_case_offer(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Case posting cancelled. Tell user the content is still in the form if they want to edit it.",
+                    language=language
+                )
+                suggestions = ["Post a new case", "Switch to polls", "View forum"] if language == 'en' else ["Publicar nuevo caso", "Cambiar a encuestas", "Ver foro"]
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user to confirm case study posting. Tell them to say 'yes' to post or 'no' to cancel.",
+            language=language
+        )
+        suggestions = ["Yes, post it", "No, cancel"] if language == 'en' else ["Sí, publicar", "No, cancelar"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle AI syllabus generation confirmation state ---
     if conv_context.state == ConversationState.AWAITING_SYLLABUS_GENERATION_CONFIRM:
-        transcript_lower = transcript.lower()
-        yes_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'generate', 'create', 'please', 'go ahead', 'do it']
-        no_words = ['no', 'nope', 'dictate', "i'll type", "i will type", "i'll write", "i will write", 'manual', 'myself', 'skip']
+        # Use LLM-based input classification for smarter intent detection
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Would you like me to generate a syllabus?",
+            field_type="syllabus_generation_confirm",
+            workflow_name="create_course"
+        )
 
-        accepted = any(word in transcript_lower for word in yes_words)
-        declined = any(word in transcript_lower for word in no_words)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[SyllabusConfirm] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        if accepted and not declined:
-            # Generate syllabus using AI
-            course_name = conv_context.course_name_for_generation or "the course"
-
-            # Call the content generation tool via MCP registry
-            try:
-                gen_result = _execute_tool(db, 'generate_syllabus', {"course_name": course_name})
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Syllabus generation error: {e}")
-                gen_result = None
-
-            if gen_result and gen_result.get("success") and gen_result.get("syllabus"):
-                syllabus = gen_result["syllabus"]
-                # Save the generated syllabus
-                conv_context.generated_syllabus = syllabus
-                conv_context.state = ConversationState.AWAITING_SYLLABUS_REVIEW
-                conversation_manager.save_context(request.user_id, conv_context)
-
-                # Preview (first 150 chars)
-                preview = syllabus[:150] + "..." if len(syllabus) > 150 else syllabus
-
-                return ConverseResponse(
-                    message=sanitize_speech(f"I've generated a syllabus for '{course_name}'. Here's a preview: {preview}. Should I use this syllabus?"),
-                    action=ActionResponse(type='info'),
-                    results=[{
-                        "ui_actions": [
-                            {"type": "ui.fillInput", "payload": {"target": "syllabus", "value": syllabus}},
-                        ]
-                    }],
-                    suggestions=["Yes, use it", "No, let me edit", "Skip syllabus"],
+        # Handle COMMAND type (cancel, skip, etc.)
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                # User wants to cancel the entire form
+                conversation_manager.cancel_form(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Course creation cancelled. Tell user to let you know when they're ready to continue.",
+                    language=language
                 )
-            else:
-                # Generation failed - fallback to manual
-                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
-                conversation_manager.save_context(request.user_id, conv_context)
-                error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
                 return ConverseResponse(
-                    message=sanitize_speech(f"Sorry, I couldn't generate the syllabus: {error_msg}. Please dictate the syllabus or say 'skip'."),
+                    message=sanitize_speech(cancel_msg),
                     action=ActionResponse(type='info'),
-                    suggestions=["Skip", "Cancel form"],
+                    suggestions=get_page_suggestions(request.current_page, language),
                 )
-
-        elif declined or 'skip' in transcript_lower:
-            # User wants to dictate or skip
-            if 'skip' in transcript_lower:
+            elif command == "skip":
                 skip_result = conversation_manager.skip_current_field(request.user_id)
                 # Check if next field is learning-objectives and offer AI generation
                 next_field = conversation_manager.get_current_field(request.user_id)
                 if next_field and next_field.voice_id == "learning-objectives":
                     conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
                     conversation_manager.save_context(request.user_id, conv_context)
-                    return ConverseResponse(
-                        message=sanitize_speech("Skipped syllabus. Would you like me to generate learning objectives for this course?"),
-                        action=ActionResponse(type='info'),
-                        suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
+                    skip_msg = generate_voice_response(
+                        "Skipped syllabus. Ask user if they want to generate learning objectives for the course.",
+                        language=language
                     )
+                    suggestions = ["Yes, generate them", "No, I'll dictate", "Skip"] if language == 'en' else ["Sí, generar", "No, dictaré", "Saltar"]
+                    return ConverseResponse(
+                        message=sanitize_speech(skip_msg),
+                        action=ActionResponse(type='info'),
+                        suggestions=suggestions,
+                    )
+                suggestions = ["Continue", "Cancel form"] if language == 'en' else ["Continuar", "Cancelar formulario"]
                 return ConverseResponse(
                     message=sanitize_speech(skip_result["message"]),
                     action=ActionResponse(type='info'),
-                    suggestions=["Continue", "Cancel form"],
+                    suggestions=suggestions,
                 )
+
+        # Handle META type (hesitation, thinking)
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating about syllabus generation. Tell them they can say 'yes' to generate, 'no' to dictate, 'skip' to move on, or 'cancel' to exit.",
+                language=language
+            )
+            suggestions = ["Yes, generate it", "No, I'll dictate", "Skip", "Cancel"] if language == 'en' else ["Sí, generar", "No, dictaré", "Saltar", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(hesitation_msg),
+                action=ActionResponse(type='info'),
+                suggestions=suggestions,
+            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                # Generate syllabus using AI
+                course_name = conv_context.course_name_for_generation or "the course"
+
+                # Call the content generation tool via MCP registry
+                try:
+                    gen_result = _execute_tool(db, 'generate_syllabus', {"course_name": course_name})
+                except Exception as e:
+                    logging.getLogger(__name__).error(f"Syllabus generation error: {e}")
+                    gen_result = None
+
+                if gen_result and gen_result.get("success") and gen_result.get("syllabus"):
+                    syllabus = gen_result["syllabus"]
+                    # Save the generated syllabus
+                    conv_context.generated_syllabus = syllabus
+                    conv_context.state = ConversationState.AWAITING_SYLLABUS_REVIEW
+                    conversation_manager.save_context(request.user_id, conv_context)
+
+                    # Preview (first 150 chars)
+                    preview = syllabus[:150] + "..." if len(syllabus) > 150 else syllabus
+
+                    gen_msg = generate_voice_response(
+                        f"Generated a syllabus for '{course_name}'. Give a brief preview and ask if user wants to use it. Preview: {preview}",
+                        language=language
+                    )
+                    suggestions = ["Yes, use it", "No, let me edit", "Skip syllabus"] if language == 'en' else ["Sí, úsalo", "No, déjame editar", "Saltar programa"]
+                    return ConverseResponse(
+                        message=sanitize_speech(gen_msg),
+                        action=ActionResponse(type='info'),
+                        results=[{
+                            "ui_actions": [
+                                {"type": "ui.fillInput", "payload": {"target": "syllabus", "value": syllabus}},
+                            ]
+                        }],
+                        suggestions=suggestions,
+                    )
+                else:
+                    # Generation failed - fallback to manual
+                    conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                    conversation_manager.save_context(request.user_id, conv_context)
+                    error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
+                    error_response = generate_voice_response(
+                        f"Syllabus generation failed with error: {error_msg}. Ask user to dictate the syllabus or say 'skip'.",
+                        language=language
+                    )
+                    suggestions = ["Skip", "Cancel form"] if language == 'en' else ["Saltar", "Cancelar formulario"]
+                    return ConverseResponse(
+                        message=sanitize_speech(error_response),
+                        action=ActionResponse(type='info'),
+                        suggestions=suggestions,
+                    )
             else:
+                # User said no - they want to dictate
                 conv_context.state = ConversationState.AWAITING_FIELD_INPUT
                 conversation_manager.save_context(request.user_id, conv_context)
-                return ConverseResponse(
-                    message=sanitize_speech("Okay, please dictate the syllabus now. Say what you'd like to include."),
-                    action=ActionResponse(type='info'),
-                    suggestions=["Skip", "Cancel form"],
+                dictate_msg = generate_voice_response(
+                    "User wants to dictate the syllabus. Ask them to start dictating what they want to include.",
+                    language=language
                 )
-        else:
+                suggestions = ["Skip", "Cancel form"] if language == 'en' else ["Saltar", "Cancelar formulario"]
+                return ConverseResponse(
+                    message=sanitize_speech(dictate_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - treat as if they want to dictate their own syllabus
+        if input_classification.input_type == InputType.CONTENT:
+            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conversation_manager.save_context(request.user_id, conv_context)
+            # Record the content they just spoke as the syllabus value
+            result = conversation_manager.record_field_value(request.user_id, transcript)
+            ui_actions = []
+            if result.get("field_to_fill"):
+                sanitized_value = result["all_values"].get(result["field_to_fill"].voice_id, transcript)
+                ui_actions.append({
+                    "type": "ui.fillInput",
+                    "payload": {"target": result["field_to_fill"].voice_id, "value": sanitized_value}
+                })
             return ConverseResponse(
-                message=sanitize_speech("Would you like me to generate a syllabus for you? Say 'yes' to generate, 'no' to dictate it yourself, or 'skip' to move on."),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, generate it", "No, I'll dictate", "Skip"],
+                message=sanitize_speech(result.get("next_prompt", "Got it! What's next?")),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions, "all_values": result.get("all_values", {})}],
+                suggestions=["Continue", "Skip", "Cancel"],
             )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user if they want to generate a syllabus with AI, dictate it themselves, skip, or cancel.",
+            language=language
+        )
+        suggestions = ["Yes, generate it", "No, I'll dictate", "Skip", "Cancel"] if language == 'en' else ["Sí, generar", "No, dictaré", "Saltar", "Cancelar"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle syllabus review state ---
     if conv_context.state == ConversationState.AWAITING_SYLLABUS_REVIEW:
-        transcript_lower = transcript.lower()
-        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'use it', 'looks good', 'perfect', 'great', 'accept', 'good']
-        edit_words = ['no', 'edit', 'change', 'modify', 'different', 'regenerate', 'try again']
-        skip_words = ['skip', 'next', 'move on']
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Should I use this generated syllabus?",
+            field_type="syllabus_review",
+            workflow_name="create_course"
+        )
 
-        accepted = any(word in transcript_lower for word in accept_words)
-        wants_edit = any(word in transcript_lower for word in edit_words)
-        wants_skip = any(word in transcript_lower for word in skip_words)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[SyllabusReview] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        if accepted and not wants_edit:
-            # Accept the generated syllabus and move to next field
-            conv_context.collected_values["syllabus"] = conv_context.generated_syllabus
-            conv_context.current_field_index += 1
-            conv_context.generated_syllabus = ""
-            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
-            conversation_manager.save_context(request.user_id, conv_context)
-
-            # Get next field prompt
-            next_field = conversation_manager.get_current_field(request.user_id)
-            if next_field:
-                # Offer AI generation for objectives too
-                if next_field.voice_id == "learning-objectives":
+        # Handle COMMAND type (cancel, skip, edit, etc.)
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                conversation_manager.cancel_form(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Course creation cancelled. Acknowledge briefly.",
+                    language=language
+                )
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
+            elif command == "skip":
+                skip_result = conversation_manager.skip_current_field(request.user_id)
+                conv_context.generated_syllabus = ""
+                conversation_manager.save_context(request.user_id, conv_context)
+                next_field = conversation_manager.get_current_field(request.user_id)
+                if next_field and next_field.voice_id == "learning-objectives":
                     conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
                     conversation_manager.save_context(request.user_id, conv_context)
-                    return ConverseResponse(
-                        message=sanitize_speech(f"Syllabus saved! Now for learning objectives. Would you like me to generate learning objectives based on the syllabus?"),
-                        action=ActionResponse(type='info'),
-                        suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
+                    skip_msg = generate_voice_response(
+                        "Skipped syllabus. Ask user if they want to generate learning objectives for the course.",
+                        language=language
                     )
-                return ConverseResponse(
-                    message=sanitize_speech(f"Syllabus saved! {next_field.prompt}"),
-                    action=ActionResponse(type='info'),
-                    suggestions=["Skip", "Cancel form"],
-                )
-            else:
-                return ConverseResponse(
-                    message=sanitize_speech("Syllabus saved! The form is ready to submit. Would you like me to create the course?"),
-                    action=ActionResponse(type='info'),
-                    suggestions=["Yes, create course", "No, cancel"],
-                )
-
-        elif wants_skip:
-            skip_result = conversation_manager.skip_current_field(request.user_id)
-            conv_context.generated_syllabus = ""
-            conversation_manager.save_context(request.user_id, conv_context)
-            # Check if next field is learning-objectives and offer AI generation
-            next_field = conversation_manager.get_current_field(request.user_id)
-            if next_field and next_field.voice_id == "learning-objectives":
-                conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
-                conversation_manager.save_context(request.user_id, conv_context)
-                return ConverseResponse(
-                    message=sanitize_speech("Skipped syllabus. Would you like me to generate learning objectives for this course?"),
-                    action=ActionResponse(type='info'),
-                    results=[{
-                        "ui_actions": [
-                            {"type": "ui.clearInput", "payload": {"target": "syllabus"}},
-                        ]
-                    }],
-                    suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
-                )
-            return ConverseResponse(
-                message=sanitize_speech(skip_result["message"]),
-                action=ActionResponse(type='info'),
-                results=[{
-                    "ui_actions": [
-                        {"type": "ui.clearInput", "payload": {"target": "syllabus"}},
-                    ]
-                }],
-                suggestions=["Continue", "Cancel form"],
-            )
-
-        else:
-            # User wants to edit - keep the text in the form for manual editing
-            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
-            conversation_manager.save_context(request.user_id, conv_context)
-            return ConverseResponse(
-                message=sanitize_speech("The syllabus is in the form. You can edit it manually, or dictate a new one. Say 'done' when finished or 'skip' to move on."),
-                action=ActionResponse(type='info'),
-                suggestions=["Skip", "Cancel form"],
-            )
-
-    # --- Handle AI objectives generation confirmation state ---
-    if conv_context.state == ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM:
-        transcript_lower = transcript.lower()
-        yes_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'generate', 'create', 'please', 'go ahead', 'do it']
-        no_words = ['no', 'nope', 'dictate', "i'll type", "i will type", "i'll write", "i will write", 'manual', 'myself', 'skip']
-
-        accepted = any(word in transcript_lower for word in yes_words)
-        declined = any(word in transcript_lower for word in no_words)
-
-        if accepted and not declined:
-            # Generate objectives using AI
-            course_name = conv_context.course_name_for_generation or "the course"
-            syllabus = conv_context.collected_values.get("syllabus", "")
-
-            try:
-                gen_result = _execute_tool(db, 'generate_objectives', {"course_name": course_name, "syllabus": syllabus})
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Objectives generation error: {e}")
-                gen_result = None
-
-            if gen_result and gen_result.get("success") and gen_result.get("objectives"):
-                objectives = gen_result["objectives"]
-                objectives_text = "\n".join(f"- {obj}" for obj in objectives)
-
-                # Save the generated objectives
-                conv_context.generated_objectives = objectives
-                conv_context.state = ConversationState.AWAITING_OBJECTIVES_REVIEW
-                conversation_manager.save_context(request.user_id, conv_context)
-
-                # Preview (first 3 objectives)
-                preview = ", ".join(objectives[:3])
-                if len(objectives) > 3:
-                    preview += f", and {len(objectives) - 3} more"
-
-                return ConverseResponse(
-                    message=sanitize_speech(f"I've generated {len(objectives)} learning objectives. Here are the first few: {preview}. Should I use these objectives?"),
-                    action=ActionResponse(type='info'),
-                    results=[{
-                        "ui_actions": [
-                            {"type": "ui.fillInput", "payload": {"target": "learning-objectives", "value": objectives_text}},
-                        ]
-                    }],
-                    suggestions=["Yes, use them", "No, let me edit", "Skip objectives"],
-                )
-            else:
-                # Generation failed
-                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
-                conversation_manager.save_context(request.user_id, conv_context)
-                error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
-                return ConverseResponse(
-                    message=sanitize_speech(f"Sorry, I couldn't generate objectives: {error_msg}. Please dictate them or say 'skip'."),
-                    action=ActionResponse(type='info'),
-                    suggestions=["Skip", "Cancel form"],
-                )
-
-        elif declined or 'skip' in transcript_lower:
-            if 'skip' in transcript_lower:
-                skip_result = conversation_manager.skip_current_field(request.user_id)
+                    suggestions = ["Yes, generate them", "No, I'll dictate", "Skip"] if language == 'en' else ["Sí, generar", "No, dictaré", "Saltar"]
+                    return ConverseResponse(
+                        message=sanitize_speech(skip_msg),
+                        action=ActionResponse(type='info'),
+                        results=[{"ui_actions": [{"type": "ui.clearInput", "payload": {"target": "syllabus"}}]}],
+                        suggestions=suggestions,
+                    )
+                suggestions = ["Continue", "Cancel form"] if language == 'en' else ["Continuar", "Cancelar formulario"]
                 return ConverseResponse(
                     message=sanitize_speech(skip_result["message"]),
                     action=ActionResponse(type='info'),
-                    suggestions=["Continue", "Cancel form"],
+                    results=[{"ui_actions": [{"type": "ui.clearInput", "payload": {"target": "syllabus"}}]}],
+                    suggestions=suggestions,
                 )
-            else:
+
+        # Handle META type (hesitation, thinking)
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating about using the generated syllabus. Tell them they can say 'yes' to use it, 'no' to edit, or 'skip' to move on.",
+                language=language
+            )
+            suggestions = ["Yes, use it", "No, edit", "Skip", "Cancel"] if language == 'en' else ["Sí, usar", "No, editar", "Saltar", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(hesitation_msg),
+                action=ActionResponse(type='info'),
+                suggestions=suggestions,
+            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                # Accept the generated syllabus and move to next field
+                conv_context.collected_values["syllabus"] = conv_context.generated_syllabus
+                conv_context.current_field_index += 1
+                conv_context.generated_syllabus = ""
                 conv_context.state = ConversationState.AWAITING_FIELD_INPUT
                 conversation_manager.save_context(request.user_id, conv_context)
-                return ConverseResponse(
-                    message=sanitize_speech("Okay, please dictate the learning objectives now."),
-                    action=ActionResponse(type='info'),
-                    suggestions=["Skip", "Cancel form"],
+
+                next_field = conversation_manager.get_current_field(request.user_id)
+                if next_field:
+                    if next_field.voice_id == "learning-objectives":
+                        conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
+                        conversation_manager.save_context(request.user_id, conv_context)
+                        saved_msg = generate_voice_response(
+                            "Syllabus saved. Now asking about learning objectives - offer to generate them based on the syllabus.",
+                            language=language
+                        )
+                        suggestions = ["Yes, generate them", "No, I'll dictate", "Skip"] if language == 'en' else ["Sí, generar", "No, dictaré", "Saltar"]
+                        return ConverseResponse(
+                            message=sanitize_speech(saved_msg),
+                            action=ActionResponse(type='info'),
+                            suggestions=suggestions,
+                        )
+                    saved_msg = generate_voice_response(
+                        f"Syllabus saved. Now asking for: {next_field.prompt.get(language, next_field.prompt.get('en', 'the next field'))}",
+                        language=language
+                    )
+                    suggestions = ["Skip", "Cancel form"] if language == 'en' else ["Saltar", "Cancelar formulario"]
+                    return ConverseResponse(
+                        message=sanitize_speech(saved_msg),
+                        action=ActionResponse(type='info'),
+                        suggestions=suggestions,
+                    )
+                else:
+                    ready_msg = generate_voice_response(
+                        "Syllabus saved. Form is ready to submit. Ask user if they want to create the course now.",
+                        language=language
+                    )
+                    suggestions = ["Yes, create course", "No, cancel"] if language == 'en' else ["Sí, crear curso", "No, cancelar"]
+                    return ConverseResponse(
+                        message=sanitize_speech(ready_msg),
+                        action=ActionResponse(type='info'),
+                        suggestions=suggestions,
+                    )
+            else:
+                # User said no - they want to edit
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                edit_msg = generate_voice_response(
+                    "Syllabus is in the form. Tell user they can edit it manually or dictate a new one. Say 'done' when finished or 'skip' to move on.",
+                    language=language
                 )
-        else:
+                suggestions = ["Skip", "Cancel form"] if language == 'en' else ["Saltar", "Cancelar formulario"]
+                return ConverseResponse(
+                    message=sanitize_speech(edit_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - user is providing new syllabus content
+        if input_classification.input_type == InputType.CONTENT:
+            # User is dictating new syllabus content - replace the generated one
+            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conv_context.generated_syllabus = ""
+            conversation_manager.save_context(request.user_id, conv_context)
+            result = conversation_manager.record_field_value(request.user_id, transcript)
+            ui_actions = []
+            if result.get("field_to_fill"):
+                sanitized_value = result["all_values"].get(result["field_to_fill"].voice_id, transcript)
+                ui_actions.append({"type": "ui.fillInput", "payload": {"target": result["field_to_fill"].voice_id, "value": sanitized_value}})
             return ConverseResponse(
-                message=sanitize_speech("Would you like me to generate learning objectives? Say 'yes' to generate, 'no' to dictate them, or 'skip'."),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, generate them", "No, I'll dictate", "Skip"],
+                message=sanitize_speech(result.get("next_prompt", "Got it! What's next?")),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions, "all_values": result.get("all_values", {})}],
+                suggestions=["Continue", "Skip", "Cancel"],
             )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user to confirm using the generated syllabus. Options: 'yes' to use it, 'no' to edit, 'skip' to move on, 'cancel' to exit.",
+            language=language
+        )
+        suggestions = ["Yes, use it", "No, edit", "Skip", "Cancel"] if language == 'en' else ["Sí, usar", "No, editar", "Saltar", "Cancelar"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
+
+    # --- Handle AI objectives generation confirmation state ---
+    if conv_context.state == ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM:
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Would you like me to generate learning objectives?",
+            field_type="objectives_generation_confirm",
+            workflow_name="create_course"
+        )
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[ObjectivesConfirm] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
+
+        # Handle COMMAND type (cancel, skip, etc.)
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                conversation_manager.cancel_form(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Course creation cancelled. Acknowledge briefly.",
+                    language=language
+                )
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
+            elif command == "skip":
+                skip_result = conversation_manager.skip_current_field(request.user_id)
+                suggestions = ["Continue", "Cancel form"] if language == 'en' else ["Continuar", "Cancelar formulario"]
+                return ConverseResponse(
+                    message=sanitize_speech(skip_result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle META type (hesitation, thinking)
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating about objectives generation. Tell them they can say 'yes' to generate, 'no' to dictate, or 'skip' to move on.",
+                language=language
+            )
+            suggestions = ["Yes, generate them", "No, I'll dictate", "Skip", "Cancel"] if language == 'en' else ["Sí, generar", "No, dictaré", "Saltar", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(hesitation_msg),
+                action=ActionResponse(type='info'),
+                suggestions=suggestions,
+            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                # Generate objectives using AI
+                course_name = conv_context.course_name_for_generation or "the course"
+                syllabus = conv_context.collected_values.get("syllabus", "")
+
+                try:
+                    gen_result = _execute_tool(db, 'generate_objectives', {"course_name": course_name, "syllabus": syllabus})
+                except Exception as e:
+                    logging.getLogger(__name__).error(f"Objectives generation error: {e}")
+                    gen_result = None
+
+                if gen_result and gen_result.get("success") and gen_result.get("objectives"):
+                    objectives = gen_result["objectives"]
+                    objectives_text = "\n".join(f"- {obj}" for obj in objectives)
+
+                    conv_context.generated_objectives = objectives
+                    conv_context.state = ConversationState.AWAITING_OBJECTIVES_REVIEW
+                    conversation_manager.save_context(request.user_id, conv_context)
+
+                    preview = ", ".join(objectives[:3])
+                    if len(objectives) > 3:
+                        preview += f", and {len(objectives) - 3} more"
+
+                    return ConverseResponse(
+                        message=sanitize_speech(f"I've generated {len(objectives)} learning objectives. Here are the first few: {preview}. Should I use these objectives?"),
+                        action=ActionResponse(type='info'),
+                        results=[{"ui_actions": [{"type": "ui.fillInput", "payload": {"target": "learning-objectives", "value": objectives_text}}]}],
+                        suggestions=["Yes, use them", "No, let me edit", "Skip objectives"],
+                    )
+                else:
+                    conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                    conversation_manager.save_context(request.user_id, conv_context)
+                    error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
+                    return ConverseResponse(
+                        message=sanitize_speech(f"Sorry, I couldn't generate objectives: {error_msg}. Please dictate them or say 'skip'."),
+                        action=ActionResponse(type='info'),
+                        suggestions=["Skip", "Cancel form"],
+                    )
+            else:
+                # User said no - they want to dictate
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                dictate_msg = generate_voice_response(
+                    "User wants to dictate the learning objectives. Ask them to start dictating.",
+                    language=language
+                )
+                suggestions = ["Skip", "Cancel form"] if language == 'en' else ["Saltar", "Cancelar formulario"]
+                return ConverseResponse(
+                    message=sanitize_speech(dictate_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - user is providing objectives content directly
+        if input_classification.input_type == InputType.CONTENT:
+            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conversation_manager.save_context(request.user_id, conv_context)
+            result = conversation_manager.record_field_value(request.user_id, transcript)
+            ui_actions = []
+            if result.get("field_to_fill"):
+                sanitized_value = result["all_values"].get(result["field_to_fill"].voice_id, transcript)
+                ui_actions.append({"type": "ui.fillInput", "payload": {"target": result["field_to_fill"].voice_id, "value": sanitized_value}})
+            suggestions = ["Continue", "Skip", "Cancel"] if language == 'en' else ["Continuar", "Saltar", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(result.get("next_prompt", "Got it! What's next?")),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions, "all_values": result.get("all_values", {})}],
+                suggestions=suggestions,
+            )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user if they want to generate learning objectives with AI, dictate them, skip, or cancel.",
+            language=language
+        )
+        suggestions = ["Yes, generate them", "No, I'll dictate", "Skip", "Cancel"] if language == 'en' else ["Sí, generar", "No, dictaré", "Saltar", "Cancelar"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle objectives review state ---
     if conv_context.state == ConversationState.AWAITING_OBJECTIVES_REVIEW:
-        transcript_lower = transcript.lower()
-        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'use them', 'looks good', 'perfect', 'great', 'accept', 'good']
-        edit_words = ['no', 'edit', 'change', 'modify', 'different', 'regenerate', 'try again']
-        skip_words = ['skip', 'next', 'move on']
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Should I use these generated learning objectives?",
+            field_type="objectives_review",
+            workflow_name="create_course"
+        )
 
-        accepted = any(word in transcript_lower for word in accept_words)
-        wants_edit = any(word in transcript_lower for word in edit_words)
-        wants_skip = any(word in transcript_lower for word in skip_words)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[ObjectivesReview] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        if accepted and not wants_edit:
-            # Accept the generated objectives
-            objectives_text = "\n".join(f"- {obj}" for obj in conv_context.generated_objectives)
-            conv_context.collected_values["learning-objectives"] = objectives_text
-            conv_context.current_field_index += 1
-            conv_context.generated_objectives = []
-            conv_context.state = ConversationState.AWAITING_CONFIRMATION
-            conv_context.pending_action = "ui_click_button"
-            conv_context.pending_action_data = {
-                "voice_id": "create-course-with-plans",
-                "form_name": "create_course",
-            }
-            conversation_manager.save_context(request.user_id, conv_context)
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                conversation_manager.cancel_form(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Course creation cancelled. Acknowledge briefly.",
+                    language=language
+                )
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
+            elif command == "skip":
+                skip_result = conversation_manager.skip_current_field(request.user_id)
+                conv_context.generated_objectives = []
+                conversation_manager.save_context(request.user_id, conv_context)
+                suggestions = ["Continue", "Cancel form"] if language == 'en' else ["Continuar", "Cancelar formulario"]
+                return ConverseResponse(
+                    message=sanitize_speech(skip_result["message"]),
+                    action=ActionResponse(type='info'),
+                    results=[{"ui_actions": [{"type": "ui.clearInput", "payload": {"target": "learning-objectives"}}]}],
+                    suggestions=suggestions,
+                )
 
+        # Handle META type (hesitation)
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating about using the generated objectives. Tell them they can say 'yes' to use them, 'no' to edit, or 'skip' to move on.",
+                language=language
+            )
+            suggestions = ["Yes, use them", "No, edit", "Skip", "Cancel"] if language == 'en' else ["Sí, usar", "No, editar", "Saltar", "Cancelar"]
             return ConverseResponse(
-                message=sanitize_speech("Objectives saved! The course is ready to create. Would you like me to create it now and generate session plans?"),
+                message=sanitize_speech(hesitation_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Yes, create it", "No, cancel"],
+                suggestions=suggestions,
             )
 
-        elif wants_skip:
-            skip_result = conversation_manager.skip_current_field(request.user_id)
-            conv_context.generated_objectives = []
-            conversation_manager.save_context(request.user_id, conv_context)
-            return ConverseResponse(
-                message=sanitize_speech(skip_result["message"]),
-                action=ActionResponse(type='info'),
-                results=[{
-                    "ui_actions": [
-                        {"type": "ui.clearInput", "payload": {"target": "learning-objectives"}},
-                    ]
-                }],
-                suggestions=["Continue", "Cancel form"],
-            )
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                # Accept the generated objectives
+                objectives_text = "\n".join(f"- {obj}" for obj in conv_context.generated_objectives)
+                conv_context.collected_values["learning-objectives"] = objectives_text
+                conv_context.current_field_index += 1
+                conv_context.generated_objectives = []
+                conv_context.state = ConversationState.AWAITING_CONFIRMATION
+                conv_context.pending_action = "ui_click_button"
+                conv_context.pending_action_data = {
+                    "voice_id": "create-course-with-plans",
+                    "form_name": "create_course",
+                }
+                conversation_manager.save_context(request.user_id, conv_context)
 
-        else:
-            # User wants to edit
+                ready_msg = generate_voice_response(
+                    "Objectives saved. Course is ready to create. Ask user if they want to create it now and generate session plans.",
+                    language=language
+                )
+                suggestions = ["Yes, create it", "No, cancel"] if language == 'en' else ["Sí, crear", "No, cancelar"]
+                return ConverseResponse(
+                    message=sanitize_speech(ready_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+            else:
+                # User said no - they want to edit
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                edit_msg = generate_voice_response(
+                    "Objectives are in the form. Tell user they can edit them manually or dictate new ones. Say 'done' when finished or 'skip' to move on.",
+                    language=language
+                )
+                suggestions = ["Skip", "Cancel form"] if language == 'en' else ["Saltar", "Cancelar formulario"]
+                return ConverseResponse(
+                    message=sanitize_speech(edit_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - user is providing new objectives directly
+        if input_classification.input_type == InputType.CONTENT:
             conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conv_context.generated_objectives = []
             conversation_manager.save_context(request.user_id, conv_context)
+            result = conversation_manager.record_field_value(request.user_id, transcript)
+            ui_actions = []
+            if result.get("field_to_fill"):
+                sanitized_value = result["all_values"].get(result["field_to_fill"].voice_id, transcript)
+                ui_actions.append({"type": "ui.fillInput", "payload": {"target": result["field_to_fill"].voice_id, "value": sanitized_value}})
             return ConverseResponse(
-                message=sanitize_speech("The objectives are in the form. You can edit them manually, or dictate new ones. Say 'done' when finished or 'skip' to move on."),
-                action=ActionResponse(type='info'),
-                suggestions=["Skip", "Cancel form"],
+                message=sanitize_speech(result.get("next_prompt", "Got it! What's next?")),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions, "all_values": result.get("all_values", {})}],
+                suggestions=["Continue", "Skip", "Cancel"],
             )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user to confirm using the generated objectives. Options: 'yes' to use them, 'no' to edit, 'skip' to move on, 'cancel' to exit.",
+            language=language
+        )
+        suggestions = ["Yes, use them", "No, edit", "Skip", "Cancel"] if language == 'en' else ["Sí, usar", "No, editar", "Saltar", "Cancelar"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # --- Handle AI session plan generation confirmation state ---
     if conv_context.state == ConversationState.AWAITING_SESSION_PLAN_GENERATION_CONFIRM:
-        transcript_lower = transcript.lower()
-        yes_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'generate', 'create', 'please', 'go ahead', 'do it']
-        no_words = ['no', 'nope', 'dictate', "i'll type", "i will type", "i'll write", "i will write", 'manual', 'myself', 'skip']
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Would you like me to generate a session plan with discussion prompts and a case study?",
+            field_type="session_plan_generation_confirm",
+            workflow_name="create_session"
+        )
 
-        accepted = any(word in transcript_lower for word in yes_words)
-        declined = any(word in transcript_lower for word in no_words)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[SessionPlanConfirm] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
 
-        if accepted and not declined:
-            # Generate session plan using AI
-            session_topic = conv_context.collected_values.get("input-session-title", "the session")
-            # Get course info from context if available
-            course_id = context_store.get_context(request.user_id).get("active_course_id") if request.user_id else None
-            course_name = "the course"
-            syllabus = None
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                conversation_manager.cancel_form(request.user_id)
+                cancel_msg = generate_voice_response(
+                    "Session creation cancelled. Acknowledge briefly.",
+                    language=language
+                )
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
+            elif command == "skip":
+                skip_result = conversation_manager.skip_current_field(request.user_id)
+                suggestions = ["Create session", "Cancel form"] if language == 'en' else ["Crear sesión", "Cancelar formulario"]
+                return ConverseResponse(
+                    message=sanitize_speech(skip_result["message"]),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
 
-            if course_id and db:
-                course = db.query(Course).filter(Course.id == course_id).first()
-                if course:
-                    course_name = course.title
-                    syllabus = course.syllabus_text
+        # Handle META type
+        if input_classification.input_type == InputType.META:
+            hesitation_msg = generate_voice_response(
+                "User is hesitating about session plan generation. Tell them they can say 'yes' to generate, 'no' to dictate, or 'skip' to move on.",
+                language=language
+            )
+            suggestions = ["Yes, generate it", "No, I'll dictate", "Skip", "Cancel"] if language == 'en' else ["Sí, generar", "No, dictaré", "Saltar", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(hesitation_msg),
+                action=ActionResponse(type='info'),
+                suggestions=suggestions,
+            )
 
-            try:
-                gen_result = _execute_tool(db, 'generate_session_plan', {
-                    "course_name": course_name,
-                    "session_topic": session_topic,
-                    "syllabus": syllabus,
-                })
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).error(f"Session plan generation error: {e}")
-                gen_result = None
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                # Generate session plan using AI
+                session_topic = conv_context.collected_values.get("input-session-title", "the session")
+                course_id = context_store.get_context(request.user_id).get("active_course_id") if request.user_id else None
+                course_name = "the course"
+                syllabus = None
 
-            if gen_result and gen_result.get("success") and gen_result.get("plan"):
-                plan = gen_result["plan"]
-                # Format the plan as a description
+                if course_id and db:
+                    course = db.query(Course).filter(Course.id == course_id).first()
+                    if course:
+                        course_name = course.title
+                        syllabus = course.syllabus_text
+
+                try:
+                    gen_result = _execute_tool(db, 'generate_session_plan', {
+                        "course_name": course_name,
+                        "session_topic": session_topic,
+                        "syllabus": syllabus,
+                    })
+                except Exception as e:
+                    logging.getLogger(__name__).error(f"Session plan generation error: {e}")
+                    gen_result = None
+
+                if gen_result and gen_result.get("success") and gen_result.get("plan"):
+                    plan = gen_result["plan"]
+                    description_parts = []
+                    if plan.get("goals"):
+                        description_parts.append("Learning Goals:\n" + "\n".join(f"- {g}" for g in plan["goals"]))
+                    if plan.get("key_concepts"):
+                        description_parts.append("\nKey Concepts:\n" + "\n".join(f"- {c}" for c in plan["key_concepts"]))
+                    if plan.get("discussion_prompts"):
+                        description_parts.append("\nDiscussion Prompts:\n" + "\n".join(f"- {p}" for p in plan["discussion_prompts"]))
+                    if plan.get("case_prompt"):
+                        description_parts.append(f"\nCase Study:\n{plan['case_prompt']}")
+
+                    description = "\n".join(description_parts)
+                    conv_context.generated_session_plan = plan
+                    conv_context.state = ConversationState.AWAITING_SESSION_PLAN_REVIEW
+                    conversation_manager.save_context(request.user_id, conv_context)
+
+                    prompt_count = len(plan.get("discussion_prompts", []))
+                    summary = f"I've generated a session plan for '{session_topic}' with {prompt_count} discussion prompts"
+                    if plan.get("case_prompt"):
+                        summary += " and a case study"
+                    summary += ". Should I use this plan?"
+
+                    return ConverseResponse(
+                        message=sanitize_speech(summary),
+                        action=ActionResponse(type='info'),
+                        results=[{"ui_actions": [{"type": "ui.fillInput", "payload": {"target": "textarea-session-description", "value": description}}]}],
+                        suggestions=["Yes, use it", "No, let me edit", "Skip"],
+                    )
+                else:
+                    conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                    conversation_manager.save_context(request.user_id, conv_context)
+                    error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
+                    return ConverseResponse(
+                        message=sanitize_speech(f"Sorry, I couldn't generate the session plan: {error_msg}. Please dictate a description or say 'skip'."),
+                        action=ActionResponse(type='info'),
+                        suggestions=["Skip", "Cancel form"],
+                    )
+            else:
+                # User said no - they want to dictate
+                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+                conversation_manager.save_context(request.user_id, conv_context)
+                dictate_msg = generate_voice_response(
+                    "User wants to dictate the session description. Ask them to start dictating.",
+                    language=language
+                )
+                suggestions = ["Skip", "Cancel form"] if language == 'en' else ["Saltar", "Cancelar formulario"]
+                return ConverseResponse(
+                    message=sanitize_speech(dictate_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=suggestions,
+                )
+
+        # Handle CONTENT type - user is providing description directly
+        if input_classification.input_type == InputType.CONTENT:
+            conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conversation_manager.save_context(request.user_id, conv_context)
+            result = conversation_manager.record_field_value(request.user_id, transcript)
+            ui_actions = []
+            if result.get("field_to_fill"):
+                sanitized_value = result["all_values"].get(result["field_to_fill"].voice_id, transcript)
+                ui_actions.append({"type": "ui.fillInput", "payload": {"target": result["field_to_fill"].voice_id, "value": sanitized_value}})
+            suggestions = ["Continue", "Skip", "Cancel"] if language == 'en' else ["Continuar", "Saltar", "Cancelar"]
+            return ConverseResponse(
+                message=sanitize_speech(result.get("next_prompt", "Got it! What's next?")),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions, "all_values": result.get("all_values", {})}],
+                suggestions=suggestions,
+            )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user if they want to generate a session plan with AI, dictate it, skip, or cancel.",
+            language=language
+        )
+        suggestions = ["Yes, generate it", "No, I'll dictate", "Skip", "Cancel"] if language == 'en' else ["Sí, generar", "No, dictaré", "Saltar", "Cancelar"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
+
+    # --- Handle session plan review state ---
+    if conv_context.state == ConversationState.AWAITING_SESSION_PLAN_REVIEW:
+        # Use LLM-based input classification
+        input_classification = classify_form_input(
+            user_input=transcript,
+            field_prompt="Should I use this generated session plan?",
+            field_type="session_plan_review",
+            workflow_name="create_session"
+        )
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[SessionPlanReview] Input: '{transcript}' -> Type: {input_classification.input_type}, Command: {input_classification.command}, Confirm: {input_classification.confirm_value}")
+
+        # Handle COMMAND type
+        if input_classification.input_type == InputType.COMMAND:
+            command = input_classification.command or "cancel"
+            if command == "cancel":
+                conversation_manager.cancel_form(request.user_id)
+                if language == 'es':
+                    cancel_msg = "Entendido. He cancelado la creación de la sesión."
+                else:
+                    cancel_msg = "Understood. I've cancelled session creation."
+                return ConverseResponse(
+                    message=sanitize_speech(cancel_msg),
+                    action=ActionResponse(type='info'),
+                    suggestions=get_page_suggestions(request.current_page, language),
+                )
+            elif command == "skip":
+                skip_result = conversation_manager.skip_current_field(request.user_id)
+                conv_context.generated_session_plan = {}
+                conversation_manager.save_context(request.user_id, conv_context)
+                return ConverseResponse(
+                    message=sanitize_speech(skip_result["message"]),
+                    action=ActionResponse(type='info'),
+                    results=[{"ui_actions": [{"type": "ui.clearInput", "payload": {"target": "textarea-session-description"}}]}],
+                    suggestions=["Create session", "Cancel form"],
+                )
+
+        # Handle META type
+        if input_classification.input_type == InputType.META:
+            if language == 'es':
+                hesitation_msg = "Tómate tu tiempo. Di 'sí' para usar este plan, 'no' para editarlo, o 'saltar' para continuar."
+            else:
+                hesitation_msg = "Take your time. Say 'yes' to use this plan, 'no' to edit it, or 'skip' to move on."
+            return ConverseResponse(
+                message=sanitize_speech(hesitation_msg),
+                action=ActionResponse(type='info'),
+                suggestions=["Yes, use it", "No, edit", "Skip", "Cancel"],
+            )
+
+        # Handle CONFIRM type
+        if input_classification.input_type == InputType.CONFIRM:
+            if input_classification.confirm_value == "yes":
+                # Accept the generated plan
+                plan = conv_context.generated_session_plan
                 description_parts = []
                 if plan.get("goals"):
                     description_parts.append("Learning Goals:\n" + "\n".join(f"- {g}" for g in plan["goals"]))
@@ -3414,131 +3386,73 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     description_parts.append("\nDiscussion Prompts:\n" + "\n".join(f"- {p}" for p in plan["discussion_prompts"]))
                 if plan.get("case_prompt"):
                     description_parts.append(f"\nCase Study:\n{plan['case_prompt']}")
-
                 description = "\n".join(description_parts)
 
-                # Save the generated plan
-                conv_context.generated_session_plan = plan
-                conv_context.state = ConversationState.AWAITING_SESSION_PLAN_REVIEW
+                conv_context.collected_values["textarea-session-description"] = description
+                conv_context.current_field_index += 1
+                conv_context.generated_session_plan = {}
+                conv_context.state = ConversationState.AWAITING_CONFIRMATION
+                conv_context.pending_action = "ui_click_button"
+                conv_context.pending_action_data = {
+                    "voice_id": "create-session",
+                    "form_name": "create_session",
+                }
                 conversation_manager.save_context(request.user_id, conv_context)
 
-                # Create a voice-friendly summary
-                prompt_count = len(plan.get("discussion_prompts", []))
-                summary = f"I've generated a session plan for '{session_topic}' with {prompt_count} discussion prompts"
-                if plan.get("case_prompt"):
-                    summary += " and a case study"
-                summary += ". Should I use this plan?"
-
+                ready_msg = generate_voice_response(
+                    "Session plan saved. Session is ready to create. Ask user if they want to create it now.",
+                    language=language
+                )
+                suggestions = ["Yes, create it", "No, cancel"] if language == 'en' else ["Sí, crear", "No, cancelar"]
                 return ConverseResponse(
-                    message=sanitize_speech(summary),
+                    message=sanitize_speech(ready_msg),
                     action=ActionResponse(type='info'),
-                    results=[{
-                        "ui_actions": [
-                            {"type": "ui.fillInput", "payload": {"target": "textarea-session-description", "value": description}},
-                        ]
-                    }],
-                    suggestions=["Yes, use it", "No, let me edit", "Skip"],
+                    suggestions=suggestions,
                 )
             else:
-                # Generation failed
+                # User said no - they want to edit
                 conv_context.state = ConversationState.AWAITING_FIELD_INPUT
                 conversation_manager.save_context(request.user_id, conv_context)
-                error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
+                edit_msg = generate_voice_response(
+                    "Session plan is in the form. Tell user they can edit it manually or dictate a new description. Say 'done' when finished or 'skip'.",
+                    language=language
+                )
+                suggestions = ["Skip", "Cancel form"] if language == 'en' else ["Saltar", "Cancelar formulario"]
                 return ConverseResponse(
-                    message=sanitize_speech(f"Sorry, I couldn't generate the session plan: {error_msg}. Please dictate a description or say 'skip'."),
+                    message=sanitize_speech(edit_msg),
                     action=ActionResponse(type='info'),
-                    suggestions=["Skip", "Cancel form"],
+                    suggestions=suggestions,
                 )
 
-        elif declined or 'skip' in transcript_lower:
-            if 'skip' in transcript_lower:
-                skip_result = conversation_manager.skip_current_field(request.user_id)
-                return ConverseResponse(
-                    message=sanitize_speech(skip_result["message"]),
-                    action=ActionResponse(type='info'),
-                    suggestions=["Create session", "Cancel form"],
-                )
-            else:
-                conv_context.state = ConversationState.AWAITING_FIELD_INPUT
-                conversation_manager.save_context(request.user_id, conv_context)
-                return ConverseResponse(
-                    message=sanitize_speech("Okay, please dictate the session description now."),
-                    action=ActionResponse(type='info'),
-                    suggestions=["Skip", "Cancel form"],
-                )
-        else:
-            return ConverseResponse(
-                message=sanitize_speech("Would you like me to generate a session plan with discussion prompts and a case study? Say 'yes' to generate, 'no' to dictate, or 'skip'."),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, generate it", "No, I'll dictate", "Skip"],
-            )
-
-    # --- Handle session plan review state ---
-    if conv_context.state == ConversationState.AWAITING_SESSION_PLAN_REVIEW:
-        transcript_lower = transcript.lower()
-        accept_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'use it', 'looks good', 'perfect', 'great', 'accept', 'good']
-        edit_words = ['no', 'edit', 'change', 'modify', 'different', 'regenerate', 'try again']
-        skip_words = ['skip', 'next', 'move on']
-
-        accepted = any(word in transcript_lower for word in accept_words)
-        wants_edit = any(word in transcript_lower for word in edit_words)
-        wants_skip = any(word in transcript_lower for word in skip_words)
-
-        if accepted and not wants_edit:
-            # Accept the generated plan
-            plan = conv_context.generated_session_plan
-            description_parts = []
-            if plan.get("goals"):
-                description_parts.append("Learning Goals:\n" + "\n".join(f"- {g}" for g in plan["goals"]))
-            if plan.get("key_concepts"):
-                description_parts.append("\nKey Concepts:\n" + "\n".join(f"- {c}" for c in plan["key_concepts"]))
-            if plan.get("discussion_prompts"):
-                description_parts.append("\nDiscussion Prompts:\n" + "\n".join(f"- {p}" for p in plan["discussion_prompts"]))
-            if plan.get("case_prompt"):
-                description_parts.append(f"\nCase Study:\n{plan['case_prompt']}")
-            description = "\n".join(description_parts)
-
-            conv_context.collected_values["textarea-session-description"] = description
-            conv_context.current_field_index += 1
-            conv_context.generated_session_plan = {}
-            conv_context.state = ConversationState.AWAITING_CONFIRMATION
-            conv_context.pending_action = "ui_click_button"
-            conv_context.pending_action_data = {
-                "voice_id": "create-session",
-                "form_name": "create_session",
-            }
-            conversation_manager.save_context(request.user_id, conv_context)
-
-            return ConverseResponse(
-                message=sanitize_speech("Session plan saved! The session is ready to create. Would you like me to create it now?"),
-                action=ActionResponse(type='info'),
-                suggestions=["Yes, create it", "No, cancel"],
-            )
-
-        elif wants_skip:
-            skip_result = conversation_manager.skip_current_field(request.user_id)
-            conv_context.generated_session_plan = {}
-            conversation_manager.save_context(request.user_id, conv_context)
-            return ConverseResponse(
-                message=sanitize_speech(skip_result["message"]),
-                action=ActionResponse(type='info'),
-                results=[{
-                    "ui_actions": [
-                        {"type": "ui.clearInput", "payload": {"target": "textarea-session-description"}},
-                    ]
-                }],
-                suggestions=["Create session", "Cancel form"],
-            )
-
-        else:
-            # User wants to edit
+        # Handle CONTENT type - user is providing new content directly
+        if input_classification.input_type == InputType.CONTENT:
             conv_context.state = ConversationState.AWAITING_FIELD_INPUT
+            conv_context.generated_session_plan = {}
             conversation_manager.save_context(request.user_id, conv_context)
+            result = conversation_manager.record_field_value(request.user_id, transcript)
+            ui_actions = []
+            if result.get("field_to_fill"):
+                sanitized_value = result["all_values"].get(result["field_to_fill"].voice_id, transcript)
+                ui_actions.append({"type": "ui.fillInput", "payload": {"target": result["field_to_fill"].voice_id, "value": sanitized_value}})
+            suggestions = ["Continue", "Skip", "Cancel"] if language == 'en' else ["Continuar", "Saltar", "Cancelar"]
             return ConverseResponse(
-                message=sanitize_speech("The session plan is in the form. You can edit it manually, or dictate a new description. Say 'done' when finished or 'skip'."),
-                action=ActionResponse(type='info'),
-                suggestions=["Skip", "Cancel form"],
+                message=sanitize_speech(result.get("next_prompt", "Got it! What's next?")),
+                action=ActionResponse(type='execute', executed=True),
+                results=[{"ui_actions": ui_actions, "all_values": result.get("all_values", {})}],
+                suggestions=suggestions,
             )
+
+        # Fallback - re-prompt
+        fallback_msg = generate_voice_response(
+            "Ask user to confirm using the generated session plan. Options: 'yes' to use it, 'no' to edit, 'skip' to move on, 'cancel' to exit.",
+            language=language
+        )
+        suggestions = ["Yes, use it", "No, edit", "Skip", "Cancel"] if language == 'en' else ["Sí, usar", "No, editar", "Saltar", "Cancelar"]
+        return ConverseResponse(
+            message=sanitize_speech(fallback_msg),
+            action=ActionResponse(type='info'),
+            suggestions=suggestions,
+        )
 
     # =========================================================================
     # INTENT DETECTION: LLM-first or Regex-based (configurable)
@@ -3695,15 +3609,22 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         if intent_result["type"] == "confirm":
             confirm_type = intent_result["value"]
             if confirm_type == "yes":
-                ready_msg = "Estoy listo para ayudar. Que te gustaria que confirme?" if language == 'es' else "I'm ready to help. What would you like me to confirm?"
+                ready_msg = generate_voice_response(
+                    "User said yes but no action pending. Say ready to help and ask what they want to confirm.",
+                    language=language
+                )
                 return ConverseResponse(
                     message=sanitize_speech(ready_msg),
                     action=ActionResponse(type='info'),
                     suggestions=get_page_suggestions(request.current_page, language),
                 )
             elif confirm_type in ["no", "cancel"]:
+                cancel_msg = generate_voice_response(
+                    "Cancelled. Ask what else user would like to do.",
+                    language=language
+                )
                 return ConverseResponse(
-                    message=sanitize_speech("Okay, cancelled. What else can I help you with?"),
+                    message=sanitize_speech(cancel_msg),
                     action=ActionResponse(type='info'),
                     suggestions=get_page_suggestions(request.current_page, language),
                 )
@@ -3711,10 +3632,15 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         # Handle dictation intent
         if intent_result["type"] == "dictate":
             # User is providing content - this should be handled by conversation state
+            no_form_msg = generate_voice_response(
+                "Heard user's input but no form is active. Tell them to start a form or select an input field first.",
+                language=language
+            )
+            suggestions = ["Create course", "Create session", "Post to forum"] if language == 'en' else ["Crear curso", "Crear sesión", "Publicar en foro"]
             return ConverseResponse(
-                message=sanitize_speech("I heard your input. Please start a form or select an input field first."),
+                message=sanitize_speech(no_form_msg),
                 action=ActionResponse(type='info'),
-                suggestions=["Create course", "Create session", "Post to forum"],
+                suggestions=suggestions,
             )
 
         # Fallback for unclear intent

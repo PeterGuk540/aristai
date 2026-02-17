@@ -926,10 +926,20 @@ class VoiceConversationManager:
             selection_clean = re.sub(rf'\b{word}\b', '', selection_clean)
         selection_clean = ' '.join(selection_clean.split())  # Clean up whitespace
 
-        # Ordinal mapping
+        # Ordinal mapping (first, second, etc.)
         ordinals = {
             'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5,
-            'last': len(options), '1st': 1, '2nd': 2, '3rd': 3, '4th': 4, '5th': 5,
+            'sixth': 6, 'seventh': 7, 'eighth': 8, 'ninth': 9, 'tenth': 10,
+            'last': len(options),
+            '1st': 1, '2nd': 2, '3rd': 3, '4th': 4, '5th': 5,
+            '6th': 6, '7th': 7, '8th': 8, '9th': 9, '10th': 10,
+        }
+
+        # Word-to-number mapping (one, two, three, etc.)
+        number_words = {
+            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+            'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
         }
 
         # Try to match by ordinal (first, second, etc.)
@@ -938,6 +948,14 @@ class VoiceConversationManager:
                 if 0 < idx <= len(options):
                     selected = options[idx - 1]
                     break
+
+        # Try to match by number word (one, two, three, six, etc.)
+        if not selected:
+            for word, num in number_words.items():
+                if word in selection_str:
+                    if 0 < num <= len(options):
+                        selected = options[num - 1]
+                        break
 
         # Try to match by numeric index (1, 2, 3...)
         if not selected:

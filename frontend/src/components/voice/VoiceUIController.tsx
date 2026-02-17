@@ -1008,11 +1008,14 @@ export const VoiceUIController = () => {
     console.log('🎤 VoiceUI: switchTab', { target, tabName });
 
     const searchName = tabName || target || '';
-    const searchNameLower = searchName.toLowerCase().replace(/-/g, '').replace(/tab|panel|section/g, '').trim();
+    // Keep original with hyphens for exact matching, also create normalized version
+    const searchNameLower = searchName.toLowerCase().replace(/tab|panel|section/g, '').trim();
+    const searchNameNormalized = searchNameLower.replace(/-/g, ''); // Without hyphens for fuzzy matching
 
     // First try the voice-select-tab custom event (supported by many pages)
+    // Send the normalized version (without hyphens) - page handlers will map it
     window.dispatchEvent(new CustomEvent('voice-select-tab', {
-      detail: { tab: searchNameLower }
+      detail: { tab: searchNameNormalized }
     }));
 
     let element: HTMLElement | null = null;
@@ -1020,13 +1023,15 @@ export const VoiceUIController = () => {
     // 1. Try to find by data-voice-id first (most specific)
     element = findElement(target);
 
-    // 2. Try to find Radix TabsTrigger by value attribute (exact match)
+    // 2. Try to find Radix TabsTrigger by value attribute (exact match with or without hyphens)
     if (!element) {
       // Radix UI tabs have a data-state and value attribute
       const radixTabs = Array.from(document.querySelectorAll('[data-radix-collection-item]'));
       for (const tab of radixTabs) {
         const tabValue = tab.getAttribute('value')?.toLowerCase() || '';
-        if (tabValue === searchNameLower) {
+        const tabValueNormalized = tabValue.replace(/-/g, '');
+        // Match either exact (with hyphens) or normalized (without hyphens)
+        if (tabValue === searchNameLower || tabValueNormalized === searchNameNormalized) {
           element = tab as HTMLElement;
           console.log('🎤 VoiceUI: Found tab by value attribute:', tabValue);
           break;
@@ -1040,7 +1045,10 @@ export const VoiceUIController = () => {
       for (const tab of roleTabs) {
         const ariaControls = tab.getAttribute('aria-controls')?.toLowerCase() || '';
         const tabId = tab.getAttribute('id')?.toLowerCase() || '';
-        if (ariaControls.includes(searchNameLower) || tabId.includes(searchNameLower)) {
+        const ariaControlsNormalized = ariaControls.replace(/-/g, '');
+        const tabIdNormalized = tabId.replace(/-/g, '');
+        if (ariaControls.includes(searchNameLower) || tabId.includes(searchNameLower) ||
+            ariaControlsNormalized.includes(searchNameNormalized) || tabIdNormalized.includes(searchNameNormalized)) {
           element = tab as HTMLElement;
           console.log('🎤 VoiceUI: Found tab by aria-controls:', ariaControls);
           break;
@@ -1060,11 +1068,16 @@ export const VoiceUIController = () => {
         const tabs = Array.from(document.querySelectorAll(selector));
         for (const tab of tabs) {
           const tabText = tab.textContent?.toLowerCase().replace(/\(\d+\)/g, '').trim() || '';
+          const tabTextNormalized = tabText.replace(/-/g, '').replace(/\s+/g, '');
           const voiceId = tab.getAttribute('data-voice-id')?.toLowerCase() || '';
-          // Match if tab text starts with or equals search term
+          const voiceIdNormalized = voiceId.replace(/-/g, '');
+          // Match if tab text starts with or equals search term (with or without hyphens)
           if (tabText === searchNameLower ||
               tabText.startsWith(searchNameLower) ||
-              voiceId.includes(searchNameLower)) {
+              tabTextNormalized === searchNameNormalized ||
+              tabTextNormalized.startsWith(searchNameNormalized) ||
+              voiceId.includes(searchNameLower) ||
+              voiceIdNormalized.includes(searchNameNormalized)) {
             element = tab as HTMLElement;
             console.log('🎤 VoiceUI: Found tab by text content:', tabText);
             break;

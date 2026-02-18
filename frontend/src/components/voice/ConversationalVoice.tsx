@@ -420,7 +420,12 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             if (greeting) {
               addAssistantMessage(greeting);
             } else {
-              addAssistantMessage(`Hello ${currentUser?.name?.split(' ')[0] || 'there'}! I'm your AristAI assistant, an expert in educational platform operations. I can help you navigate instantly to any page, create courses with AI-generated plans, manage live sessions, create polls, generate comprehensive reports, and much more. Just tell me what you'd like to do!`);
+              // Language-aware greeting
+              const userName = currentUser?.name?.split(' ')[0] || (locale === 'es' ? 'amigo' : 'there');
+              const greetingMessage = locale === 'es'
+                ? `¡Hola ${userName}! Soy tu asistente AristAI. Puedo ayudarte a navegar, crear cursos, gestionar sesiones, crear encuestas, generar reportes y mucho más. ¿Qué te gustaría hacer?`
+                : `Hello ${userName}! I'm your AristAI assistant. I can help you navigate, create courses, manage sessions, create polls, generate reports, and much more. What would you like to do?`;
+              addAssistantMessage(greetingMessage);
             }
           } else {
             // Silent refresh complete - reset the flag

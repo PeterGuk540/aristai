@@ -5814,14 +5814,28 @@ async def execute_action(
 
         if action == 'manage_enrollments':
             course_id = _resolve_course_id(db, current_page, user_id)
+
+            # If no course selected, navigate to courses page and prompt user to select one
+            if not course_id:
+                return {
+                    "action": "manage_enrollments",
+                    "course_id": None,
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": "/courses"}},
+                        {"type": "ui.switchTab", "payload": {"tabName": "advanced", "target": "tab-advanced"}},
+                    ],
+                    "message": "Please select a course first, then I can help you manage enrollments. Go to the advanced tab to manage student enrollment.",
+                }
+
+            # Course is selected - navigate to course page and switch to advanced/enrollment tab
             return {
                 "action": "manage_enrollments",
                 "course_id": course_id,
                 "ui_actions": [
-                    {"type": "ui.navigate", "payload": {"path": f"/courses/{course_id}" if course_id else "/courses"}},
-                    {"type": "ui.openModal", "payload": {"modal": "manageEnrollments", "courseId": course_id}},
+                    {"type": "ui.navigate", "payload": {"path": "/courses"}},
+                    {"type": "ui.switchTab", "payload": {"tabName": "advanced", "target": "tab-advanced"}},
                 ],
-                "message": "Opening enrollment management.",
+                "message": "Opening enrollment management. You can add or remove students from this course.",
             }
 
         if action == 'list_student_pool':

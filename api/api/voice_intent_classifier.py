@@ -379,15 +379,19 @@ into specific data queries above, use action "open_question":
 - "can you explain the analytics?" / "puedes explicar las analiticas?"
 
 ### CREATE (category: "create")
-Create new content like courses, sessions, polls.
+Create new content like courses, sessions, polls, or manage enrollments.
 Actions: create_course, create_session, create_poll, post_case, post_to_discussion,
-         generate_report, enroll_students
+         generate_report, manage_enrollments
 
 Examples:
 - "create a new course" / "crear un curso nuevo"
 - "start a poll" / "hacer una encuesta"
 - "post to the discussion" / "publicar en la discusion"
 - "generate the report" / "generar el reporte"
+- "enroll students" / "enroll some students" / "inscribir estudiantes" → manage_enrollments
+- "add students to this course" / "agregar estudiantes" → manage_enrollments
+- "manage enrollments" / "manage student enrollment" / "gestionar inscripciones" → manage_enrollments
+- "I want to enroll students" / "quiero inscribir estudiantes" → manage_enrollments
 
 ### CONTROL (category: "control")
 Control application features and session state.
@@ -789,6 +793,7 @@ INTENT_TO_LEGACY_ACTION = {
     "post_to_discussion": "post_to_discussion",
     "generate_report": "generate_report",
     "enroll_students": "manage_enrollments",
+    "manage_enrollments": "manage_enrollments",
 
     # Control mappings
     "start_copilot": "start_copilot",
@@ -877,15 +882,27 @@ def intent_to_legacy_format(intent: ClassifiedIntent) -> Dict[str, Any]:
             result["value"] = mapped or target_page
         else:
             # Safety check: If the action is not a valid page, it might be a tab
-            # Common tab names that might be mistaken for pages
+            # Common tab names and related words that might be mistaken for pages
             TAB_NAMES = {
-                'advanced', 'enrollment', 'instructor', 'create', 'join', 'manage', 'insights', 'materials',
+                'advanced', 'enrollment', 'enrollments', 'enroll', 'students', 'instructor',
+                'create', 'join', 'manage', 'insights', 'materials',
                 'summary', 'participation', 'scoring', 'analytics',
                 'copilot', 'polls', 'cases', 'tools', 'requests', 'roster', 'discussion',
                 'switch_tab'
             }
+
+            # Actions that should not be navigation (common misclassifications)
+            NON_NAVIGATION_ACTIONS = {
+                'manage_enrollments', 'enroll_students', 'list_enrollments',
+            }
             action_lower = intent.action.lower() if intent.action else ''
-            if action_lower in TAB_NAMES or (intent.parameters.tab_name):
+
+            # Check if this is actually a non-navigation action that was misclassified
+            if action_lower in NON_NAVIGATION_ACTIONS:
+                logger.warning(f"Correcting misclassified navigation to action: {intent.action}")
+                result["type"] = "action"
+                result["value"] = INTENT_TO_LEGACY_ACTION.get(action_lower, action_lower)
+            elif action_lower in TAB_NAMES or (intent.parameters.tab_name):
                 # This is actually a tab switch, not navigation
                 logger.warning(f"Correcting misclassified navigation to tab switch: {intent.action}")
                 result["type"] = "action"

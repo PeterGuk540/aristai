@@ -79,6 +79,13 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'tab-instructor': '[data-voice-id="tab-advanced"]',
     'instructor': '[data-voice-id="tab-advanced"]',
     'become-instructor': '[data-voice-id="tab-advanced"]',
+    // AI Insights tab (Courses page)
+    'aiInsightsTab': '[data-voice-id="tab-ai-insights"]',
+    'tab-ai-insights': '[data-voice-id="tab-ai-insights"]',
+    'ai-insights': '[data-voice-id="tab-ai-insights"]',
+    'aiInsights': '[data-voice-id="tab-ai-insights"]',
+    'participation-insights': '[data-voice-id="tab-ai-insights"]',
+    'objective-coverage': '[data-voice-id="tab-ai-insights"]',
     'joinCodeInput': '[data-voice-id="join-code"]',
     'join-code': '[data-voice-id="join-code"]',
     'joinButton': '[data-voice-id="join-course-button"]',
@@ -115,6 +122,12 @@ const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
     'insightsTab': '[data-voice-id="tab-insights"]',
     'tab-insights': '[data-voice-id="tab-insights"]',
     'insights': '[data-voice-id="tab-insights"]',
+    // AI Features tab
+    'aiFeaturesTab': '[data-voice-id="tab-ai-features"]',
+    'tab-ai-features': '[data-voice-id="tab-ai-features"]',
+    'ai-features': '[data-voice-id="tab-ai-features"]',
+    'aiFeatures': '[data-voice-id="tab-ai-features"]',
+    'enhanced-features': '[data-voice-id="tab-ai-features"]',
     // Post-class summary buttons
     'send-summary-to-students': '[data-voice-id="send-summary-to-students"]',
     'generate-session-summary': '[data-voice-id="generate-session-summary"]',

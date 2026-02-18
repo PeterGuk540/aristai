@@ -274,9 +274,9 @@ Use "take me to X", "go to X", "open X", "show X" with tabs → switch_tab (NOT 
 Available tabs by page (use EXACT tab_name value):
 - Console page: copilot, polls, cases, tools, requests, roster
 - Forum page: cases, discussion
-- Courses page: courses, create, join, advanced
-- Sessions page: sessions, materials, create, manage, insights
-- Reports page: summary, participation, scoring, analytics
+- Courses page: courses, create, join, advanced, ai-insights
+- Sessions page: sessions, materials, create, manage, insights, ai-features
+- Reports page: summary, participation, scoring, analytics, my-performance, best-practice
 
 Tab name mapping (spoken phrase → tab_name value):
 - "post a case" / "cases" / "case study" / "case studies" → cases
@@ -289,23 +289,29 @@ Tab name mapping (spoken phrase → tab_name value):
 - "advanced" / "enrollment" / "instructor access" / "manage enrollment" / "students" → advanced
 - "insights" / "session insights" → insights
 - "materials" / "session materials" / "class materials" → materials
-- "summary" / "report summary" → summary
-- "participation" / "engagement" / "participation tab" → participation
+- "ai insights" / "AI insights" / "participation insights" / "objective coverage" → ai-insights
+- "ai features" / "AI features" / "enhanced features" / "AI tools" → ai-features
+- "summary" / "report summary" / "overview" → summary
+- "participation" / "participation tab" → participation
 - "scoring" / "scores" / "grades" / "answer scores" → scoring
 - "analytics" / "analytics tab" / "data analytics" → analytics
+- "my performance" / "my progress" / "student performance" → my-performance
+- "best practice" / "best practices" / "best answer" → best-practice
 - "manage" / "manage status" / "session status" → manage
 - "create" / "create new" → create
 
 Examples of switch_tab (use category=ui_action, action=switch_tab):
 - "go to the discussion tab" → switch_tab with tab_name="discussion"
 - "take me to advanced" → switch_tab with tab_name="advanced"
-- "open the analytics tab" → switch_tab with tab_name="analytics"
-- "show me participation" → switch_tab with tab_name="participation"
+- "show me engagement" → switch_tab with tab_name="engagement"
+- "show me performance" → switch_tab with tab_name="performance"
 - "switch to post a case" → switch_tab with tab_name="cases"
 - "open the polls tab" → switch_tab with tab_name="polls"
 - "show instructor tools" → switch_tab with tab_name="tools"
-- "go to scoring" → switch_tab with tab_name="scoring"
-- "take me to answer scores" → switch_tab with tab_name="scoring"
+- "go to materials" → switch_tab with tab_name="materials"
+- "show AI insights" → switch_tab with tab_name="ai-insights"
+- "take me to session insights" → switch_tab with tab_name="insights"
+- "open manage tab" → switch_tab with tab_name="manage"
 
 Examples of click_button:
 - "click submit" / "press the create button" / "presionar enviar"

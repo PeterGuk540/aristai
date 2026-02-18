@@ -123,6 +123,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
             Tab(name="Enrollment", voice_id="tab-enrollment", description="Manage student enrollment in your courses"),
             Tab(name="Join Course", voice_id="tab-join", description="Join an existing course using an access code"),
             Tab(name="Instructor Courses", voice_id="tab-instructor", description="View courses you teach"),
+            Tab(name="AI Insights", voice_id="tab-ai-insights", description="View AI-powered participation insights and learning objective coverage"),
         ],
         forms={
             "create_course": [
@@ -201,6 +202,10 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
             Tab(name="Upcoming", voice_id="tab-upcoming", description="View upcoming sessions"),
             Tab(name="Past", voice_id="tab-past", description="View past sessions"),
             Tab(name="Create", voice_id="tab-create", description="Create a new session"),
+            Tab(name="Materials", voice_id="tab-materials", description="View and manage course materials and files"),
+            Tab(name="Insights", voice_id="tab-insights", description="View session analytics, engagement data, and AI summaries"),
+            Tab(name="Manage", voice_id="tab-manage", description="Manage session status - go live, end, or schedule sessions"),
+            Tab(name="AI Features", voice_id="tab-ai-features", description="Access enhanced AI features like pre-class prep and discussion summaries"),
         ],
         forms={
             "create_session": [
@@ -472,9 +477,12 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
         name="Reports",
         description="View analytics and reports for your courses",
         tabs=[
-            Tab(name="Overview", voice_id="tab-overview", description="Summary of course activity"),
-            Tab(name="Engagement", voice_id="tab-engagement", description="Student engagement metrics"),
-            Tab(name="Performance", voice_id="tab-performance", description="Student performance data"),
+            Tab(name="Summary", voice_id="tab-summary", description="Summary of course activity and reports"),
+            Tab(name="Participation", voice_id="tab-participation", description="Student participation metrics"),
+            Tab(name="Scoring", voice_id="tab-scoring", description="Student scores and grades"),
+            Tab(name="Analytics", voice_id="tab-analytics", description="Advanced data analytics"),
+            Tab(name="My Performance", voice_id="tab-my-performance", description="View your personal performance and progress"),
+            Tab(name="Best Practice", voice_id="tab-best-practice", description="View best practice answers and examples"),
         ],
         forms={},
         dropdowns=[

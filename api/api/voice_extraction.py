@@ -376,6 +376,22 @@ def extract_tab_info(transcript: str) -> Dict[str, str]:
         'ai analytics': 'ai-insights',
         'participation insights': 'ai-insights',
         'objective coverage': 'ai-insights',
+        # Materials tab (sessions page)
+        'materials': 'materials',
+        'material': 'materials',
+        'course materials': 'materials',
+        'session materials': 'materials',
+        'class materials': 'materials',
+        'files': 'materials',
+        'documents': 'materials',
+        # Insights tab (sessions page)
+        'insights': 'insights',
+        'insight': 'insights',
+        'session insights': 'insights',
+        'analytics': 'insights',
+        'session analytics': 'insights',
+        'engagement': 'insights',
+        'session engagement': 'insights',
         # Create tab
         'create': 'create',
         'creation': 'create',
@@ -387,6 +403,18 @@ def extract_tab_info(transcript: str) -> Dict[str, str]:
         'view sessions': 'sessions',
         'list': 'sessions',
         'session list': 'sessions',
+        # Reports page tabs
+        'summary': 'summary',
+        'report summary': 'summary',
+        'overview': 'summary',
+        'participation': 'participation',
+        'participation tab': 'participation',
+        'scoring': 'scoring',
+        'scores': 'scoring',
+        'grades': 'scoring',
+        'answer scores': 'scoring',
+        'report analytics': 'analytics',
+        'data analytics': 'analytics',
     }
 
     # First try exact match

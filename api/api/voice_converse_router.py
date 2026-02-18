@@ -163,6 +163,19 @@ ACTION_TARGET_PAGES: Dict[str, str] = {
     "create_session": "/courses",
     # Other actions that need specific pages
     "create_assignment": "/courses",
+    "manage_enrollments": "/courses",
+}
+
+# Maps actions to the tab they should switch to after navigation
+ACTION_TARGET_TABS: Dict[str, str] = {
+    "create_course": "create",
+    "create_course_flow": "create",
+    "create_session": "create",
+    "manage_enrollments": "advanced",
+    "list_enrollments": "advanced",
+    "enroll_students": "advanced",
+    "post_to_forum": "discussion",
+    "create_forum_post": "cases",
 }
 
 
@@ -266,6 +279,7 @@ async def check_pending_action(request: PendingActionRequest, db: Session = Depe
         db,
         transcript,
         parameters,
+        language,
     )
 
     # Generate a message for the action
@@ -1254,7 +1268,9 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     request.user_id,
                     request.current_page,
                     db,
-                    transcript
+                    transcript,
+                    None,  # llm_params
+                    language,
                 )
                 conversation_manager.reset_retry_count(request.user_id)
                 return ConverseResponse(
@@ -3469,6 +3485,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             db,
             transcript,
             {"searchQuery": search_query},
+            language,
         )
         if search_result:
             return ConverseResponse(
@@ -3534,13 +3551,16 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         if intent_result["type"] == "navigate":
             nav_path = intent_result["value"]
             message = sanitize_speech(generate_conversational_response('navigate', nav_path, language=language))
+            # Generate toast message in correct language
+            page_name = nav_path.strip('/').replace('-', ' ').title()
+            toast_msg = f"Navegando a {page_name}" if language == 'es' else f"Navigating to {page_name}"
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
                 results=[{
                     "ui_actions": [
                         {"type": "ui.navigate", "payload": {"path": nav_path}},
-                        {"type": "ui.toast", "payload": {"message": f"Navigating to {nav_path}", "type": "info"}},
+                        {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
                     ]
                 }],
                 suggestions=get_page_suggestions(nav_path, language)
@@ -3553,8 +3573,26 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             # Phase 2.5: Check if auto-navigation is needed for cross-page commands
             nav_target = get_auto_navigation(action, request.current_page)
             if nav_target:
-                # User is on wrong page - navigate first, then store action for after navigation
-                # Store the pending action in conversation state so it executes after navigation
+                # User is on wrong page - navigate first, then switch to correct tab
+                # Check if this action also requires a specific tab
+                target_tab = ACTION_TARGET_TABS.get(action)
+
+                # Build UI actions - always navigate, optionally switch tab
+                ui_actions = [
+                    {"type": "ui.navigate", "payload": {"path": nav_target}},
+                ]
+                if target_tab:
+                    ui_actions.append({"type": "ui.switchTab", "payload": {"tabName": target_tab, "target": f"tab-{target_tab}"}})
+
+                # Use LLM to generate navigation message in correct language
+                action_name = action.replace("_", " ").replace("flow", "").strip()
+                tab_context = f" and switching to {target_tab} tab" if target_tab else ""
+                nav_message = generate_voice_response(
+                    f"Navigating to {nav_target}{tab_context} to help user {action_name}. Confirm briefly.",
+                    language=language
+                )
+
+                # Store the pending action so it executes after navigation completes
                 conversation_manager.set_pending_action(
                     request.user_id,
                     action=action,
@@ -3562,21 +3600,11 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     transcript=transcript,
                 )
 
-                # Build navigation message with action context
-                action_name = action.replace("_", " ").replace("flow", "").strip()
-                if language == 'es':
-                    nav_message = f"Llevándote a {nav_target} para {action_name}. Un momento."
-                else:
-                    nav_message = f"Taking you to {nav_target} to {action_name}. One moment."
-
                 return ConverseResponse(
                     message=sanitize_speech(nav_message),
                     action=ActionResponse(type='navigate', target=nav_target),
                     results=[{
-                        "ui_actions": [
-                            {"type": "ui.navigate", "payload": {"path": nav_target}},
-                            {"type": "ui.toast", "payload": {"message": nav_message, "type": "info"}},
-                        ],
+                        "ui_actions": ui_actions,
                         "pending_action": {
                             "action": action,
                             "parameters": intent_result.get("parameters"),
@@ -3587,7 +3615,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
 
             # Pass extracted parameters to execute_action via transcript context
             # The LLM has already extracted tab names, button names, etc.
-            result = await execute_action(action, request.user_id, request.current_page, db, transcript, intent_result.get("parameters"))
+            result = await execute_action(action, request.user_id, request.current_page, db, transcript, intent_result.get("parameters"), language)
             results_list = [result] if result and not isinstance(result, list) else result
             return ConverseResponse(
                 message=sanitize_speech(generate_conversational_response(
@@ -4256,6 +4284,7 @@ async def execute_action(
     db: Session,
     transcript: Optional[str] = None,
     llm_params: Optional[Dict[str, Any]] = None,
+    language: str = 'en',
 ) -> Optional[Any]:
     """Execute an MCP tool and return results, including UI actions for frontend.
 
@@ -4267,6 +4296,7 @@ async def execute_action(
         transcript: The original voice transcript
         llm_params: Optional parameters extracted by the LLM intent classifier
                    (e.g., tabName, buttonName, selectionIndex, inputValue)
+        language: Response language ('en' or 'es')
     """
     # Use LLM-extracted parameters if available, otherwise fall back to regex extraction
     llm_params = llm_params or {}
@@ -4280,9 +4310,13 @@ async def execute_action(
 
             if not session_id:
                 missing_target = "create breakout groups" if action == "create_breakout_groups" else "start a timer"
+                missing_msg = generate_voice_response(
+                    f"No session selected. Ask user to select a session first so you can {missing_target}.",
+                    language=language
+                )
                 return {
                     "action": action,
-                    "message": f"Please select a session first, then I can {missing_target}.",
+                    "message": missing_msg,
                     "ui_actions": [
                         {"type": "ui.navigate", "payload": {"path": "/console"}},
                         {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
@@ -4294,6 +4328,11 @@ async def execute_action(
                 first_question = conversation_manager.start_form_filling(
                     user_id, "create_breakout_groups", "/console"
                 )
+                if not first_question:
+                    first_question = generate_voice_response(
+                        "Opening breakout groups form. Ask user how many groups they would like to create.",
+                        language=language
+                    )
                 return {
                     "action": "create_breakout_groups",
                     "session_id": session_id,
@@ -4302,7 +4341,7 @@ async def execute_action(
                         {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
                         {"type": "ui.clickButton", "payload": {"target": "open-breakout-form", "buttonLabel": "Create Breakout Groups"}},
                     ],
-                    "message": first_question or "Opening breakout groups. How many groups would you like?",
+                    "message": first_question,
                     "conversation_state": "form_filling",
                 }
 
@@ -4310,6 +4349,11 @@ async def execute_action(
                 first_question = conversation_manager.start_form_filling(
                     user_id, "start_timer", "/console"
                 )
+                if not first_question:
+                    first_question = generate_voice_response(
+                        "Opening timer setup form. Ask user how many minutes the timer should run.",
+                        language=language
+                    )
                 return {
                     "action": "start_timer",
                     "session_id": session_id,
@@ -4318,7 +4362,7 @@ async def execute_action(
                         {"type": "ui.switchTab", "payload": {"tabName": "tools", "target": "tab-tools"}},
                         {"type": "ui.clickButton", "payload": {"target": "open-timer-form", "buttonLabel": "Start Timer"}},
                     ],
-                    "message": first_question or "Opening timer setup. How many minutes should the timer run?",
+                    "message": first_question,
                     "conversation_state": "form_filling",
                 }
 
@@ -4354,15 +4398,24 @@ async def execute_action(
             if extracted:
                 field_name = extracted.get("field", "input")
                 value = extracted.get("value", "")
+                fill_msg = generate_voice_response(
+                    f"Setting {field_name} field to the provided value. Confirm briefly.",
+                    language=language
+                )
+                toast_msg = f"{field_name.title()} establecido" if language == 'es' else f"{field_name.title()} set"
                 return {
                     "action": "fill_input",
-                    "message": f"Setting {field_name} to: {value[:50]}{'...' if len(value) > 50 else ''}",
+                    "message": fill_msg,
                     "ui_actions": [
                         {"type": "ui.fillInput", "payload": {"target": field_name, "value": value}},
-                        {"type": "ui.toast", "payload": {"message": f"{field_name.title()} set", "type": "success"}},
+                        {"type": "ui.toast", "payload": {"message": toast_msg, "type": "success"}},
                     ],
                 }
-            return {"message": "Please specify what you'd like to fill in."}
+            no_input_msg = generate_voice_response(
+                "Could not understand input. Ask user to specify what they would like to fill in.",
+                language=language
+            )
+            return {"message": no_input_msg}
 
         # === UNIVERSAL DROPDOWN EXPANSION ===
         # Works for ANY dropdown on any page - fetches options and reads them verbally
@@ -4492,9 +4545,13 @@ async def execute_action(
                             options.append(DropdownOption(label=f"{title} ({status})", value=str(session_id)))
                 else:
                     # No course selected - prompt user to select course first
+                    no_course_msg = generate_voice_response(
+                        "No course selected. Ask user to select a course first before choosing a session.",
+                        language=language
+                    )
                     return {
                         "action": "expand_dropdown",
-                        "message": "Please select a course first before choosing a session.",
+                        "message": no_course_msg,
                         "ui_actions": [],
                         "needs_course": True,
                     }
@@ -4514,9 +4571,13 @@ async def execute_action(
                     "conversation_state": "dropdown_selection",
                 }
             else:
+                empty_msg = generate_voice_response(
+                    "The dropdown is empty with no options available. Tell user.",
+                    language=language
+                )
                 return {
                     "action": "expand_dropdown",
-                    "message": "The dropdown is empty. There are no options available.",
+                    "message": empty_msg,
                     "ui_actions": [
                         {"type": "ui.expandDropdown", "payload": {"target": dropdown_hint, "findAny": True}},
                     ],
@@ -4540,9 +4601,13 @@ async def execute_action(
                     # Offer to help post after switching to discussion tab
                     offer_prompt = conversation_manager.offer_forum_post(user_id)
                     if offer_prompt:
+                        switch_msg = generate_voice_response(
+                            f"Switching to discussion tab. {offer_prompt}",
+                            language=language
+                        )
                         return {
                             "action": "switch_tab_with_post_offer",
-                            "message": f"Switching to discussion. {offer_prompt}",
+                            "message": switch_msg,
                             "ui_actions": [
                                 {"type": "ui.switchTab", "payload": {"tabName": tab_name, "target": f"tab-{tab_name}"}},
                             ],
@@ -4557,9 +4622,13 @@ async def execute_action(
                     # Offer to help create poll after switching to polls tab
                     offer_prompt = conversation_manager.offer_poll_creation(user_id)
                     if offer_prompt:
+                        switch_msg = generate_voice_response(
+                            f"Switching to polls tab. {offer_prompt}",
+                            language=language
+                        )
                         return {
                             "action": "switch_tab_with_poll_offer",
-                            "message": f"Switching to polls. {offer_prompt}",
+                            "message": switch_msg,
                             "ui_actions": [
                                 {"type": "ui.switchTab", "payload": {"tabName": tab_name, "target": f"tab-{tab_name}"}},
                             ],
@@ -4568,22 +4637,33 @@ async def execute_action(
 
             # Special handling for sessions page manage status tab - offer status options
             if current_page and '/sessions' in current_page and tab_name in ['manage', 'management', 'manage status', 'managestatus']:
+                status_msg = generate_voice_response(
+                    "Switching to manage status tab. Tell user they can say 'go live', 'set to draft', 'complete', or 'schedule' to change session status.",
+                    language=language
+                )
+                toast_msg = "Administrar estado" if language == 'es' else "Manage status"
                 return {
                     "action": "switch_tab_with_status_offer",
-                    "message": "Switching to manage status. You can say 'go live', 'set to draft', 'complete', or 'schedule' to change the session status.",
+                    "message": status_msg,
                     "ui_actions": [
                         {"type": "ui.switchTab", "payload": {"tabName": "manage", "target": "tab-manage"}},
-                        {"type": "ui.toast", "payload": {"message": "Switched to manage status", "type": "info"}},
+                        {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
                     ],
                     "status_offer": True,
                 }
 
+            # Default tab switch with LLM-generated message
+            switch_msg = generate_voice_response(
+                f"Switching to {tab_name} tab. Confirm briefly.",
+                language=language
+            )
+            toast_msg = f"Cambiado a {tab_name}" if language == 'es' else f"Switched to {tab_name}"
             return {
                 "action": "switch_tab",
-                "message": f"Switching to {tab_name} tab.",
+                "message": switch_msg,
                 "ui_actions": [
                     {"type": "ui.switchTab", "payload": {"tabName": tab_name, "target": f"tab-{tab_name}"}},
-                    {"type": "ui.toast", "payload": {"message": f"Switched to {tab_name}", "type": "info"}},
+                    {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
                 ],
             }
 
@@ -4722,7 +4802,11 @@ async def execute_action(
                         {"type": "ui.toast", "payload": {"message": f"{button_label} clicked", "type": "success"}},
                     ],
                 }
-            return {"message": "I couldn't determine which button to click."}
+            no_button_msg = generate_voice_response(
+                "Could not determine which button to click. Ask user to clarify.",
+                language=language
+            )
+            return {"message": no_button_msg}
 
         # === WORKSPACE SEARCH + NAVIGATE ===
         if action == 'ui_search_navigate':
@@ -4730,7 +4814,11 @@ async def execute_action(
             if not query:
                 query = _extract_search_query(transcript or "")
             if not query:
-                return {"message": "What should I search for?"}
+                no_query_msg = generate_voice_response(
+                    "Ask user what they would like to search for.",
+                    language=language
+                )
+                return {"message": no_query_msg}
 
             return {
                 "action": "search_navigate",
@@ -4750,9 +4838,14 @@ async def execute_action(
 
             last_action = context_store.get_last_undoable_action(user_id)
             if not last_action:
+                no_undo_msg = generate_voice_response(
+                    "Nothing to undo. Recent actions don't have undo data. Tell user.",
+                    language=language
+                )
+                toast_msg = "Nada que deshacer" if language == 'es' else "Nothing to undo"
                 return {
-                    "message": "Nothing to undo. Your recent actions don't have undo data.",
-                    "ui_actions": [{"type": "ui.toast", "payload": {"message": "Nothing to undo", "type": "info"}}],
+                    "message": no_undo_msg,
+                    "ui_actions": [{"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}}],
                 }
 
             action_type = last_action.get("action_type", "unknown")
@@ -4800,9 +4893,14 @@ async def execute_action(
         if action == 'clear_context':
             if user_id:
                 context_store.clear_context(user_id)
+            clear_msg = generate_voice_response(
+                "Context has been cleared. Starting fresh. Confirm briefly.",
+                language=language
+            )
+            toast_msg = "Contexto borrado" if language == 'es' else "Context cleared"
             return {
-                "message": "Context cleared. Starting fresh!",
-                "ui_actions": [{"type": "ui.toast", "payload": {"message": "Context cleared", "type": "success"}}],
+                "message": clear_msg,
+                "ui_actions": [{"type": "ui.toast", "payload": {"message": toast_msg, "type": "success"}}],
             }
 
         # === CONTEXT/STATUS ACTIONS ===
@@ -4810,15 +4908,25 @@ async def execute_action(
             return _get_page_context(db, current_page)
 
         if action == 'get_help':
+            help_msg = generate_voice_response(
+                "Tell user what you can help with: navigating pages, listing courses and sessions, "
+                "starting copilot, creating polls, viewing forum discussions, pinning posts, "
+                "generating reports, and managing enrollments. Invite them to ask for help.",
+                language=language
+            )
+            commands_en = [
+                "Show my courses", "Go to forum", "Start copilot",
+                "Create a poll", "Show pinned posts", "Summarize discussion",
+                "Generate report", "Go live", "End session"
+            ]
+            commands_es = [
+                "Mostrar mis cursos", "Ir al foro", "Iniciar copiloto",
+                "Crear encuesta", "Ver publicaciones fijadas", "Resumir discusión",
+                "Generar informe", "Ir en vivo", "Terminar sesión"
+            ]
             return {
-                "message": "I can help you with: navigating pages, listing courses and sessions, "
-                           "starting copilot, creating polls, viewing forum discussions, pinning posts, "
-                           "generating reports, and managing enrollments. Just ask!",
-                "available_commands": [
-                    "Show my courses", "Go to forum", "Start copilot",
-                    "Create a poll", "Show pinned posts", "Summarize discussion",
-                    "Generate report", "Go live", "End session"
-                ]
+                "message": help_msg,
+                "available_commands": commands_es if language == 'es' else commands_en
             }
 
         # === OPEN-ENDED QUESTIONS (LLM-based) ===
@@ -4834,13 +4942,19 @@ async def execute_action(
             first_question = conversation_manager.start_form_filling(
                 user_id, "create_course", "/courses"
             )
+            # Generate language-aware message
+            if not first_question:
+                first_question = generate_voice_response(
+                    "Opening course creation form. Ask user what they would like to name the course.",
+                    language=language
+                )
             return {
                 "action": "create_course",
                 "ui_actions": [
                     {"type": "ui.navigate", "payload": {"path": "/courses"}},
                     {"type": "ui.switchTab", "payload": {"tabName": "create", "target": "tab-create"}},
                 ],
-                "message": first_question or "Opening course creation. What would you like to name the course?",
+                "message": first_question,
                 "conversation_state": "form_filling",
             }
 
@@ -4860,19 +4974,31 @@ async def execute_action(
                         {"type": "ui.toast", "payload": {"message": f"Selected: {first_course.get('title', 'course')}", "type": "success"}},
                     ],
                 }
-            return {"error": "No courses found to select."}
+            no_courses_msg = generate_voice_response(
+                "No courses found. Ask user to create a course first.",
+                language=language
+            )
+            return {"error": no_courses_msg}
 
         if action == 'view_course_details':
             course_id = _resolve_course_id(db, current_page, user_id)
             if course_id:
                 return _execute_tool(db, 'get_course', {"course_id": course_id})
-            return {"error": "No course selected. Please navigate to a course first."}
+            no_course_msg = generate_voice_response(
+                "No course selected. Ask user to navigate to or select a course first.",
+                language=language
+            )
+            return {"error": no_course_msg}
 
         # === SESSION ACTIONS ===
         if action == 'list_sessions':
             course_id = _resolve_course_id(db, current_page, user_id)
             if not course_id:
-                return {"message": "Please select a course first to view sessions.", "sessions": []}
+                no_course_msg = generate_voice_response(
+                    "No course selected. Ask user to select a course first to view sessions.",
+                    language=language
+                )
+                return {"message": no_course_msg, "sessions": []}
 
             # Check if user wants only live sessions
             # Note: "live" can be pronounced two ways and transcribed differently
@@ -4894,6 +5020,11 @@ async def execute_action(
             first_question = conversation_manager.start_form_filling(
                 user_id, "create_session", "/sessions"
             )
+            if not first_question:
+                first_question = generate_voice_response(
+                    "Opening session creation form. Ask user what they would like to name the session.",
+                    language=language
+                )
             return {
                 "action": "create_session",
                 "course_id": course_id,
@@ -4901,14 +5032,18 @@ async def execute_action(
                     {"type": "ui.navigate", "payload": {"path": "/sessions"}},
                     {"type": "ui.switchTab", "payload": {"tabName": "create", "target": "tab-create"}},
                 ],
-                "message": first_question or "Opening session creation. What would you like to call this session?",
+                "message": first_question,
                 "conversation_state": "form_filling",
             }
 
         if action == 'select_session':
             course_id = _resolve_course_id(db, current_page, user_id)
             if not course_id:
-                return {"message": "Please select a course first before choosing a session."}
+                no_course_msg = generate_voice_response(
+                    "No course selected. Ask user to select a course first before choosing a session.",
+                    language=language
+                )
+                return {"message": no_course_msg}
 
             # Check if user wants only live sessions
             # Note: "live" can be pronounced two ways and transcribed differently
@@ -4928,8 +5063,11 @@ async def execute_action(
             sessions = result.get("sessions", []) if isinstance(result, dict) else []
 
             if not sessions:
-                status_msg = f" with status '{status_filter}'" if status_filter else ""
-                return {"message": f"No sessions found{status_msg} for this course."}
+                no_sessions_msg = generate_voice_response(
+                    f"No sessions found{' with status ' + status_filter if status_filter else ''} for this course. Tell user.",
+                    language=language
+                )
+                return {"message": no_sessions_msg}
 
             # If only one session, select it directly
             if len(sessions) == 1:
@@ -4968,9 +5106,13 @@ async def execute_action(
         if action == 'go_live' or action == 'set_session_live':
             # If on sessions page manage tab, just click the button - frontend handles API call
             if current_page and '/sessions' in current_page:
+                go_live_msg = generate_voice_response(
+                    "Setting session to live now. Confirm briefly.",
+                    language=language
+                )
                 return {
                     "action": "set_session_live",
-                    "message": "Setting session to live...",
+                    "message": go_live_msg,
                     "ui_actions": [
                         {"type": "ui.clickButton", "payload": {"target": "go-live"}},
                     ],
@@ -4989,19 +5131,28 @@ async def execute_action(
                             action_data={"session_id": session_id},
                             undo_data={"session_id": session_id, "previous_status": "draft"},
                         )
+                    toast_msg = "¡Sesión EN VIVO!" if language == 'es' else "Session is now LIVE!"
                     result["ui_actions"] = [
                         {"type": "ui.navigate", "payload": {"path": f"/console?session={session_id}"}},
-                        {"type": "ui.toast", "payload": {"message": "Session is now LIVE!", "type": "success"}},
+                        {"type": "ui.toast", "payload": {"message": toast_msg, "type": "success"}},
                     ]
                 return result
-            return {"error": "No session found to go live."}
+            no_session_msg = generate_voice_response(
+                "No session found to go live. Ask user to select a session first.",
+                language=language
+            )
+            return {"error": no_session_msg}
 
         if action == 'end_session' or action == 'set_session_completed':
             # If on sessions page manage tab, just click the button - frontend handles API call
             if current_page and '/sessions' in current_page:
+                complete_msg = generate_voice_response(
+                    "Completing session now. Confirm briefly.",
+                    language=language
+                )
                 return {
                     "action": "set_session_completed",
-                    "message": "Completing session...",
+                    "message": complete_msg,
                     "ui_actions": [
                         {"type": "ui.clickButton", "payload": {"target": "complete-session"}},
                     ],
@@ -5010,7 +5161,11 @@ async def execute_action(
             course_id = _resolve_course_id(db, current_page, user_id)
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if not session_id:
-                return {"error": "No active session found to end."}
+                no_session_msg = generate_voice_response(
+                    "No active session found to end. Ask user to select a session first.",
+                    language=language
+                )
+                return {"error": no_session_msg}
 
             # Check if already confirmed (from confirmation flow)
             conv_context = conversation_manager.get_context(user_id)
@@ -5047,9 +5202,13 @@ async def execute_action(
         # === MATERIALS ACTIONS ===
         if action == 'view_materials':
             # Navigate to sessions page with materials tab
+            materials_msg = generate_voice_response(
+                "Opening course materials where user can view and download files. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "view_materials",
-                "message": "Opening the course materials tab.",
+                "message": materials_msg,
                 "ui_actions": [
                     {"type": "ui.openModal", "payload": {"modal": "viewMaterials"}},
                 ],
@@ -5124,49 +5283,71 @@ async def execute_action(
             return result
 
         if action == 'refresh_interventions':
+            refresh_msg = generate_voice_response(
+                "Refreshing copilot interventions now. Confirm briefly.",
+                language=language
+            )
+            toast_msg = "Intervenciones actualizadas" if language == 'es' else "Interventions refreshed"
             return {
                 "action": "refresh_interventions",
-                "message": "Refreshing interventions...",
+                "message": refresh_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "refresh-interventions"}},
-                    {"type": "ui.toast", "payload": {"message": "Interventions refreshed", "type": "success"}},
+                    {"type": "ui.toast", "payload": {"message": toast_msg, "type": "success"}},
                 ],
             }
 
         # === SESSION STATUS MANAGEMENT (on sessions page) ===
         if action == 'set_session_draft':
+            draft_msg = generate_voice_response(
+                "Setting session to draft status. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "set_session_draft",
-                "message": "Setting session to draft...",
+                "message": draft_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "set-to-draft"}},
                 ],
             }
 
         if action == 'schedule_session':
+            schedule_msg = generate_voice_response(
+                "Scheduling session now. Confirm briefly.",
+                language=language
+            )
+            toast_msg = "Sesión programada" if language == 'es' else "Session scheduled"
             return {
                 "action": "schedule_session",
-                "message": "Scheduling session...",
+                "message": schedule_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "schedule-session"}},
-                    {"type": "ui.toast", "payload": {"message": "Session scheduled", "type": "success"}},
+                    {"type": "ui.toast", "payload": {"message": toast_msg, "type": "success"}},
                 ],
             }
 
         # === REPORT ACTIONS ===
         if action == 'refresh_report':
+            refresh_msg = generate_voice_response(
+                "Refreshing report now. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "refresh_report",
-                "message": "Refreshing report...",
+                "message": refresh_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "refresh-report"}},
                 ],
             }
 
         if action == 'regenerate_report':
+            regen_msg = generate_voice_response(
+                "Regenerating report. This may take a moment. Tell user to wait.",
+                language=language
+            )
             return {
                 "action": "regenerate_report",
-                "message": "Regenerating report. This may take a moment...",
+                "message": regen_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "regenerate-report"}},
                 ],
@@ -5174,54 +5355,78 @@ async def execute_action(
 
         # === THEME AND USER MENU ACTIONS ===
         if action == 'toggle_theme':
+            theme_msg = generate_voice_response(
+                "Toggling theme now. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "toggle_theme",
-                "message": "Toggling theme...",
+                "message": theme_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "toggle-theme"}},
                 ],
             }
 
         if action == 'open_user_menu':
+            menu_msg = generate_voice_response(
+                "Opening user menu now. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "open_user_menu",
-                "message": "Opening user menu...",
+                "message": menu_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "user-menu"}},
                 ],
             }
 
         if action == 'view_voice_guide':
+            guide_msg = generate_voice_response(
+                "Opening voice commands guide. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "view_voice_guide",
-                "message": "Opening voice commands guide...",
+                "message": guide_msg,
                 "ui_actions": [
                     {"type": "voice-menu-action", "payload": {"action": "view-voice-guide"}},
                 ],
             }
 
         if action == 'open_profile':
+            profile_msg = generate_voice_response(
+                "Opening profile settings. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "open_profile",
-                "message": "Opening profile...",
+                "message": profile_msg,
                 "ui_actions": [
                     {"type": "voice-menu-action", "payload": {"action": "open-profile"}},
                 ],
             }
 
         if action == 'sign_out':
+            signout_msg = generate_voice_response(
+                "Signing out now. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "sign_out",
-                "message": "Signing out...",
+                "message": signout_msg,
                 "ui_actions": [
                     {"type": "voice-menu-action", "payload": {"action": "sign-out"}},
                 ],
             }
 
         if action == 'forum_instructions':
+            instr_msg = generate_voice_response(
+                "Opening platform instructions. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "forum_instructions",
-                "message": "Opening platform instructions...",
+                "message": instr_msg,
                 "ui_actions": [
                     {"type": "voice-menu-action", "payload": {"action": "forum-instructions"}},
                 ],
@@ -5229,9 +5434,13 @@ async def execute_action(
 
         if action == 'close_modal':
             # Try to click "Got It" buttons in any open modal
+            close_msg = generate_voice_response(
+                "Closing modal. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "close_modal",
-                "message": "Closing...",
+                "message": close_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "got-it-voice-guide"}},
                     {"type": "ui.clickButton", "payload": {"target": "got-it-platform-guide"}},
@@ -5246,9 +5455,13 @@ async def execute_action(
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
             if not session_id:
+                no_session_msg = generate_voice_response(
+                    "No session selected. Ask user to select a session first to check class status.",
+                    language=language
+                )
                 return {
                     "action": "class_status",
-                    "message": "Please select a session first to check on the class.",
+                    "message": no_session_msg,
                 }
 
             # Gather data from multiple sources
@@ -5321,9 +5534,13 @@ async def execute_action(
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
             if not session_id:
+                no_session_msg = generate_voice_response(
+                    "No session selected. Ask user to select a session first to identify students who need help.",
+                    language=language
+                )
                 return {
                     "action": "who_needs_help",
-                    "message": "Please select a session first to identify students who need help.",
+                    "message": no_session_msg,
                 }
 
             help_parts = []
@@ -5386,9 +5603,13 @@ async def execute_action(
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
             if not session_id:
+                no_session_msg = generate_voice_response(
+                    "No session selected. Ask user to select a session first to view misconceptions.",
+                    language=language
+                )
                 return {
                     "action": "ask_misconceptions",
-                    "message": "Please select a session first to view misconceptions.",
+                    "message": no_session_msg,
                 }
 
             # Get report data
@@ -5444,9 +5665,13 @@ async def execute_action(
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
             if not session_id:
+                no_session_msg = generate_voice_response(
+                    "No session selected. Ask user to select a session first to view scores.",
+                    language=language
+                )
                 return {
                     "action": "ask_scores",
-                    "message": "Please select a session first to view scores.",
+                    "message": no_session_msg,
                 }
 
             scores_result = _execute_tool(db, 'get_student_scores', {"session_id": session_id})
@@ -5454,9 +5679,13 @@ async def execute_action(
                 return scores_result
 
             if not scores_result or not scores_result.get("has_scores"):
+                no_scores_msg = generate_voice_response(
+                    "No scores available yet. Tell user to generate a report for this session first.",
+                    language=language
+                )
                 return {
                     "action": "ask_scores",
-                    "message": "No scores available yet. Generate a report for this session first.",
+                    "message": no_scores_msg,
                 }
 
             parts = []
@@ -5500,9 +5729,13 @@ async def execute_action(
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
             if not session_id:
+                no_session_msg = generate_voice_response(
+                    "No session selected. Ask user to select a session first to view participation stats.",
+                    language=language
+                )
                 return {
                     "action": "ask_participation",
-                    "message": "Please select a session first to view participation stats.",
+                    "message": no_session_msg,
                 }
 
             result = _execute_tool(db, 'get_participation_stats', {"session_id": session_id})
@@ -5524,9 +5757,13 @@ async def execute_action(
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
             if not session_id:
+                no_session_msg = generate_voice_response(
+                    "No session selected. Ask user to select a session first to read posts.",
+                    language=language
+                )
                 return {
                     "action": "read_posts",
-                    "message": "Please select a session first to read posts.",
+                    "message": no_session_msg,
                 }
 
             result = _execute_tool(db, 'get_latest_posts', {"session_id": session_id, "count": 3})
@@ -5535,9 +5772,13 @@ async def execute_action(
 
             posts = result.get("posts", [])
             if not posts:
+                no_posts_msg = generate_voice_response(
+                    "No posts in this discussion yet. Tell user.",
+                    language=language
+                )
                 return {
                     "action": "read_posts",
-                    "message": "There are no posts in this discussion yet.",
+                    "message": no_posts_msg,
                 }
 
             # Format posts for voice reading
@@ -5562,9 +5803,13 @@ async def execute_action(
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
             if not session_id:
+                no_session_msg = generate_voice_response(
+                    "No session selected. Ask user to select a session first to get copilot suggestions.",
+                    language=language
+                )
                 return {
                     "action": "copilot_suggestions",
-                    "message": "Please select a session first to get copilot suggestions.",
+                    "message": no_session_msg,
                 }
 
             # Check if copilot is active
@@ -5576,13 +5821,21 @@ async def execute_action(
 
             if not result or not result.get("suggestions"):
                 if session and session.copilot_active != 1:
+                    copilot_off_msg = generate_voice_response(
+                        "Copilot is not running. Tell user to say 'start copilot' to begin monitoring.",
+                        language=language
+                    )
                     return {
                         "action": "copilot_suggestions",
-                        "message": "The copilot is not running. Say 'start copilot' to begin monitoring.",
+                        "message": copilot_off_msg,
                     }
+                no_suggestions_msg = generate_voice_response(
+                    "No copilot suggestions yet. Tell user it analyzes the discussion every 90 seconds.",
+                    language=language
+                )
                 return {
                     "action": "copilot_suggestions",
-                    "message": "No suggestions from the copilot yet. It analyzes the discussion every 90 seconds.",
+                    "message": no_suggestions_msg,
                 }
 
             latest = result.get("latest", {})
@@ -5708,9 +5961,13 @@ async def execute_action(
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
             if not session_id:
+                no_session_msg = generate_voice_response(
+                    "No session selected. Ask user to select a session first to summarize the discussion.",
+                    language=language
+                )
                 return {
                     "action": "summarize_discussion",
-                    "message": "Please select a session first to summarize the discussion.",
+                    "message": no_session_msg,
                 }
 
             # Try to get summary from copilot first (most up-to-date)
@@ -5755,9 +6012,13 @@ async def execute_action(
                     "source": "posts",
                 }
 
+            no_content_msg = generate_voice_response(
+                "No discussion content to summarize yet. Tell user.",
+                language=language
+            )
             return {
                 "action": "summarize_discussion",
-                "message": "No discussion content to summarize yet.",
+                "message": no_content_msg,
             }
 
         # === POLL ACTIONS ===
@@ -5773,14 +6034,19 @@ async def execute_action(
             conv_context.poll_current_option_index = 1
             conversation_manager.save_context(user_id, conv_context)
 
+            poll_msg = generate_voice_response(
+                "Opening poll creator. Ask user what question they would like to ask in the poll.",
+                language=language
+            )
+            toast_msg = "Abriendo creador de encuestas..." if language == 'es' else "Opening poll creator..."
             return {
                 "action": "create_poll",
                 "session_id": session_id,
                 "ui_actions": [
                     {"type": "ui.switchTab", "payload": {"tabName": "polls", "target": "tab-polls"}},
-                    {"type": "ui.toast", "payload": {"message": "Opening poll creator...", "type": "info"}},
+                    {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
                 ],
-                "message": "Great! What question would you like to ask in the poll?",
+                "message": poll_msg,
                 "conversation_state": "poll_creation",
             }
 
@@ -5799,9 +6065,10 @@ async def execute_action(
                     undo_data=None,  # Reports can't be undone
                 )
             if result:
+                toast_msg = "Generando informe..." if language == 'es' else "Generating report..."
                 result["ui_actions"] = [
                     {"type": "ui.navigate", "payload": {"path": "/reports"}},
-                    {"type": "ui.toast", "payload": {"message": "Generating report...", "type": "info"}},
+                    {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
                 ]
             return result
 
@@ -5817,6 +6084,10 @@ async def execute_action(
 
             # If no course selected, navigate to courses page and prompt user to select one
             if not course_id:
+                no_course_msg = generate_voice_response(
+                    "No course selected. Navigating to courses page and advanced tab. Tell user to select a course first to manage enrollments.",
+                    language=language
+                )
                 return {
                     "action": "manage_enrollments",
                     "course_id": None,
@@ -5824,10 +6095,14 @@ async def execute_action(
                         {"type": "ui.navigate", "payload": {"path": "/courses"}},
                         {"type": "ui.switchTab", "payload": {"tabName": "advanced", "target": "tab-advanced"}},
                     ],
-                    "message": "Please select a course first, then I can help you manage enrollments. Go to the advanced tab to manage student enrollment.",
+                    "message": no_course_msg,
                 }
 
             # Course is selected - navigate to course page and switch to advanced/enrollment tab
+            enroll_msg = generate_voice_response(
+                "Opening enrollment management. Tell user they can add or remove students from this course.",
+                language=language
+            )
             return {
                 "action": "manage_enrollments",
                 "course_id": course_id,
@@ -5835,14 +6110,18 @@ async def execute_action(
                     {"type": "ui.navigate", "payload": {"path": "/courses"}},
                     {"type": "ui.switchTab", "payload": {"tabName": "advanced", "target": "tab-advanced"}},
                 ],
-                "message": "Opening enrollment management. You can add or remove students from this course.",
+                "message": enroll_msg,
             }
 
         if action == 'list_student_pool':
             # List available students (not enrolled) for selection
             course_id = _resolve_course_id(db, current_page, user_id)
             if not course_id:
-                return {"message": "Please select a course first to see the student pool."}
+                no_course_msg = generate_voice_response(
+                    "No course selected. Ask user to select a course first to see the student pool.",
+                    language=language
+                )
+                return {"message": no_course_msg}
 
             # Get all students using get_users with role=student
             result = _execute_tool(db, 'get_users', {"role": "student"})
@@ -5857,7 +6136,11 @@ async def execute_action(
             available_students = [s for s in all_students if s.get("id") not in enrolled_ids]
 
             if not available_students:
-                return {"message": "The student pool is empty. All students are already enrolled in this course."}
+                pool_empty_msg = generate_voice_response(
+                    "Student pool is empty. All students are already enrolled in this course. Tell user.",
+                    language=language
+                )
+                return {"message": pool_empty_msg}
 
             # Create options for dropdown-style selection
             options = [DropdownOption(label=s.get("name") or s.get("email", f"Student {s['id']}"), value=str(s["id"])) for s in available_students[:10]]
@@ -5877,18 +6160,26 @@ async def execute_action(
             }
 
         if action == 'enroll_selected':
+            enroll_msg = generate_voice_response(
+                "Enrolling the selected students now. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "enroll_selected",
-                "message": "Enrolling the selected students.",
+                "message": enroll_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "enroll-selected"}},
                 ],
             }
 
         if action == 'enroll_all':
+            enroll_all_msg = generate_voice_response(
+                "Enrolling all available students now. Confirm briefly.",
+                language=language
+            )
             return {
                 "action": "enroll_all",
-                "message": "Enrolling all available students.",
+                "message": enroll_all_msg,
                 "ui_actions": [
                     {"type": "ui.clickButton", "payload": {"target": "enroll-all"}},
                 ],
@@ -5918,41 +6209,59 @@ async def execute_action(
                 # Offer to help create a case using conversational flow
                 offer_prompt = conversation_manager.offer_case_posting(user_id)
                 if offer_prompt:
+                    switch_msg = generate_voice_response(
+                        f"Switching to Post Case tab. {offer_prompt}",
+                        language=language
+                    )
                     return {
                         "action": "post_case",
                         "session_id": session_id,
                         "ui_actions": [
                             {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
                         ],
-                        "message": f"Switching to the Post Case tab. {offer_prompt}",
+                        "message": switch_msg,
                         "case_offer": True,
                     }
                 else:
                     # User already declined the offer - just switch tab
+                    switch_msg = generate_voice_response(
+                        "Switching to Post Case tab. User can type their case study here.",
+                        language=language
+                    )
+                    toast_msg = "Cambiado a Publicar Caso" if language == 'es' else "Switched to Post Case tab"
                     return {
                         "action": "post_case",
                         "session_id": session_id,
                         "ui_actions": [
                             {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
-                            {"type": "ui.toast", "payload": {"message": "Switched to Post Case tab", "type": "info"}},
+                            {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
                         ],
-                        "message": "Switching to the Post Case tab. You can type your case study here.",
+                        "message": switch_msg,
                     }
 
             # If on forum page, switch to cases tab there
             if current_page and '/forum' in current_page:
+                switch_msg = generate_voice_response(
+                    "Switching to Case Studies tab. Confirm briefly.",
+                    language=language
+                )
+                toast_msg = "Cambiado a Estudios de Caso" if language == 'es' else "Switched to Case Studies tab"
                 return {
                     "action": "post_case",
                     "session_id": session_id,
                     "ui_actions": [
                         {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
-                        {"type": "ui.toast", "payload": {"message": "Switched to Case Studies tab", "type": "info"}},
+                        {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
                     ],
-                    "message": "Switching to the Case Studies tab.",
+                    "message": switch_msg,
                 }
 
             # Otherwise navigate to console page and switch to cases tab with offer
             offer_prompt = conversation_manager.offer_case_posting(user_id)
+            console_msg = generate_voice_response(
+                f"Opening the console. {offer_prompt or 'User can type their case study here.'}",
+                language=language
+            )
             return {
                 "action": "post_case",
                 "session_id": session_id,
@@ -5960,7 +6269,7 @@ async def execute_action(
                     {"type": "ui.navigate", "payload": {"path": "/console"}},
                     {"type": "ui.switchTab", "payload": {"tabName": "cases", "target": "tab-cases"}},
                 ],
-                "message": f"Opening the console. {offer_prompt or 'You can type your case study here.'}",
+                "message": console_msg,
                 "case_offer": bool(offer_prompt),
             }
 
@@ -5969,10 +6278,14 @@ async def execute_action(
             course_id = _resolve_course_id(db, current_page, user_id)
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
             if not session_id:
+                no_session_msg = generate_voice_response(
+                    "No live session selected. Ask user to select a live session first before posting to the discussion.",
+                    language=language
+                )
                 return {
                     "action": "post_to_discussion",
                     "error": "no_session",
-                    "message": "Please select a live session first before posting to the discussion.",
+                    "message": no_session_msg,
                     "ui_actions": [
                         {"type": "ui.navigate", "payload": {"path": "/forum"}},
                     ],
@@ -5992,9 +6305,13 @@ async def execute_action(
                 }
             else:
                 # User already declined the offer this session
+                declined_msg = generate_voice_response(
+                    "User already declined to post earlier. Tell them to let you know if they change their mind.",
+                    language=language
+                )
                 return {
                     "action": "post_to_discussion",
-                    "message": "You've already declined to post. Let me know if you change your mind!",
+                    "message": declined_msg,
                 }
 
         if action == 'view_posts':

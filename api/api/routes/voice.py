@@ -100,26 +100,29 @@ async def test_route():
     return {"message": "Router is working", "status": "ok"}
 
 @router.get("/agent/signed-url", status_code=status.HTTP_200_OK)
-async def get_agent_signed_url(request: Request):
+async def get_agent_signed_url(request: Request, language: str = "en"):
     """
     Get a signed WebSocket URL for ElevenLabs Agent conversation.
-    
+
     The browser will connect directly to ElevenLabs using this URL.
     The API key and agent ID are kept server-side.
+
+    Args:
+        language: Language code ('en' or 'es') for the agent to use
     """
     import time
     import uuid
     request_id = str(uuid.uuid4())[:8]
     start_time = time.time()
-    
-    logger.info(f"[{request_id}] GET /api/voice/agent/signed-url - Processing request")
-    
+
+    logger.info(f"[{request_id}] GET /api/voice/agent/signed-url - Processing request (language={language})")
+
     # Simple authentication check
     require_auth(request)
     logger.info(f"[{request_id}] Authentication passed")
-    
+
     try:
-        signed_url = await get_signed_url()
+        signed_url = await get_signed_url(language=language)
         processing_time = time.time() - start_time
         logger.info(f"[{request_id}] Signed URL generated successfully - processing_time: {processing_time:.2f}s")
         return {"signed_url": signed_url}

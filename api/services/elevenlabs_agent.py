@@ -12,28 +12,35 @@ from api.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 
-async def get_signed_url() -> str:
+async def get_signed_url(language: str = "en") -> str:
     """
     Get a signed WebSocket URL from ElevenLabs for realtime agent conversation.
-    
+
+    Args:
+        language: Language code ('en' or 'es') to pass to the agent as a dynamic variable
+
     Returns:
         str: WebSocket URL (wss://...) for direct browser connection
-        
+
     Raises:
         ValueError: If required environment variables are missing
         httpx.HTTPError: If the ElevenLabs API request fails
     """
     settings = get_settings()
-    
+
     # Validate required environment variables
     if not settings.elevenlabs_api_key:
         raise ValueError("ELEVENLABS_API_KEY environment variable is required")
-    
+
     if not settings.elevenlabs_agent_id:
         raise ValueError("ELEVENLABS_AGENT_ID environment variable is required")
-    
-    # Call the official ElevenLabs endpoint
-    url = f"https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id={settings.elevenlabs_agent_id}"
+
+    # Call the official ElevenLabs endpoint with language as a dynamic variable
+    # The agent prompt can reference this via {{language}}
+    # Format: dynamic_variables[key]=value
+    url = f"https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id={settings.elevenlabs_agent_id}&dynamic_variables[language]={language}"
+
+    logger.info(f"Getting signed URL with language={language}")
     
     headers = {
         "xi-api-key": settings.elevenlabs_api_key,

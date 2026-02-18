@@ -164,6 +164,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const userInitiatedDisconnectRef = useRef(false); // Track user-initiated Stop clicks
   const previousUserIdRef = useRef<number | null>(null); // Track user ID for logout detection
   const messageCountRef = useRef(0); // Track message count for session refresh
+  const previousLocaleRef = useRef<string>(locale); // Track locale for language switch detection
   const isRefreshingRef = useRef(false); // Track if this is a silent refresh (skip greeting)
   const lastUserMessageIdRef = useRef<string | null>(null); // Track last user message for transcript updates
   const pendingTranscriptRef = useRef<string | null>(null); // Track pending transcript to avoid duplicate processing
@@ -278,6 +279,50 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     previousUserIdRef.current = currentUserId;
   }, [currentUser?.id]);
 
+  // Language switch detection - reconnect ElevenLabs when locale changes
+  // This ensures the voice assistant responds in the newly selected language
+  useEffect(() => {
+    const previousLocale = previousLocaleRef.current;
+
+    // Only act if locale actually changed and conversation is active
+    if (previousLocale !== locale && conversationRef.current) {
+      console.log(`🌐 Language changed from ${previousLocale} to ${locale} - reconnecting voice assistant`);
+
+      // Update ref first
+      previousLocaleRef.current = locale;
+
+      // Trigger a silent refresh to reconnect with new language
+      // The signed URL will be fetched with the new locale
+      const reconnectWithNewLanguage = async () => {
+        isRefreshingRef.current = true; // Skip greeting on reconnect
+
+        // End current session
+        if (conversationRef.current) {
+          try {
+            await conversationRef.current.endSession();
+          } catch (error) {
+            console.error('Error ending session for language switch:', error);
+          }
+          conversationRef.current = null;
+        }
+
+        // Small delay to ensure clean disconnect
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Reinitialize with new language (will use updated locale from hook)
+        isInitializingRef.current = false;
+        await initializeConversation();
+
+        console.log(`✅ Voice assistant reconnected with language: ${locale}`);
+      };
+
+      reconnectWithNewLanguage();
+    } else {
+      // Just update the ref without reconnecting
+      previousLocaleRef.current = locale;
+    }
+  }, [locale]);
+
   const initializeConversation = async () => {
     setState('connecting');
     setError('');
@@ -298,11 +343,11 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         return;
       }
 
-      // Get signed URL from our backend
-      console.log('🔑 Getting signed URL from backend...');
+      // Get signed URL from our backend with language parameter
+      console.log(`🔑 Getting signed URL from backend (language=${locale})...`);
       // Use relative URL for all environments to leverage Next.js API routes
       const apiUrl = '/api';
-      const response = await fetch(`${apiUrl}/voice/agent/signed-url`, {
+      const response = await fetch(`${apiUrl}/voice/agent/signed-url?language=${locale}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer dummy-token`, // TODO: Replace with real auth

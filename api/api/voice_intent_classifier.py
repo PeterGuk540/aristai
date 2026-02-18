@@ -15,7 +15,7 @@ from enum import Enum
 import json
 import logging
 
-from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics, parse_json_response
+from workflows.llm_utils import get_llm_with_tracking, get_fast_voice_llm, invoke_llm_with_metrics, parse_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -1761,9 +1761,10 @@ class LLMResponseGenerator:
         self._model_name = None
 
     def _ensure_llm(self) -> bool:
-        """Ensure LLM is initialized."""
+        """Ensure LLM is initialized with fast voice settings."""
         if self._llm is None:
-            self._llm, self._model_name = get_llm_with_tracking()
+            # Use fast voice LLM (lower temperature, max_tokens) for quicker responses
+            self._llm, self._model_name = get_fast_voice_llm()
         return self._llm is not None
 
     def generate_response(

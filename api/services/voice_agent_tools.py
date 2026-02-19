@@ -22,6 +22,13 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
+# Import LLM utilities for content generation
+from workflows.llm_utils import (
+    get_fast_voice_llm,
+    invoke_llm_with_metrics,
+    LLMResponse,
+)
+
 # Import page registry for workflow and topology knowledge
 from api.services.voice_page_registry import (
     get_page,
@@ -325,6 +332,102 @@ Use this instead of switch_tab when you're not sure if the tab exists on the cur
                 }
             },
             "required": ["tab_voice_id"]
+        }
+    },
+    # =========================================================================
+    # AI CONTENT GENERATION TOOLS - Generate and fill form fields
+    # =========================================================================
+    {
+        "name": "generate_syllabus",
+        "description": """Generate a syllabus for a course using AI and fill the syllabus form field.
+
+Use this when the user asks you to generate, create, or write a syllabus for them.
+The generated syllabus will automatically be filled into the syllabus text area.
+
+Examples of when to use this tool:
+- "Generate a syllabus for this course"
+- "Create a syllabus for Machine Learning"
+- "Write me a syllabus"
+- "Can you make a syllabus for me?"
+- "Help me with the syllabus"
+
+IMPORTANT: Use this BEFORE clicking create/submit buttons when user wants AI-generated syllabus.""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "course_name": {
+                    "type": "string",
+                    "description": "Name of the course to generate syllabus for"
+                },
+                "course_description": {
+                    "type": "string",
+                    "description": "Optional description or context about the course"
+                }
+            },
+            "required": ["course_name"]
+        }
+    },
+    {
+        "name": "generate_objectives",
+        "description": """Generate learning objectives for a course using AI and fill the objectives form field.
+
+Use this when the user asks you to generate or create learning objectives.
+The generated objectives will automatically be filled into the learning objectives text area.
+
+Examples of when to use this tool:
+- "Generate learning objectives"
+- "Create objectives for this course"
+- "What should the learning objectives be?"
+- "Help me with the objectives"
+
+IMPORTANT: Use this BEFORE clicking create/submit buttons when user wants AI-generated objectives.""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "course_name": {
+                    "type": "string",
+                    "description": "Name of the course"
+                },
+                "syllabus": {
+                    "type": "string",
+                    "description": "Course syllabus to base objectives on (if available)"
+                }
+            },
+            "required": ["course_name"]
+        }
+    },
+    {
+        "name": "generate_session_plan",
+        "description": """Generate a session plan/description for a class session using AI and fill the session description field.
+
+Use this when the user asks you to generate or create a session plan.
+The generated plan will automatically be filled into the session description text area.
+
+Examples of when to use this tool:
+- "Generate a session plan"
+- "Create a plan for this session"
+- "Write a session description"
+- "Help me plan this session"
+
+IMPORTANT: Use this BEFORE clicking create/submit buttons when user wants AI-generated session plan.""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "session_title": {
+                    "type": "string",
+                    "description": "Title or topic of the session"
+                },
+                "course_name": {
+                    "type": "string",
+                    "description": "Name of the course this session belongs to"
+                },
+                "duration_minutes": {
+                    "type": "integer",
+                    "description": "Duration of the session in minutes",
+                    "default": 60
+                }
+            },
+            "required": ["session_title"]
         }
     },
 ]
@@ -671,6 +774,195 @@ def handle_smart_switch_tab(tab_voice_id: str, current_route: Optional[str] = No
 
 
 # ============================================================================
+# AI CONTENT GENERATION HANDLERS
+# ============================================================================
+
+def handle_generate_syllabus(
+    course_name: str,
+    course_description: Optional[str] = None
+) -> ToolResult:
+    """Generate a syllabus for a course using LLM and fill the form field."""
+    try:
+        llm = get_fast_voice_llm()
+        if not llm:
+            return ToolResult(
+                status=ToolResultStatus.FAILURE,
+                message="AI generation is temporarily unavailable."
+            )
+
+        # Build generation prompt
+        context = f"Course: {course_name}"
+        if course_description:
+            context += f"\nDescription: {course_description}"
+
+        prompt = f"""Generate a comprehensive syllabus for the following course.
+The syllabus should include:
+- Course overview and description
+- Learning outcomes
+- Weekly topics/modules (8-12 weeks)
+- Assessment methods
+- Required materials/textbooks
+
+{context}
+
+Generate a well-structured syllabus in plain text format (no markdown headers, just clear sections).
+Keep it concise but comprehensive (300-500 words)."""
+
+        response = invoke_llm_with_metrics(llm, prompt, "syllabus-generation")
+
+        if not response.success or not response.content:
+            return ToolResult(
+                status=ToolResultStatus.FAILURE,
+                message="Failed to generate syllabus. Please try again."
+            )
+
+        syllabus = response.content.strip()
+
+        return ToolResult(
+            status=ToolResultStatus.SUCCESS,
+            message=f"Generated syllabus for {course_name}",
+            data={"syllabus": syllabus},
+            ui_action={
+                "type": "ui.fillInput",
+                "payload": {
+                    "target": "syllabus",
+                    "value": syllabus
+                }
+            }
+        )
+
+    except Exception as e:
+        logger.exception(f"Error generating syllabus: {e}")
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message=f"Error generating syllabus: {str(e)}"
+        )
+
+
+def handle_generate_objectives(
+    course_name: str,
+    syllabus: Optional[str] = None
+) -> ToolResult:
+    """Generate learning objectives for a course using LLM and fill the form field."""
+    try:
+        llm = get_fast_voice_llm()
+        if not llm:
+            return ToolResult(
+                status=ToolResultStatus.FAILURE,
+                message="AI generation is temporarily unavailable."
+            )
+
+        # Build generation prompt
+        context = f"Course: {course_name}"
+        if syllabus:
+            context += f"\nSyllabus: {syllabus[:1000]}..."  # Truncate if too long
+
+        prompt = f"""Generate 5-7 clear learning objectives for the following course.
+Each objective should:
+- Start with an action verb (Understand, Analyze, Apply, Create, Evaluate, etc.)
+- Be specific and measurable
+- Be achievable within the course duration
+
+{context}
+
+Format: One objective per line, numbered 1-7. No bullet points or dashes.
+Keep each objective concise (1-2 sentences max)."""
+
+        response = invoke_llm_with_metrics(llm, prompt, "objectives-generation")
+
+        if not response.success or not response.content:
+            return ToolResult(
+                status=ToolResultStatus.FAILURE,
+                message="Failed to generate objectives. Please try again."
+            )
+
+        objectives = response.content.strip()
+
+        return ToolResult(
+            status=ToolResultStatus.SUCCESS,
+            message=f"Generated learning objectives for {course_name}",
+            data={"objectives": objectives},
+            ui_action={
+                "type": "ui.fillInput",
+                "payload": {
+                    "target": "learning-objectives",
+                    "value": objectives
+                }
+            }
+        )
+
+    except Exception as e:
+        logger.exception(f"Error generating objectives: {e}")
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message=f"Error generating objectives: {str(e)}"
+        )
+
+
+def handle_generate_session_plan(
+    session_title: str,
+    course_name: Optional[str] = None,
+    duration_minutes: int = 60
+) -> ToolResult:
+    """Generate a session plan/description using LLM and fill the form field."""
+    try:
+        llm = get_fast_voice_llm()
+        if not llm:
+            return ToolResult(
+                status=ToolResultStatus.FAILURE,
+                message="AI generation is temporarily unavailable."
+            )
+
+        # Build generation prompt
+        context = f"Session Topic: {session_title}\nDuration: {duration_minutes} minutes"
+        if course_name:
+            context += f"\nCourse: {course_name}"
+
+        prompt = f"""Generate a detailed session plan for the following class session.
+The plan should include:
+- Session overview (2-3 sentences)
+- Key learning goals for this session
+- Outline of activities with approximate timing
+- Discussion questions to engage students
+- Key takeaways
+
+{context}
+
+Format as a clear, readable plan in plain text (no markdown).
+Keep it practical and actionable (200-400 words)."""
+
+        response = invoke_llm_with_metrics(llm, prompt, "session-plan-generation")
+
+        if not response.success or not response.content:
+            return ToolResult(
+                status=ToolResultStatus.FAILURE,
+                message="Failed to generate session plan. Please try again."
+            )
+
+        session_plan = response.content.strip()
+
+        return ToolResult(
+            status=ToolResultStatus.SUCCESS,
+            message=f"Generated session plan for {session_title}",
+            data={"session_plan": session_plan},
+            ui_action={
+                "type": "ui.fillInput",
+                "payload": {
+                    "target": "textarea-session-description",
+                    "value": session_plan
+                }
+            }
+        )
+
+    except Exception as e:
+        logger.exception(f"Error generating session plan: {e}")
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message=f"Error generating session plan: {str(e)}"
+        )
+
+
+# ============================================================================
 # TOOL DISPATCHER
 # ============================================================================
 
@@ -758,6 +1050,26 @@ def execute_voice_tool(tool_name: str, parameters: Dict[str, Any]) -> ToolResult
             return handle_smart_switch_tab(
                 parameters.get("tab_voice_id", ""),
                 parameters.get("current_route")
+            )
+
+        # AI Content Generation tools
+        elif tool_name == "generate_syllabus":
+            return handle_generate_syllabus(
+                parameters.get("course_name", "this course"),
+                parameters.get("course_description")
+            )
+
+        elif tool_name == "generate_objectives":
+            return handle_generate_objectives(
+                parameters.get("course_name", "this course"),
+                parameters.get("syllabus")
+            )
+
+        elif tool_name == "generate_session_plan":
+            return handle_generate_session_plan(
+                parameters.get("session_title", "this session"),
+                parameters.get("course_name"),
+                parameters.get("duration_minutes", 60)
             )
 
         else:

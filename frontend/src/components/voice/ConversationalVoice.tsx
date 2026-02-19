@@ -55,6 +55,17 @@ const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
 // Set to true to use the new architecture
 const USE_VOICE_V2 = true;
 
+// ARCHITECTURE NOTE:
+// ElevenLabs agent calls delegate_to_mcp tool → backend processes → returns response
+// ElevenLabs speaks the response. UI actions are published via SSE broker.
+//
+// The frontend handleTranscript() call is a FALLBACK for executing UI actions
+// when SSE broker isn't working. It should NOT send MCP_RESPONSE since
+// ElevenLabs already handles speech via delegate_to_mcp.
+//
+// Set to false to prevent duplicate responses.
+const SEND_MCP_RESPONSE = false;
+
 /**
  * Phase 2: Collect rich page context for smarter LLM intent detection
  * Scans the DOM for available UI elements that can be voice-controlled
@@ -886,18 +897,30 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           }
         }
 
-        // Speak the response via ElevenLabs if it contains meaningful content
-        if (response.spoken_response && response.spoken_response.length > 5) {
+        // ARCHITECTURE: ElevenLabs handles all speech via delegate_to_mcp.
+        // We only send MCP_RESPONSE if SEND_MCP_RESPONSE is true AND response contains
+        // backend-only data (dropdown options, course lists, etc.)
+        if (SEND_MCP_RESPONSE && response.spoken_response && response.spoken_response.length > 5) {
           const msg = response.spoken_response.toLowerCase();
-          // Only speak if it's not a simple confirmation that ElevenLabs will handle
-          const isSimpleConfirmation =
-            msg === 'done' || msg === 'ok' || msg === 'got it' ||
-            msg.startsWith('navigating') || msg.startsWith('switching');
 
-          if (!isSimpleConfirmation) {
-            console.log('📢 Speaking V2 response via ElevenLabs');
+          // Check if response contains DATA that only backend knows
+          const containsBackendData =
+            /\d+\.\s/.test(msg) ||  // Numbered lists
+            msg.includes('options are') ||
+            msg.includes('available:') ||
+            msg.includes('here are') ||
+            msg.includes('i found') ||
+            msg.includes('your courses') ||
+            msg.includes('your sessions');
+
+          if (containsBackendData) {
+            console.log('📢 Speaking backend data via ElevenLabs');
             speakViaElevenLabs(response.spoken_response);
+          } else {
+            console.log('ℹ️ Skipping MCP_RESPONSE - ElevenLabs handles via delegate_to_mcp');
           }
+        } else if (response.spoken_response) {
+          console.log('ℹ️ MCP_RESPONSE disabled - ElevenLabs handles speech via delegate_to_mcp');
         }
 
         // Reset and finalize
@@ -948,24 +971,14 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         console.log('ℹ️ No UI actions needed');
       }
 
-      // OPTION B: Only speak MCP responses when they contain DATA that ElevenLabs
-      // doesn't have access to (dropdown options, course lists, student names, etc.)
-      // For simple confirmations (navigation, tab switching), ElevenLabs' response is sufficient.
-      //
-      // This prevents double responses - ElevenLabs speaks the conversational part,
-      // MCP only speaks when it has unique data to share.
-      //
-      // IMPORTANT: Do NOT call addAssistantMessage here!
-      // The message will be added to chatbox when ElevenLabs speaks it and fires onMessage.
-      if (response?.message) {
+      // V1 ARCHITECTURE: Same as V2 - ElevenLabs handles speech via delegate_to_mcp.
+      // Only send MCP_RESPONSE if flag is enabled AND response contains backend-only data.
+      if (SEND_MCP_RESPONSE && response?.message) {
         const mcpMessage = response.message.toLowerCase();
 
         // Detect if MCP response contains DATA that ElevenLabs doesn't have
-        // These are dynamic values from the database that only MCP can provide
         const mcpHasData =
-          // Numbered lists (dropdown options, course lists, etc.)
           /\b\d+\.\s/.test(mcpMessage) ||
-          // Explicit data indicators
           mcpMessage.includes('options are') ||
           mcpMessage.includes('available options') ||
           mcpMessage.includes('your courses') ||
@@ -976,20 +989,16 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           mcpMessage.includes('here are') ||
           mcpMessage.includes('i found') ||
           mcpMessage.includes('there are') ||
-          // Form field prompts (conversational flow data)
           mcpMessage.includes('what is the') ||
           mcpMessage.includes('please provide') ||
           mcpMessage.includes('please enter') ||
           mcpMessage.includes('what would you like to') ||
-          // Error messages with specific details
           mcpMessage.includes('error:') ||
           mcpMessage.includes('failed to') ||
-          // Summary/report data
           mcpMessage.includes('summary:') ||
           mcpMessage.includes('report:') ||
           mcpMessage.includes('students') ||
           mcpMessage.includes('participants') ||
-          // Question/confirmation requiring user response
           mcpMessage.includes('would you like me to') ||
           mcpMessage.includes('should i') ||
           mcpMessage.includes('do you want');
@@ -998,11 +1007,10 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           console.log('📢 Speaking MCP data response via ElevenLabs');
           speakViaElevenLabs(response.message);
         } else {
-          // Skip simple confirmations - ElevenLabs already handled them
-          console.log('ℹ️ Skipping MCP simple confirmation (no unique data):', mcpMessage.substring(0, 60));
+          console.log('ℹ️ Skipping MCP simple confirmation (no unique data)');
         }
-      } else {
-        console.log('ℹ️ No backend message to speak');
+      } else if (response?.message) {
+        console.log('ℹ️ MCP_RESPONSE disabled - ElevenLabs handles speech via delegate_to_mcp');
       }
 
       // Reset agent response tracking

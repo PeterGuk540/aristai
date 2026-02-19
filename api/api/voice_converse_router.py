@@ -3302,8 +3302,8 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             copilot_active=request.copilot_active,
         )
 
-        # Classify intent using LLM (fast confirmations checked first via regex)
-        intent = classify_intent(transcript, page_context, use_fast_confirm=True)
+        # Classify intent using LLM (all confirmations go through LLM)
+        intent = classify_intent(transcript, page_context)
 
         # Convert to legacy format for compatibility with existing action execution
         intent_result = intent_to_legacy_format(intent)

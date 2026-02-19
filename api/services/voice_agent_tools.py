@@ -430,6 +430,527 @@ IMPORTANT: Use this BEFORE clicking create/submit buttons when user wants AI-gen
             "required": ["session_title"]
         }
     },
+    # =========================================================================
+    # SESSION MANAGEMENT TOOLS
+    # =========================================================================
+    {
+        "name": "go_live",
+        "description": """Start a live session. Use this when the user wants to begin a live class session.
+
+Examples: "go live", "start the session", "begin the live session", "make session live", "start class".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "integer",
+                    "description": "ID of the session to start (optional, uses current if not specified)"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "end_session",
+        "description": """End a live session. Use this when the user wants to finish/complete the current live session.
+
+Examples: "end session", "stop the session", "finish class", "complete the session", "end class".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "integer",
+                    "description": "ID of the session to end (optional, uses current if not specified)"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "start_timer",
+        "description": """Start a countdown timer for session pacing. Use for timed activities, discussions, or breaks.
+
+Examples: "start a 5 minute timer", "set timer for 10 minutes", "start countdown", "time this activity".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "minutes": {
+                    "type": "integer",
+                    "description": "Duration in minutes",
+                    "default": 5
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Label for the timer (e.g., 'Discussion', 'Break')"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "pause_timer",
+        "description": """Pause the running timer. Use when user wants to temporarily stop the countdown.
+
+Examples: "pause timer", "stop the clock", "hold the timer", "pause countdown".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "resume_timer",
+        "description": """Resume a paused timer. Use when user wants to continue a paused countdown.
+
+Examples: "resume timer", "continue timer", "unpause", "start timer again".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "stop_timer",
+        "description": """Stop and reset the timer. Use when user wants to cancel the current timer.
+
+Examples: "stop timer", "cancel timer", "clear timer", "reset countdown".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_timer_status",
+        "description": """Check current timer status. Use when user asks about remaining time.
+
+Examples: "how much time left", "timer status", "check the timer", "time remaining".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    # =========================================================================
+    # BREAKOUT GROUPS TOOLS
+    # =========================================================================
+    {
+        "name": "create_breakout_groups",
+        "description": """Create AI-powered breakout groups for collaborative activities.
+
+Supports different grouping strategies:
+- random: Random assignment
+- debate: Opposing viewpoints for debates
+- mixed: Balance high/low participation
+- jigsaw: Topic-based expert groups
+
+Examples: "create breakout groups", "split students into groups", "make 4 groups", "create debate groups".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "num_groups": {
+                    "type": "integer",
+                    "description": "Number of groups to create",
+                    "default": 4
+                },
+                "strategy": {
+                    "type": "string",
+                    "enum": ["random", "debate", "mixed", "jigsaw"],
+                    "description": "Grouping strategy",
+                    "default": "random"
+                },
+                "topic": {
+                    "type": "string",
+                    "description": "Topic for the group activity"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_breakout_groups",
+        "description": """View current breakout groups and their members.
+
+Examples: "show breakout groups", "who is in which group", "view groups", "list the groups".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "dissolve_breakout_groups",
+        "description": """End breakout session and bring everyone back together.
+
+Examples: "dissolve groups", "end breakout", "bring everyone back", "close breakout groups".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    # =========================================================================
+    # AI COPILOT TOOLS
+    # =========================================================================
+    {
+        "name": "start_copilot",
+        "description": """Start the AI copilot for live teaching assistance. Provides real-time suggestions during class.
+
+Examples: "start copilot", "turn on AI assistant", "enable copilot", "start AI help".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "stop_copilot",
+        "description": """Stop the AI copilot.
+
+Examples: "stop copilot", "turn off AI assistant", "disable copilot", "stop AI help".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_copilot_suggestions",
+        "description": """Get current AI copilot suggestions for teaching.
+
+Examples: "what does copilot suggest", "show suggestions", "AI recommendations", "copilot advice".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_facilitation_suggestions",
+        "description": """Get AI-powered facilitation suggestions based on current discussion.
+
+Examples: "facilitation suggestions", "how should I facilitate", "teaching suggestions", "what should I do next".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    # =========================================================================
+    # STUDENT MONITORING TOOLS
+    # =========================================================================
+    {
+        "name": "get_engagement_heatmap",
+        "description": """Show visual engagement heatmap of student participation.
+
+Examples: "show engagement heatmap", "participation heatmap", "who is participating", "engagement visualization".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_disengaged_students",
+        "description": """Identify students who are disengaged or at-risk.
+
+Examples: "who is disengaged", "at-risk students", "who needs attention", "inactive students".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "who_needs_help",
+        "description": """Identify students who may be struggling and need help.
+
+Examples: "who needs help", "struggling students", "students having difficulty", "who should I help".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "student_lookup",
+        "description": """Look up information about a specific student.
+
+Examples: "look up John Smith", "find student Maria", "student info for...", "tell me about student...".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "student_name": {
+                    "type": "string",
+                    "description": "Name or partial name of the student to look up"
+                }
+            },
+            "required": ["student_name"]
+        }
+    },
+    {
+        "name": "get_class_status",
+        "description": """Get overall class engagement and participation status.
+
+Examples: "class status", "how is the class doing", "participation levels", "engagement overview".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_participation_stats",
+        "description": """Get detailed participation statistics for the session.
+
+Examples: "participation stats", "engagement statistics", "how many participated", "participation breakdown".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "suggest_next_student",
+        "description": """AI suggests which student to call on next for balanced participation.
+
+Examples: "who should I call on", "suggest next student", "who hasn't spoken", "next participant".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_student_progress",
+        "description": """Get progress tracking for a specific student or all students.
+
+Examples: "student progress", "how is John doing", "track progress", "student performance".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "student_name": {
+                    "type": "string",
+                    "description": "Optional: specific student name"
+                }
+            },
+            "required": []
+        }
+    },
+    # =========================================================================
+    # DISCUSSION & CONTENT TOOLS
+    # =========================================================================
+    {
+        "name": "summarize_discussion",
+        "description": """Generate AI summary of the current discussion thread.
+
+Examples: "summarize discussion", "summary of posts", "what has been discussed", "recap the discussion".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "include_key_points": {
+                    "type": "boolean",
+                    "description": "Include key points in summary",
+                    "default": True
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_misconceptions",
+        "description": """Identify student misconceptions from discussion posts.
+
+Examples: "any misconceptions", "what are students getting wrong", "identify misunderstandings", "check for errors".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_student_questions",
+        "description": """Get unanswered questions from students.
+
+Examples: "student questions", "unanswered questions", "what are students asking", "pending questions".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_poll_suggestions",
+        "description": """Get AI-suggested poll questions based on current discussion.
+
+Examples: "suggest a poll", "poll ideas", "what poll should I create", "recommend poll questions".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "read_posts",
+        "description": """Read recent discussion posts aloud.
+
+Examples: "read posts", "what did students post", "read the discussion", "show me posts".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "description": "Number of posts to read",
+                    "default": 5
+                }
+            },
+            "required": []
+        }
+    },
+    # =========================================================================
+    # AI TEACHING ASSISTANT TOOLS
+    # =========================================================================
+    {
+        "name": "generate_ai_draft",
+        "description": """Generate an AI draft response to a student question.
+
+Examples: "draft a response", "AI answer this", "generate response for...", "help me respond".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "The student question to respond to"
+                },
+                "context": {
+                    "type": "string",
+                    "description": "Additional context for the response"
+                }
+            },
+            "required": ["question"]
+        }
+    },
+    {
+        "name": "get_ai_drafts",
+        "description": """Get pending AI-generated response drafts awaiting review.
+
+Examples: "show AI drafts", "pending responses", "drafts to review", "AI responses queue".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "approve_ai_draft",
+        "description": """Approve an AI-generated draft for posting.
+
+Examples: "approve draft", "post the response", "accept AI response", "publish draft".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "draft_id": {
+                    "type": "integer",
+                    "description": "ID of the draft to approve"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "reject_ai_draft",
+        "description": """Reject an AI-generated draft.
+
+Examples: "reject draft", "discard response", "don't post that", "delete draft".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "draft_id": {
+                    "type": "integer",
+                    "description": "ID of the draft to reject"
+                }
+            },
+            "required": []
+        }
+    },
+    # =========================================================================
+    # SESSION TEMPLATES & SUMMARIES
+    # =========================================================================
+    {
+        "name": "save_template",
+        "description": """Save current session as a reusable template.
+
+Examples: "save as template", "create template", "save this session template", "make reusable".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "template_name": {
+                    "type": "string",
+                    "description": "Name for the template"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "clone_session",
+        "description": """Clone/duplicate a session for reuse.
+
+Examples: "clone session", "duplicate session", "copy this session", "create copy".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "new_title": {
+                    "type": "string",
+                    "description": "Title for the cloned session"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_session_summary",
+        "description": """Generate a post-session summary.
+
+Examples: "session summary", "summarize the session", "post-class summary", "what happened in class".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "send_session_summary",
+        "description": """Send session summary to students via email or Canvas.
+
+Examples: "send summary to students", "email the summary", "share session recap", "distribute summary".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "method": {
+                    "type": "string",
+                    "enum": ["email", "canvas", "in_app"],
+                    "description": "Delivery method",
+                    "default": "in_app"
+                }
+            },
+            "required": []
+        }
+    },
+    # =========================================================================
+    # ANALYTICS & COMPARISON TOOLS
+    # =========================================================================
+    {
+        "name": "compare_sessions",
+        "description": """Compare engagement/participation across multiple sessions.
+
+Examples: "compare sessions", "session comparison", "how does this compare", "compare to last week".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "session_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "IDs of sessions to compare"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_course_analytics",
+        "description": """Get overall course analytics and trends.
+
+Examples: "course analytics", "course statistics", "how is the course going", "course trends".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    # =========================================================================
+    # LMS INTEGRATION TOOLS
+    # =========================================================================
+    {
+        "name": "push_to_canvas",
+        "description": """Push session content/summary to Canvas LMS.
+
+Examples: "push to Canvas", "send to Canvas", "sync with Canvas", "upload to LMS".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string",
+                    "enum": ["summary", "announcement", "assignment", "grades"],
+                    "description": "Type of content to push",
+                    "default": "summary"
+                }
+            },
+            "required": []
+        }
+    },
+    # =========================================================================
+    # UTILITY TOOLS
+    # =========================================================================
+    {
+        "name": "undo_action",
+        "description": """Undo the last action performed.
+
+Examples: "undo", "undo that", "go back", "revert", "cancel last action".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "toggle_theme",
+        "description": """Toggle between light and dark theme.
+
+Examples: "toggle theme", "dark mode", "light mode", "switch theme", "change appearance".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "theme": {
+                    "type": "string",
+                    "enum": ["light", "dark", "toggle"],
+                    "description": "Theme to switch to",
+                    "default": "toggle"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_help",
+        "description": """Get help about voice commands or the current page.
+
+Examples: "help", "what can I do", "voice commands", "how do I...", "show help".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": "Specific topic to get help about"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "sign_out",
+        "description": """Sign out of the application.
+
+Examples: "sign out", "log out", "logout", "exit", "sign me out".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
 ]
 
 
@@ -963,6 +1484,601 @@ Keep it practical and actionable (200-400 words)."""
 
 
 # ============================================================================
+# SESSION MANAGEMENT HANDLERS
+# ============================================================================
+
+def handle_go_live(session_id: Optional[int] = None) -> ToolResult:
+    """Start a live session."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Starting live session",
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"target": "go-live", "voiceId": "go-live"}
+        }
+    )
+
+
+def handle_end_session(session_id: Optional[int] = None) -> ToolResult:
+    """End the current live session."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Ending session",
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"target": "end-session", "voiceId": "end-session"}
+        }
+    )
+
+
+def handle_start_timer(minutes: int = 5, label: Optional[str] = None) -> ToolResult:
+    """Start a countdown timer."""
+    timer_label = label or f"{minutes} minute timer"
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Starting {timer_label}",
+        data={"minutes": minutes, "label": timer_label},
+        ui_action={
+            "type": "ui.startTimer",
+            "payload": {"minutes": minutes, "label": timer_label}
+        }
+    )
+
+
+def handle_pause_timer() -> ToolResult:
+    """Pause the running timer."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Timer paused",
+        ui_action={"type": "ui.pauseTimer", "payload": {}}
+    )
+
+
+def handle_resume_timer() -> ToolResult:
+    """Resume a paused timer."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Timer resumed",
+        ui_action={"type": "ui.resumeTimer", "payload": {}}
+    )
+
+
+def handle_stop_timer() -> ToolResult:
+    """Stop and reset the timer."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Timer stopped",
+        ui_action={"type": "ui.stopTimer", "payload": {}}
+    )
+
+
+def handle_get_timer_status() -> ToolResult:
+    """Get current timer status."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Checking timer status",
+        ui_action={"type": "ui.getTimerStatus", "payload": {}}
+    )
+
+
+# ============================================================================
+# BREAKOUT GROUPS HANDLERS
+# ============================================================================
+
+def handle_create_breakout_groups(
+    num_groups: int = 4,
+    strategy: str = "random",
+    topic: Optional[str] = None
+) -> ToolResult:
+    """Create AI-powered breakout groups."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Creating {num_groups} breakout groups using {strategy} strategy",
+        data={"num_groups": num_groups, "strategy": strategy, "topic": topic},
+        ui_action={
+            "type": "ui.createBreakoutGroups",
+            "payload": {"numGroups": num_groups, "strategy": strategy, "topic": topic}
+        }
+    )
+
+
+def handle_get_breakout_groups() -> ToolResult:
+    """View current breakout groups."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Showing breakout groups",
+        ui_action={"type": "ui.showBreakoutGroups", "payload": {}}
+    )
+
+
+def handle_dissolve_breakout_groups() -> ToolResult:
+    """Dissolve breakout groups."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Dissolving breakout groups",
+        ui_action={"type": "ui.dissolveBreakoutGroups", "payload": {}}
+    )
+
+
+# ============================================================================
+# AI COPILOT HANDLERS
+# ============================================================================
+
+def handle_start_copilot() -> ToolResult:
+    """Start the AI copilot."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Starting AI copilot",
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"target": "start-copilot", "voiceId": "start-copilot"}
+        }
+    )
+
+
+def handle_stop_copilot() -> ToolResult:
+    """Stop the AI copilot."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Stopping AI copilot",
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"target": "stop-copilot", "voiceId": "stop-copilot"}
+        }
+    )
+
+
+def handle_get_copilot_suggestions() -> ToolResult:
+    """Get copilot suggestions."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Fetching copilot suggestions",
+        ui_action={"type": "ui.getCopilotSuggestions", "payload": {}}
+    )
+
+
+def handle_get_facilitation_suggestions() -> ToolResult:
+    """Get facilitation suggestions using LLM."""
+    try:
+        llm = get_fast_voice_llm()
+        if not llm:
+            return ToolResult(
+                status=ToolResultStatus.FAILURE,
+                message="AI suggestions temporarily unavailable"
+            )
+
+        prompt = """As a teaching assistant, provide 3-5 brief facilitation suggestions for a live class discussion.
+Focus on:
+- Engaging quiet students
+- Deepening the discussion
+- Addressing potential confusion
+- Transitioning between topics
+
+Keep each suggestion to 1-2 sentences. Be practical and actionable."""
+
+        response = invoke_llm_with_metrics(llm, prompt, "facilitation-suggestions")
+
+        if response.success and response.content:
+            return ToolResult(
+                status=ToolResultStatus.SUCCESS,
+                message="Here are some facilitation suggestions",
+                data={"suggestions": response.content.strip()}
+            )
+
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message="Could not generate suggestions"
+        )
+    except Exception as e:
+        logger.exception(f"Error getting facilitation suggestions: {e}")
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message="Error getting suggestions"
+        )
+
+
+# ============================================================================
+# STUDENT MONITORING HANDLERS
+# ============================================================================
+
+def handle_get_engagement_heatmap() -> ToolResult:
+    """Show engagement heatmap."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Showing engagement heatmap",
+        ui_action={"type": "ui.showEngagementHeatmap", "payload": {}}
+    )
+
+
+def handle_get_disengaged_students() -> ToolResult:
+    """Identify disengaged students."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Identifying disengaged students",
+        ui_action={"type": "ui.getDisengagedStudents", "payload": {}}
+    )
+
+
+def handle_who_needs_help() -> ToolResult:
+    """Identify students who need help."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Finding students who need help",
+        ui_action={"type": "ui.getStudentsNeedingHelp", "payload": {}}
+    )
+
+
+def handle_student_lookup(student_name: str) -> ToolResult:
+    """Look up a specific student."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Looking up student: {student_name}",
+        data={"student_name": student_name},
+        ui_action={
+            "type": "ui.studentLookup",
+            "payload": {"studentName": student_name}
+        }
+    )
+
+
+def handle_get_class_status() -> ToolResult:
+    """Get overall class status."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Getting class status",
+        ui_action={"type": "ui.getClassStatus", "payload": {}}
+    )
+
+
+def handle_get_participation_stats() -> ToolResult:
+    """Get participation statistics."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Getting participation statistics",
+        ui_action={"type": "ui.getParticipationStats", "payload": {}}
+    )
+
+
+def handle_suggest_next_student() -> ToolResult:
+    """Suggest next student to call on."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Suggesting next student",
+        ui_action={"type": "ui.suggestNextStudent", "payload": {}}
+    )
+
+
+def handle_get_student_progress(student_name: Optional[str] = None) -> ToolResult:
+    """Get student progress."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Getting progress for {student_name or 'all students'}",
+        data={"student_name": student_name},
+        ui_action={
+            "type": "ui.getStudentProgress",
+            "payload": {"studentName": student_name}
+        }
+    )
+
+
+# ============================================================================
+# DISCUSSION & CONTENT HANDLERS
+# ============================================================================
+
+def handle_summarize_discussion(include_key_points: bool = True) -> ToolResult:
+    """Summarize the current discussion using LLM."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Generating discussion summary",
+        ui_action={
+            "type": "ui.summarizeDiscussion",
+            "payload": {"includeKeyPoints": include_key_points}
+        }
+    )
+
+
+def handle_get_misconceptions() -> ToolResult:
+    """Identify misconceptions in discussion."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Analyzing for misconceptions",
+        ui_action={"type": "ui.getMisconceptions", "payload": {}}
+    )
+
+
+def handle_get_student_questions() -> ToolResult:
+    """Get unanswered student questions."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Getting student questions",
+        ui_action={"type": "ui.getStudentQuestions", "payload": {}}
+    )
+
+
+def handle_get_poll_suggestions() -> ToolResult:
+    """Get AI-suggested poll questions."""
+    try:
+        llm = get_fast_voice_llm()
+        if not llm:
+            return ToolResult(
+                status=ToolResultStatus.FAILURE,
+                message="Poll suggestions temporarily unavailable"
+            )
+
+        prompt = """Suggest 3 engaging poll questions for a live class discussion.
+Each poll should:
+- Have a clear question
+- Have 3-4 answer options
+- Be relevant to educational discussions
+- Encourage participation
+
+Format as numbered list with question and options."""
+
+        response = invoke_llm_with_metrics(llm, prompt, "poll-suggestions")
+
+        if response.success and response.content:
+            return ToolResult(
+                status=ToolResultStatus.SUCCESS,
+                message="Here are some poll suggestions",
+                data={"suggestions": response.content.strip()}
+            )
+
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message="Could not generate poll suggestions"
+        )
+    except Exception as e:
+        logger.exception(f"Error getting poll suggestions: {e}")
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message="Error getting poll suggestions"
+        )
+
+
+def handle_read_posts(count: int = 5) -> ToolResult:
+    """Read recent discussion posts."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Reading the last {count} posts",
+        data={"count": count},
+        ui_action={
+            "type": "ui.readPosts",
+            "payload": {"count": count}
+        }
+    )
+
+
+# ============================================================================
+# AI TEACHING ASSISTANT HANDLERS
+# ============================================================================
+
+def handle_generate_ai_draft(question: str, context: Optional[str] = None) -> ToolResult:
+    """Generate AI response draft."""
+    try:
+        llm = get_fast_voice_llm()
+        if not llm:
+            return ToolResult(
+                status=ToolResultStatus.FAILURE,
+                message="AI draft generation temporarily unavailable"
+            )
+
+        ctx = f"\nContext: {context}" if context else ""
+        prompt = f"""Generate a helpful instructor response to this student question.
+Be clear, educational, and encouraging.
+
+Question: {question}{ctx}
+
+Provide a thoughtful response (2-3 paragraphs max)."""
+
+        response = invoke_llm_with_metrics(llm, prompt, "ai-draft-generation")
+
+        if response.success and response.content:
+            return ToolResult(
+                status=ToolResultStatus.SUCCESS,
+                message="AI draft generated",
+                data={"draft": response.content.strip(), "question": question}
+            )
+
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message="Could not generate draft"
+        )
+    except Exception as e:
+        logger.exception(f"Error generating AI draft: {e}")
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message="Error generating draft"
+        )
+
+
+def handle_get_ai_drafts() -> ToolResult:
+    """Get pending AI drafts."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Getting pending AI drafts",
+        ui_action={"type": "ui.getAIDrafts", "payload": {}}
+    )
+
+
+def handle_approve_ai_draft(draft_id: Optional[int] = None) -> ToolResult:
+    """Approve an AI draft."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Approving AI draft",
+        data={"draft_id": draft_id},
+        ui_action={
+            "type": "ui.approveAIDraft",
+            "payload": {"draftId": draft_id}
+        }
+    )
+
+
+def handle_reject_ai_draft(draft_id: Optional[int] = None) -> ToolResult:
+    """Reject an AI draft."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Rejecting AI draft",
+        data={"draft_id": draft_id},
+        ui_action={
+            "type": "ui.rejectAIDraft",
+            "payload": {"draftId": draft_id}
+        }
+    )
+
+
+# ============================================================================
+# SESSION TEMPLATES & SUMMARIES HANDLERS
+# ============================================================================
+
+def handle_save_template(template_name: Optional[str] = None) -> ToolResult:
+    """Save session as template."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Saving session as template{': ' + template_name if template_name else ''}",
+        data={"template_name": template_name},
+        ui_action={
+            "type": "ui.saveTemplate",
+            "payload": {"templateName": template_name}
+        }
+    )
+
+
+def handle_clone_session(new_title: Optional[str] = None) -> ToolResult:
+    """Clone the current session."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Cloning session{': ' + new_title if new_title else ''}",
+        data={"new_title": new_title},
+        ui_action={
+            "type": "ui.cloneSession",
+            "payload": {"newTitle": new_title}
+        }
+    )
+
+
+def handle_get_session_summary() -> ToolResult:
+    """Generate session summary."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Generating session summary",
+        ui_action={"type": "ui.getSessionSummary", "payload": {}}
+    )
+
+
+def handle_send_session_summary(method: str = "in_app") -> ToolResult:
+    """Send session summary to students."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Sending session summary via {method}",
+        data={"method": method},
+        ui_action={
+            "type": "ui.sendSessionSummary",
+            "payload": {"method": method}
+        }
+    )
+
+
+# ============================================================================
+# ANALYTICS HANDLERS
+# ============================================================================
+
+def handle_compare_sessions(session_ids: Optional[List[int]] = None) -> ToolResult:
+    """Compare multiple sessions."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Comparing sessions",
+        data={"session_ids": session_ids},
+        ui_action={
+            "type": "ui.compareSessions",
+            "payload": {"sessionIds": session_ids}
+        }
+    )
+
+
+def handle_get_course_analytics() -> ToolResult:
+    """Get course analytics."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Getting course analytics",
+        ui_action={"type": "ui.getCourseAnalytics", "payload": {}}
+    )
+
+
+# ============================================================================
+# LMS INTEGRATION HANDLERS
+# ============================================================================
+
+def handle_push_to_canvas(content_type: str = "summary") -> ToolResult:
+    """Push content to Canvas LMS."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Pushing {content_type} to Canvas",
+        data={"content_type": content_type},
+        ui_action={
+            "type": "ui.pushToCanvas",
+            "payload": {"contentType": content_type}
+        }
+    )
+
+
+# ============================================================================
+# UTILITY HANDLERS
+# ============================================================================
+
+def handle_undo_action() -> ToolResult:
+    """Undo the last action."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Undoing last action",
+        ui_action={"type": "ui.undo", "payload": {}}
+    )
+
+
+def handle_toggle_theme(theme: str = "toggle") -> ToolResult:
+    """Toggle or set theme."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"{'Toggling' if theme == 'toggle' else 'Switching to ' + theme} theme",
+        ui_action={
+            "type": "ui.toggleTheme",
+            "payload": {"theme": theme}
+        }
+    )
+
+
+def handle_get_help(topic: Optional[str] = None) -> ToolResult:
+    """Get help information."""
+    help_text = """Available voice commands:
+- Navigation: "go to courses", "open sessions", "switch to forum"
+- Session: "go live", "end session", "start 5 minute timer"
+- Groups: "create breakout groups", "dissolve groups"
+- Copilot: "start copilot", "show suggestions"
+- Students: "who needs help", "show engagement heatmap"
+- Content: "generate syllabus", "summarize discussion"
+- Polls: "suggest a poll", "create poll"
+
+Say the name of what you want to do!"""
+
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=help_text,
+        data={"topic": topic, "help": help_text}
+    )
+
+
+def handle_sign_out() -> ToolResult:
+    """Sign out of the application."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Signing out",
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"target": "sign-out", "voiceId": "sign-out"}
+        }
+    )
+
+
+# ============================================================================
 # TOOL DISPATCHER
 # ============================================================================
 
@@ -1071,6 +2187,152 @@ def execute_voice_tool(tool_name: str, parameters: Dict[str, Any]) -> ToolResult
                 parameters.get("course_name"),
                 parameters.get("duration_minutes", 60)
             )
+
+        # Session Management tools
+        elif tool_name == "go_live":
+            return handle_go_live(parameters.get("session_id"))
+
+        elif tool_name == "end_session":
+            return handle_end_session(parameters.get("session_id"))
+
+        elif tool_name == "start_timer":
+            return handle_start_timer(
+                parameters.get("minutes", 5),
+                parameters.get("label")
+            )
+
+        elif tool_name == "pause_timer":
+            return handle_pause_timer()
+
+        elif tool_name == "resume_timer":
+            return handle_resume_timer()
+
+        elif tool_name == "stop_timer":
+            return handle_stop_timer()
+
+        elif tool_name == "get_timer_status":
+            return handle_get_timer_status()
+
+        # Breakout Groups tools
+        elif tool_name == "create_breakout_groups":
+            return handle_create_breakout_groups(
+                parameters.get("num_groups", 4),
+                parameters.get("strategy", "random"),
+                parameters.get("topic")
+            )
+
+        elif tool_name == "get_breakout_groups":
+            return handle_get_breakout_groups()
+
+        elif tool_name == "dissolve_breakout_groups":
+            return handle_dissolve_breakout_groups()
+
+        # AI Copilot tools
+        elif tool_name == "start_copilot":
+            return handle_start_copilot()
+
+        elif tool_name == "stop_copilot":
+            return handle_stop_copilot()
+
+        elif tool_name == "get_copilot_suggestions":
+            return handle_get_copilot_suggestions()
+
+        elif tool_name == "get_facilitation_suggestions":
+            return handle_get_facilitation_suggestions()
+
+        # Student Monitoring tools
+        elif tool_name == "get_engagement_heatmap":
+            return handle_get_engagement_heatmap()
+
+        elif tool_name == "get_disengaged_students":
+            return handle_get_disengaged_students()
+
+        elif tool_name == "who_needs_help":
+            return handle_who_needs_help()
+
+        elif tool_name == "student_lookup":
+            return handle_student_lookup(parameters.get("student_name", ""))
+
+        elif tool_name == "get_class_status":
+            return handle_get_class_status()
+
+        elif tool_name == "get_participation_stats":
+            return handle_get_participation_stats()
+
+        elif tool_name == "suggest_next_student":
+            return handle_suggest_next_student()
+
+        elif tool_name == "get_student_progress":
+            return handle_get_student_progress(parameters.get("student_name"))
+
+        # Discussion & Content tools
+        elif tool_name == "summarize_discussion":
+            return handle_summarize_discussion(parameters.get("include_key_points", True))
+
+        elif tool_name == "get_misconceptions":
+            return handle_get_misconceptions()
+
+        elif tool_name == "get_student_questions":
+            return handle_get_student_questions()
+
+        elif tool_name == "get_poll_suggestions":
+            return handle_get_poll_suggestions()
+
+        elif tool_name == "read_posts":
+            return handle_read_posts(parameters.get("count", 5))
+
+        # AI Teaching Assistant tools
+        elif tool_name == "generate_ai_draft":
+            return handle_generate_ai_draft(
+                parameters.get("question", ""),
+                parameters.get("context")
+            )
+
+        elif tool_name == "get_ai_drafts":
+            return handle_get_ai_drafts()
+
+        elif tool_name == "approve_ai_draft":
+            return handle_approve_ai_draft(parameters.get("draft_id"))
+
+        elif tool_name == "reject_ai_draft":
+            return handle_reject_ai_draft(parameters.get("draft_id"))
+
+        # Session Templates & Summaries tools
+        elif tool_name == "save_template":
+            return handle_save_template(parameters.get("template_name"))
+
+        elif tool_name == "clone_session":
+            return handle_clone_session(parameters.get("new_title"))
+
+        elif tool_name == "get_session_summary":
+            return handle_get_session_summary()
+
+        elif tool_name == "send_session_summary":
+            return handle_send_session_summary(parameters.get("method", "in_app"))
+
+        # Analytics tools
+        elif tool_name == "compare_sessions":
+            return handle_compare_sessions(parameters.get("session_ids"))
+
+        elif tool_name == "get_course_analytics":
+            return handle_get_course_analytics()
+
+        # LMS Integration tools
+        elif tool_name == "push_to_canvas":
+            return handle_push_to_canvas(parameters.get("content_type", "summary"))
+
+        # Utility tools
+        elif tool_name == "undo_action":
+            return handle_undo_action()
+
+        elif tool_name == "toggle_theme":
+            return handle_toggle_theme(parameters.get("theme", "toggle"))
+
+        elif tool_name == "get_help":
+            return handle_get_help(parameters.get("topic"))
+
+        elif tool_name == "sign_out":
+            return handle_sign_out()
 
         else:
             return ToolResult(

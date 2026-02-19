@@ -84,8 +84,8 @@ def get_fast_voice_llm():
     """
     Get a speed-optimized LLM for voice responses.
 
-    Uses lower temperature (0.3) and max_tokens (150) for faster responses
-    while maintaining precision. Voice responses are short by nature.
+    Uses lower temperature (0.3) for faster, more deterministic responses.
+    max_tokens=500 to accommodate structured JSON responses from extraction.
 
     Returns:
         Tuple of (llm_instance, model_name) or (None, None) if no keys available
@@ -98,7 +98,7 @@ def get_fast_voice_llm():
             model="gpt-4o-mini",
             api_key=settings.openai_api_key,
             temperature=0.3,  # Lower for faster, more deterministic responses
-            max_tokens=150,   # Voice responses are short
+            max_tokens=500,   # Increased for structured JSON responses
         ), "gpt-4o-mini"
     elif settings.anthropic_api_key:
         from langchain_anthropic import ChatAnthropic
@@ -106,7 +106,7 @@ def get_fast_voice_llm():
             model="claude-3-haiku-20240307",
             api_key=settings.anthropic_api_key,
             temperature=0.3,
-            max_tokens=150,
+            max_tokens=500,   # Increased for structured JSON responses
         ), "claude-3-haiku-20240307"
     else:
         return None, None

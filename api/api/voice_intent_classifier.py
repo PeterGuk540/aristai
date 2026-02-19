@@ -625,6 +625,19 @@ Set clarification_needed=true and provide a helpful clarification_message.
 5. Set confidence based on how certain you are (0.0-1.0)
 6. If confidence < 0.5, set clarification_needed=true and suggest what to ask
 7. For ordinals: "first"=0, "second"=1, "third"=2, "last"=-1
+8. ALWAYS include tab_name when the action implies a specific tab:
+   - "create a course" → tab_name="create"
+   - "enroll students" / "manage enrollments" → tab_name="advanced"
+   - "view AI insights" → tab_name="ai-insights"
+   - "create a session" → tab_name="create"
+   - "start session" / "go live" / "manage status" → tab_name="manage"
+   - "view AI features" → tab_name="ai-features"
+   - "create poll" / "launch poll" → tab_name="polls"
+   - "start copilot" → tab_name="copilot"
+   - "generate summary" → tab_name="summary"
+   - "post to discussion" → tab_name="discussion"
+   - "post case" / "view cases" → tab_name="cases"
+9. Include tab_name even when navigating to a page - the frontend will switch tabs after navigation
 
 ## Response Format:
 Return a valid JSON object with this structure:

@@ -125,34 +125,48 @@ LLM_INTENT_CONFIDENCE_THRESHOLD = 0.5  # Lowered from 0.6 - trust LLM more
 # If user issues a command from a different page, navigate first then execute.
 
 ACTION_REQUIRED_PAGES: Dict[str, List[str]] = {
-    # Course actions - require /courses or /courses/* pages
+    # Course actions - require /courses page
     "create_course": ["/courses"],
     "create_course_flow": ["/courses"],
+    "view_ai_insights": ["/courses"],
+    "course_insights": ["/courses"],
 
-    # Enrollment actions - REQUIRE /courses page with advanced tab
+    # Enrollment actions - require /courses page with advanced tab
     "manage_enrollments": ["/courses"],
     "enroll_students": ["/courses"],
     "list_enrollments": ["/courses"],
+    "view_enrollments": ["/courses"],
 
     # Session actions - require session or course context
     "create_session": ["/courses/", "/sessions"],
     "start_session": ["/sessions/"],
     "end_session": ["/sessions/"],
     "go_live": ["/sessions/"],
+    "manage_session": ["/sessions/"],
+    "session_status": ["/sessions/"],
+    "view_ai_features": ["/sessions/"],
+    "ai_features": ["/sessions/"],
 
     # Forum actions - require /forum page
     "create_forum_post": ["/forum", "/courses/"],
     "post_to_forum": ["/forum", "/courses/"],
+    "view_discussion": ["/forum"],
+    "view_cases": ["/forum"],
+    "post_case": ["/forum"],
+    "forum_tools": ["/forum"],
 
-    # Poll/Quiz actions - require session context
-    "create_poll": ["/sessions/"],
-    "launch_poll": ["/sessions/"],
+    # Console/Poll actions - require /console page
+    "create_poll": ["/console", "/sessions/"],
+    "launch_poll": ["/console", "/sessions/"],
+    "view_polls": ["/console"],
     "create_quiz": ["/sessions/", "/courses/"],
 
-    # AI features - typically require session context
-    "generate_summary": ["/sessions/"],
-    "start_copilot": ["/sessions/"],
-    "stop_copilot": ["/sessions/"],
+    # AI features - typically require console or session context
+    "generate_summary": ["/console", "/sessions/"],
+    "generate_live_summary": ["/console", "/sessions/"],
+    "view_summary": ["/console"],
+    "start_copilot": ["/console", "/sessions/"],
+    "stop_copilot": ["/console", "/sessions/"],
 
     # Assignment actions - require course context
     "create_assignment": ["/courses/"],
@@ -161,27 +175,80 @@ ACTION_REQUIRED_PAGES: Dict[str, List[str]] = {
 
 # Maps actions to their target navigation page when auto-navigation is needed
 ACTION_TARGET_PAGES: Dict[str, str] = {
+    # Course-related actions
     "create_course": "/courses",
     "create_course_flow": "/courses",
+    "manage_enrollments": "/courses",
+    "enroll_students": "/courses",
+    "list_enrollments": "/courses",
+    "view_enrollments": "/courses",
+    "view_ai_insights": "/courses",
+    "course_insights": "/courses",
+    "create_assignment": "/courses",
+
+    # Session-related actions
+    "create_session": "/sessions",
+    "manage_session": "/sessions",
+    "session_status": "/sessions",
+    "view_ai_features": "/sessions",
+    "ai_features": "/sessions",
+
+    # Forum-related actions
     "create_forum_post": "/forum",
     "post_to_forum": "/forum",
-    # Session actions require course context first
-    "create_session": "/courses",
-    # Other actions that need specific pages
-    "create_assignment": "/courses",
-    "manage_enrollments": "/courses",
+    "view_discussion": "/forum",
+    "view_cases": "/forum",
+    "post_case": "/forum",
+    "forum_tools": "/forum",
+
+    # Console-related actions
+    "create_poll": "/console",
+    "launch_poll": "/console",
+    "view_polls": "/console",
+    "generate_summary": "/console",
+    "generate_live_summary": "/console",
+    "view_summary": "/console",
+    "start_copilot": "/console",
+    "stop_copilot": "/console",
 }
 
 # Maps actions to the tab they should switch to after navigation
+# This ensures voice commands automatically switch to the correct tab
 ACTION_TARGET_TABS: Dict[str, str] = {
+    # Courses page tabs
     "create_course": "create",
     "create_course_flow": "create",
-    "create_session": "create",
     "manage_enrollments": "advanced",
     "list_enrollments": "advanced",
     "enroll_students": "advanced",
+    "view_enrollments": "advanced",
+    "view_ai_insights": "ai-insights",
+    "course_insights": "ai-insights",
+
+    # Sessions page tabs
+    "create_session": "create",
+    "manage_session": "manage",
+    "session_status": "manage",
+    "view_ai_features": "ai-features",
+    "ai_features": "ai-features",
+
+    # Forum page tabs
     "post_to_forum": "discussion",
+    "view_discussion": "discussion",
     "create_forum_post": "cases",
+    "post_case": "cases",
+    "view_cases": "cases",
+    "forum_tools": "tools",
+
+    # Console page tabs
+    "create_poll": "polls",
+    "launch_poll": "polls",
+    "view_polls": "polls",
+    "start_copilot": "copilot",
+    "stop_copilot": "copilot",
+    "generate_summary": "summary",
+    "generate_live_summary": "summary",
+    "view_summary": "summary",
 }
 
 
@@ -3265,29 +3332,11 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         )
 
     # =========================================================================
-    # INTENT DETECTION: LLM-first or Regex-based (configurable)
+    # INTENT DETECTION: LLM-based (unified approach)
     # =========================================================================
-
-    # Fast-path workspace search intent so this works reliably even if the LLM
-    # classifies it as a generic query.
-    search_query = _extract_search_query(transcript)
-    if search_query:
-        search_result = await execute_action(
-            'ui_search_navigate',
-            request.user_id,
-            request.current_page,
-            db,
-            transcript,
-            {"searchQuery": search_query},
-            language,
-        )
-        if search_result:
-            return ConverseResponse(
-                message=sanitize_speech(f"Searching for {search_query}."),
-                action=ActionResponse(type='execute', executed=True),
-                results=[search_result],
-                suggestions=["Open notifications", "Switch tab", "Go back"],
-            )
+    # NOTE: Removed duplicate _extract_search_query call here.
+    # Search queries are now detected by the unified intent classifier below.
+    # This eliminates an extra LLM call and improves response time.
 
     if USE_LLM_INTENT_DETECTION:
         # =====================================================================
@@ -3349,32 +3398,46 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         # Handle navigation intent
         if intent_result["type"] == "navigate":
             nav_path = intent_result["value"]
-            print(f"✅ [VOICE] NAVIGATION INTENT MATCHED! Navigating to: {nav_path}")
-            message = sanitize_speech(generate_conversational_response('navigate', nav_path, language=language))
+            # Check if LLM also detected a tab to switch to
+            target_tab = intent.parameters.tab_name if intent.parameters else None
+            print(f"✅ [VOICE] NAVIGATION INTENT MATCHED! Navigating to: {nav_path}, tab: {target_tab}")
+
+            # Generate message - include tab info if switching tab
+            if target_tab:
+                tab_display = target_tab.replace('-', ' ').replace('_', ' ').title()
+                message = sanitize_speech(generate_conversational_response('navigate', nav_path, language=language))
+                # Append tab switch info to message
+                if language == 'es':
+                    message = message.rstrip('.!') + f" y abriendo la pestaña {tab_display}."
+                else:
+                    message = message.rstrip('.!') + f" and opening the {tab_display} tab."
+            else:
+                message = sanitize_speech(generate_conversational_response('navigate', nav_path, language=language))
+
             # Generate toast message in correct language
             page_name = nav_path.strip('/').replace('-', ' ').title()
             toast_msg = f"Navegando a {page_name}" if language == 'es' else f"Navigating to {page_name}"
+
+            # Build UI actions - always navigate, optionally switch tab
+            ui_actions = [
+                {"type": "ui.navigate", "payload": {"path": nav_path}},
+                {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
+            ]
+            # Add tab switch if LLM detected a target tab
+            if target_tab:
+                ui_actions.append({"type": "ui.switchTab", "payload": {"tabName": target_tab, "target": f"tab-{target_tab}"}})
+
             response_data = {
                 "message": message,
                 "action": {"type": "navigate", "target": nav_path},
-                "results": [{
-                    "ui_actions": [
-                        {"type": "ui.navigate", "payload": {"path": nav_path}},
-                        {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
-                    ]
-                }],
+                "results": [{"ui_actions": ui_actions}],
                 "suggestions": get_page_suggestions(nav_path, language)
             }
             print(f"✅ [VOICE] FULL RESPONSE DATA: {response_data}")
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
-                results=[{
-                    "ui_actions": [
-                        {"type": "ui.navigate", "payload": {"path": nav_path}},
-                        {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
-                    ]
-                }],
+                results=[{"ui_actions": ui_actions}],
                 suggestions=get_page_suggestions(nav_path, language)
             )
 
@@ -3425,8 +3488,55 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     suggestions=[],  # No suggestions during auto-navigation
                 )
 
-            # Pass extracted parameters to execute_action via transcript context
-            # The LLM has already extracted tab names, button names, etc.
+            # Check if LLM detected a tab to switch to (even when already on correct page)
+            # This allows "I want to create a course" to switch to create tab when on /courses
+            llm_tab = intent.parameters.tab_name if intent.parameters else None
+            # Fallback to ACTION_TARGET_TABS only if LLM didn't detect a tab
+            target_tab = llm_tab or ACTION_TARGET_TABS.get(action)
+
+            # If there's a tab to switch to, include it in the action
+            if target_tab:
+                print(f"✅ [VOICE] Action '{action}' on correct page, switching to tab: {target_tab}")
+                tab_display = target_tab.replace('-', ' ').replace('_', ' ').title()
+
+                # Execute the action first
+                result = await execute_action(action, request.user_id, request.current_page, db, transcript, intent_result.get("parameters"), language)
+                results_list = [result] if result and not isinstance(result, list) else result
+
+                # Add tab switch to UI actions
+                ui_actions = [{"type": "ui.switchTab", "payload": {"tabName": target_tab, "target": f"tab-{target_tab}"}}]
+
+                # Merge with any existing UI actions from the result
+                if results_list and isinstance(results_list[0], dict):
+                    existing_actions = results_list[0].get("ui_actions", [])
+                    results_list[0]["ui_actions"] = existing_actions + ui_actions
+                else:
+                    results_list = [{"ui_actions": ui_actions}] if not results_list else results_list
+                    if isinstance(results_list[0], dict):
+                        results_list[0]["ui_actions"] = results_list[0].get("ui_actions", []) + ui_actions
+
+                # Generate message mentioning the tab
+                action_msg = generate_conversational_response(
+                    'execute',
+                    action,
+                    results=result,
+                    context=request.context,
+                    current_page=request.current_page,
+                    language=language,
+                )
+                if language == 'es':
+                    action_msg = action_msg.rstrip('.!') + f" en la pestaña {tab_display}."
+                else:
+                    action_msg = action_msg.rstrip('.!') + f" in the {tab_display} tab."
+
+                return ConverseResponse(
+                    message=sanitize_speech(action_msg),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=results_list,
+                    suggestions=get_action_suggestions(action, language),
+                )
+
+            # No tab needed - just execute the action
             result = await execute_action(action, request.user_id, request.current_page, db, transcript, intent_result.get("parameters"), language)
             results_list = [result] if result and not isinstance(result, list) else result
             return ConverseResponse(

@@ -1161,10 +1161,11 @@ def build_page_context(
 
 class InputType(str, Enum):
     """Types of user input during form-filling"""
-    CONTENT = "content"  # Actual field content to be saved
-    META = "meta"        # Meta-conversation: hesitation, questions, thinking
-    COMMAND = "command"  # Commands: cancel, skip, help, navigate
-    CONFIRM = "confirm"  # Confirmation: yes/no
+    CONTENT = "content"      # Actual field content to be saved
+    META = "meta"            # Meta-conversation: hesitation, questions, thinking
+    COMMAND = "command"      # Commands: cancel, skip, help, navigate
+    CONFIRM = "confirm"      # Confirmation: yes/no
+    AI_GENERATE = "ai_generate"  # Request to use AI to generate content for this field
 
 
 class InputTypeResult(BaseModel):
@@ -1173,6 +1174,7 @@ class InputTypeResult(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     command: Optional[str] = None  # If COMMAND: cancel, skip, help, etc.
     confirm_value: Optional[str] = None  # If CONFIRM: yes, no
+    ai_context: Optional[str] = None  # If AI_GENERATE: additional context from user (e.g., course name)
     reason: Optional[str] = None  # Explanation for the classification
 
 
@@ -1182,19 +1184,14 @@ whether their response is:
 
 1. **CONTENT** - They are providing actual content/data for the field
 2. **META** - They are NOT providing content, but instead:
-   - Hesitating ("let me think", "um", "hold on")
-   - Asking about the process ("what should I say?", "can you repeat that?")
-   - Thinking out loud ("I'm not sure", "let me consider")
-   - Stalling ("give me a second", "wait a moment")
+   - Hesitating, thinking, asking about the process, or stalling
 3. **COMMAND** - They want to give a command instead of content:
-   - Cancel/abort ("cancel", "I don't want to", "never mind", "forget it")
-   - Skip ("skip this", "next", "move on")
-   - Help ("help", "what can I say?", "what are my options?")
-   - Navigate ("go back", "take me to courses")
-   - Undo ("undo", "go back")
-4. **CONFIRM** - They are responding yes/no to something:
-   - Yes ("yes", "yeah", "sure", "okay")
-   - No ("no", "nope", "not yet")
+   - Cancel/abort, skip, help, navigate away, or undo
+4. **CONFIRM** - They are responding yes/no to something
+5. **AI_GENERATE** - They are requesting that AI/the system automatically generate or create
+   the content for this field instead of providing it themselves. This includes any request
+   where the user wants the system to write, create, compose, or produce the field content
+   on their behalf, possibly mentioning context like a course name or topic to use
 
 ## Context:
 - The user is being asked: "{field_prompt}"
@@ -1233,10 +1230,11 @@ whether their response is:
 ## Response Format:
 Return a JSON object:
 {{
-    "input_type": "content" | "meta" | "command" | "confirm",
+    "input_type": "content" | "meta" | "command" | "confirm" | "ai_generate",
     "confidence": 0.0 to 1.0,
     "command": "cancel" | "skip" | "help" | "navigate" | "undo" | null,
     "confirm_value": "yes" | "no" | null,
+    "ai_context": "any context the user provided for AI generation (e.g., course name, topic)" | null,
     "reason": "Brief explanation of why this classification"
 }}
 
@@ -1328,6 +1326,7 @@ class FormInputClassifier:
                 confidence=float(parsed.get("confidence", 0.7)),
                 command=parsed.get("command"),
                 confirm_value=parsed.get("confirm_value"),
+                ai_context=parsed.get("ai_context"),
                 reason=parsed.get("reason"),
             )
 

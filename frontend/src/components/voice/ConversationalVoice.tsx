@@ -49,7 +49,9 @@ interface ConversationalVoiceProps {
 // ElevenLabs agent handles all responses, backend only executes UI actions
 
 // Prefix used to send MCP responses through ElevenLabs
-const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
+// IMPORTANT: Use "SPEAK:" instead of "MCP_RESPONSE:" - simpler for LLM to understand
+// The ElevenLabs prompt tells it to repeat whatever follows "SPEAK:" verbatim
+const MCP_RESPONSE_PREFIX = 'SPEAK: ';
 
 // Feature flag: Use V2 LLM-based processing (no regex, pure LLM)
 // Set to true to use the new architecture
@@ -73,11 +75,13 @@ const SEND_MCP_RESPONSE = true;  // Enable MCP response injection
 // Backend API base for voice processing calls
 const BACKEND_API_BASE = '/api/proxy';
 
-// Helper to strip MCP_RESPONSE prefix from any string
+// Helper to strip MCP_RESPONSE or SPEAK prefix from any string
 const stripMcpPrefix = (text: string): string => {
   if (!text) return text;
-  // Handle various formats: MCP_RESPONSE:, mcp_response:, MCP RESPONSE:, etc.
-  const mcpPrefixRegex = /^mcp[_\s]?response[:\s]*/i;
+  // Handle various formats:
+  // - MCP_RESPONSE:, mcp_response:, MCP RESPONSE:
+  // - SPEAK:, speak:, Speak:
+  const mcpPrefixRegex = /^(mcp[_\s]?response[:\s]*|speak[:\s]+)/i;
   return text.replace(mcpPrefixRegex, '').trim();
 };
 

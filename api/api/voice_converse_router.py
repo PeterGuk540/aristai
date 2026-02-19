@@ -1459,23 +1459,21 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     suggestions=["Skip", "Cancel form", "Help"] if language == 'en' else ["Saltar", "Cancelar formulario", "Ayuda"],
                 )
 
-            # If we get here, input_classification.input_type == InputType.CONTENT
-            # Continue with normal field value recording below
-
             # Check if this is the course title field - save it for later generation
-            if current_field.voice_id == "course-title":
+            if current_field.voice_id == "course-title" and input_classification.input_type == InputType.CONTENT:
                 # Save the course name for potential AI generation
                 conv_context = conversation_manager.get_context(request.user_id)
                 conv_context.course_name_for_generation = transcript.strip().rstrip('.!?,')
                 conversation_manager.save_context(request.user_id, conv_context)
 
-            # Check if we're on the syllabus field - offer AI generation
-            if current_field.voice_id == "syllabus":
-                # Check if user wants AI to generate it
-                generate_words = ['generate', 'create', 'make', 'write', 'ai', 'auto', 'automatic', 'yes please', 'help me']
-                if any(word in transcript.lower() for word in generate_words):
-                    conv_context = conversation_manager.get_context(request.user_id)
-                    course_name = conv_context.course_name_for_generation or conv_context.collected_values.get("course-title", "this course")
+            # Handle AI_GENERATE type - user wants AI to generate content for this field
+            # This uses LLM-based intent detection, not keyword matching
+            if input_classification.input_type == InputType.AI_GENERATE:
+                conv_context = conversation_manager.get_context(request.user_id)
+
+                # Determine which generation flow based on current field
+                if current_field.voice_id == "syllabus":
+                    course_name = input_classification.ai_context or conv_context.course_name_for_generation or conv_context.collected_values.get("course-title", "this course")
                     conv_context.state = ConversationState.AWAITING_SYLLABUS_GENERATION_CONFIRM
                     conversation_manager.save_context(request.user_id, conv_context)
                     return ConverseResponse(
@@ -1483,14 +1481,8 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         action=ActionResponse(type='info'),
                         suggestions=["Yes, generate it", "No, I'll dictate", "Skip"] if language == 'en' else ["Si, generalo", "No, lo dictare", "Saltar"],
                     )
-
-            # Check if we're on the learning objectives field - offer AI generation
-            if current_field.voice_id == "learning-objectives":
-                # Check if user wants AI to generate it
-                generate_words = ['generate', 'create', 'make', 'write', 'ai', 'auto', 'automatic', 'yes please', 'help me']
-                if any(word in transcript.lower() for word in generate_words):
-                    conv_context = conversation_manager.get_context(request.user_id)
-                    course_name = conv_context.course_name_for_generation or conv_context.collected_values.get("course-title", "this course")
+                elif current_field.voice_id == "learning-objectives":
+                    course_name = input_classification.ai_context or conv_context.course_name_for_generation or conv_context.collected_values.get("course-title", "this course")
                     conv_context.state = ConversationState.AWAITING_OBJECTIVES_GENERATION_CONFIRM
                     conversation_manager.save_context(request.user_id, conv_context)
                     return ConverseResponse(
@@ -1498,13 +1490,8 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         action=ActionResponse(type='info'),
                         suggestions=["Yes, generate them", "No, I'll dictate", "Skip"] if language == 'en' else ["Si, generalos", "No, los dictare", "Saltar"],
                     )
-
-            # Check if we're on session description field - offer AI session plan generation
-            if current_field.voice_id == "textarea-session-description":
-                generate_words = ['generate', 'create', 'make', 'write', 'ai', 'auto', 'automatic', 'yes please', 'help me', 'session plan', 'case study', 'discussion']
-                if any(word in transcript.lower() for word in generate_words):
-                    conv_context = conversation_manager.get_context(request.user_id)
-                    session_topic = conv_context.collected_values.get("input-session-title", "this session")
+                elif current_field.voice_id == "textarea-session-description":
+                    session_topic = input_classification.ai_context or conv_context.collected_values.get("input-session-title", "this session")
                     conv_context.state = ConversationState.AWAITING_SESSION_PLAN_GENERATION_CONFIRM
                     conversation_manager.save_context(request.user_id, conv_context)
                     return ConverseResponse(
@@ -1512,6 +1499,12 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         action=ActionResponse(type='info'),
                         suggestions=["Yes, generate it", "No, I'll dictate", "Skip"] if language == 'en' else ["Si, generalo", "No, lo dictare", "Saltar"],
                     )
+                else:
+                    # For fields that don't have specific AI generation, treat as content
+                    pass  # Fall through to CONTENT handling below
+
+            # If we get here, input_classification.input_type == InputType.CONTENT
+            # Continue with normal field value recording below
 
             # Record the user's answer and fill the field
             result = conversation_manager.record_field_value(request.user_id, transcript)

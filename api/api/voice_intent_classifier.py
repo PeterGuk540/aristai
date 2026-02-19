@@ -141,6 +141,10 @@ class ControlType(str, Enum):
     DELETE_COURSE = "delete_course"
     EDIT_SESSION = "edit_session"
     DELETE_SESSION = "delete_session"
+    # Universal AI content generation (works outside form-filling flow)
+    GENERATE_SYLLABUS = "generate_syllabus"
+    GENERATE_OBJECTIVES = "generate_objectives"
+    GENERATE_SESSION_PLAN = "generate_session_plan"
     # New instructor feature controls
     START_TIMER = "start_timer"
     PAUSE_TIMER = "pause_timer"
@@ -601,6 +605,10 @@ Examples:
 - "delete this course" / "delete course Machine Learning" / "eliminar el curso" → delete_course (NOTE: goes to courses Overview tab)
 - "edit the session" / "edit session Week 1" / "editar la sesion" → edit_session (NOTE: goes to sessions tab)
 - "delete this session" / "delete session Week 1" / "eliminar la sesion" → delete_session (NOTE: goes to sessions tab)
+- When user asks the system to CREATE/GENERATE content for a field (syllabus, objectives, session plan):
+  - generate_syllabus: User wants AI to create a syllabus and fill the form
+  - generate_objectives: User wants AI to create learning objectives and fill the form
+  - generate_session_plan: User wants AI to create a session plan and fill the form
 
 ### CONFIRM (category: "confirm")
 User is confirming or denying a pending action.
@@ -996,6 +1004,10 @@ INTENT_TO_LEGACY_ACTION = {
     "send_session_summary": "send_session_summary",
     # Canvas integration
     "push_to_canvas": "push_to_canvas",
+    # Universal AI content generation (works outside form-filling flow)
+    "generate_syllabus": "generate_syllabus",
+    "generate_objectives": "generate_objectives",
+    "generate_session_plan": "generate_session_plan",
 }
 
 # Navigation targets

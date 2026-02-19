@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Any, Dict, Tuple
 import re
+import logging
 
 from sqlalchemy.orm import Session
 
@@ -4007,6 +4008,168 @@ async def execute_action(
         )
         if instructor_result is not None:
             return instructor_result
+
+        # === UNIVERSAL AI CONTENT GENERATION ===
+        # These handlers work outside of form-filling flow to generate and fill form fields
+        # They allow users to say "generate a syllabus for Machine Learning" at any time
+        # when on the appropriate page, and have it fill the form field directly.
+
+        if action == 'generate_syllabus':
+            # Extract course name from LLM params or transcript
+            course_name = llm_params.get("selectionValue") or llm_params.get("inputValue") or "this course"
+
+            # Also check context for course name
+            conv_context = conversation_manager.get_context(user_id)
+            if conv_context and conv_context.course_name_for_generation:
+                course_name = conv_context.course_name_for_generation
+
+            # Call the generation tool
+            try:
+                gen_result = _execute_tool(db, 'generate_syllabus', {"course_name": course_name})
+            except Exception as e:
+                logging.getLogger(__name__).error(f"Syllabus generation error: {e}")
+                gen_result = None
+
+            if gen_result and gen_result.get("success") and gen_result.get("syllabus"):
+                syllabus = gen_result["syllabus"]
+                preview = syllabus[:150] + "..." if len(syllabus) > 150 else syllabus
+
+                gen_msg = generate_voice_response(
+                    f"Generated a syllabus for '{course_name}'. Preview: {preview}",
+                    language=language
+                )
+                return {
+                    "action": "generate_syllabus",
+                    "message": gen_msg,
+                    "ui_actions": [
+                        {"type": "ui.fillInput", "payload": {"target": "syllabus", "value": syllabus}},
+                        {"type": "ui.toast", "payload": {"message": "Syllabus generated", "type": "success"}},
+                    ],
+                    "generated_content": syllabus,
+                }
+            else:
+                error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
+                error_response = generate_voice_response(
+                    f"Syllabus generation failed: {error_msg}. Ask user to try again or dictate manually.",
+                    language=language
+                )
+                return {
+                    "action": "generate_syllabus",
+                    "message": error_response,
+                    "ui_actions": [],
+                    "error": error_msg,
+                }
+
+        if action == 'generate_objectives':
+            # Extract course name and syllabus from context
+            conv_context = conversation_manager.get_context(user_id)
+            course_name = llm_params.get("selectionValue") or llm_params.get("inputValue") or "this course"
+            syllabus = ""
+
+            if conv_context:
+                if conv_context.course_name_for_generation:
+                    course_name = conv_context.course_name_for_generation
+                syllabus = conv_context.collected_values.get("syllabus", "") or conv_context.generated_syllabus or ""
+
+            # Call the generation tool
+            try:
+                gen_result = _execute_tool(db, 'generate_objectives', {"course_name": course_name, "syllabus": syllabus})
+            except Exception as e:
+                logging.getLogger(__name__).error(f"Objectives generation error: {e}")
+                gen_result = None
+
+            if gen_result and gen_result.get("success") and gen_result.get("objectives"):
+                objectives = gen_result["objectives"]
+                preview = objectives[:150] + "..." if len(objectives) > 150 else objectives
+
+                gen_msg = generate_voice_response(
+                    f"Generated learning objectives for '{course_name}'. Preview: {preview}",
+                    language=language
+                )
+                return {
+                    "action": "generate_objectives",
+                    "message": gen_msg,
+                    "ui_actions": [
+                        {"type": "ui.fillInput", "payload": {"target": "learning-objectives", "value": objectives}},
+                        {"type": "ui.toast", "payload": {"message": "Learning objectives generated", "type": "success"}},
+                    ],
+                    "generated_content": objectives,
+                }
+            else:
+                error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
+                error_response = generate_voice_response(
+                    f"Objectives generation failed: {error_msg}. Ask user to try again or dictate manually.",
+                    language=language
+                )
+                return {
+                    "action": "generate_objectives",
+                    "message": error_response,
+                    "ui_actions": [],
+                    "error": error_msg,
+                }
+
+        if action == 'generate_session_plan':
+            # Extract session topic and course info from context
+            conv_context = conversation_manager.get_context(user_id)
+            session_topic = llm_params.get("selectionValue") or llm_params.get("inputValue") or "this session"
+            course_name = ""
+            syllabus = ""
+
+            if conv_context:
+                session_topic = conv_context.collected_values.get("input-session-title", session_topic)
+                course_name = conv_context.course_name_for_generation or ""
+                syllabus = conv_context.collected_values.get("syllabus", "") or conv_context.generated_syllabus or ""
+
+            # Try to get course syllabus from active course if not in context
+            if not syllabus:
+                course_id = _resolve_course_id(db, current_page, user_id)
+                if course_id:
+                    from models.course import Course
+                    course = db.query(Course).filter(Course.id == course_id).first()
+                    if course:
+                        course_name = course.title
+                        syllabus = course.syllabus_text or ""
+
+            # Call the generation tool
+            try:
+                gen_result = _execute_tool(db, 'generate_session_plan', {
+                    "course_name": course_name,
+                    "session_topic": session_topic,
+                    "syllabus": syllabus,
+                })
+            except Exception as e:
+                logging.getLogger(__name__).error(f"Session plan generation error: {e}")
+                gen_result = None
+
+            if gen_result and gen_result.get("success") and gen_result.get("session_plan"):
+                session_plan = gen_result["session_plan"]
+                preview = session_plan[:150] + "..." if len(session_plan) > 150 else session_plan
+
+                gen_msg = generate_voice_response(
+                    f"Generated a session plan for '{session_topic}'. Preview: {preview}",
+                    language=language
+                )
+                return {
+                    "action": "generate_session_plan",
+                    "message": gen_msg,
+                    "ui_actions": [
+                        {"type": "ui.fillInput", "payload": {"target": "textarea-session-description", "value": session_plan}},
+                        {"type": "ui.toast", "payload": {"message": "Session plan generated", "type": "success"}},
+                    ],
+                    "generated_content": session_plan,
+                }
+            else:
+                error_msg = gen_result.get("error", "Generation failed") if gen_result else "Tool not available"
+                error_response = generate_voice_response(
+                    f"Session plan generation failed: {error_msg}. Ask user to try again or dictate manually.",
+                    language=language
+                )
+                return {
+                    "action": "generate_session_plan",
+                    "message": error_response,
+                    "ui_actions": [],
+                    "error": error_msg,
+                }
 
         # === UNIVERSAL UI ELEMENT INTERACTIONS ===
         # All UI actions now use universal handlers that work across all pages

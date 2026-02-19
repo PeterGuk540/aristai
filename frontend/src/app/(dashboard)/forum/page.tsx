@@ -381,6 +381,7 @@ export default function ForumPage() {
               variant="ghost"
               size="sm"
               onClick={() => setReplyingTo(isReplying ? null : post.id)}
+              data-voice-id={`reply-post-${post.id}`}
             >
               <MessageSquare className="h-4 w-4 mr-1" />
               Reply
@@ -392,6 +393,7 @@ export default function ForumPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => handlePinPost(post.id, post.pinned)}
+                  data-voice-id={`pin-post-${post.id}`}
                 >
                   <Pin className="h-4 w-4 mr-1" />
                   {post.pinned ? 'Unpin' : 'Pin'}
@@ -434,6 +436,7 @@ export default function ForumPage() {
                   size="sm"
                   onClick={() => handleReply(post.id)}
                   disabled={submitting || !replyContent.trim()}
+                  data-voice-id="send-reply"
                 >
                   <Send className="h-4 w-4 mr-1" />
                   Send Reply
@@ -445,6 +448,7 @@ export default function ForumPage() {
                     setReplyingTo(null);
                     setReplyContent('');
                   }}
+                  data-voice-id="cancel-reply"
                 >
                   Cancel
                 </Button>

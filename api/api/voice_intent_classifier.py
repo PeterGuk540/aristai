@@ -136,6 +136,11 @@ class ControlType(str, Enum):
     OPEN_USER_MENU = "open_user_menu"
     UNDO_ACTION = "undo_action"
     CLEAR_CONTEXT = "clear_context"
+    # Edit/delete entity actions
+    EDIT_COURSE = "edit_course"
+    DELETE_COURSE = "delete_course"
+    EDIT_SESSION = "edit_session"
+    DELETE_SESSION = "delete_session"
     # New instructor feature controls
     START_TIMER = "start_timer"
     PAUSE_TIMER = "pause_timer"
@@ -557,7 +562,7 @@ Examples:
 - "I want to enroll students" / "quiero inscribir estudiantes" → manage_enrollments
 
 ### CONTROL (category: "control")
-Control application features and session state.
+Control application features, session state, and entity management.
 Actions: start_copilot, stop_copilot, toggle_theme, go_live, end_session,
          set_session_draft, set_session_completed, refresh_report, sign_out,
          open_user_menu, undo_action, clear_context, start_timer, pause_timer,
@@ -565,7 +570,8 @@ Actions: start_copilot, stop_copilot, toggle_theme, go_live, end_session,
          save_template, clone_session, generate_ai_draft, approve_ai_draft, reject_ai_draft,
          send_session_summary, push_to_canvas, generate_live_summary, generate_ai_groups,
          generate_followups, generate_questions, analyze_participation, analyze_objectives,
-         create_peer_reviews, translate_posts, ask_ai_assistant
+         create_peer_reviews, translate_posts, ask_ai_assistant,
+         edit_course, delete_course, edit_session, delete_session
 
 Examples:
 - "start the copilot" / "iniciar el copilot"
@@ -591,6 +597,10 @@ Examples:
 - "create peer review assignments" / "set up peer reviews" / "crear revisiones de pares" → create_peer_reviews
 - "translate the posts" / "translate to Spanish" / "traducir publicaciones" → translate_posts
 - "ask the AI assistant" / "ask the teaching assistant" / "preguntar al asistente" → ask_ai_assistant
+- "edit the course" / "edit course Machine Learning" / "editar el curso" → edit_course (NOTE: goes to courses Overview tab)
+- "delete this course" / "delete course Machine Learning" / "eliminar el curso" → delete_course (NOTE: goes to courses Overview tab)
+- "edit the session" / "edit session Week 1" / "editar la sesion" → edit_session (NOTE: goes to sessions tab)
+- "delete this session" / "delete session Week 1" / "eliminar la sesion" → delete_session (NOTE: goes to sessions tab)
 
 ### CONFIRM (category: "confirm")
 User is confirming or denying a pending action.

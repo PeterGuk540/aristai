@@ -634,6 +634,8 @@ export default function CoursesPage() {
                             variant="ghost"
                             onClick={() => handleStartEdit(course)}
                             title={t('common.edit')}
+                            data-voice-id={`edit-course-${course.id}`}
+                            data-voice-label={`Edit ${course.title}`}
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
@@ -643,6 +645,8 @@ export default function CoursesPage() {
                             onClick={() => handleDeleteCourse(course.id)}
                             disabled={deleting === course.id}
                             title={t('common.delete')}
+                            data-voice-id={`delete-course-${course.id}`}
+                            data-voice-label={`Delete ${course.title}`}
                             className="text-danger-600 hover:text-danger-700 hover:bg-danger-50 dark:text-danger-400 dark:hover:bg-danger-900/20"
                           >
                             {deleting === course.id ? (

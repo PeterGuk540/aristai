@@ -117,11 +117,10 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
         name="Courses",
         description="Manage your courses - view enrolled courses, create new courses, or join existing ones",
         tabs=[
-            Tab(name="My Courses", voice_id="tab-courses", description="View your enrolled or created courses"),
+            Tab(name="Overview", voice_id="tab-courses", description="View your courses with edit and delete options"),
             Tab(name="Create Course", voice_id="tab-create", description="Create a new course as an instructor"),
-            Tab(name="Enrollment", voice_id="tab-enrollment", description="Manage student enrollment in your courses"),
+            Tab(name="Advanced", voice_id="tab-advanced", description="Advanced features including student enrollment management"),
             Tab(name="Join Course", voice_id="tab-join", description="Join an existing course using an access code"),
-            Tab(name="Instructor Courses", voice_id="tab-instructor", description="View courses you teach"),
             Tab(name="AI Insights", voice_id="tab-ai-insights", description="View AI-powered participation insights and learning objective coverage"),
         ],
         forms={
@@ -188,6 +187,19 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                 voice_id="enroll-student",
                 description="Enroll the selected student",
                 destructive=False
+            ),
+            ActionButton(
+                name="Edit Course",
+                voice_id="edit-course",
+                description="Edit a course - opens edit modal for the selected course. Use edit-course-{id} for specific course.",
+                destructive=False
+            ),
+            ActionButton(
+                name="Delete Course",
+                voice_id="delete-course",
+                description="Delete a course - permanently removes the course. Use delete-course-{id} for specific course.",
+                destructive=True,
+                confirmation_prompt="Are you sure you want to delete this course? This action cannot be undone."
             ),
         ],
     ),

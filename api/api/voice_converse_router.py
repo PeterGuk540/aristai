@@ -130,6 +130,8 @@ ACTION_REQUIRED_PAGES: Dict[str, List[str]] = {
     "create_course_flow": ["/courses"],
     "view_ai_insights": ["/courses"],
     "course_insights": ["/courses"],
+    "edit_course": ["/courses"],
+    "delete_course": ["/courses"],
 
     # Enrollment actions - require /courses page with advanced tab
     "manage_enrollments": ["/courses"],
@@ -146,6 +148,8 @@ ACTION_REQUIRED_PAGES: Dict[str, List[str]] = {
     "session_status": ["/sessions/"],
     "view_ai_features": ["/sessions/"],
     "ai_features": ["/sessions/"],
+    "edit_session": ["/sessions/"],
+    "delete_session": ["/sessions/"],
 
     # Forum actions - require /forum page
     "create_forum_post": ["/forum", "/courses/"],
@@ -185,6 +189,8 @@ ACTION_TARGET_PAGES: Dict[str, str] = {
     "view_ai_insights": "/courses",
     "course_insights": "/courses",
     "create_assignment": "/courses",
+    "edit_course": "/courses",
+    "delete_course": "/courses",
 
     # Session-related actions
     "create_session": "/sessions",
@@ -192,6 +198,8 @@ ACTION_TARGET_PAGES: Dict[str, str] = {
     "session_status": "/sessions",
     "view_ai_features": "/sessions",
     "ai_features": "/sessions",
+    "edit_session": "/sessions",
+    "delete_session": "/sessions",
 
     # Forum-related actions
     "create_forum_post": "/forum",
@@ -224,6 +232,8 @@ ACTION_TARGET_TABS: Dict[str, str] = {
     "view_enrollments": "advanced",
     "view_ai_insights": "ai-insights",
     "course_insights": "ai-insights",
+    "edit_course": "courses",      # Edit course is on Overview tab, not Create tab
+    "delete_course": "courses",    # Delete course is on Overview tab, not Create tab
 
     # Sessions page tabs
     "create_session": "create",
@@ -231,6 +241,8 @@ ACTION_TARGET_TABS: Dict[str, str] = {
     "session_status": "manage",
     "view_ai_features": "ai-features",
     "ai_features": "ai-features",
+    "edit_session": "sessions",    # Edit session is on View Sessions tab
+    "delete_session": "sessions",  # Delete session is on View Sessions tab
 
     # Forum page tabs
     "post_to_forum": "discussion",

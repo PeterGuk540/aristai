@@ -836,12 +836,14 @@ export default function SessionsPage() {
                           <Button
                             variant="outline"
                             onClick={() => setEditingSession(null)}
+                            data-voice-id="cancel-edit-session"
                           >
                             Cancel
                           </Button>
                           <Button
                             onClick={handleSaveEdit}
                             disabled={saving || !editTitle.trim()}
+                            data-voice-id="save-edit-session"
                           >
                             {saving ? 'Saving...' : 'Save Changes'}
                           </Button>
@@ -866,6 +868,7 @@ export default function SessionsPage() {
                           <Button
                             variant="outline"
                             onClick={() => setShowDeleteConfirm(false)}
+                            data-voice-id="cancel-delete-session"
                           >
                             Cancel
                           </Button>
@@ -873,6 +876,7 @@ export default function SessionsPage() {
                             variant="danger"
                             onClick={handleDeleteSession}
                             disabled={deleting}
+                            data-voice-id="confirm-delete-session"
                           >
                             {deleting ? 'Deleting...' : 'Delete Session'}
                           </Button>

@@ -449,6 +449,62 @@ export const VoiceUIController = () => {
   }, []);
 
   // ========================================================================
+  // NAVIGATE (Page navigation)
+  // ========================================================================
+
+  const handleNavigate = useCallback((event: CustomEvent) => {
+    const { path, route } = event.detail || {};
+    const targetPath = path || route;
+    log('navigate', { targetPath });
+
+    if (!targetPath) {
+      warn('No navigation path provided');
+      return;
+    }
+
+    router.push(targetPath);
+    log('Navigated to:', targetPath);
+  }, [router]);
+
+  // ========================================================================
+  // WORKFLOW (Multi-step action sequences)
+  // ========================================================================
+
+  const handleWorkflow = useCallback(async (event: CustomEvent) => {
+    const { workflow, steps, description } = event.detail || {};
+    log('workflow', { workflow, stepCount: steps?.length, description });
+
+    if (!steps || !Array.isArray(steps) || steps.length === 0) {
+      warn('No workflow steps provided');
+      return;
+    }
+
+    // Execute steps sequentially
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      log(`Executing step ${i + 1}/${steps.length}:`, step.type);
+
+      // Dispatch the action as a CustomEvent
+      window.dispatchEvent(new CustomEvent(step.type, {
+        detail: step.payload
+      }));
+
+      // Wait for UI to stabilize if this is a navigation step
+      if (step.waitForLoad || step.type === 'ui.navigate') {
+        // Wait for navigation to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait for DOM to stabilize
+        await waitForUiStability(300);
+      } else {
+        // Short delay between steps
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+
+    log('Workflow completed:', workflow);
+  }, []);
+
+  // ========================================================================
   // SWITCH TAB
   // ========================================================================
 
@@ -693,6 +749,8 @@ export const VoiceUIController = () => {
       'ui.searchAndNavigate': handleSearchAndNavigate,
       'ui.getUiState': handleGetUiState as any,
       'ui.getAvailableElements': handleGetAvailableElements as any,
+      'ui.navigate': handleNavigate,
+      'ui.workflow': handleWorkflow as any,
     };
 
     // Add all event listeners
@@ -721,6 +779,8 @@ export const VoiceUIController = () => {
     handleSearchAndNavigate,
     handleGetUiState,
     handleGetAvailableElements,
+    handleNavigate,
+    handleWorkflow,
   ]);
 
   return null;

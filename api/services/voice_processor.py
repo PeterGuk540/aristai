@@ -26,6 +26,12 @@ from api.services.voice_agent_tools import (
     ToolResultStatus,
     VOICE_AGENT_TOOLS,
 )
+from api.services.voice_page_registry import (
+    generate_page_context_for_llm,
+    generate_full_topology_for_llm,
+    get_page,
+    is_tab_on_page,
+)
 from workflows.llm_utils import (
     get_fast_voice_llm,
     invoke_llm_with_metrics,
@@ -123,14 +129,14 @@ class VoiceProcessorResponse:
 VOICE_UNDERSTANDING_PROMPT = """You are the voice command processor for AristAI, an educational discussion platform.
 Analyze the user's voice input and determine which tool to call.
 
-## Available Tools
-{tools_json}
+## APPLICATION PAGE TOPOLOGY (Ground Truth)
+{page_topology}
 
 ## Current UI State
 Route: {route}
 Active Tab: {active_tab}
 
-### Visible Tabs
+### Visible Tabs on CURRENT PAGE
 {tabs_list}
 
 ### Available Buttons
@@ -145,6 +151,30 @@ Active Tab: {active_tab}
 ### Modal
 {modal_state}
 
+## Available Tools
+{tools_json}
+
+## CRITICAL: Multi-Step Workflows
+
+For common tasks that require navigation + tab switch, use execute_workflow:
+- "enroll students" / "add students" → execute_workflow(workflow_name="enroll_students")
+- "AI features" / "live summary" / "question bank" → execute_workflow(workflow_name="view_ai_features")
+- "create poll" / "launch poll" → execute_workflow(workflow_name="create_poll")
+- "start session" / "go live" → execute_workflow(workflow_name="start_session")
+- "create course" / "new course" → execute_workflow(workflow_name="create_course")
+- "participation insights" → execute_workflow(workflow_name="view_participation")
+- "upload materials" → execute_workflow(workflow_name="upload_materials")
+
+## CRITICAL: Tab Location Awareness
+
+Before switching tabs, CHECK if the tab exists on the current page:
+- If tab-ai-features is requested but you're on /courses → use execute_workflow("view_ai_features")
+- If tab-advanced is requested but you're on /sessions → use execute_workflow("enroll_students")
+- If tab-polls is requested but you're on /courses → use execute_workflow("create_poll")
+
+NEVER use switch_tab for tabs that don't exist on the current page!
+Instead, use execute_workflow or smart_switch_tab.
+
 ## Conversation Context
 State: {conversation_state}
 Language: {language}
@@ -156,34 +186,25 @@ Active Session: {active_session}
 
 ## Instructions
 
-1. Analyze what the user wants to do
-2. Match their intent to one of the available tools
-3. Extract the required parameters
+1. Understand INTENT from natural language (not keywords)
+2. Check if the target feature/tab is on the CURRENT PAGE
+3. If multi-step navigation needed, use execute_workflow
+4. If simple action on current page, use appropriate tool
+5. Always provide current_route when using smart_switch_tab
 
-### Important Rules:
-- Match UI elements by SEMANTIC MEANING, not exact words
-  - "polls tab" / "show polls" / "go to polls" → switch_tab(tab_voice_id="tab-polls")
-  - "AI features" / "enhanced features" → switch_tab(tab_voice_id="tab-ai-features")
-  - "create poll" / "new poll" / "make a poll" → click_button(button_voice_id="create-poll")
+### Ordinal Handling (0-indexed):
+- "first" / "primero" → selection_index: 0
+- "second" / "segundo" → selection_index: 1
+- "third" / "tercero" → selection_index: 2
+- "last" / "último" → selection_index: -1
 
-- Handle ordinals for dropdown selection:
-  - "first" / "primero" / "one" → selection_index: 0
-  - "second" / "segundo" / "two" → selection_index: 1
-  - "third" / "tercero" / "three" → selection_index: 2
-  - "last" / "último" → selection_index: -1
-
-- If the user provides content to fill (like "the title is Introduction to AI"):
-  - Use fill_input with the content extracted
-  - If no specific field mentioned, use the first empty input
-
-- Handle confirmations:
-  - "yes" / "si" / "confirm" / "go ahead" → confirm_action(confirmed=true)
-  - "no" / "cancel" / "stop" → confirm_action(confirmed=false)
-  - "skip" / "next" / "omitir" → confirm_action(confirmed=false, skip=true)
+### Confirmations:
+- "yes" / "si" / "confirm" → confirm_action(confirmed=true)
+- "no" / "cancel" → confirm_action(confirmed=false)
 
 ## Response Format
 
-Return ONLY valid JSON:
+Return ONLY valid JSON (no markdown, no explanation):
 {{
     "tool_name": "name of tool to call",
     "parameters": {{ ... tool parameters ... }},
@@ -191,7 +212,7 @@ Return ONLY valid JSON:
     "spoken_response": "Brief response to speak to user (in {language})"
 }}
 
-If you cannot understand the command, return:
+If unclear, return:
 {{
     "tool_name": null,
     "parameters": {{}},
@@ -280,7 +301,11 @@ class VoiceProcessor:
         """Build the LLM prompt with all context."""
         tools_json = json.dumps(VOICE_AGENT_TOOLS, indent=2)
 
+        # Generate page topology for LLM context
+        page_topology = generate_full_topology_for_llm()
+
         return VOICE_UNDERSTANDING_PROMPT.format(
+            page_topology=page_topology,
             tools_json=tools_json,
             route=ui_state.route,
             active_tab=ui_state.activeTab or "None",

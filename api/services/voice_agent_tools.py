@@ -22,6 +22,19 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
+# Import page registry for workflow and topology knowledge
+from api.services.voice_page_registry import (
+    get_page,
+    get_tabs_for_page,
+    is_tab_on_page,
+    find_tab_page,
+    find_feature_location,
+    get_workflow,
+    get_navigation_steps,
+    PAGE_REGISTRY,
+    WORKFLOW_REGISTRY,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -235,6 +248,85 @@ VOICE_AGENT_TOOLS = [
             "required": ["confirmed"]
         }
     },
+    # =========================================================================
+    # COMPOSITE TOOLS - Multi-step workflows as atomic operations
+    # =========================================================================
+    {
+        "name": "execute_workflow",
+        "description": """Execute a predefined multi-step workflow. Use this for common tasks that require multiple steps.
+
+Available workflows:
+- enroll_students: Navigate to /courses → advanced tab (for adding students)
+- view_ai_features: Navigate to /sessions → ai-features tab
+- create_poll: Navigate to /console → polls tab → create poll
+- start_session: Navigate to /sessions → manage tab → go live
+- create_course: Navigate to /courses → create tab
+- view_participation: Navigate to /courses → ai-insights tab
+- upload_materials: Navigate to /sessions → materials tab
+
+IMPORTANT: Use this tool when user wants to do one of these tasks, regardless of which page they're currently on.""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "workflow_name": {
+                    "type": "string",
+                    "enum": ["enroll_students", "view_ai_features", "create_poll",
+                            "start_session", "create_course", "view_participation", "upload_materials"],
+                    "description": "Name of the workflow to execute"
+                }
+            },
+            "required": ["workflow_name"]
+        }
+    },
+    {
+        "name": "navigate_and_switch_tab",
+        "description": """Navigate to a page AND switch to a specific tab in one operation.
+
+Use this when you need to go to a tab that may be on a different page.
+This tool automatically handles the navigation if needed.
+
+IMPORTANT: Always use this instead of separate navigate + switch_tab calls.""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target_tab": {
+                    "type": "string",
+                    "description": "The voice-id of the target tab (e.g., 'tab-advanced', 'tab-ai-features')"
+                },
+                "current_route": {
+                    "type": "string",
+                    "description": "The current page route (e.g., '/courses', '/sessions')"
+                }
+            },
+            "required": ["target_tab", "current_route"]
+        }
+    },
+    {
+        "name": "smart_switch_tab",
+        "description": """Intelligently switch to a tab, navigating to the correct page first if necessary.
+
+This tool knows the application structure:
+- tab-advanced is on /courses (for enrollment)
+- tab-ai-features is on /sessions (for AI features)
+- tab-polls is on /console (for polls)
+- etc.
+
+Use this instead of switch_tab when you're not sure if the tab exists on the current page.""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tab_voice_id": {
+                    "type": "string",
+                    "description": "The voice-id of the tab to switch to"
+                },
+                "current_route": {
+                    "type": "string",
+                    "description": "Current page route for context"
+                }
+            },
+            "required": ["tab_voice_id"]
+        }
+    },
 ]
 
 
@@ -443,6 +535,142 @@ def handle_confirm_action(confirmed: bool, skip: bool = False) -> ToolResult:
 
 
 # ============================================================================
+# COMPOSITE TOOL HANDLERS
+# ============================================================================
+
+def handle_execute_workflow(workflow_name: str) -> ToolResult:
+    """Execute a predefined multi-step workflow.
+
+    This handler:
+    1. Looks up the workflow in the registry
+    2. Returns a compound UI action that executes all steps in sequence
+    """
+    workflow = WORKFLOW_REGISTRY.get(workflow_name)
+
+    if not workflow:
+        available = ", ".join(WORKFLOW_REGISTRY.keys())
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message=f"Unknown workflow: {workflow_name}. Available: {available}"
+        )
+
+    # Build compound action with all steps
+    ui_actions = []
+    for step in workflow.steps:
+        if step.action == "navigate":
+            ui_actions.append({
+                "type": "ui.navigate",
+                "payload": {"path": step.target},
+                "waitForLoad": step.wait_for_load
+            })
+        elif step.action == "switch_tab":
+            ui_actions.append({
+                "type": "ui.switchTab",
+                "payload": {"voiceId": step.target, "tabName": step.target}
+            })
+        elif step.action == "click_button":
+            ui_actions.append({
+                "type": "ui.clickButton",
+                "payload": {"voiceId": step.target}
+            })
+
+    # Return compound action
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=workflow.description,
+        ui_action={
+            "type": "ui.workflow",
+            "payload": {
+                "workflow": workflow_name,
+                "steps": ui_actions,
+                "description": workflow.description
+            }
+        }
+    )
+
+
+def handle_navigate_and_switch_tab(target_tab: str, current_route: str) -> ToolResult:
+    """Navigate to a page and switch to a tab in one operation.
+
+    Uses the page registry to determine if navigation is needed.
+    """
+    # Get the steps needed (may include navigation)
+    steps = get_navigation_steps(current_route, target_tab)
+
+    if not steps:
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message=f"Tab '{target_tab}' not found in application"
+        )
+
+    # Build compound action
+    ui_actions = []
+    descriptions = []
+
+    for step in steps:
+        if step.action == "navigate":
+            page = get_page(step.target)
+            page_name = page.name if page else step.target
+            ui_actions.append({
+                "type": "ui.navigate",
+                "payload": {"path": step.target},
+                "waitForLoad": step.wait_for_load
+            })
+            descriptions.append(f"Navigating to {page_name}")
+        elif step.action == "switch_tab":
+            ui_actions.append({
+                "type": "ui.switchTab",
+                "payload": {"voiceId": step.target, "tabName": step.target}
+            })
+            descriptions.append(f"Switching to {step.target}")
+
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=". ".join(descriptions),
+        ui_action={
+            "type": "ui.workflow",
+            "payload": {
+                "workflow": "navigate_and_switch_tab",
+                "steps": ui_actions
+            }
+        }
+    )
+
+
+def handle_smart_switch_tab(tab_voice_id: str, current_route: Optional[str] = None) -> ToolResult:
+    """Intelligently switch to a tab, navigating first if necessary.
+
+    This tool knows the application topology and will:
+    1. Check if the tab exists on the current page
+    2. If not, find which page has the tab
+    3. Navigate to that page first
+    4. Then switch to the tab
+    """
+    # Find which page has this tab
+    target_page = find_tab_page(tab_voice_id)
+
+    if not target_page:
+        return ToolResult(
+            status=ToolResultStatus.FAILURE,
+            message=f"Tab '{tab_voice_id}' not found in any page"
+        )
+
+    # Check if we need to navigate
+    if current_route:
+        current_base = "/" + current_route.strip("/").split("/")[0]
+        needs_navigation = current_base != target_page
+    else:
+        needs_navigation = True  # Assume we might need to navigate
+
+    if needs_navigation:
+        # Use navigate_and_switch_tab
+        return handle_navigate_and_switch_tab(tab_voice_id, current_route or "/")
+    else:
+        # Just switch tab
+        return handle_switch_tab(tab_voice_id)
+
+
+# ============================================================================
 # TOOL DISPATCHER
 # ============================================================================
 
@@ -512,6 +740,24 @@ def execute_voice_tool(tool_name: str, parameters: Dict[str, Any]) -> ToolResult
             return handle_confirm_action(
                 parameters.get("confirmed", False),
                 parameters.get("skip", False)
+            )
+
+        # Composite tools
+        elif tool_name == "execute_workflow":
+            return handle_execute_workflow(
+                parameters.get("workflow_name", "")
+            )
+
+        elif tool_name == "navigate_and_switch_tab":
+            return handle_navigate_and_switch_tab(
+                parameters.get("target_tab", ""),
+                parameters.get("current_route", "/")
+            )
+
+        elif tool_name == "smart_switch_tab":
+            return handle_smart_switch_tab(
+                parameters.get("tab_voice_id", ""),
+                parameters.get("current_route")
             )
 
         else:

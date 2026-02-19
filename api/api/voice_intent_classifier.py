@@ -205,6 +205,8 @@ class ClassifiedIntent(BaseModel):
     clarification_needed: bool = Field(False, description="Whether clarification is needed")
     clarification_message: Optional[str] = Field(None, description="Question to ask for clarification")
     original_text: Optional[str] = Field(None, description="Original user input")
+    # NEW: Voice response generated in same LLM call (optimization to reduce latency)
+    voice_response: Optional[str] = Field(None, description="Brief spoken response to confirm the action (e.g., 'Taking you to sessions.')")
 
 
 # ============================================================================
@@ -669,8 +671,13 @@ Return a valid JSON object with this structure:
     }},
     "confidence": <0.0 to 1.0>,
     "clarification_needed": <true/false>,
-    "clarification_message": "<question to ask if clarification needed>"
+    "clarification_message": "<question to ask if clarification needed>",
+    "voice_response": "<brief spoken confirmation in {language}, e.g., 'Taking you to sessions.' or 'Seleccionando el primer curso.'>"
 }}
+
+IMPORTANT: Always include voice_response - a brief, natural confirmation of what you're doing.
+Keep it short (1 sentence). Match the language setting: {language}.
+Examples: "Taking you to sessions." / "Selecting the first course." / "Llevándote a cursos." / "Confirmado."
 
 ## User Input:
 "{user_input}"
@@ -721,6 +728,7 @@ class VoiceIntentClassifier:
         self,
         user_input: str,
         page_context: Optional[PageContext] = None,
+        language: str = 'en',
     ) -> ClassifiedIntent:
         """
         Classify the user's intent from their natural language input.
@@ -728,16 +736,17 @@ class VoiceIntentClassifier:
         Args:
             user_input: The user's voice command/transcript
             page_context: Optional context about the current page state
+            language: Language for the voice_response ('en' or 'es')
 
         Returns:
-            ClassifiedIntent with the detected intent and parameters
+            ClassifiedIntent with the detected intent, parameters, and voice_response
         """
-        logger.info(f"[IntentClassifier] Classifying input: '{user_input}'")
+        logger.info(f"[IntentClassifier] Classifying input: '{user_input}' (language={language})")
 
         # Ensure LLM is available
         if not self._ensure_llm():
             logger.error("[IntentClassifier] No LLM available, returning fallback")
-            return self._fallback_intent(user_input)
+            return self._fallback_intent(user_input, language)
 
         # Format page context for the prompt
         if page_context:
@@ -745,10 +754,11 @@ class VoiceIntentClassifier:
         else:
             context_str = "No page context available"
 
-        # Build the prompt
+        # Build the prompt with language for voice_response generation
         prompt = INTENT_CLASSIFICATION_PROMPT.format(
             page_context=context_str,
             user_input=user_input,
+            language=language,
         )
 
         try:
@@ -758,7 +768,7 @@ class VoiceIntentClassifier:
 
             if not response.success:
                 logger.warning(f"[IntentClassifier] LLM call failed: {response.metrics.error_message}")
-                return self._fallback_intent(user_input)
+                return self._fallback_intent(user_input, language)
 
             logger.info(f"[IntentClassifier] LLM response (first 500 chars): {response.content[:500] if response.content else 'None'}")
 
@@ -766,7 +776,7 @@ class VoiceIntentClassifier:
             parsed = parse_json_response(response.content or "")
             if not parsed:
                 logger.warning(f"[IntentClassifier] Failed to parse JSON from response: {response.content}")
-                return self._fallback_intent(user_input)
+                return self._fallback_intent(user_input, language)
 
             logger.info(f"[IntentClassifier] Parsed intent: category={parsed.get('category')}, action={parsed.get('action')}, confidence={parsed.get('confidence')}")
 
@@ -777,7 +787,7 @@ class VoiceIntentClassifier:
 
         except Exception as e:
             logger.error(f"[IntentClassifier] Exception during classification: {e}", exc_info=True)
-            return self._fallback_intent(user_input)
+            return self._fallback_intent(user_input, language)
 
     def _build_intent(self, parsed: Dict[str, Any], original_text: str) -> ClassifiedIntent:
         """Build a ClassifiedIntent from the parsed LLM response"""
@@ -805,21 +815,26 @@ class VoiceIntentClassifier:
                 clarification_needed=parsed.get("clarification_needed", False),
                 clarification_message=parsed.get("clarification_message"),
                 original_text=original_text,
+                voice_response=parsed.get("voice_response"),  # LLM-generated response
             )
         except Exception as e:
             logger.error(f"Error building intent from parsed response: {e}")
             return self._fallback_intent(original_text)
 
-    def _fallback_intent(self, original_text: str) -> ClassifiedIntent:
+    def _fallback_intent(self, original_text: str, language: str = 'en') -> ClassifiedIntent:
         """Return a fallback intent when classification fails"""
+        fallback_response = "I'm not sure what you'd like to do. Could you please rephrase that?"
+        if language == 'es':
+            fallback_response = "No estoy seguro de lo que te gustaría hacer. ¿Podrías reformularlo?"
         return ClassifiedIntent(
             category=IntentCategory.UNCLEAR,
             action="unknown",
             parameters=IntentParameters(),
             confidence=0.0,
             clarification_needed=True,
-            clarification_message="I'm not sure what you'd like to do. Could you please rephrase that?",
+            clarification_message=fallback_response,
             original_text=original_text,
+            voice_response=fallback_response,
         )
 
 
@@ -842,22 +857,25 @@ def get_intent_classifier() -> VoiceIntentClassifier:
 def classify_intent(
     user_input: str,
     page_context: Optional[PageContext] = None,
+    language: str = 'en',
 ) -> ClassifiedIntent:
     """
     Classify user intent using LLM.
 
     All voice commands go through LLM classification - no regex shortcuts.
+    Now also generates voice_response in the same LLM call for reduced latency.
 
     Args:
         user_input: The user's voice command
         page_context: Optional context about current page
+        language: Language code ('en' or 'es') for voice_response
 
     Returns:
-        ClassifiedIntent with the detected intent
+        ClassifiedIntent with the detected intent and voice_response
     """
     # Use LLM classifier for all intents (including confirmations)
     classifier = get_intent_classifier()
-    return classifier.classify(user_input, page_context)
+    return classifier.classify(user_input, page_context, language)
 
 
 # ============================================================================

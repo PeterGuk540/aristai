@@ -56,15 +56,30 @@ const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
 const USE_VOICE_V2 = true;
 
 // ARCHITECTURE NOTE:
-// ElevenLabs agent calls delegate_to_mcp tool → backend processes → returns response
-// ElevenLabs speaks the response. UI actions are published via SSE broker.
+// Since ElevenLabs webhooks require HTTPS and we use HTTP backend,
+// we handle ALL processing in the frontend:
 //
-// The frontend handleTranscript() call is a FALLBACK for executing UI actions
-// when SSE broker isn't working. It should NOT send MCP_RESPONSE since
-// ElevenLabs already handles speech via delegate_to_mcp.
+// Flow:
+// 1. User speaks → ElevenLabs transcribes → onMessage(source='user')
+// 2. Frontend IMMEDIATELY calls HTTP backend with transcript
+// 3. Backend returns voice_response + ui_actions
+// 4. UI actions execute locally
+// 5. Frontend sends MCP_RESPONSE:voice_response to ElevenLabs
+// 6. ElevenLabs speaks the response (prompt tells it to ONLY speak MCP_RESPONSE content)
 //
-// Set to false to prevent duplicate responses.
-const SEND_MCP_RESPONSE = false;
+// NOTE: MCP_RESPONSE prefix is stripped from both transcripts and voice output.
+const SEND_MCP_RESPONSE = true;  // Enable MCP response injection
+
+// Backend API base for voice processing calls
+const BACKEND_API_BASE = '/api/proxy';
+
+// Helper to strip MCP_RESPONSE prefix from any string
+const stripMcpPrefix = (text: string): string => {
+  if (!text) return text;
+  // Handle various formats: MCP_RESPONSE:, mcp_response:, MCP RESPONSE:, etc.
+  const mcpPrefixRegex = /^mcp[_\s]?response[:\s]*/i;
+  return text.replace(mcpPrefixRegex, '').trim();
+};
 
 /**
  * Phase 2: Collect rich page context for smarter LLM intent detection
@@ -509,9 +524,11 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       console.log('✅ Got signed URL:', signed_url.substring(0, 50) + '...');
 
       // Start the conversation session using the official SDK
+      // NOTE: We don't use ElevenLabs tools - frontend handles all processing
+      // and injects responses via MCP_RESPONSE prefix
       console.log('🚀 Starting conversation session...');
       console.log('🔗 Using signed URL:', signed_url.substring(0, 80) + '...');
-      
+
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
         connectionType: "websocket",
@@ -600,39 +617,39 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // We UPDATE the last user message instead of adding new ones for each interim
             console.log('🎤 User message received:', message);
 
+            // Strip MCP prefix from user messages (in case it appears in transcript)
+            const cleanMessage = stripMcpPrefix(message);
+
             // Reset MCP response tracking - new user turn starts
             lastMcpResponseTimeRef.current = 0;
             lastMcpResponseContentRef.current = '';
             mcpResponseDisplayedRef.current = false;
 
-            // Note: MCP_RESPONSE injection removed with Option A architecture
-            // All responses come from ElevenLabs agent directly
-
             // Emit transcription event
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('voice-transcription', {
-                detail: `[${new Date().toISOString()}] Transcription: ${message}`
+                detail: `[${new Date().toISOString()}] Transcription: ${cleanMessage}`
               }));
             }
 
             // Update or add user message (handles interim transcripts)
-            updateOrAddUserMessage(message);
+            updateOrAddUserMessage(cleanMessage);
 
             // Store pending transcript - will be processed after a brief delay
-            // This prevents processing interim transcripts
-            pendingTranscriptRef.current = message;
+            // This prevents processing interim transcripts (user still speaking)
+            pendingTranscriptRef.current = cleanMessage;
 
             // Debounce: Wait 500ms after last transcript update before processing
-            // This ensures we process the final transcript, not interim ones
-            // Clear any existing timeout to prevent race conditions
+            // This catches the final transcript after interim updates stop
             if ((window as any).__pendingTranscriptTimeout) {
               clearTimeout((window as any).__pendingTranscriptTimeout);
             }
             (window as any).__pendingTranscriptTimeout = setTimeout(() => {
               // Double-check: only process if this is still the pending transcript
               // AND we're not already processing another request
-              if (pendingTranscriptRef.current === message && !isProcessingTranscriptRef.current) {
-                handleTranscript(message);
+              if (pendingTranscriptRef.current === cleanMessage && !isProcessingTranscriptRef.current) {
+                console.log('🎯 Processing final transcript:', cleanMessage.substring(0, 50));
+                handleTranscript(cleanMessage);
               }
               (window as any).__pendingTranscriptTimeout = null;
             }, 500);
@@ -703,15 +720,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
             if (message && message.length > 5 && !isAck && !isGenericDenial) {
               // Strip MCP_RESPONSE: prefix if ElevenLabs echoed it back
-              let cleanMessage = message;
-              if (cleanMessage.startsWith('MCP_RESPONSE:')) {
-                cleanMessage = cleanMessage.substring('MCP_RESPONSE:'.length).trim();
-              }
-              // Also handle case where it might be lowercase or have spaces
-              const mcpPrefixMatch = cleanMessage.match(/^mcp[_\s]?response[:\s]*/i);
-              if (mcpPrefixMatch) {
-                cleanMessage = cleanMessage.substring(mcpPrefixMatch[0].length).trim();
-              }
+              const cleanMessage = stripMcpPrefix(message);
               if (cleanMessage.length > 0) {
                 addAssistantMessage(cleanMessage);
               }

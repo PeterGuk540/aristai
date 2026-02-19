@@ -625,19 +625,21 @@ Set clarification_needed=true and provide a helpful clarification_message.
 5. Set confidence based on how certain you are (0.0-1.0)
 6. If confidence < 0.5, set clarification_needed=true and suggest what to ask
 7. For ordinals: "first"=0, "second"=1, "third"=2, "last"=-1
-8. ALWAYS include tab_name when the action implies a specific tab:
-   - "create a course" → tab_name="create"
+8. **CREATE vs NAVIGATE distinction**: When user wants to CREATE something, use category="create" NOT "navigate":
+   - "create a course" / "I want to create a course" / "let me create a course" → category="create", action="create_course"
+   - "create a session" / "make a new session" → category="create", action="create_session"
+   - "create a poll" / "start a poll" / "launch a poll" → category="create", action="create_poll"
+   - "post a case" / "create a case study" → category="create", action="post_case"
+   - "post to discussion" / "I want to post something" → category="create", action="post_to_discussion"
+   ONLY use "navigate" when user wants to VIEW or GO TO a page without creating (e.g., "show me courses", "go to sessions page")
+9. ALWAYS include tab_name when the action implies a specific tab:
    - "enroll students" / "manage enrollments" → tab_name="advanced"
    - "view AI insights" → tab_name="ai-insights"
-   - "create a session" → tab_name="create"
    - "start session" / "go live" / "manage status" → tab_name="manage"
    - "view AI features" → tab_name="ai-features"
-   - "create poll" / "launch poll" → tab_name="polls"
    - "start copilot" → tab_name="copilot"
    - "generate summary" → tab_name="summary"
-   - "post to discussion" → tab_name="discussion"
-   - "post case" / "view cases" → tab_name="cases"
-9. Include tab_name even when navigating to a page - the frontend will switch tabs after navigation
+10. Include tab_name even when navigating to a page - the frontend will switch tabs after navigation
 
 ## Response Format:
 Return a valid JSON object with this structure:

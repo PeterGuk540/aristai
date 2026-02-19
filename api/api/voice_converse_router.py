@@ -3402,6 +3402,48 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             target_tab = intent.parameters.tab_name if intent.parameters else None
             print(f"✅ [VOICE] NAVIGATION INTENT MATCHED! Navigating to: {nav_path}, tab: {target_tab}")
 
+            # Check if this navigation implies a create action that should start form filling
+            # e.g., navigating to /courses with tab='create' implies creating a course
+            form_workflow = None
+            form_workflow_message = None
+            if target_tab == 'create':
+                if nav_path == '/courses':
+                    form_workflow = 'create_course'
+                    form_workflow_message = "Opening course creation form. Ask user what they would like to name the course."
+                elif nav_path == '/sessions':
+                    form_workflow = 'create_session'
+                    form_workflow_message = "Opening session creation form. Ask user what they would like to name the session."
+            elif target_tab == 'polls' and nav_path == '/console':
+                form_workflow = 'create_poll'
+                form_workflow_message = "Opening poll creation form. Ask user what question they would like to ask."
+            elif target_tab == 'cases' and nav_path == '/console':
+                form_workflow = 'post_case'
+                form_workflow_message = "Opening case study form. Ask user what case scenario they would like to present."
+            elif target_tab == 'join' and nav_path == '/courses':
+                form_workflow = 'join_course'
+                form_workflow_message = "Opening course join form. Ask user for the course access code."
+
+            # Start form filling if this navigation implies a create action
+            if form_workflow:
+                print(f"✅ [VOICE] Navigation implies create action, starting form filling: {form_workflow}")
+                first_question = conversation_manager.start_form_filling(
+                    request.user_id, form_workflow, nav_path
+                )
+                if not first_question and form_workflow_message:
+                    first_question = generate_voice_response(form_workflow_message, language=language)
+
+                ui_actions = [
+                    {"type": "ui.navigate", "payload": {"path": nav_path}},
+                    {"type": "ui.switchTab", "payload": {"tabName": target_tab, "target": f"tab-{target_tab}"}},
+                ]
+
+                return ConverseResponse(
+                    message=sanitize_speech(first_question),
+                    action=ActionResponse(type='navigate', target=nav_path),
+                    results=[{"ui_actions": ui_actions}],
+                    suggestions=["Skip", "Cancel"] if language == 'en' else ["Saltar", "Cancelar"]
+                )
+
             # Generate message - include tab info if switching tab
             if target_tab:
                 tab_display = target_tab.replace('-', ' ').replace('_', ' ').title()
@@ -3579,9 +3621,37 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     suggestions=get_page_suggestions(request.current_page, language),
                 )
 
-        # Handle dictation intent
+        # Handle dictation intent - use LLM-extracted input_field and input_value
         if intent_result["type"] == "dictate":
-            # User is providing content - this should be handled by conversation state
+            # Check if LLM extracted input_field and input_value
+            input_field = intent.parameters.input_field if intent.parameters else None
+            input_value = intent.parameters.input_value if intent.parameters else None
+
+            if input_field and input_value:
+                # LLM successfully extracted field and value - fill the input directly
+                print(f"✅ [VOICE] DICTATE: Filling '{input_field}' with '{input_value}'")
+
+                # Generate confirmation message
+                fill_msg = generate_voice_response(
+                    f"Setting the {input_field.replace('-', ' ')} to '{input_value}'. Confirm briefly.",
+                    language=language
+                )
+
+                toast_msg = f"Filled {input_field.replace('-', ' ')}" if language == 'en' else f"Rellenado {input_field.replace('-', ' ')}"
+
+                return ConverseResponse(
+                    message=sanitize_speech(fill_msg),
+                    action=ActionResponse(type='execute', executed=True),
+                    results=[{
+                        "ui_actions": [
+                            {"type": "ui.fillInput", "payload": {"target": input_field, "value": input_value}},
+                            {"type": "ui.toast", "payload": {"message": toast_msg, "type": "success"}},
+                        ]
+                    }],
+                    suggestions=["Submit", "Skip", "Cancel"] if language == 'en' else ["Enviar", "Saltar", "Cancelar"],
+                )
+
+            # No field/value extracted - ask user to be more specific
             no_form_msg = generate_voice_response(
                 "Heard user's input but no form is active. Tell them to start a form or select an input field first.",
                 language=language

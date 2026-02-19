@@ -534,14 +534,10 @@ Examples:
 - "show student followups" / "personalized feedback" / "seguimientos personalizados" → get_followups
 - "show AI assistant messages" / "student questions to AI" / "mensajes del asistente" → get_ai_assistant_messages
 
-For questions about the platform, features, capabilities, or general knowledge that don't fit
-into specific data queries above, use action "open_question":
-- "what features did you add?" / "que funciones agregaste?"
-- "what can you do?" / "que puedes hacer?"
-- "tell me about the new updates" / "cuentame sobre las nuevas actualizaciones"
-- "how does the heatmap work?" / "como funciona el mapa de calor?"
-- "what is this platform for?" / "para que es esta plataforma?"
-- "can you explain the analytics?" / "puedes explicar las analiticas?"
+For ANY question about the platform, features, capabilities, how things work, or general knowledge,
+use action "open_question". This is a catch-all for information-seeking questions.
+
+The key insight: if the user is ASKING something (not commanding an action), classify as query/open_question.
 
 ### CREATE (category: "create")
 Create new content like courses, sessions, polls, or manage enrollments.
@@ -610,9 +606,19 @@ Actions: dictate_content
 This is detected when the user appears to be speaking content for a form rather than giving a command.
 
 ### UNCLEAR (category: "unclear")
-When you can't determine the intent with sufficient confidence.
+Use this ONLY as a last resort when the input is truly incomprehensible.
 
-Set clarification_needed=true and provide a helpful clarification_message.
+IMPORTANT: Before returning "unclear", try these approaches:
+1. If input seems like a question (any form of asking), use query/open_question
+2. If input mentions any page/feature name, try to navigate or switch tabs
+3. If input is very short/minimal (like "...", "um", single words), treat as:
+   - If it could be a confirmation → confirm/yes or confirm/no
+   - If it sounds like a question → query/open_question
+   - Otherwise → query/get_help (offer assistance)
+4. NEVER ask for clarification on questions - always try to answer with open_question
+
+The goal is to be HELPFUL, not to be perfect. It's better to make a reasonable guess
+and help the user than to ask for clarification.
 
 ## Current Page Context:
 {page_context}
@@ -623,7 +629,10 @@ Set clarification_needed=true and provide a helpful clarification_message.
 3. Extract all relevant parameters (tab names, button names, ordinals, student names, etc.)
 4. If multiple interpretations are possible, choose the most likely based on context
 5. Set confidence based on how certain you are (0.0-1.0)
-6. If confidence < 0.5, set clarification_needed=true and suggest what to ask
+6. **BE HELPFUL, NOT PEDANTIC**: Do NOT ask for clarification if you can make a reasonable guess.
+   - If user asks ANY question → query/open_question with confidence 0.8+
+   - If input is minimal/unclear but could be anything → query/get_help with confidence 0.6
+   - ONLY use "unclear" with clarification_needed=true for truly incomprehensible gibberish
 7. For ordinals: "first"=0, "second"=1, "third"=2, "last"=-1
 8. **CREATE vs NAVIGATE distinction**: When user wants to CREATE something, use category="create" NOT "navigate":
    - "create a course" / "I want to create a course" / "let me create a course" → category="create", action="create_course"

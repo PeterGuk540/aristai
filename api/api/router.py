@@ -4,6 +4,7 @@ from api.core.config import get_settings
 from api.api.routes import users, courses, sessions, posts, polls, reports, enrollments, voice, debug, mcp, ui_actions, materials, instructor_features, integrations, enhanced_features
 
 from .voice_converse_router import router as voice_converse_router
+from .voice_v2_router import router as voice_v2_router
 
 from mcp_server.router_integration import include_voice_loop_router
 
@@ -19,6 +20,7 @@ api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(enrollments.router, prefix="/enrollments", tags=["enrollments"])
 api_router.include_router(voice.router, prefix="/voice", tags=["voice"])
 api_router.include_router(voice_converse_router, prefix="/voice-converse", tags=["voice-converse"])
+api_router.include_router(voice_v2_router, tags=["voice-v2"])  # Voice API v2 with pure LLM processing
 api_router.include_router(mcp.router, prefix="/mcp", tags=["mcp"])
 api_router.include_router(ui_actions.router, prefix="/ui-actions", tags=["ui-actions"])
 api_router.include_router(materials.router, tags=["materials"])

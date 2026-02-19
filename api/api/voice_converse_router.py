@@ -3373,30 +3373,22 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         intent_result = intent_to_legacy_format(intent)
         print(f"🎯 [VOICE] Legacy format: type={intent_result.get('type')}, value={intent_result.get('value')}")
 
-        # Handle low confidence - ask for intelligent clarification (no regex fallback)
-        # Phase 1: Trust LLM fully, provide helpful context-aware suggestions
+        # Handle low confidence - instead of asking for clarification, try to help
+        # Use LLM to generate a helpful response about what we can do
         if intent.confidence < LLM_INTENT_CONFIDENCE_THRESHOLD or intent.clarification_needed:
-            # Build helpful suggestions based on what the LLM partially understood
-            suggestions = []
-            if intent.category == IntentCategory.NAVIGATE:
-                suggestions = ["Go to courses", "Go to sessions", "Go to forum"] if language == 'en' else ["Ir a cursos", "Ir a sesiones", "Ir a foro"]
-            elif intent.category == IntentCategory.CREATE:
-                suggestions = ["Create a course", "Create a session", "Create a poll"] if language == 'en' else ["Crear un curso", "Crear una sesion", "Crear una encuesta"]
-            elif intent.category == IntentCategory.QUERY:
-                suggestions = ["Show my courses", "Who needs help?", "Class status"] if language == 'en' else ["Mostrar mis cursos", "Quien necesita ayuda?", "Estado de la clase"]
-            else:
-                suggestions = get_page_suggestions(request.current_page, language)
+            print(f"⚠️ [VOICE] Low confidence ({intent.confidence}) or clarification needed - providing helpful response instead")
 
-            # Provide context-aware clarification message
-            if intent.clarification_message:
-                clarification_msg = intent.clarification_message
-            elif language == 'es':
-                clarification_msg = f"Escuche '{transcript}'. No estoy completamente seguro de lo que te gustaria hacer. ¿Podrias ser mas especifico?"
-            else:
-                clarification_msg = f"I heard '{transcript}'. I'm not quite sure what you'd like to do. Could you be more specific?"
+            # Instead of asking for clarification, use open_question to explain what we can help with
+            # This is more user-friendly than asking them to repeat themselves
+            help_result = await _handle_open_question(
+                f"The user said '{transcript}' on the {request.current_page} page. Provide a brief, helpful response about what you can help with on this page. Don't ask for clarification - just be helpful.",
+                request.current_page
+            )
+
+            suggestions = get_page_suggestions(request.current_page, language)
 
             return ConverseResponse(
-                message=sanitize_speech(clarification_msg),
+                message=sanitize_speech(help_result.get("message", "I can help you navigate, create content, or answer questions. What would you like to do?")),
                 action=ActionResponse(type='info'),
                 suggestions=suggestions,
             )
@@ -6059,48 +6051,29 @@ def execute_plan_steps(steps: List[Dict[str, Any]], db: Session) -> tuple[list[d
 # OPEN QUESTION HANDLER - LLM-based responses for open-ended questions
 # ============================================================================
 
-OPEN_QUESTION_PROMPT = """You are AristAI, an intelligent voice assistant for an educational platform.
-You help instructors manage their courses, sessions, students, and classroom activities.
+OPEN_QUESTION_PROMPT = """You are AristAI, a helpful voice assistant for an educational platform. Answer the user's question naturally and helpfully.
 
-The user asked an open-ended question. Provide a helpful, concise answer suitable for text-to-speech playback.
-Keep responses under 3 sentences for most questions. Be conversational and friendly.
+PLATFORM KNOWLEDGE:
+- /courses page: Create/manage courses, enroll students (Advanced tab), view AI Insights (analytics, progress tracking, session comparison)
+- /sessions page: Create/manage sessions, go live, upload materials, AI Features (live summary, question bank, peer review)
+- /console page: Live instructor tools - Copilot AI, polls, breakout groups, timer, engagement heatmap, facilitation suggestions
+- /forum page: Discussion posts, case studies, pinning, summarizing
+- /reports page: Participation analytics, scoring, session comparison
 
-PLATFORM CAPABILITIES (mention these when relevant):
-- Navigation: Navigate to any page (courses, sessions, forum, console, reports)
-- Course Management: Create courses with AI-generated plans, manage enrollments
-- Session Management: Create sessions, go live, track participation
-- Live Class Tools: Real-time engagement heatmap, session timers, breakout groups
-- Copilot: AI teaching assistant that monitors discussions and provides suggestions
-- Facilitation: AI suggestions for who to call on next, poll suggestions
-- Forum: Discussion posts, pinning, summarizing discussions
-- Reports: Participation analytics, scoring, session comparison
-- Student Progress: Track individual and class-level progress over time
-- AI Draft Responses: Generate draft responses to student questions
-- Post-Class: Session summaries, unresolved topic tracking
+AI INSIGHTS (Courses): Course analytics, student progress tracking across sessions, session comparison, participation trends, learning objective coverage.
+AI FEATURES (Sessions): Live summaries, quiz question generation, peer review assignments, participation insights, objective coverage analysis.
 
-RECENT FEATURE ENHANCEMENTS (if asked about new features or updates):
-- Real-time engagement heatmap showing student participation at a glance
-- Session timer for timed activities
-- Breakout groups for collaborative learning
-- Facilitation suggestions for who to call on next
-- Poll suggestions based on discussion topics
-- Student progress tracking across sessions
-- AI-generated draft responses for student questions
-- Pre-class readiness insights
-- Post-class session summaries
-- Course analytics and session comparison
-
-RULES:
-1. Be concise - answers should be speakable in under 15 seconds
-2. Be helpful and informative
-3. Don't mention specific vendor names (ElevenLabs, OpenAI, etc.)
-4. If you don't know something specific, offer related helpful information
-5. Suggest related actions the user could take
+INSTRUCTIONS:
+1. Directly answer what the user asked - don't deflect or ask for clarification
+2. Be concise (2-3 sentences max) - this will be spoken aloud
+3. If user asks about features/capabilities, explain what's available
+4. If user seems confused, offer helpful guidance about what they can do
+5. Be friendly and conversational
 
 Current page: {current_page}
-User question: "{question}"
+User: "{question}"
 
-Provide a helpful response:"""
+Your response:"""
 
 
 async def _handle_open_question(question: str, current_page: Optional[str] = None) -> Dict[str, Any]:

@@ -1,1098 +1,517 @@
 'use client';
 
+/**
+ * VoiceUIController - Handles voice-triggered UI interactions
+ *
+ * This controller:
+ * 1. Listens for voice UI action events (ui.switchTab, ui.clickButton, etc.)
+ * 2. Uses dynamic DOM discovery (no hardcoded element registries)
+ * 3. Executes actions with verification loop
+ * 4. Reports results for voice feedback
+ *
+ * All voice-controllable elements must have a data-voice-id attribute.
+ */
+
 import { useEffect, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import {
+  getUiState,
+  getCompactUiState,
+  findElementByVoiceId,
+  waitForUiStability,
+  computeStateDiff,
+} from '@/lib/voice-ui-state';
+import {
+  executeVoiceAction,
+  ExecutionResult,
+} from '@/lib/voice-action-executor';
+import type { VoiceAction } from '@/lib/voice-action-schema';
+
+// ============================================================================
+// GLOBAL UI ELEMENTS (Shell-level, always present)
+// ============================================================================
+
+const GLOBAL_VOICE_IDS = [
+  'theme-toggle',
+  'user-menu',
+  'sign-out',
+  'language-toggle',
+  'workspace-search',
+];
+
+// ============================================================================
+// LOGGING
+// ============================================================================
+
+const LOG_PREFIX = '🎤 VoiceUI:';
+
+function log(message: string, ...args: unknown[]) {
+  console.log(`${LOG_PREFIX} ${message}`, ...args);
+}
+
+function warn(message: string, ...args: unknown[]) {
+  console.warn(`${LOG_PREFIX} ${message}`, ...args);
+}
+
+// ============================================================================
+// ELEMENT FINDING (Dynamic, no hardcoded registry)
+// ============================================================================
 
 /**
- * Page element registry - maps voice targets to DOM selectors
- * This allows the voice assistant to target specific UI elements
+ * Find an element by voice-id or fallback strategies.
+ * NO hardcoded element registry - all discovery is dynamic.
  */
-const UI_ELEMENT_REGISTRY: Record<string, Record<string, string>> = {
-  // Reports page elements
-  '/reports': {
-    'courseDropdown': '[data-voice-id="select-course"]',
-    'sessionDropdown': '[data-voice-id="select-session"]',
-    'generateButton': '[data-voice-id="generate-report"]',
-    'generate-report': '[data-voice-id="generate-report"]',
-    'refreshButton': '[data-voice-id="refresh-report"]',
-    'refresh-report': '[data-voice-id="refresh-report"]',
-    'regenerate-report': '[data-voice-id="regenerate-report"]',
-    // Report tabs
-    'summaryTab': '[data-voice-id="tab-summary"]',
-    'tab-summary': '[data-voice-id="tab-summary"]',
-    'summary': '[data-voice-id="tab-summary"]',
-    'participationTab': '[data-voice-id="tab-participation"]',
-    'tab-participation': '[data-voice-id="tab-participation"]',
-    'participation': '[data-voice-id="tab-participation"]',
-    'scoringTab': '[data-voice-id="tab-scoring"]',
-    'tab-scoring': '[data-voice-id="tab-scoring"]',
-    'scoring': '[data-voice-id="tab-scoring"]',
-    'answer-scores': '[data-voice-id="tab-scoring"]',
-    'analyticsTab': '[data-voice-id="tab-analytics"]',
-    'tab-analytics': '[data-voice-id="tab-analytics"]',
-    'analytics': '[data-voice-id="tab-analytics"]',
-    'my-performance': '[data-voice-id="tab-my-performance"]',
-    'tab-my-performance': '[data-voice-id="tab-my-performance"]',
-    'best-practice': '[data-voice-id="tab-best-practice"]',
-    'tab-best-practice': '[data-voice-id="tab-best-practice"]',
-  },
-  // Courses page elements
-  '/courses': {
-    'courseDropdown': '[data-voice-id="select-course"]',
-    'courseTitleInput': '[data-voice-id="course-title"]',
-    'course-title': '[data-voice-id="course-title"]',
-    'syllabusInput': '[data-voice-id="syllabus"]',
-    'syllabus': '[data-voice-id="syllabus"]',
-    'objectivesInput': '[data-voice-id="learning-objectives"]',
-    'learning-objectives': '[data-voice-id="learning-objectives"]',
-    'createButton': '[data-voice-id="create-course"]',
-    'create-course': '[data-voice-id="create-course"]',
-    'createWithPlansButton': '[data-voice-id="create-course-with-plans"]',
-    'create-course-with-plans': '[data-voice-id="create-course-with-plans"]',
-    'generatePlansButton': '[data-voice-id="generate-plans"]',
-    'generate-plans': '[data-voice-id="generate-plans"]',
-    'enrollButton': '[data-voice-id="enroll-students"]',
-    'enroll-students': '[data-voice-id="enroll-students"]',
-    'refreshButton': '[data-voice-id="refresh"]',
-    'refresh': '[data-voice-id="refresh"]',
-    // Courses tabs
-    'coursesTab': '[data-voice-id="tab-courses"]',
-    'tab-courses': '[data-voice-id="tab-courses"]',
-    'courses': '[data-voice-id="tab-courses"]',
-    'view-courses': '[data-voice-id="tab-courses"]',
-    'createTab': '[data-voice-id="tab-create"]',
-    'tab-create': '[data-voice-id="tab-create"]',
-    'create': '[data-voice-id="tab-create"]',
-    'advancedTab': '[data-voice-id="tab-advanced"]',
-    'tab-advanced': '[data-voice-id="tab-advanced"]',
-    'advanced': '[data-voice-id="tab-advanced"]',
-    // Back-compat aliases: enrollment/instructor now map to Advanced tab
-    'enrollmentTab': '[data-voice-id="tab-advanced"]',
-    'tab-enrollment': '[data-voice-id="tab-advanced"]',
-    'enrollment': '[data-voice-id="tab-advanced"]',
-    'manage-enrollment': '[data-voice-id="tab-advanced"]',
-    'joinTab': '[data-voice-id="tab-join"]',
-    'tab-join': '[data-voice-id="tab-join"]',
-    'join': '[data-voice-id="tab-join"]',
-    'join-course': '[data-voice-id="tab-join"]',
-    'instructorTab': '[data-voice-id="tab-advanced"]',
-    'tab-instructor': '[data-voice-id="tab-advanced"]',
-    'instructor': '[data-voice-id="tab-advanced"]',
-    'become-instructor': '[data-voice-id="tab-advanced"]',
-    // AI Insights tab (Courses page)
-    'aiInsightsTab': '[data-voice-id="tab-ai-insights"]',
-    'tab-ai-insights': '[data-voice-id="tab-ai-insights"]',
-    'ai-insights': '[data-voice-id="tab-ai-insights"]',
-    'aiInsights': '[data-voice-id="tab-ai-insights"]',
-    'participation-insights': '[data-voice-id="tab-ai-insights"]',
-    'objective-coverage': '[data-voice-id="tab-ai-insights"]',
-    'joinCodeInput': '[data-voice-id="join-code"]',
-    'join-code': '[data-voice-id="join-code"]',
-    'joinButton': '[data-voice-id="join-course-button"]',
-  },
-  // Sessions page elements
-  '/sessions': {
-    'courseDropdown': '[data-voice-id="select-course"]',
-    'sessionTitleInput': '[data-voice-id="session-title"]',
-    'createButton': '[data-voice-id="create-session"]',
-    'create-session': '[data-voice-id="create-session"]',
-    'goLiveButton': '[data-voice-id="go-live"]',
-    'go-live': '[data-voice-id="go-live"]',
-    'completeButton': '[data-voice-id="complete-session"]',
-    'complete-session': '[data-voice-id="complete-session"]',
-    'scheduleButton': '[data-voice-id="schedule-session"]',
-    'schedule-session': '[data-voice-id="schedule-session"]',
-    'set-to-draft': '[data-voice-id="set-to-draft"]',
-    'sessionList': '[data-voice-id="session-list"]',
-    // Sessions tabs
-    'sessionsTab': '[data-voice-id="tab-sessions"]',
-    'tab-sessions': '[data-voice-id="tab-sessions"]',
-    'sessions': '[data-voice-id="tab-sessions"]',
-    'view-sessions': '[data-voice-id="tab-sessions"]',
-    'materialsTab': '[data-voice-id="tab-materials"]',
-    'tab-materials': '[data-voice-id="tab-materials"]',
-    'materials': '[data-voice-id="tab-materials"]',
-    'createTab': '[data-voice-id="tab-create"]',
-    'tab-create': '[data-voice-id="tab-create"]',
-    'create': '[data-voice-id="tab-create"]',
-    'manageTab': '[data-voice-id="tab-manage"]',
-    'tab-manage': '[data-voice-id="tab-manage"]',
-    'manage': '[data-voice-id="tab-manage"]',
-    'manage-status': '[data-voice-id="tab-manage"]',
-    'insightsTab': '[data-voice-id="tab-insights"]',
-    'tab-insights': '[data-voice-id="tab-insights"]',
-    'insights': '[data-voice-id="tab-insights"]',
-    // AI Features tab
-    'aiFeaturesTab': '[data-voice-id="tab-ai-features"]',
-    'tab-ai-features': '[data-voice-id="tab-ai-features"]',
-    'ai-features': '[data-voice-id="tab-ai-features"]',
-    'aiFeatures': '[data-voice-id="tab-ai-features"]',
-    'enhanced-features': '[data-voice-id="tab-ai-features"]',
-    // Post-class summary buttons
-    'send-summary-to-students': '[data-voice-id="send-summary-to-students"]',
-    'generate-session-summary': '[data-voice-id="generate-session-summary"]',
-    // Push to Canvas
-    'select-canvas-connection': '[data-voice-id="select-canvas-connection"]',
-    'canvas-connection': '[data-voice-id="select-canvas-connection"]',
-    'push-to-canvas': '[data-voice-id="push-to-canvas"]',
-    'push-canvas': '[data-voice-id="push-to-canvas"]',
-    'push-summary': '[data-voice-id="push-to-canvas"]',
-    'push-type-announcement': '[data-voice-id="push-type-announcement"]',
-    'announcement': '[data-voice-id="push-type-announcement"]',
-    'push-type-assignment': '[data-voice-id="push-type-assignment"]',
-    'assignment': '[data-voice-id="push-type-assignment"]',
-    'reflection': '[data-voice-id="push-type-assignment"]',
-    // Edit and delete session
-    'edit-session': '[data-voice-id="edit-session"]',
-    'editSession': '[data-voice-id="edit-session"]',
-    'delete-session': '[data-voice-id="delete-session"]',
-    'deleteSession': '[data-voice-id="delete-session"]',
-    'remove-session': '[data-voice-id="delete-session"]',
-  },
-  // Forum page elements
-  '/forum': {
-    'courseDropdown': '[data-voice-id="select-course"]',
-    'sessionDropdown': '[data-voice-id="select-session"]',
-    'postTextarea': '[data-voice-id="new-post"]',
-    'new-post': '[data-voice-id="new-post"]',
-    'postButton': '[data-voice-id="submit-post"]',
-    'submit-post': '[data-voice-id="submit-post"]',
-    'refreshButton': '[data-voice-id="refresh"]',
-    'refresh': '[data-voice-id="refresh"]',
-    // Forum tabs
-    'casesTab': '[data-voice-id="tab-cases"]',
-    'tab-cases': '[data-voice-id="tab-cases"]',
-    'cases': '[data-voice-id="tab-cases"]',
-    'case-studies': '[data-voice-id="tab-cases"]',
-    'discussionTab': '[data-voice-id="tab-discussion"]',
-    'tab-discussion': '[data-voice-id="tab-discussion"]',
-    'discussion': '[data-voice-id="tab-discussion"]',
-  },
-  // Console page elements
-  '/console': {
-    'courseDropdown': '[data-voice-id="select-course"]',
-    'sessionDropdown': '[data-voice-id="select-session"]',
-    'startCopilotButton': '[data-voice-id="start-copilot"]',
-    'start-copilot': '[data-voice-id="start-copilot"]',
-    'stopCopilotButton': '[data-voice-id="stop-copilot"]',
-    'stop-copilot': '[data-voice-id="stop-copilot"]',
-    'refreshButton': '[data-voice-id="refresh-interventions"]',
-    'refresh-interventions': '[data-voice-id="refresh-interventions"]',
-    'pollQuestionInput': '[data-voice-id="poll-question"]',
-    'poll-question': '[data-voice-id="poll-question"]',
-    'poll-option-1': '[data-voice-id="poll-option-1"]',
-    'poll-option-2': '[data-voice-id="poll-option-2"]',
-    'poll-option-3': '[data-voice-id="poll-option-3"]',
-    'poll-option-4': '[data-voice-id="poll-option-4"]',
-    'createPollButton': '[data-voice-id="create-poll"]',
-    'create-poll': '[data-voice-id="create-poll"]',
-    'caseTextarea': '[data-voice-id="case-prompt"]',
-    'case-prompt': '[data-voice-id="case-prompt"]',
-    'postCaseButton': '[data-voice-id="post-case"]',
-    'post-case': '[data-voice-id="post-case"]',
-    // Console tabs
-    'copilotTab': '[data-voice-id="tab-copilot"]',
-    'tab-copilot': '[data-voice-id="tab-copilot"]',
-    'copilot': '[data-voice-id="tab-copilot"]',
-    'ai-copilot': '[data-voice-id="tab-copilot"]',
-    'pollsTab': '[data-voice-id="tab-polls"]',
-    'tab-polls': '[data-voice-id="tab-polls"]',
-    'polls': '[data-voice-id="tab-polls"]',
-    'casesTab': '[data-voice-id="tab-cases"]',
-    'tab-cases': '[data-voice-id="tab-cases"]',
-    'cases': '[data-voice-id="tab-cases"]',
-    'case-studies': '[data-voice-id="tab-cases"]',
-    'toolsTab': '[data-voice-id="tab-tools"]',
-    'tab-tools': '[data-voice-id="tab-tools"]',
-    'tools': '[data-voice-id="tab-tools"]',
-    'instructor-tools': '[data-voice-id="tab-tools"]',
-    'requestsTab': '[data-voice-id="tab-requests"]',
-    'tab-requests': '[data-voice-id="tab-requests"]',
-    'requests': '[data-voice-id="tab-requests"]',
-    'instructor-requests': '[data-voice-id="tab-requests"]',
-    'rosterTab': '[data-voice-id="tab-roster"]',
-    'tab-roster': '[data-voice-id="tab-roster"]',
-    'roster': '[data-voice-id="tab-roster"]',
-    // Instructor tools - Session Timer
-    'open-timer-form': '[data-voice-id="open-timer-form"]',
-    'timer-duration-minutes': '[data-voice-id="timer-duration-minutes"]',
-    'timer-label': '[data-voice-id="timer-label"]',
-    'start-session-timer': '[data-voice-id="start-session-timer"]',
-    'cancel-session-timer': '[data-voice-id="cancel-session-timer"]',
-    'pause-timer': '[data-voice-id="pause-timer"]',
-    'resume-timer': '[data-voice-id="resume-timer"]',
-    'stop-timer': '[data-voice-id="stop-timer"]',
-    // Instructor tools - Breakout Groups
-    'open-breakout-form': '[data-voice-id="open-breakout-form"]',
-    'num-breakout-groups': '[data-voice-id="num-breakout-groups"]',
-    'create-breakout-groups': '[data-voice-id="create-breakout-groups"]',
-    'cancel-breakout-groups': '[data-voice-id="cancel-breakout-groups"]',
-    'dissolve-breakout-groups': '[data-voice-id="dissolve-breakout-groups"]',
-    'rosterCourseDropdown': '[data-voice-id="roster-course"]',
-    'uploadRosterButton': '[data-voice-id="upload-roster"]',
-    // Session status management buttons
-    'go-live': '[data-voice-id="go-live"]',
-    'goLiveButton': '[data-voice-id="go-live"]',
-    'set-to-draft': '[data-voice-id="set-to-draft"]',
-    'setToDraftButton': '[data-voice-id="set-to-draft"]',
-    'complete-session': '[data-voice-id="complete-session"]',
-    'completeSessionButton': '[data-voice-id="complete-session"]',
-    'schedule-session': '[data-voice-id="schedule-session"]',
-    'scheduleSessionButton': '[data-voice-id="schedule-session"]',
-    // Report buttons
-    'refresh-report': '[data-voice-id="refresh-report"]',
-    'refreshReportButton': '[data-voice-id="refresh-report"]',
-    'regenerate-report': '[data-voice-id="regenerate-report"]',
-    'regenerateReportButton': '[data-voice-id="regenerate-report"]',
-    'generate-report': '[data-voice-id="generate-report"]',
-    'generateReportButton': '[data-voice-id="generate-report"]',
-    // Theme and user menu
-    'toggle-theme': '[data-voice-id="toggle-theme"]',
-    'toggleTheme': '[data-voice-id="toggle-theme"]',
-    'user-menu': '[data-voice-id="user-menu"]',
-    'userMenu': '[data-voice-id="user-menu"]',
-    'view-voice-guide': '[data-voice-id="open-help"]',
-    'viewVoiceGuide': '[data-voice-id="open-help"]',
-    'forum-instructions': '[data-voice-id="open-help"]',
-    'forumInstructions': '[data-voice-id="open-help"]',
-    // Got It buttons for closing floating windows
-    'got-it-voice-guide': '[data-voice-id="got-it-voice-guide"]',
-    'got-it-platform-guide': '[data-voice-id="got-it-platform-guide"]',
-    'open-profile': '[data-voice-id="open-profile"]',
-    'openProfile': '[data-voice-id="open-profile"]',
-    'sign-out': '[data-voice-id="sign-out"]',
-    'signOut': '[data-voice-id="sign-out"]',
-  },
-  '/platform-guide': {
-    'introduction': '[data-voice-id="introduction-page"]',
-    'get-started': '[data-voice-id="intro-get-started"]',
-    'voice-commands': '[data-voice-id="intro-voice-commands"]',
-    'open-faq-1': '[data-voice-id="faq-question-1"]',
-    'open-faq-2': '[data-voice-id="faq-question-2"]',
-    'open-faq-3': '[data-voice-id="faq-question-3"]',
-    'open-faq-4': '[data-voice-id="faq-question-4"]',
-    'open-faq-5': '[data-voice-id="faq-question-5"]',
-    'open-courses': '[data-voice-id="intro-cta-courses"]',
-  },
-  '/integrations': {
-    'provider-dropdown': '[data-voice-id="select-integration-provider"]',
-    'select-integration-provider': '[data-voice-id="select-integration-provider"]',
-    'check-integration-connection': '[data-voice-id="check-integration-connection"]',
-    'select-provider-connection': '[data-voice-id="select-provider-connection"]',
-    'add-provider-connection': '[data-voice-id="add-provider-connection"]',
-    'connect-canvas-oauth': '[data-voice-id="connect-canvas-oauth"]',
-    'test-provider-connection': '[data-voice-id="test-provider-connection"]',
-    'activate-provider-connection': '[data-voice-id="activate-provider-connection"]',
-    'new-provider-connection-label': '[data-voice-id="new-provider-connection-label"]',
-    'new-provider-connection-url': '[data-voice-id="new-provider-connection-url"]',
-    'new-provider-connection-token': '[data-voice-id="new-provider-connection-token"]',
-    'external-course-dropdown': '[data-voice-id="select-external-course"]',
-    'select-external-course': '[data-voice-id="select-external-course"]',
-    'target-course-dropdown': '[data-voice-id="select-target-course"]',
-    'select-target-course': '[data-voice-id="select-target-course"]',
-    'target-session-dropdown': '[data-voice-id="select-target-session"]',
-    'select-target-session': '[data-voice-id="select-target-session"]',
-    'select-integration-mapping': '[data-voice-id="select-integration-mapping"]',
-    'save-course-mapping': '[data-voice-id="save-course-mapping"]',
-    'import-external-course': '[data-voice-id="import-external-course"]',
-    'sync-all-materials': '[data-voice-id="sync-all-materials"]',
-    'sync-roster': '[data-voice-id="sync-roster"]',
-    'import-external-materials': '[data-voice-id="import-external-materials"]',
-    'refresh-integrations': '[data-voice-id="refresh-integrations"]',
-    'select-all-external-materials': '[data-voice-id="select-all-external-materials"]',
-    'clear-external-materials': '[data-voice-id="clear-external-materials"]',
-  },
-};
+function findElement(target: string | undefined): HTMLElement | null {
+  if (!target) return null;
 
-const GLOBAL_UI_ELEMENTS: Record<string, string> = {
-  'toggle-theme': '[data-voice-id="toggle-theme"]',
-  'toggleTheme': '[data-voice-id="toggle-theme"]',
-  'user-menu': '[data-voice-id="user-menu"]',
-  'userMenu': '[data-voice-id="user-menu"]',
-  'notifications': '[data-voice-id="notifications-button"]',
-  'notification': '[data-voice-id="notifications-button"]',
-  'notifications-button': '[data-voice-id="notifications-button"]',
-  'open-notifications': '[data-voice-id="notifications-button"]',
-  'top-notification': '[data-voice-id="notifications-button"]',
-  'top-bar-notification': '[data-voice-id="notifications-button"]',
-  'workspace-search': '[data-voice-id="workspace-search"]',
-  'search': '[data-voice-id="workspace-search"]',
-  'search-pages': '[data-voice-id="workspace-search"]',
-  'help': '[aria-label="Help and documentation"]',
-  'open-help': '[aria-label="Help and documentation"]',
-  'view-voice-guide': '[data-voice-id="open-help"]',
-  'forum-instructions': '[data-voice-id="open-help"]',
-  'open-instructor-requests': '[data-voice-id="open-instructor-requests"]',
-  'open-courses-from-notifications': '[data-voice-id="open-courses-from-notifications"]',
-  'refresh-poll-results': '[data-voice-id="refresh-poll-results"]',
-  'refresh-instructor-requests': '[data-voice-id="refresh-instructor-requests"]',
-  'approve-instructor-request': '[data-voice-id="approve-instructor-request"]',
-  'reject-instructor-request': '[data-voice-id="reject-instructor-request"]',
-  'introduction': '[data-voice-id="tab-introduction"]',
-  'tab-introduction': '[data-voice-id="tab-introduction"]',
-  'platform-guide': '[data-voice-id="tab-introduction"]',
-  'integrations': '[data-voice-id="tab-integrations"]',
-  'tab-integrations': '[data-voice-id="tab-integrations"]',
-  'lms-integrations': '[data-voice-id="tab-integrations"]',
-  'canvas-integrations': '[data-voice-id="tab-integrations"]',
-  'check-connection': '[data-voice-id="check-integration-connection"]',
-  'provider-connection': '[data-voice-id="select-provider-connection"]',
-  'add-connection': '[data-voice-id="add-provider-connection"]',
-  'connect-canvas': '[data-voice-id="connect-canvas-oauth"]',
-  'connect-canvas-oauth': '[data-voice-id="connect-canvas-oauth"]',
-  'test-connection': '[data-voice-id="test-provider-connection"]',
-  'set-default-connection': '[data-voice-id="activate-provider-connection"]',
-  'create-forum-course': '[data-voice-id="import-external-course"]',
-  'save-mapping': '[data-voice-id="save-course-mapping"]',
-  'sync-materials': '[data-voice-id="sync-all-materials"]',
-  'sync-students': '[data-voice-id="sync-roster"]',
-  'toggle-language': '[data-voice-id="toggle-language"]',
-  'change-language': '[data-voice-id="toggle-language"]',
-  'switch-language': '[data-voice-id="toggle-language"]',
-  'language-button': '[data-voice-id="toggle-language"]',
-  // Push to Canvas (global so it can be triggered from anywhere)
-  'push-to-canvas': '[data-voice-id="push-to-canvas"]',
-  'push-canvas': '[data-voice-id="push-to-canvas"]',
-  'push-summary-canvas': '[data-voice-id="push-to-canvas"]',
-  'send-to-canvas': '[data-voice-id="push-to-canvas"]',
-};
+  // 1. Direct voice-id lookup
+  let element = document.querySelector(`[data-voice-id="${target}"]`) as HTMLElement | null;
+  if (element) return element;
+
+  // 2. Partial voice-id match (for flexibility)
+  element = document.querySelector(`[data-voice-id*="${target}"]`) as HTMLElement | null;
+  if (element) return element;
+
+  // 3. Try common variations
+  const variations = [
+    target,
+    target.toLowerCase(),
+    target.replace(/_/g, '-'),
+    target.replace(/-/g, '_'),
+    `tab-${target}`,
+    `${target}-button`,
+  ];
+
+  for (const variation of variations) {
+    element = document.querySelector(`[data-voice-id="${variation}"]`) as HTMLElement | null;
+    if (element) return element;
+  }
+
+  // 4. Search by text content (buttons, tabs)
+  const targetLower = target.toLowerCase().replace(/[-_]/g, ' ');
+  const clickables = document.querySelectorAll('button, [role="button"], [role="tab"]');
+  for (const el of clickables) {
+    const text = el.textContent?.toLowerCase().trim() || '';
+    const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+    if (text.includes(targetLower) || targetLower.includes(text) ||
+        ariaLabel.includes(targetLower)) {
+      return el as HTMLElement;
+    }
+  }
+
+  return null;
+}
 
 /**
- * Voice-friendly names mapping to actual option values
- * Helps match spoken words like "first", "second" to actual options
+ * Find a dropdown element
  */
-const ORDINAL_MAP: Record<string, number> = {
-  'first': 0,
-  'second': 1,
-  'third': 2,
-  'fourth': 3,
-  'fifth': 4,
-  'last': -1,
-  '1st': 0,
-  '2nd': 1,
-  '3rd': 2,
-  '4th': 3,
-  '5th': 4,
-  'one': 0,
-  'two': 1,
-  'three': 2,
-  'four': 3,
-  'five': 4,
-};
+function findDropdown(target: string | undefined): HTMLSelectElement | null {
+  if (target) {
+    const element = findElement(target);
+    if (element?.tagName === 'SELECT') {
+      return element as HTMLSelectElement;
+    }
+  }
 
-const NUMBER_WORD_MAP: Record<string, number> = {
-  one: 1,
-  two: 2,
-  three: 3,
-  four: 4,
-  five: 5,
-  six: 6,
-  seven: 7,
-  eight: 8,
-  nine: 9,
-  ten: 10,
-};
+  // Find first visible select on page
+  const selects = document.querySelectorAll('select');
+  for (const select of selects) {
+    const rect = select.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      return select as HTMLSelectElement;
+    }
+  }
+
+  return null;
+}
 
 /**
- * VoiceUIController - Handles voice-triggered UI interactions within pages
- *
- * Listens for custom events and interacts with UI elements:
- * - ui.selectDropdown: Selects an option from a dropdown
- * - ui.clickButton: Clicks a button
- * - ui.fillInput: Fills an input field
- * - ui.clearInput: Clears an input field
- * - ui.switchTab: Switches to a tab
- * - ui.selectListItem: Selects an item from a list
+ * Find an input element
  */
+function findInput(target: string | undefined): HTMLInputElement | HTMLTextAreaElement | null {
+  // Special case: focused input
+  if (target === 'focused-input') {
+    const focused = document.activeElement;
+    if (focused?.tagName === 'INPUT' || focused?.tagName === 'TEXTAREA') {
+      return focused as HTMLInputElement | HTMLTextAreaElement;
+    }
+  }
+
+  if (target) {
+    const element = findElement(target);
+    if (element?.tagName === 'INPUT' || element?.tagName === 'TEXTAREA') {
+      return element as HTMLInputElement | HTMLTextAreaElement;
+    }
+  }
+
+  // Find first visible, empty input
+  const inputs = document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]), textarea');
+  for (const input of inputs) {
+    const el = input as HTMLInputElement | HTMLTextAreaElement;
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0 && !el.value) {
+      return el;
+    }
+  }
+
+  // Fall back to any visible input
+  for (const input of inputs) {
+    const el = input as HTMLInputElement | HTMLTextAreaElement;
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      return el;
+    }
+  }
+
+  return null;
+}
+
+// ============================================================================
+// REACT-COMPATIBLE VALUE SETTERS
+// ============================================================================
+
+/**
+ * Set input value in a React-compatible way
+ */
+function setInputValueReactCompatible(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  value: string
+): void {
+  input.focus();
+
+  const prototype = input.tagName === 'TEXTAREA'
+    ? window.HTMLTextAreaElement.prototype
+    : window.HTMLInputElement.prototype;
+
+  const nativeSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+
+  if (nativeSetter) {
+    nativeSetter.call(input, value);
+  } else {
+    input.value = value;
+  }
+
+  // Update React's internal tracker
+  const tracker = (input as any)._valueTracker;
+  if (tracker) {
+    tracker.setValue('__voice_trigger__');
+  }
+
+  // Dispatch events
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/**
+ * Set select value in a React-compatible way
+ */
+function setSelectValueReactCompatible(
+  select: HTMLSelectElement,
+  value: string
+): void {
+  select.focus();
+
+  const nativeSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLSelectElement.prototype,
+    'value'
+  )?.set;
+
+  if (nativeSetter) {
+    nativeSetter.call(select, value);
+  } else {
+    select.value = value;
+  }
+
+  // Update React's internal tracker
+  const tracker = (select as any)._valueTracker;
+  if (tracker) {
+    tracker.setValue('__voice_trigger__');
+  }
+
+  // Dispatch events
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  select.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// ============================================================================
+// GET DROPDOWN OPTIONS
+// ============================================================================
+
+function getDropdownOptions(select: HTMLSelectElement): Array<{
+  value: string;
+  text: string;
+  index: number;
+}> {
+  const options: Array<{ value: string; text: string; index: number }> = [];
+  let validIndex = 0;
+
+  for (let i = 0; i < select.options.length; i++) {
+    const opt = select.options[i];
+    // Skip empty placeholder options
+    if (opt.value) {
+      options.push({
+        value: opt.value,
+        text: opt.text,
+        index: validIndex++,
+      });
+    }
+  }
+
+  return options;
+}
+
+// ============================================================================
+// VOICE UI CONTROLLER COMPONENT
+// ============================================================================
+
 export const VoiceUIController = () => {
   const router = useRouter();
   const pathname = usePathname();
   const lastActionRef = useRef<number>(0);
 
-  /**
-   * Find an element using the registry or direct selector
-   */
-  const findElement = useCallback((target: string): HTMLElement | null => {
-    // First, check if it's a direct voice-id
-    let element = document.querySelector(`[data-voice-id="${target}"]`) as HTMLElement;
-    if (element) return element;
+  // ========================================================================
+  // DROPDOWN SELECTION
+  // ========================================================================
 
-    // Check the page registry
-    const pageRegistry = UI_ELEMENT_REGISTRY[pathname] || {};
-    const selector = pageRegistry[target];
-    if (selector) {
-      element = document.querySelector(selector) as HTMLElement;
-      if (element) return element;
-    }
+  const handleSelectDropdown = useCallback((event: CustomEvent) => {
+    const { target, voiceId, value, optionName, optionIndex, selectionIndex, selectionValue } = event.detail || {};
+    log('selectDropdown', { target, voiceId, value, optionName, optionIndex, selectionIndex, selectionValue });
 
-    // Check global shell controls
-    const globalSelector = GLOBAL_UI_ELEMENTS[target];
-    if (globalSelector) {
-      element = document.querySelector(globalSelector) as HTMLElement;
-      if (element) return element;
-    }
-
-    // Try common patterns
-    const patterns = [
-      `[data-voice-id*="${target}"]`,
-      `[id*="${target}"]`,
-      `[name*="${target}"]`,
-      `select[aria-label*="${target}" i]`,
-      `input[placeholder*="${target}" i]`,
-      `button:contains("${target}")`,
-    ];
-
-    for (const pattern of patterns) {
-      try {
-        element = document.querySelector(pattern) as HTMLElement;
-        if (element) return element;
-      } catch {
-        // Selector might be invalid, continue
-      }
-    }
-
-    return null;
-  }, [pathname]);
-
-  /**
-   * Get all options from a select dropdown
-   */
-  const getDropdownOptions = useCallback((select: HTMLSelectElement): Array<{value: string, text: string, index: number}> => {
-    const options: Array<{value: string, text: string, index: number}> = [];
-    for (let i = 0; i < select.options.length; i++) {
-      const opt = select.options[i];
-      if (opt.value) { // Skip empty placeholder options
-        options.push({
-          value: opt.value,
-          text: opt.text,
-          index: i,
-        });
-      }
-    }
-    return options;
-  }, []);
-
-  /**
-   * Find best matching option in dropdown by name or ordinal
-   */
-  const findBestOption = useCallback((options: Array<{value: string, text: string, index: number}>, searchTerm: string): {value: string, text: string, index: number} | null => {
-    if (!options.length) return null;
-
-    const termLower = searchTerm.toLowerCase().trim();
-
-    // Check for ordinal (first, second, etc.)
-    if (ORDINAL_MAP[termLower] !== undefined) {
-      const idx = ORDINAL_MAP[termLower];
-      if (idx === -1) {
-        // "last"
-        return options[options.length - 1];
-      }
-      if (idx < options.length) {
-        return options[idx];
-      }
-    }
-
-    // Check for numeric index (e.g., "1", "2")
-    const numericMatch = termLower.match(/^(\d+)$/);
-    if (numericMatch) {
-      const idx = parseInt(numericMatch[1], 10) - 1; // 1-indexed
-      if (idx >= 0 && idx < options.length) {
-        return options[idx];
-      }
-    }
-
-    // Check for numeric index embedded in phrase (e.g., "course number 3")
-    const embeddedNumericMatch = termLower.match(/\b(\d+)\b/);
-    if (embeddedNumericMatch) {
-      const idx = parseInt(embeddedNumericMatch[1], 10) - 1;
-      if (idx >= 0 && idx < options.length) {
-        return options[idx];
-      }
-    }
-
-    // Check for written number embedded in phrase (e.g., "course number three")
-    for (const [word, num] of Object.entries(NUMBER_WORD_MAP)) {
-      if (termLower.includes(word)) {
-        const idx = num - 1;
-        if (idx >= 0 && idx < options.length) {
-          return options[idx];
-        }
-      }
-    }
-
-    // Exact match (case insensitive)
-    const exactMatch = options.find(o => o.text.toLowerCase() === termLower);
-    if (exactMatch) return exactMatch;
-
-    // Partial match (contains)
-    const partialMatch = options.find(o => o.text.toLowerCase().includes(termLower));
-    if (partialMatch) return partialMatch;
-
-    // Fuzzy match - find the option with most words matching
-    const searchWords = termLower.split(/\s+/);
-    let bestMatch: {value: string, text: string, index: number} | null = null;
-    let bestScore = 0;
-
-    for (const opt of options) {
-      const optWords = opt.text.toLowerCase().split(/\s+/);
-      let score = 0;
-      for (const searchWord of searchWords) {
-        for (const optWord of optWords) {
-          if (optWord.includes(searchWord) || searchWord.includes(optWord)) {
-            score++;
-          }
-        }
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = opt;
-      }
-    }
-
-    return bestMatch;
-  }, []);
-
-  /**
-   * Set select value using React-compatible approach
-   * React controlled components need special handling to trigger state updates
-   */
-  const setSelectValueReactCompatible = useCallback((select: HTMLSelectElement, newValue: string) => {
-    // Focus first to ensure React is tracking this element
-    select.focus();
-
-    // Get the native value setter for HTMLSelectElement
-    const nativeSelectValueSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLSelectElement.prototype,
-      'value'
-    )?.set;
-
-    if (nativeSelectValueSetter) {
-      nativeSelectValueSetter.call(select, newValue);
-    } else {
-      select.value = newValue;
-    }
-
-    if (select.value !== newValue) {
-      const targetOption = Array.from(select.options).find((o) => o.value === newValue);
-      if (targetOption) {
-        select.selectedIndex = targetOption.index;
-      }
-    }
-
-    // React 16+ uses a tracker on the DOM node to detect value changes
-    // We need to update this tracker for React to pick up our change
-    const tracker = (select as any)._valueTracker;
-    if (tracker) {
-      tracker.setValue('__voice_trigger__'); // Set to something different so React sees a change
-    }
-
-    // Dispatch change event - this should now be picked up by React
-    const changeEvent = new Event('change', { bubbles: true });
-    select.dispatchEvent(changeEvent);
-
-    // Also dispatch input event for good measure
-    const inputEvent = new Event('input', { bubbles: true });
-    select.dispatchEvent(inputEvent);
-
-    console.log('🎤 VoiceUI: Set select value (React-compatible):', newValue);
-  }, []);
-
-  const handleSelectOnElement = useCallback((select: HTMLSelectElement, value?: string, optionName?: string, optionIndex?: number) => {
-    const options = getDropdownOptions(select);
-
-    // If a specific value is provided, use it directly
-    if (value !== undefined && value !== null) {
-      setSelectValueReactCompatible(select, String(value));
-      console.log('🎤 VoiceUI: Selected by value:', value);
+    const select = findDropdown(target || voiceId);
+    if (!select) {
+      warn('No dropdown found');
       return;
     }
 
-    // If an option index is provided (0-based, or -1 for last)
-    if (optionIndex !== undefined && optionIndex !== null) {
-      let actualIndex = optionIndex === -1 ? options.length - 1 : optionIndex;
-      if (actualIndex >= options.length && actualIndex - 1 >= 0 && actualIndex - 1 < options.length) {
-        actualIndex = actualIndex - 1;
-      }
-      if (actualIndex >= 0 && actualIndex < options.length) {
-        setSelectValueReactCompatible(select, options[actualIndex].value);
-        console.log('🎤 VoiceUI: Selected by index:', actualIndex, options[actualIndex].text);
-        return;
-      }
+    const options = getDropdownOptions(select);
+    if (options.length === 0) {
+      warn('Dropdown has no options');
+      return;
     }
 
-    // If an option name is provided, find best match
-    if (optionName) {
-      const match = findBestOption(options, optionName);
+    let targetValue: string | null = null;
+
+    // Priority 1: Direct value
+    if (value !== undefined || selectionValue !== undefined) {
+      targetValue = String(value ?? selectionValue);
+    }
+    // Priority 2: Index (0-based, -1 for last)
+    else if (optionIndex !== undefined || selectionIndex !== undefined) {
+      const idx = optionIndex ?? selectionIndex;
+      const actualIdx = idx === -1 ? options.length - 1 : idx;
+      if (actualIdx >= 0 && actualIdx < options.length) {
+        targetValue = options[actualIdx].value;
+      }
+    }
+    // Priority 3: Name matching
+    else if (optionName) {
+      const nameLower = optionName.toLowerCase();
+      const match = options.find(o =>
+        o.text.toLowerCase() === nameLower ||
+        o.text.toLowerCase().includes(nameLower)
+      );
       if (match) {
-        setSelectValueReactCompatible(select, match.value);
-        console.log('🎤 VoiceUI: Selected by name:', match.text);
-        return;
+        targetValue = match.value;
       }
     }
 
-    // Default to first non-empty option
-    if (options.length > 0) {
-      setSelectValueReactCompatible(select, options[0].value);
-      console.log('🎤 VoiceUI: Selected first option:', options[0].text);
-    }
-  }, [getDropdownOptions, findBestOption, setSelectValueReactCompatible]);
-
-  /**
-   * UNIVERSAL dropdown selection - works for ANY dropdown on any page
-   * Finds by: data-voice-id, label text, name, or first visible dropdown
-   */
-  const handleSelectDropdown = useCallback((event: CustomEvent) => {
-    const { target, value, optionName, optionIndex } = event.detail || {};
-    console.log('🎤 VoiceUI: selectDropdown', { target, value, optionName, optionIndex });
-
-    let element: HTMLElement | null = null;
-
-    // Try to find by target first
-    if (target) {
-      element = findElement(target);
-
-      // Try to find by label if not found
-      if (!element || element.tagName !== 'SELECT') {
-        const targetLower = target.toLowerCase().replace(/-/g, ' ');
-        const selects = Array.from(document.querySelectorAll('select'));
-        for (const select of selects) {
-          const label = select.closest('div')?.querySelector('label')?.textContent?.toLowerCase() || '';
-          const ariaLabel = select.getAttribute('aria-label')?.toLowerCase() || '';
-          const name = select.getAttribute('name')?.toLowerCase() || '';
-          if (label.includes(targetLower) || ariaLabel.includes(targetLower) ||
-              name.includes(targetLower) || targetLower.includes(label.split(' ')[0])) {
-            element = select as HTMLElement;
-            break;
-          }
-        }
-      }
-    }
-
-    // UNIVERSAL: If no target or not found, use the first visible select
-    if ((!target || String(target).trim() === '') && (!element || element.tagName !== 'SELECT')) {
-      const selects = Array.from(document.querySelectorAll('select')).filter(sel => {
-        const rect = sel.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
-      });
-      if (selects.length > 0) {
-        element = selects[0] as HTMLElement;
-      }
-    }
-
-    if (element && element.tagName === 'SELECT') {
-      handleSelectOnElement(element as HTMLSelectElement, value, optionName, optionIndex);
+    if (targetValue) {
+      setSelectValueReactCompatible(select, targetValue);
+      log('Selected:', targetValue);
     } else {
-      console.warn('🎤 VoiceUI: No dropdown found');
+      warn('Could not determine selection');
     }
-  }, [findElement, handleSelectOnElement]);
+  }, []);
 
-  /**
-   * Handle button click
-   */
+  // ========================================================================
+  // EXPAND DROPDOWN
+  // ========================================================================
+
+  const handleExpandDropdown = useCallback((event: CustomEvent) => {
+    const { target, voiceId } = event.detail || {};
+    log('expandDropdown', { target, voiceId });
+
+    const select = findDropdown(target || voiceId);
+    if (!select) {
+      warn('No dropdown found');
+      return;
+    }
+
+    select.focus();
+    select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+    // Report available options
+    const options = getDropdownOptions(select);
+    log('Options:', options.map((o, i) => `${i + 1}. ${o.text}`));
+
+    window.dispatchEvent(new CustomEvent('voice-dropdown-options', {
+      detail: { options: options.map(o => o.text) }
+    }));
+  }, []);
+
+  // ========================================================================
+  // BUTTON CLICK
+  // ========================================================================
+
   const handleClickButton = useCallback((event: CustomEvent) => {
-    const { target, buttonLabel } = event.detail || {};
-    console.log('🎤 VoiceUI: clickButton', { target, buttonLabel });
+    const { target, voiceId, buttonLabel } = event.detail || {};
+    log('clickButton', { target, voiceId, buttonLabel });
 
     // Debounce rapid clicks
     const now = Date.now();
     if (now - lastActionRef.current < 500) {
-      console.log('🎤 VoiceUI: Debounced rapid click');
+      log('Debounced rapid click');
       return;
     }
     lastActionRef.current = now;
 
-    let element = findElement(target);
+    const element = findElement(target || voiceId) || (buttonLabel ? findElement(buttonLabel) : null);
 
-    // If not found by target, search by button label
-    if (!element && buttonLabel) {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const labelLower = buttonLabel.toLowerCase();
-      for (const btn of buttons) {
-        const btnText = btn.textContent?.toLowerCase() || '';
-        if (btnText.includes(labelLower)) {
-          element = btn as HTMLElement;
-          break;
-        }
-      }
+    if (!element) {
+      warn('Button not found:', target || voiceId);
+      return;
     }
 
-    // If still not found, try fuzzy lookup on target text across common clickable elements.
-    if (!element && target) {
-      const targetLower = String(target).toLowerCase().replace(/[-_]/g, ' ').trim();
-      const clickables = Array.from(document.querySelectorAll('button, a, [role=\"button\"]'));
-      for (const node of clickables) {
-        const text = node.textContent?.toLowerCase().trim() || '';
-        const aria = node.getAttribute('aria-label')?.toLowerCase() || '';
-        const title = node.getAttribute('title')?.toLowerCase() || '';
-        if ((text && (text.includes(targetLower) || targetLower.includes(text))) ||
-            (aria && (aria.includes(targetLower) || targetLower.includes(aria))) ||
-            (title && (title.includes(targetLower) || targetLower.includes(title)))) {
-          element = node as HTMLElement;
-          break;
-        }
-      }
+    if (element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true') {
+      warn('Button is disabled');
+      return;
     }
 
-    if (element) {
-      // Check if button is disabled
-      if (element.hasAttribute('disabled') || element.classList.contains('disabled')) {
-        console.warn('🎤 VoiceUI: Button is disabled:', target);
-        return;
-      }
-      element.click();
-      console.log('🎤 VoiceUI: Clicked button:', target || buttonLabel);
-    } else {
-      console.warn('🎤 VoiceUI: Button not found:', target, buttonLabel);
-    }
-  }, [findElement]);
+    element.click();
+    log('Clicked button');
+  }, []);
 
-  /**
-   * Handle opening a menu and clicking an item inside it with proper timing
-   * This handles dropdown menus where items are only rendered when menu is open
-   */
+  // ========================================================================
+  // MENU AND CLICK
+  // ========================================================================
+
   const handleOpenMenuAndClick = useCallback((event: CustomEvent) => {
-    const { menuTarget, itemTarget } = event.detail || {};
-    console.log('🎤 VoiceUI: openMenuAndClick', { menuTarget, itemTarget });
+    const { menuTarget, menuVoiceId, itemTarget, itemVoiceId } = event.detail || {};
+    log('openMenuAndClick', { menuTarget, menuVoiceId, itemTarget, itemVoiceId });
 
-    // First, find and click the menu button
-    const menuButton = findElement(menuTarget);
+    const menuButton = findElement(menuTarget || menuVoiceId);
     if (!menuButton) {
-      console.warn('🎤 VoiceUI: Menu button not found:', menuTarget);
+      warn('Menu button not found');
       return;
     }
 
     menuButton.click();
-    console.log('🎤 VoiceUI: Clicked menu button:', menuTarget);
 
-    // Wait for menu to render, then click the item
+    // Wait for menu to render, then click item
     setTimeout(() => {
-      const menuItem = findElement(itemTarget);
+      const menuItem = findElement(itemTarget || itemVoiceId);
       if (menuItem) {
         menuItem.click();
-        console.log('🎤 VoiceUI: Clicked menu item:', itemTarget);
+        log('Clicked menu item');
       } else {
-        console.warn('🎤 VoiceUI: Menu item not found after delay:', itemTarget);
+        warn('Menu item not found');
       }
-    }, 300); // 300ms delay for menu to render
-  }, [findElement]);
+    }, 300);
+  }, []);
 
-  /**
-   * UNIVERSAL input fill - works for ANY input field on any page
-   * Finds inputs by: data-voice-id, label text, placeholder, aria-label, or active focus
-   */
+  // ========================================================================
+  // FILL INPUT
+  // ========================================================================
+
   const handleFillInput = useCallback((event: CustomEvent) => {
-    const { target, value } = event.detail || {};
-    console.log('🎤 VoiceUI: fillInput', { target, value });
+    const { target, voiceId, value, content, append } = event.detail || {};
+    const inputValue = value ?? content ?? '';
+    log('fillInput', { target, voiceId, value: inputValue.substring(0, 50) });
 
-    let element: HTMLElement | null = null;
-
-    // Special case: "focused-input" means fill the currently focused element or first visible input
-    if (target === 'focused-input') {
-      const focused = document.activeElement;
-      if (focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA')) {
-        element = focused as HTMLElement;
-      }
+    const input = findInput(target || voiceId);
+    if (!input) {
+      warn('No input found');
+      return;
     }
 
-    // Try to find by voice-id first
-    if (!element && target && target !== 'focused-input') {
-      element = findElement(target);
-    }
+    const newValue = append ? input.value + inputValue : inputValue;
+    setInputValueReactCompatible(input, newValue);
+    log('Filled input');
+  }, []);
 
-    // Try to find by label text (universal approach)
-    if (!element && target && target !== 'focused-input') {
-      const targetLower = target.toLowerCase().replace(/-/g, ' ');
+  // ========================================================================
+  // CLEAR INPUT
+  // ========================================================================
 
-      // Search for input by associated label
-      const labels = Array.from(document.querySelectorAll('label'));
-      for (const label of labels) {
-        const labelText = label.textContent?.toLowerCase() || '';
-        // Match if label contains target or target contains any word from label
-        if (labelText.includes(targetLower) || targetLower.split(' ').some((word: string) => labelText.includes(word))) {
-          const forId = label.getAttribute('for');
-          if (forId) {
-            element = document.getElementById(forId) as HTMLElement;
-          } else {
-            // Label might wrap the input
-            element = label.querySelector('input, textarea') as HTMLElement;
-          }
-          if (element) break;
-        }
-      }
-
-      // Search by placeholder or aria-label
-      if (!element) {
-        const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]), textarea'));
-        for (const input of inputs) {
-          const placeholder = input.getAttribute('placeholder')?.toLowerCase() || '';
-          const ariaLabel = input.getAttribute('aria-label')?.toLowerCase() || '';
-          const name = input.getAttribute('name')?.toLowerCase() || '';
-          const id = input.getAttribute('id')?.toLowerCase() || '';
-          if (placeholder.includes(targetLower) || ariaLabel.includes(targetLower) ||
-              name.includes(targetLower) || id.includes(targetLower) ||
-              targetLower.includes(placeholder) || targetLower.includes(name)) {
-            element = input as HTMLElement;
-            break;
-          }
-        }
-      }
-    }
-
-    // UNIVERSAL FALLBACK: Find the first visible, empty or focusable input
-    if (!element) {
-      const visibleInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea')).filter(el => {
-        const rect = el.getBoundingClientRect();
-        const style = window.getComputedStyle(el);
-        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
-      }) as HTMLInputElement[];
-
-      // Prefer empty inputs, then inputs in forms
-      const emptyInput = visibleInputs.find(inp => !inp.value);
-      element = emptyInput || visibleInputs[0] || null;
-    }
-
-    // Fill the input - use React-compatible approach to trigger state updates
-    if (element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')) {
-      const input = element as HTMLInputElement | HTMLTextAreaElement;
-
-      // Focus first to ensure React is tracking this element
-      input.focus();
-
-      // Get the native value setter
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        element.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
-        'value'
-      )?.set;
-
-      if (nativeInputValueSetter) {
-        nativeInputValueSetter.call(input, value || '');
-      } else {
-        input.value = value || '';
-      }
-
-      // React 16+ uses a tracker on the DOM node to detect value changes
-      // We need to update this tracker for React to pick up our change
-      const tracker = (input as any)._valueTracker;
-      if (tracker) {
-        tracker.setValue(''); // Set to something different so React sees a change
-      }
-
-      // Dispatch input event - this should now be picked up by React
-      const inputEvent = new Event('input', { bubbles: true });
-      input.dispatchEvent(inputEvent);
-
-      // Also dispatch change event
-      const changeEvent = new Event('change', { bubbles: true });
-      input.dispatchEvent(changeEvent);
-
-      console.log('🎤 VoiceUI: Filled input:', element.getAttribute('data-voice-id') || element.getAttribute('name') || 'unknown', 'with:', value);
-    } else {
-      console.warn('🎤 VoiceUI: No input found to fill');
-    }
-  }, [findElement]);
-
-  /**
-   * UNIVERSAL input clearing - clears an input/textarea by voice-id
-   */
   const handleClearInput = useCallback((event: CustomEvent) => {
-    const { target } = event.detail || {};
-    console.log('🎤 VoiceUI: clearInput', { target });
+    const { target, voiceId } = event.detail || {};
+    log('clearInput', { target, voiceId });
 
-    let element: HTMLElement | null = null;
-
-    // Find by voice-id
-    if (target) {
-      element = findElement(target);
+    const input = findInput(target || voiceId);
+    if (!input) {
+      warn('No input found');
+      return;
     }
 
-    // Clear the input using React-compatible approach
-    if (element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')) {
-      const input = element as HTMLInputElement | HTMLTextAreaElement;
+    setInputValueReactCompatible(input, '');
+    input.blur();
+    log('Cleared input');
+  }, []);
 
-      // Focus first
-      input.focus();
+  // ========================================================================
+  // SWITCH TAB
+  // ========================================================================
 
-      // Get the native value setter
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        element.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
-        'value'
-      )?.set;
-
-      if (nativeInputValueSetter) {
-        nativeInputValueSetter.call(input, '');
-      } else {
-        input.value = '';
-      }
-
-      // Update React's tracker
-      const tracker = (input as any)._valueTracker;
-      if (tracker) {
-        tracker.setValue('something'); // Set to something different so React sees a change
-      }
-
-      // Dispatch events
-      const inputEvent = new Event('input', { bubbles: true });
-      input.dispatchEvent(inputEvent);
-      const changeEvent = new Event('change', { bubbles: true });
-      input.dispatchEvent(changeEvent);
-
-      // Blur to unfocus
-      input.blur();
-
-      console.log('🎤 VoiceUI: Cleared input:', target);
-    } else {
-      console.warn('🎤 VoiceUI: No input found to clear:', target);
-    }
-  }, [findElement]);
-
-  /**
-   * UNIVERSAL dropdown expansion - works for ANY dropdown on any page
-   * Finds dropdowns by: data-voice-id, label, or just finds any visible dropdown
-   */
-  const handleExpandDropdown = useCallback((event: CustomEvent) => {
-    const { target, findAny } = event.detail || {};
-    console.log('🎤 VoiceUI: expandDropdown', { target, findAny });
-
-    let element: HTMLElement | null = null;
-
-    // Try to find by target first
-    if (target) {
-      element = findElement(target);
-
-      // Try to find by label if not found
-      if (!element || element.tagName !== 'SELECT') {
-        const targetLower = target.toLowerCase().replace(/-/g, ' ');
-        const selects = Array.from(document.querySelectorAll('select'));
-        for (const select of selects) {
-          // Check label
-          const label = select.closest('div')?.querySelector('label')?.textContent?.toLowerCase() || '';
-          const ariaLabel = select.getAttribute('aria-label')?.toLowerCase() || '';
-          const name = select.getAttribute('name')?.toLowerCase() || '';
-          if (label.includes(targetLower) || ariaLabel.includes(targetLower) ||
-              name.includes(targetLower) || targetLower.includes(label.split(' ')[0])) {
-            element = select as HTMLElement;
-            break;
-          }
-        }
-      }
-    }
-
-    // UNIVERSAL: If not found or findAny is true, get the first visible select on the page
-    if (!element || element.tagName !== 'SELECT') {
-      const selects = Array.from(document.querySelectorAll('select')).filter(sel => {
-        const rect = sel.getBoundingClientRect();
-        const style = window.getComputedStyle(sel);
-        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden';
-      });
-      if (selects.length > 0) {
-        element = selects[0] as HTMLElement;
-      }
-    }
-
-    if (element && element.tagName === 'SELECT') {
-      const select = element as HTMLSelectElement;
-      // Focus and open the dropdown
-      select.focus();
-      select.click();
-      select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-
-      // List available options for voice feedback
-      const options = Array.from(select.options).filter(opt => opt.value);
-      console.log('🎤 VoiceUI: Expanded dropdown with options:', options.map((o, i) => `${i + 1}. ${o.text}`));
-
-      // Dispatch event with available options (for voice assistant to announce)
-      window.dispatchEvent(new CustomEvent('voice-dropdown-options', {
-        detail: { options: options.map(o => o.text) }
-      }));
-    } else {
-      console.warn('🎤 VoiceUI: No dropdown found on page');
-    }
-  }, [findElement]);
-
-  /**
-   * UNIVERSAL tab switch - works for ANY tab on any page
-   * Finds tabs by: value attribute (Radix), data-voice-id, text content, role="tab"
-   *
-   * IMPORTANT: The tabName from backend should be the actual tab value (e.g., "cases", "discussion")
-   * not the display text (e.g., "Post a Case", "Discussion (5)")
-   */
   const handleSwitchTab = useCallback((event: CustomEvent) => {
-    const { target, tabName } = event.detail || {};
-    console.log('🎤 VoiceUI: switchTab', { target, tabName });
+    const { target, voiceId, tabName } = event.detail || {};
+    const searchName = tabName || target || voiceId || '';
+    log('switchTab', { searchName });
 
-    const searchName = tabName || target || '';
-    // Keep original with hyphens for exact matching, also create normalized version
-    const searchNameLower = searchName.toLowerCase().replace(/tab|panel|section/g, '').trim();
-    const searchNameNormalized = searchNameLower.replace(/-/g, ''); // Without hyphens for fuzzy matching
+    if (!searchName) {
+      warn('No tab name provided');
+      return;
+    }
 
-    // First try the voice-select-tab custom event (supported by many pages)
-    // Send the normalized version (without hyphens) - page handlers will map it
+    const searchLower = searchName.toLowerCase().replace(/tab|panel|section/g, '').trim();
+    const searchNormalized = searchLower.replace(/-/g, '');
+
+    // Dispatch voice-select-tab for pages that handle it
     window.dispatchEvent(new CustomEvent('voice-select-tab', {
-      detail: { tab: searchNameNormalized }
+      detail: { tab: searchNormalized }
     }));
 
     let element: HTMLElement | null = null;
 
-    // 1. Try to find by data-voice-id first (most specific)
-    element = findElement(target);
+    // 1. Try direct voice-id lookup
+    element = findElement(searchName) || findElement(`tab-${searchLower}`);
 
-    // 2. Try to find Radix TabsTrigger by value attribute (exact match with or without hyphens)
+    // 2. Try Radix TabsTrigger by value
     if (!element) {
-      // Radix UI tabs have a data-state and value attribute
-      const radixTabs = Array.from(document.querySelectorAll('[data-radix-collection-item]'));
+      const radixTabs = document.querySelectorAll('[data-radix-collection-item]');
       for (const tab of radixTabs) {
         const tabValue = tab.getAttribute('value')?.toLowerCase() || '';
-        const tabValueNormalized = tabValue.replace(/-/g, '');
-        // Match either exact (with hyphens) or normalized (without hyphens)
-        if (tabValue === searchNameLower || tabValueNormalized === searchNameNormalized) {
+        if (tabValue === searchLower || tabValue.replace(/-/g, '') === searchNormalized) {
           element = tab as HTMLElement;
-          console.log('🎤 VoiceUI: Found tab by value attribute:', tabValue);
           break;
         }
       }
     }
 
-    // 3. Try to find by role="tab" with aria-controls matching
+    // 3. Try role="tab" with aria-controls
     if (!element) {
-      const roleTabs = Array.from(document.querySelectorAll('[role="tab"]'));
+      const roleTabs = document.querySelectorAll('[role="tab"]');
       for (const tab of roleTabs) {
         const ariaControls = tab.getAttribute('aria-controls')?.toLowerCase() || '';
         const tabId = tab.getAttribute('id')?.toLowerCase() || '';
-        const ariaControlsNormalized = ariaControls.replace(/-/g, '');
-        const tabIdNormalized = tabId.replace(/-/g, '');
-        if (ariaControls.includes(searchNameLower) || tabId.includes(searchNameLower) ||
-            ariaControlsNormalized.includes(searchNameNormalized) || tabIdNormalized.includes(searchNameNormalized)) {
+        if (ariaControls.includes(searchLower) || tabId.includes(searchLower)) {
           element = tab as HTMLElement;
-          console.log('🎤 VoiceUI: Found tab by aria-controls:', ariaControls);
           break;
         }
       }
     }
 
-    // 4. Try to find by partial text content match (fallback)
+    // 4. Try text content match
     if (!element) {
-      const tabSelectors = [
-        '[role="tab"]',
-        '[data-radix-collection-item]',
-        'button[class*="tab"]',
-      ];
-
+      const tabSelectors = ['[role="tab"]', '[data-radix-collection-item]', 'button[class*="tab"]'];
       for (const selector of tabSelectors) {
-        const tabs = Array.from(document.querySelectorAll(selector));
+        const tabs = document.querySelectorAll(selector);
         for (const tab of tabs) {
           const tabText = tab.textContent?.toLowerCase().replace(/\(\d+\)/g, '').trim() || '';
-          const tabTextNormalized = tabText.replace(/-/g, '').replace(/\s+/g, '');
-          const voiceId = tab.getAttribute('data-voice-id')?.toLowerCase() || '';
-          const voiceIdNormalized = voiceId.replace(/-/g, '');
-          // Match if tab text starts with or equals search term (with or without hyphens)
-          if (tabText === searchNameLower ||
-              tabText.startsWith(searchNameLower) ||
-              tabTextNormalized === searchNameNormalized ||
-              tabTextNormalized.startsWith(searchNameNormalized) ||
-              voiceId.includes(searchNameLower) ||
-              voiceIdNormalized.includes(searchNameNormalized)) {
+          const voiceIdAttr = tab.getAttribute('data-voice-id')?.toLowerCase() || '';
+          if (tabText === searchLower || tabText.startsWith(searchLower) ||
+              tabText.replace(/-/g, '') === searchNormalized ||
+              voiceIdAttr.includes(searchLower)) {
             element = tab as HTMLElement;
-            console.log('🎤 VoiceUI: Found tab by text content:', tabText);
             break;
           }
         }
@@ -1101,64 +520,53 @@ export const VoiceUIController = () => {
     }
 
     if (element) {
-      // Check if the tab is disabled
-      const isDisabled = element.hasAttribute('disabled') ||
-                         element.getAttribute('aria-disabled') === 'true' ||
-                         element.classList.contains('disabled') ||
-                         element.hasAttribute('data-disabled') ||
-                         (element as HTMLButtonElement).disabled;
-
-      if (isDisabled) {
-        console.warn('🎤 VoiceUI: Tab is disabled:', searchName);
-        // Dispatch an event to notify that the tab is disabled
+      if (element.hasAttribute('disabled') || element.getAttribute('aria-disabled') === 'true') {
+        warn('Tab is disabled');
         window.dispatchEvent(new CustomEvent('voice-tab-disabled', {
-          detail: { tabName: searchName, message: 'This tab is disabled. Please select a session first.' }
+          detail: { tabName: searchName }
         }));
         return;
       }
 
       element.click();
-      console.log('🎤 VoiceUI: Switched to tab:', searchName, element);
+      log('Switched to tab:', searchName);
     } else {
-      console.warn('🎤 VoiceUI: Tab not found:', searchName);
-      // List available tabs for debugging
-      const availableTabs = Array.from(document.querySelectorAll('[data-radix-collection-item], [role="tab"]'));
-      console.log('🎤 VoiceUI: Available tabs:', availableTabs.map(t => ({
-        value: t.getAttribute('value'),
-        text: t.textContent?.trim().substring(0, 30),
-        voiceId: t.getAttribute('data-voice-id'),
-      })));
+      warn('Tab not found:', searchName);
     }
-  }, [findElement]);
+  }, []);
 
-  /**
-   * Handle list item selection
-   */
+  // ========================================================================
+  // SELECT LIST ITEM
+  // ========================================================================
+
   const handleSelectListItem = useCallback((event: CustomEvent) => {
-    const { target, itemName, itemIndex } = event.detail || {};
-    console.log('🎤 VoiceUI: selectListItem', { target, itemName, itemIndex });
+    const { target, listVoiceId, itemName, itemIndex, itemVoiceId } = event.detail || {};
+    log('selectListItem', { target, listVoiceId, itemName, itemIndex, itemVoiceId });
 
-    const container = findElement(target) || document;
-    const items = Array.from(container.querySelectorAll('[data-voice-item], [role="listitem"], li, button[data-state]'));
+    // Find list container
+    const container = findElement(target || listVoiceId) || document;
+    const items = container.querySelectorAll('[data-voice-item], [role="listitem"], li, button[data-state]');
 
     if (items.length === 0) {
-      console.warn('🎤 VoiceUI: No list items found in:', target);
+      warn('No list items found');
       return;
     }
 
     let selectedItem: HTMLElement | null = null;
 
-    // Select by index (ordinal or numeric)
-    if (itemIndex !== undefined) {
-      const idx = typeof itemIndex === 'string' ? (ORDINAL_MAP[itemIndex.toLowerCase()] ?? parseInt(itemIndex, 10) - 1) : itemIndex;
-      const actualIdx = idx === -1 ? items.length - 1 : idx;
-      if (actualIdx >= 0 && actualIdx < items.length) {
-        selectedItem = items[actualIdx] as HTMLElement;
+    // Select by voice-id
+    if (itemVoiceId) {
+      selectedItem = findElement(itemVoiceId);
+    }
+    // Select by index (0-based, -1 for last)
+    else if (itemIndex !== undefined) {
+      const idx = itemIndex === -1 ? items.length - 1 : itemIndex;
+      if (idx >= 0 && idx < items.length) {
+        selectedItem = items[idx] as HTMLElement;
       }
     }
-
     // Select by name
-    if (!selectedItem && itemName) {
+    else if (itemName) {
       const nameLower = itemName.toLowerCase();
       for (const item of items) {
         const itemText = item.textContent?.toLowerCase() || '';
@@ -1170,132 +578,110 @@ export const VoiceUIController = () => {
     }
 
     if (selectedItem) {
-      // If the item contains a checkbox, click the checkbox directly
-      // This avoids double-triggering from li onClick + checkbox onChange
+      // If item contains a checkbox, click that directly
       const checkbox = selectedItem.querySelector('input[type="checkbox"]') as HTMLInputElement;
       if (checkbox) {
         checkbox.click();
-        console.log('🎤 VoiceUI: Clicked checkbox in list item:', itemName || itemIndex);
       } else {
         selectedItem.click();
-        console.log('🎤 VoiceUI: Selected list item:', itemName || itemIndex);
       }
+      log('Selected list item');
     } else {
-      console.warn('🎤 VoiceUI: List item not found:', itemName, itemIndex);
+      warn('List item not found');
     }
-  }, [findElement]);
+  }, []);
 
-  /**
-   * Workspace search: fill top search input and navigate to best matching result.
-   */
+  // ========================================================================
+  // SEARCH AND NAVIGATE
+  // ========================================================================
+
   const handleSearchAndNavigate = useCallback((event: CustomEvent) => {
-    const rawQuery = String(event.detail?.query || event.detail?.target || '').trim();
-    if (!rawQuery) {
-      console.warn('🎤 VoiceUI: searchAndNavigate missing query');
+    const query = String(event.detail?.query || event.detail?.target || '').trim();
+    if (!query) {
+      warn('searchAndNavigate missing query');
       return;
     }
 
-    const query = rawQuery.toLowerCase();
-    console.log('🎤 VoiceUI: searchAndNavigate', { query });
+    log('searchAndNavigate', { query });
 
-    const input = (findElement('workspace-search') ||
-      document.querySelector('[data-voice-id="workspace-search"]')) as HTMLInputElement | null;
+    const input = findInput('workspace-search');
+    if (input) {
+      setInputValueReactCompatible(input, query);
 
-    if (!input) {
-      console.warn('🎤 VoiceUI: workspace search input not found');
-      return;
+      // Wait for search results and click best match
+      setTimeout(() => {
+        const links = document.querySelectorAll('a[href^="/"]') as NodeListOf<HTMLAnchorElement>;
+        const queryLower = query.toLowerCase();
+        for (const link of links) {
+          if (link.textContent?.toLowerCase().includes(queryLower)) {
+            link.click();
+            log('Clicked search result');
+            return;
+          }
+        }
+
+        // Fallback: direct navigation
+        const routes = [
+          { keys: ['introduction', 'intro', 'guide', 'platform'], path: '/platform-guide' },
+          { keys: ['integration', 'canvas', 'lms'], path: '/integrations' },
+          { keys: ['course', 'courses'], path: '/courses' },
+          { keys: ['session', 'sessions'], path: '/sessions' },
+          { keys: ['forum', 'discussion'], path: '/forum' },
+          { keys: ['console', 'copilot'], path: '/console' },
+          { keys: ['report', 'reports'], path: '/reports' },
+        ];
+
+        const match = routes.find(r => r.keys.some(k => queryLower.includes(k)));
+        if (match) {
+          router.push(match.path);
+        }
+      }, 250);
     }
+  }, [router]);
 
-    // React-compatible input update
-    input.focus();
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      'value'
-    )?.set;
-    if (nativeInputValueSetter) {
-      nativeInputValueSetter.call(input, rawQuery);
-    } else {
-      input.value = rawQuery;
-    }
-    const tracker = (input as any)._valueTracker;
-    if (tracker) {
-      tracker.setValue('__voice_search__');
-    }
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+  // ========================================================================
+  // GET UI STATE (for debugging and LLM context)
+  // ========================================================================
 
-    // Wait for search popover links to render and click the best match.
-    window.setTimeout(() => {
-      const links = Array.from(document.querySelectorAll('a[href^="/"]')) as HTMLAnchorElement[];
-      const best = links.find((link) => {
-        const text = (link.textContent || '').toLowerCase();
-        return text.includes(query);
-      });
+  const handleGetUiState = useCallback(() => {
+    const state = getCompactUiState();
+    log('UI State:', state);
 
-      if (best) {
-        best.click();
-        console.log('🎤 VoiceUI: searchAndNavigate clicked result:', best.textContent?.trim());
-        return;
-      }
+    window.dispatchEvent(new CustomEvent('voice-ui-state', {
+      detail: state
+    }));
 
-      // Fallback to direct route match if popover didn't yield a hit.
-      const pathMatchMap: Array<{ keys: string[]; path: string }> = [
-        { keys: ['introduction', 'intro', 'guide', 'platform'], path: '/platform-guide' },
-        { keys: ['integration', 'integrations', 'canvas', 'lms'], path: '/integrations' },
-        { keys: ['course', 'courses'], path: '/courses' },
-        { keys: ['session', 'sessions'], path: '/sessions' },
-        { keys: ['forum', 'discussion'], path: '/forum' },
-        { keys: ['console', 'copilot'], path: '/console' },
-        { keys: ['report', 'reports', 'analytics'], path: '/reports' },
-        { keys: ['dashboard', 'home'], path: '/dashboard' },
-      ];
+    return state;
+  }, []);
 
-      const mapped = pathMatchMap.find((entry) => entry.keys.some((k) => query.includes(k)));
-      if (mapped) {
-        router.push(mapped.path);
-        console.log('🎤 VoiceUI: searchAndNavigate fallback route:', mapped.path);
-      } else {
-        console.warn('🎤 VoiceUI: searchAndNavigate no matching result found');
-      }
-    }, 250);
-  }, [findElement, router]);
+  // ========================================================================
+  // GET AVAILABLE ELEMENTS
+  // ========================================================================
 
-  /**
-   * Get available UI elements on current page (for debugging/help)
-   */
-  const handleGetAvailableElements = useCallback((event: CustomEvent) => {
-    const pageRegistry = UI_ELEMENT_REGISTRY[pathname] || {};
-    const available: string[] = [];
-
-    for (const [name, selector] of Object.entries(pageRegistry)) {
-      const element = document.querySelector(selector);
-      if (element) {
-        available.push(name);
-      }
-    }
-
-    // Also find elements with data-voice-id
+  const handleGetAvailableElements = useCallback(() => {
     const voiceElements = document.querySelectorAll('[data-voice-id]');
+    const elements: string[] = [];
+
     voiceElements.forEach(el => {
       const id = el.getAttribute('data-voice-id');
-      if (id && !available.includes(id)) {
-        available.push(id);
-      }
+      if (id) elements.push(id);
     });
 
-    console.log('🎤 VoiceUI: Available elements on', pathname, ':', available);
+    log('Available elements on', pathname, ':', elements);
 
-    // Dispatch result back
     window.dispatchEvent(new CustomEvent('voice-ui-elements', {
-      detail: { page: pathname, elements: available }
+      detail: { page: pathname, elements }
     }));
+
+    return elements;
   }, [pathname]);
 
-  /**
-   * Setup event listeners
-   */
+  // ========================================================================
+  // EVENT LISTENER SETUP
+  // ========================================================================
+
   useEffect(() => {
-    const handlers = {
+    const handlers: Record<string, (event: CustomEvent) => void> = {
       'ui.selectDropdown': handleSelectDropdown,
       'ui.expandDropdown': handleExpandDropdown,
       'ui.clickButton': handleClickButton,
@@ -1305,7 +691,8 @@ export const VoiceUIController = () => {
       'ui.switchTab': handleSwitchTab,
       'ui.selectListItem': handleSelectListItem,
       'ui.searchAndNavigate': handleSearchAndNavigate,
-      'ui.getAvailableElements': handleGetAvailableElements,
+      'ui.getUiState': handleGetUiState as any,
+      'ui.getAvailableElements': handleGetAvailableElements as any,
     };
 
     // Add all event listeners
@@ -1313,7 +700,7 @@ export const VoiceUIController = () => {
       window.addEventListener(event, handler as EventListener);
     });
 
-    console.log('🎤 VoiceUIController: Initialized on', pathname);
+    log('Initialized on', pathname);
 
     // Cleanup
     return () => {
@@ -1332,6 +719,7 @@ export const VoiceUIController = () => {
     handleSwitchTab,
     handleSelectListItem,
     handleSearchAndNavigate,
+    handleGetUiState,
     handleGetAvailableElements,
   ]);
 

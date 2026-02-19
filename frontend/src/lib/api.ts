@@ -133,6 +133,71 @@ export const api = {
     });
   },
 
+  // Voice V2 API - Pure LLM-based processing with tools
+  // This is the new architecture: no regex, no hardcoded patterns
+  voiceProcessV2: async (request: {
+    user_id: number;
+    transcript: string;
+    language?: 'en' | 'es';
+    ui_state?: {
+      route: string;
+      activeTab?: string;
+      tabs?: Array<{ id: string; label: string; active: boolean }>;
+      buttons?: Array<{ id: string; label: string }>;
+      inputs?: Array<{ id: string; label: string; value: string }>;
+      dropdowns?: Array<{
+        id: string;
+        label: string;
+        selected?: string;
+        options: Array<{ idx: number; label: string }>;
+      }>;
+      modal?: string;
+    };
+    conversation_state?: string;
+    active_course_name?: string;
+    active_session_name?: string;
+  }): Promise<{
+    success: boolean;
+    spoken_response: string;
+    ui_action?: {
+      type: string;
+      payload: Record<string, unknown>;
+    };
+    tool_used?: string;
+    confidence: number;
+    needs_confirmation: boolean;
+    confirmation_context?: Record<string, unknown>;
+  }> => {
+    return fetchApi('/voice/v2/process', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  // Voice V2 - Sync UI state to backend
+  voiceSyncUiState: async (request: {
+    user_id: number;
+    ui_state: {
+      route: string;
+      activeTab?: string;
+      tabs?: Array<{ id: string; label: string; active: boolean }>;
+      buttons?: Array<{ id: string; label: string }>;
+      inputs?: Array<{ id: string; label: string; value: string }>;
+      dropdowns?: Array<{
+        id: string;
+        label: string;
+        selected?: string;
+        options: Array<{ idx: number; label: string }>;
+      }>;
+      modal?: string;
+    };
+  }): Promise<{ status: string }> => {
+    return fetchApi('/voice/v2/ui-state', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
   // Users
   getUsers: (role?: string) =>
     fetchApi<any[]>(`/users/${role ? `?role=${role}` : ''}`),

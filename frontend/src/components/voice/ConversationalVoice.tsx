@@ -51,6 +51,10 @@ interface ConversationalVoiceProps {
 // Prefix used to send MCP responses through ElevenLabs
 const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
 
+// Feature flag: Use V2 LLM-based processing (no regex, pure LLM)
+// Set to true to use the new architecture
+const USE_VOICE_V2 = true;
+
 /**
  * Phase 2: Collect rich page context for smarter LLM intent detection
  * Scans the DOM for available UI elements that can be voice-controlled
@@ -131,6 +135,97 @@ function collectPageContext(): {
   }
 
   return context;
+}
+
+/**
+ * V2: Collect full UI state for LLM-based processing
+ * Returns structured data about all interactive elements on the page
+ */
+function collectUiStateV2(): {
+  route: string;
+  activeTab?: string;
+  tabs: Array<{ id: string; label: string; active: boolean }>;
+  buttons: Array<{ id: string; label: string }>;
+  inputs: Array<{ id: string; label: string; value: string }>;
+  dropdowns: Array<{
+    id: string;
+    label: string;
+    selected?: string;
+    options: Array<{ idx: number; label: string }>;
+  }>;
+  modal?: string;
+} {
+  const state: ReturnType<typeof collectUiStateV2> = {
+    route: typeof window !== 'undefined' ? window.location.pathname : '/',
+    tabs: [],
+    buttons: [],
+    inputs: [],
+    dropdowns: [],
+  };
+
+  if (typeof window === 'undefined') return state;
+
+  // Collect tabs with voice-id
+  const tabElements = document.querySelectorAll('[data-voice-id^="tab-"], [role="tab"]');
+  tabElements.forEach((tab) => {
+    const id = tab.getAttribute('data-voice-id') || tab.getAttribute('id') || '';
+    const label = tab.textContent?.trim() || '';
+    const isActive = tab.getAttribute('aria-selected') === 'true' ||
+                     tab.getAttribute('data-state') === 'active' ||
+                     tab.classList.contains('active');
+    if (id || label) {
+      state.tabs.push({ id, label, active: isActive });
+      if (isActive) state.activeTab = id;
+    }
+  });
+
+  // Collect buttons with voice-id
+  const buttonElements = document.querySelectorAll('[data-voice-id]:not([data-voice-id^="tab-"])');
+  buttonElements.forEach((btn) => {
+    const id = btn.getAttribute('data-voice-id') || '';
+    const label = btn.textContent?.trim() || btn.getAttribute('aria-label') || '';
+    if (id && label.length < 50) {
+      state.buttons.push({ id, label });
+    }
+  });
+
+  // Collect inputs with voice-id
+  const inputElements = document.querySelectorAll('input[data-voice-id], textarea[data-voice-id]');
+  inputElements.forEach((input) => {
+    const el = input as HTMLInputElement | HTMLTextAreaElement;
+    const id = el.getAttribute('data-voice-id') || '';
+    const label = el.getAttribute('placeholder') || el.getAttribute('aria-label') || '';
+    state.inputs.push({ id, label, value: el.value || '' });
+  });
+
+  // Collect dropdowns/selects with voice-id
+  const selectElements = document.querySelectorAll('select[data-voice-id]');
+  selectElements.forEach((select) => {
+    const el = select as HTMLSelectElement;
+    const id = el.getAttribute('data-voice-id') || '';
+    const label = el.getAttribute('aria-label') || '';
+    const options: Array<{ idx: number; label: string }> = [];
+    let selectedLabel: string | undefined;
+
+    Array.from(el.options).forEach((opt, idx) => {
+      if (opt.value) {
+        options.push({ idx, label: opt.text });
+        if (opt.selected) selectedLabel = opt.text;
+      }
+    });
+
+    state.dropdowns.push({ id, label, selected: selectedLabel, options });
+  });
+
+  // Check for open modal
+  const modal = document.querySelector('[role="dialog"][aria-modal="true"], .modal.show, [data-state="open"]');
+  if (modal) {
+    state.modal = modal.getAttribute('aria-label') ||
+                  modal.querySelector('h2, h3, [class*="title"]')?.textContent?.trim() ||
+                  'Modal';
+  }
+
+  return state;
 }
 
 export function ConversationalVoice(props: ConversationalVoiceProps) {
@@ -755,14 +850,64 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     isProcessingTranscriptRef.current = true;
     console.log('🎯 Processing transcript for UI actions:', transcript);
 
-    // Option A Architecture:
-    // - ElevenLabs agent handles ALL conversation responses
-    // - Backend ONLY executes UI actions (no spoken response)
-    // - This ensures ONE response per user message
-
     try {
       const currentPage = typeof window !== 'undefined' ? window.location.pathname : undefined;
       console.log('📍 Current page:', currentPage);
+
+      // V2 Architecture: Pure LLM-based processing with tools
+      if (USE_VOICE_V2 && currentUser?.id) {
+        console.log('🚀 Using Voice V2 (LLM-based processing)');
+
+        // Collect full UI state for LLM context
+        const uiState = collectUiStateV2();
+        const pageContext = collectPageContext();
+        console.log('📋 UI State:', uiState);
+
+        const response = await api.voiceProcessV2({
+          user_id: currentUser.id,
+          transcript,
+          language: locale,
+          ui_state: uiState,
+          conversation_state: 'idle',
+          active_course_name: pageContext.active_course_name,
+          active_session_name: pageContext.active_session_name,
+        });
+
+        console.log('📦 V2 Response:', JSON.stringify(response, null, 2));
+
+        // Execute UI action if present
+        if (response.ui_action) {
+          console.log('🚀 Executing V2 UI action:', response.ui_action);
+          try {
+            executeUiAction(response.ui_action as UiAction, router);
+            console.log('✅ V2 UI action executed successfully');
+          } catch (actionError) {
+            console.error('❌ V2 UI action failed:', actionError);
+          }
+        }
+
+        // Speak the response via ElevenLabs if it contains meaningful content
+        if (response.spoken_response && response.spoken_response.length > 5) {
+          const msg = response.spoken_response.toLowerCase();
+          // Only speak if it's not a simple confirmation that ElevenLabs will handle
+          const isSimpleConfirmation =
+            msg === 'done' || msg === 'ok' || msg === 'got it' ||
+            msg.startsWith('navigating') || msg.startsWith('switching');
+
+          if (!isSimpleConfirmation) {
+            console.log('📢 Speaking V2 response via ElevenLabs');
+            speakViaElevenLabs(response.spoken_response);
+          }
+        }
+
+        // Reset and finalize
+        lastAgentResponseRef.current = '';
+        finalizeUserMessage(transcript);
+        return;
+      }
+
+      // V1 Architecture (fallback): Regex-based processing
+      console.log('📋 Using Voice V1 (legacy processing)');
 
       // Phase 2: Collect rich page context for smarter LLM intent detection
       const pageContext = collectPageContext();

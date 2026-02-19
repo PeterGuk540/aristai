@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   FileText,
   RefreshCw,
@@ -19,6 +19,7 @@ import {
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
+import { createVoiceTabHandler, setupVoiceTabListeners, mergeTabMappings } from '@/lib/voice-tab-handler';
 import { Course, Session, Report, ReportJSON, SessionComparison } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -60,6 +61,43 @@ export default function ReportsPage() {
   const [sessionComparisons, setSessionComparisons] = useState<SessionComparison[]>([]);
   const [courseAnalytics, setCourseAnalytics] = useState<any>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
+  // Tab state for voice control
+  const [activeTab, setActiveTab] = useState('summary');
+
+  // Reports page tab mappings
+  const reportsTabMap = mergeTabMappings({
+    // Instructor tabs
+    'summary': 'summary',
+    'reportsummary': 'summary',
+    'overview': 'summary',
+    'participation': 'participation',
+    'participationtab': 'participation',
+    'scoring': 'scoring',
+    'scores': 'scoring',
+    'grades': 'scoring',
+    'answerscores': 'scoring',
+    'analytics': 'analytics',
+    'reportanalytics': 'analytics',
+    'dataanalytics': 'analytics',
+    // Student tabs
+    'myperformance': 'my-performance',
+    'performance': 'my-performance',
+    'bestpractice': 'best-practice',
+    'bestpractices': 'best-practice',
+    'bestanswer': 'best-practice',
+  });
+
+  // Voice tab handler
+  const handleVoiceTabSwitch = useCallback(
+    createVoiceTabHandler(reportsTabMap, setActiveTab, 'Reports'),
+    []
+  );
+
+  // Set up voice tab listeners
+  useEffect(() => {
+    return setupVoiceTabListeners(handleVoiceTabSwitch);
+  }, [handleVoiceTabSwitch]);
 
   const fetchCourses = async () => {
     try {
@@ -922,7 +960,8 @@ export default function ReportsPage() {
 
           {/* Report Tabs - Different views for instructors/admins vs students */}
           {hasInstructorPrivileges ? (
-            <Tabs defaultValue="summary" onValueChange={(value) => {
+            <Tabs value={activeTab} onValueChange={(value) => {
+              setActiveTab(value);
               if (value === 'analytics') {
                 fetchAnalytics();
               }
@@ -1090,7 +1129,7 @@ export default function ReportsPage() {
             </Tabs>
           ) : (
             /* Student view: Only scoring, best practice, what they did well, gaps */
-            <Tabs defaultValue="my-performance">
+            <Tabs value={activeTab === 'summary' ? 'my-performance' : activeTab} onValueChange={setActiveTab}>
               <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900">
                 <TabsTrigger value="my-performance" data-voice-id="tab-my-performance">My Performance</TabsTrigger>
                 <TabsTrigger value="best-practice" data-voice-id="tab-best-practice">Best Practice Answer</TabsTrigger>

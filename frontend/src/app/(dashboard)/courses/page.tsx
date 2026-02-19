@@ -6,6 +6,7 @@ import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
+import { createVoiceTabHandler, setupVoiceTabListeners, mergeTabMappings } from '@/lib/voice-tab-handler';
 import { Course, EnrolledStudent, User } from '@/types';
 import { formatTimestamp, truncate } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -63,28 +64,32 @@ export default function CoursesPage() {
   const [extractingObjectives, setExtractingObjectives] = useState(false);
   const [objectivesExtracted, setObjectivesExtracted] = useState(false);
 
-  // Handle voice-triggered tab selection
-  const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
-    const { tab } = event.detail || {};
-    if (tab) {
-      // Map normalized tab names (without hyphens) to actual tab values
-      const tabLower = tab.toLowerCase();
-      if (tabLower === 'enrollment' || tabLower === 'instructor') {
-        setActiveTab('advanced');
-      } else if (tabLower === 'aiinsights' || tabLower === 'ai-insights') {
-        setActiveTab('ai-insights');
-      } else {
-        setActiveTab(tab);
-      }
-    }
-  }, []);
+  // Courses page tab mappings
+  const coursesTabMap = mergeTabMappings({
+    'courses': 'courses',
+    'course': 'courses',
+    'mycourses': 'courses',
+    'advanced': 'advanced',
+    'enrollment': 'advanced',
+    'enroll': 'advanced',
+    'enrollstudents': 'advanced',
+    'instructor': 'advanced',
+    'instructoraccess': 'advanced',
+    'manageenrollment': 'advanced',
+    'aiinsights': 'ai-insights',
+    'aiinsight': 'ai-insights',
+    'objectivecoverage': 'ai-insights',
+  });
 
-  // Listen for voice tab selection events
+  // Voice tab handler
+  const handleVoiceSelectTab = useCallback(
+    createVoiceTabHandler(coursesTabMap, setActiveTab, 'Courses'),
+    []
+  );
+
+  // Set up voice tab listeners
   useEffect(() => {
-    window.addEventListener('voice-select-tab', handleVoiceSelectTab as EventListener);
-    return () => {
-      window.removeEventListener('voice-select-tab', handleVoiceSelectTab as EventListener);
-    };
+    return setupVoiceTabListeners(handleVoiceSelectTab);
   }, [handleVoiceSelectTab]);
 
   // Update tab when URL changes

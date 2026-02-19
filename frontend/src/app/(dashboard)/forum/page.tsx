@@ -16,6 +16,7 @@ import {
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
+import { createVoiceTabHandler, setupVoiceTabListeners, mergeTabMappings } from '@/lib/voice-tab-handler';
 import { Course, Session, Post, Case } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -76,35 +77,24 @@ export default function ForumPage() {
   // Active tab state for voice control
   const [activeTab, setActiveTab] = useState<string>('discussion');
 
-  // Listen for voice tab switching events
+  // Forum page tab mappings
+  const forumTabMap = mergeTabMappings({
+    'discussion': 'discussion',
+    'discussions': 'discussion',
+    'posts': 'discussion',
+    'forum': 'discussion',
+  });
+
+  // Voice tab handler
+  const handleVoiceTabSwitch = useCallback(
+    createVoiceTabHandler(forumTabMap, setActiveTab, 'Forum'),
+    []
+  );
+
+  // Set up voice tab listeners
   useEffect(() => {
-    const handleVoiceTabSwitch = (event: CustomEvent) => {
-      const { tabName, target } = event.detail || {};
-      let normalizedTab = (tabName || '').toLowerCase().replace(/\s+/g, '');
-
-      const tabMap: Record<string, string> = {
-        'cases': 'cases',
-        'case': 'cases',
-        'casestudies': 'cases',
-        'casestudy': 'cases',
-        'discussion': 'discussion',
-        'discussions': 'discussion',
-        'posts': 'discussion',
-        'forum': 'discussion',
-      };
-
-      const targetTab = tabMap[normalizedTab] || normalizedTab;
-      setActiveTab(targetTab);
-    };
-
-    window.addEventListener('ui.switchTab', handleVoiceTabSwitch as EventListener);
-    window.addEventListener('voice-select-tab', handleVoiceTabSwitch as EventListener);
-
-    return () => {
-      window.removeEventListener('ui.switchTab', handleVoiceTabSwitch as EventListener);
-      window.removeEventListener('voice-select-tab', handleVoiceTabSwitch as EventListener);
-    };
-  }, []);
+    return setupVoiceTabListeners(handleVoiceTabSwitch);
+  }, [handleVoiceTabSwitch]);
 
   const fetchCourses = async () => {
     try {

@@ -6,6 +6,7 @@ import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, 
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
+import { createVoiceTabHandler, setupVoiceTabListeners, mergeTabMappings } from '@/lib/voice-tab-handler';
 import { Course, Session, SessionStatus } from '@/types';
 import { formatTimestamp } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -107,31 +108,33 @@ export default function SessionsPage() {
     created_at: string;
   }>>([]);
 
-  // Handle voice-triggered tab selection
-  const handleVoiceSelectTab = useCallback((event: CustomEvent) => {
-    const { tab } = event.detail || {};
-    if (tab) {
-      // Map normalized tab names (without hyphens) to actual tab values
-      const tabMap: Record<string, string> = {
-        'aifeatures': 'ai-features',
-        'ai-features': 'ai-features',
-        'sessions': 'sessions',
-        'materials': 'materials',
-        'create': 'create',
-        'manage': 'manage',
-        'insights': 'insights',
-      };
-      const mappedTab = tabMap[tab.toLowerCase()] || tab;
-      setActiveTab(mappedTab);
-    }
-  }, []);
+  // Sessions page tab mappings
+  const sessionsTabMap = mergeTabMappings({
+    'sessions': 'sessions',
+    'session': 'sessions',
+    'viewsessions': 'sessions',
+    'list': 'sessions',
+    'create': 'create',
+    'creation': 'create',
+    'createsession': 'create',
+    'newsession': 'create',
+    'manage': 'manage',
+    'management': 'manage',
+    'managestatus': 'manage',
+    'status': 'manage',
+    'sessionstatus': 'manage',
+    'statuscontrol': 'manage',
+  });
 
-  // Listen for voice tab selection events
+  // Voice tab handler
+  const handleVoiceSelectTab = useCallback(
+    createVoiceTabHandler(sessionsTabMap, setActiveTab, 'Sessions'),
+    []
+  );
+
+  // Set up voice tab listeners
   useEffect(() => {
-    window.addEventListener('voice-select-tab', handleVoiceSelectTab as EventListener);
-    return () => {
-      window.removeEventListener('voice-select-tab', handleVoiceSelectTab as EventListener);
-    };
+    return setupVoiceTabListeners(handleVoiceSelectTab);
   }, [handleVoiceSelectTab]);
 
   // Update tab when URL changes

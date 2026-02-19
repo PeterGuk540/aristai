@@ -1,23 +1,39 @@
-"""Voice Text Extraction Utilities.
+"""Voice Text Extraction Utilities - LLM-Based.
 
 This module provides functions for extracting structured information
-from voice transcripts, including:
+from voice transcripts using LLM-based understanding.
+
+All extraction is done through the UnifiedVoiceExtractor which uses
+a single LLM call to understand and extract:
 1. Dictated content extraction
 2. Dropdown/button/tab target extraction
 3. Search query extraction
 4. Student name extraction
+5. Confirmation detection
+
+NO REGEX PATTERNS OR HARD-CODED PHRASE DICTIONARIES ARE USED.
 """
 
-import re
+import logging
 import unicodedata
 from typing import Any, Dict, List, Optional
+
+from api.api.voice_llm_extraction import (
+    get_unified_extractor,
+    aggregate_all_ui_elements,
+    UnifiedExtractionResult,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_spanish_text(text: str) -> str:
     """
     Normalize Spanish text by removing accents and diacritics.
     This allows voice transcripts (which often lack accents) to match patterns.
-    E.g., "sesión" -> "sesion", "llévame" -> "llevame"
+    E.g., "sesion" -> "sesion", "llevame" -> "llevame"
+
+    Note: This is kept for preprocessing, not pattern matching.
     """
     if not text:
         return text
@@ -28,442 +44,337 @@ def normalize_spanish_text(text: str) -> str:
     return without_accents
 
 
-def extract_dictated_content(transcript: str, action: str) -> Optional[str]:
-    """Extract dictated content from transcript for form filling."""
-    text = transcript.strip()
+def extract_dictated_content(transcript: str, action: str = "") -> Optional[str]:
+    """
+    Extract dictated content from transcript for form filling using LLM.
 
-    # Remove common prefixes that indicate dictation
-    prefixes_to_remove = [
-        r'^(?:the\s+)?(?:course\s+)?(?:title\s+)?(?:is\s+)?(?:called\s+)?',
-        r'^(?:the\s+)?(?:session\s+)?(?:title\s+)?(?:is\s+)?(?:called\s+)?',
-        r'^(?:name|title|call)\s+(?:it|the\s+\w+)\s+',
-        r'^(?:it\'?s?\s+called\s+)',
-        r'^(?:the\s+)?(?:poll\s+)?question\s+(?:is|should\s+be)\s+',
-        r'^(?:ask|poll)\s+(?:them|students|the\s+class)\s+',
-        r'^(?:post\s+(?:this|the\s+following):\s*)',
-        r'^(?:the\s+)?(?:post|message|content)\s+(?:is|should\s+be)\s+',
-    ]
+    Args:
+        transcript: The voice transcript to extract from
+        action: The action context (e.g., "create_course", "create_poll")
 
-    for prefix in prefixes_to_remove:
-        match = re.match(prefix, text, re.IGNORECASE)
-        if match:
-            text = text[match.end():].strip()
-            break
-
-    # Remove quotes if present
-    if text.startswith('"') and text.endswith('"'):
-        text = text[1:-1]
-    elif text.startswith("'") and text.endswith("'"):
-        text = text[1:-1]
-
-    # Return None if the result is too short or looks like a command
-    if len(text) < 2:
+    Returns:
+        The extracted content string, or None if not dictation
+    """
+    if not transcript or not transcript.strip():
         return None
 
-    # Check if this looks like an actual dictation (not a command)
-    command_indicators = ['go to', 'navigate', 'open', 'show', 'create', 'start', 'stop', 'help']
-    text_lower = text.lower()
-    for indicator in command_indicators:
-        if text_lower.startswith(indicator):
-            return None
+    extractor = get_unified_extractor()
+    result = extractor.extract(
+        user_input=transcript,
+        conversation_state="awaiting_field_input",
+    )
 
-    return text
+    if result.dictation and result.dictation.has_content and result.dictation.content:
+        return result.dictation.content
+
+    # If the LLM didn't explicitly classify as dictation but there's no command detected,
+    # and the intent is dictate, return the original text as content
+    if result.intent_category == "dictate" and not result.dictation.is_command:
+        return transcript.strip()
+
+    return None
 
 
 def extract_universal_dictation(transcript: str) -> Optional[Dict[str, str]]:
     """
-    UNIVERSAL dictation extraction - works for ANY input field.
+    Universal dictation extraction using LLM - works for ANY input field.
     Extracts field name and value from natural speech patterns.
+
+    Args:
+        transcript: The voice transcript
+
+    Returns:
+        Dict with "field" and "value" keys, or None
     """
-    text = transcript.strip()
-    text_lower = text.lower()
+    if not transcript or not transcript.strip():
+        return None
 
-    # Pattern: "the [field] is [value]" or "[field] is [value]"
-    match = re.match(r'^(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:is|should\s+be|will\s+be)\s+(.+)$', text, re.IGNORECASE)
-    if match:
-        field = match.group(1).strip().lower().replace(' ', '-')
-        value = match.group(2).strip()
-        return {"field": field, "value": value}
+    extractor = get_unified_extractor()
+    result = extractor.extract(
+        user_input=transcript,
+        conversation_state="awaiting_field_input",
+    )
 
-    # Pattern: "set [field] to [value]"
-    match = re.match(r'^(?:set|make|change)\s+(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:to|as)\s+(.+)$', text, re.IGNORECASE)
-    if match:
-        field = match.group(1).strip().lower().replace(' ', '-')
-        value = match.group(2).strip()
-        return {"field": field, "value": value}
+    if result.dictation:
+        if result.dictation.is_command:
+            # Return command info
+            return None
 
-    # Pattern: "[field]: [value]"
-    match = re.match(r'^(\w+(?:\s+\w+)?):\s*(.+)$', text)
-    if match:
-        field = match.group(1).strip().lower().replace(' ', '-')
-        value = match.group(2).strip()
-        return {"field": field, "value": value}
+        if result.dictation.has_content and result.dictation.content:
+            return {
+                "field": result.dictation.field_name or "focused-input",
+                "value": result.dictation.content,
+            }
 
-    # Pattern: "for [field], use [value]"
-    match = re.match(r'^for\s+(?:the\s+)?(\w+(?:\s+\w+)?),?\s+(?:use|put|enter|type|write)\s+(.+)$', text, re.IGNORECASE)
-    if match:
-        field = match.group(1).strip().lower().replace(' ', '-')
-        value = match.group(2).strip()
-        return {"field": field, "value": value}
-
-    # Pattern: "type/enter/write [value]" - fill focused/first input
-    match = re.match(r'^(?:type|enter|write|put|input|fill(?:\s+in)?)\s+(.+)$', text, re.IGNORECASE)
-    if match:
-        value = match.group(1).strip()
-        return {"field": "focused-input", "value": value}
-
-    # If nothing matched but it looks like content (not a command), treat as dictation for focused input
-    command_starters = ['go', 'navigate', 'open', 'show', 'create', 'start', 'stop', 'help', 'select', 'choose', 'click', 'switch']
-    first_word = text_lower.split()[0] if text_lower.split() else ""
-    if first_word not in command_starters and len(text) > 3:
-        return {"field": "focused-input", "value": text}
+    # If intent is dictate but no structured extraction, treat as content for focused input
+    if result.intent_category == "dictate":
+        return {"field": "focused-input", "value": transcript.strip()}
 
     return None
 
 
 def extract_dropdown_hint(transcript: str) -> str:
-    """Extract which dropdown the user is referring to, or return empty for any dropdown."""
-    text_lower = transcript.lower()
+    """
+    Extract which dropdown the user is referring to using LLM.
 
-    # Look for specific dropdown mentions
-    # IMPORTANT: Order matters! Check more specific phrases BEFORE generic ones.
-    dropdown_keywords = [
-        # Multi-word phrases first (more specific)
-        ('provider connection', 'select-provider-connection'),
-        ('source provider', 'select-integration-provider'),
-        ('external course', 'select-external-course'),
-        ('target course', 'select-target-course'),
-        ('target session', 'select-target-session'),
-        ('saved mapping', 'select-integration-mapping'),
-        # Single words last (less specific)
-        ('connection', 'select-provider-connection'),
-        ('provider', 'select-integration-provider'),
-        ('mapping', 'select-integration-mapping'),
-        ('course', 'select-course'),
-        ('session', 'select-session'),
-        ('student', 'select-student'),
-        ('instructor', 'select-instructor'),
-        ('status', 'select-status'),
-        ('type', 'select-type'),
-    ]
+    Args:
+        transcript: The voice transcript
 
-    for keyword, target in dropdown_keywords:
-        if keyword in text_lower:
-            return target
+    Returns:
+        The dropdown voice_id, or empty string for any dropdown
+    """
+    if not transcript or not transcript.strip():
+        return ""
 
-    return ""  # Empty means find any dropdown on the page
+    extractor = get_unified_extractor()
+    ui_context = aggregate_all_ui_elements()
+
+    result = extractor.extract(
+        user_input=transcript,
+        all_dropdowns=ui_context.get("all_dropdowns", []),
+    )
+
+    if result.ui_target and result.ui_target.element_type == "dropdown":
+        return result.ui_target.voice_id or ""
+
+    return ""
 
 
 def extract_button_info(transcript: str) -> Dict[str, str]:
-    """Extract button target from transcript for button clicks."""
-    text_lower = transcript.lower()
+    """
+    Extract button target from transcript using LLM.
 
-    # Direct button mappings
-    button_mappings = {
-        'get started': 'intro-get-started',
-        'start now': 'intro-get-started',
-        'voice commands': 'intro-voice-commands',
-        'voice command': 'intro-voice-commands',
-        'open voice commands': 'intro-voice-commands',
-        'notifications': 'notifications-button',
-        'notification': 'notifications-button',
-        'open notifications': 'notifications-button',
-        'open notification': 'notifications-button',
-        'top notification': 'notifications-button',
-        'top-bar notification': 'notifications-button',
-        'change language': 'toggle-language',
-        'switch language': 'toggle-language',
-        'toggle language': 'toggle-language',
-        'language': 'toggle-language',
-        'cambiar idioma': 'toggle-language',
-        'cambiar el idioma': 'toggle-language',
-        'notificaciones': 'notifications-button',
-        'notificacion': 'notifications-button',
-        'comandos de voz': 'intro-voice-commands',
-        'comenzar': 'intro-get-started',
-        'refresh poll results': 'refresh-poll-results',
-        'refresh instructor requests': 'refresh-instructor-requests',
-        'approve request': 'approve-instructor-request',
-        'reject request': 'reject-instructor-request',
-        'generate report': 'generate-report',
-        'regenerate report': 'regenerate-report',
-        'refresh': 'refresh',
-        'start copilot': 'start-copilot',
-        'stop copilot': 'stop-copilot',
-        'create poll': 'create-poll',
-        'post case': 'post-case',
-        'go live': 'go-live',
-        'complete session': 'complete-session',
-        'edit session': 'edit-session',
-        'modify session': 'edit-session',
-        'delete session': 'delete-session',
-        'remove session': 'delete-session',
-        'enroll': 'enroll-students',
-        'upload roster': 'upload-roster',
-        'submit': 'submit-post',
-        'create course': 'create-course-with-plans',
-        'create session': 'create-session',
-        'create and generate': 'create-course-with-plans',
-        'generate plans': 'create-course-with-plans',
-        'add connection': 'add-provider-connection',
-        'connect canvas': 'connect-canvas-oauth',
-        'connect upp': 'connect-canvas-oauth',
-        'connect provider': 'connect-canvas-oauth',
-        'test selected': 'test-provider-connection',
-        'set default': 'activate-provider-connection',
-        'create forum course': 'import-external-course',
-        'save mapping': 'save-course-mapping',
-        'sync all': 'sync-all-materials',
-        'sync students': 'sync-roster',
-        'import selected materials': 'import-external-materials',
-        'import materials': 'import-external-materials',
-        'select all materials': 'select-all-external-materials',
-        'clear materials': 'clear-external-materials',
-    }
+    Args:
+        transcript: The voice transcript
 
-    for phrase, target in button_mappings.items():
-        if phrase in text_lower:
-            return {"target": target, "label": phrase.title()}
+    Returns:
+        Dict with "target" (voice_id) and "label" keys, or empty dict
+    """
+    if not transcript or not transcript.strip():
+        return {}
+
+    extractor = get_unified_extractor()
+    ui_context = aggregate_all_ui_elements()
+
+    result = extractor.extract(
+        user_input=transcript,
+        all_buttons=ui_context.get("all_buttons", []),
+    )
+
+    if result.ui_target and result.ui_target.element_type == "button":
+        voice_id = result.ui_target.voice_id
+        if voice_id:
+            return {
+                "target": voice_id,
+                "label": result.ui_target.element_name or voice_id,
+            }
 
     return {}
 
 
 def extract_search_query(transcript: str) -> Optional[str]:
-    """Extract the intended search query for workspace search navigation."""
-    text = normalize_spanish_text((transcript or "").strip().lower())
-    if not text:
+    """
+    Extract the intended search query using LLM.
+
+    Args:
+        transcript: The voice transcript
+
+    Returns:
+        The search query string, or None
+    """
+    if not transcript or not transcript.strip():
         return None
 
-    patterns = [
-        r'^(?:search|find|look\s+for)\s+(?:for\s+)?(.+)$',
-        r'^(?:busca|buscar)\s+(.+)$',
-        r'^(?:open|go\s+to)\s+(.+?)\s+(?:using\s+)?search$',
-        r'^(?:abrir|ir\s+a)\s+(.+?)\s+(?:con\s+)?busqueda$',
-    ]
+    extractor = get_unified_extractor()
+    result = extractor.extract(user_input=transcript)
 
-    query = None
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            query = match.group(1).strip()
-            break
+    if result.search_query:
+        return result.search_query
 
-    if not query:
-        if any(k in text for k in ["search", "find", "look for", "busca", "buscar"]):
-            query = text
-        else:
-            return None
-
-    # Remove common filler words that hurt matching.
-    query = re.sub(r'\b(page|tab|section|panel|the|a|an|please|for me|por favor)\b', '', query).strip()
-    query = re.sub(r'\s+', ' ', query)
-
-    return query if len(query) >= 2 else None
+    return None
 
 
 def extract_student_name(transcript: str) -> Optional[str]:
-    """Extract student name from transcript for student selection."""
-    text = transcript.strip()
+    """
+    Extract student name from transcript using LLM.
 
-    # Remove common prefixes
-    prefixes = [
-        r'^(select|choose|pick|click|check|enroll)\s+(the\s+)?student\s+',
-        r'^(select|choose|pick|click|check|enroll)\s+',
-        r'^student\s+',
-    ]
-    for prefix in prefixes:
-        text = re.sub(prefix, '', text, flags=re.IGNORECASE)
+    Args:
+        transcript: The voice transcript
 
-    # Remove common suffixes
-    suffixes = [
-        r'\s+(from|in)\s+(the\s+)?(student\s+)?pool$',
-        r'\s+please$',
-        r'\s+now$',
-    ]
-    for suffix in suffixes:
-        text = re.sub(suffix, '', text, flags=re.IGNORECASE)
+    Returns:
+        The extracted student name, or None
+    """
+    if not transcript or not transcript.strip():
+        return None
 
-    # Clean up and return
-    text = text.strip()
-    if text and len(text) > 1:
-        return text
+    extractor = get_unified_extractor()
+    result = extractor.extract(user_input=transcript)
+
+    if result.student_name:
+        return result.student_name
+
     return None
 
 
 def extract_tab_info(transcript: str) -> Dict[str, str]:
-    """Extract tab name from transcript for universal tab switching."""
-    text_lower = transcript.lower()
+    """
+    Extract tab name from transcript using LLM.
 
-    # Remove common prefixes
-    for prefix in ['go to', 'open', 'show', 'switch to', 'view', 'the']:
-        text_lower = re.sub(rf'^{prefix}\s+', '', text_lower)
+    Args:
+        transcript: The voice transcript
 
-    # Remove tab/panel/section suffix
-    text_lower = re.sub(r'\s*(tab|panel|section)\s*$', '', text_lower)
+    Returns:
+        Dict with "tabName" key containing the normalized tab name
+    """
+    if not transcript or not transcript.strip():
+        return {"tabName": ""}
 
-    # Clean up and extract the tab name
-    tab_name = text_lower.strip()
+    extractor = get_unified_extractor()
+    ui_context = aggregate_all_ui_elements()
 
-    # Normalize common variations
-    tab_aliases = {
-        'ai copilot': 'copilot',
-        'ai assistant': 'copilot',
-        'copilot': 'copilot',
-        # Polls tab - handle various transcriptions and mishearings
-        'poll': 'polls',
-        'polls': 'polls',
-        'pulse': 'polls',
-        'pose': 'polls',
-        'pols': 'polls',
-        'paul': 'polls',
-        'polling': 'polls',
-        'poles': 'polls',
-        'pulls': 'polls',
-        'bowls': 'polls',
-        'goals': 'polls',
-        # Cases tab
-        'case': 'cases',
-        'cases': 'cases',
-        'case study': 'cases',
-        'case studies': 'cases',
-        'casestudies': 'cases',
-        'post case': 'cases',
-        'post cases': 'cases',
-        # Requests tab
-        'request': 'requests',
-        'requests': 'requests',
-        'instructor request': 'requests',
-        'instructor requests': 'requests',
-        # Roster tab
-        'roster': 'roster',
-        'student roster': 'roster',
-        'class roster': 'roster',
-        'roster upload': 'roster',
-        # Courses advanced tab
-        'advanced': 'advanced',
-        'enroll': 'advanced',
-        'enrollment': 'advanced',
-        'enrollments': 'advanced',
-        'instructor': 'advanced',
-        'instructor access': 'advanced',
-        'manage enrollment': 'advanced',
-        'my performance': 'my-performance',
-        'best practice': 'best-practice',
-        'best practices': 'best-practice',
-        # Session status management tab
-        'manage': 'manage',
-        'management': 'manage',
-        'manage status': 'manage',
-        'managestatus': 'manage',
-        'status': 'manage',
-        'session status': 'manage',
-        'status control': 'manage',
-        # AI Features tab (sessions page)
-        'ai features': 'ai-features',
-        'aifeatures': 'ai-features',
-        'ai-features': 'ai-features',
-        'a i features': 'ai-features',
-        'ai feature': 'ai-features',
-        'ai tools': 'ai-features',
-        'enhanced features': 'ai-features',
-        'enhanced ai': 'ai-features',
-        # AI Insights tab (courses page)
-        'ai insights': 'ai-insights',
-        'aiinsights': 'ai-insights',
-        'ai-insights': 'ai-insights',
-        'a i insights': 'ai-insights',
-        'ai insight': 'ai-insights',
-        'ai analytics': 'ai-insights',
-        'participation insights': 'ai-insights',
-        'objective coverage': 'ai-insights',
-        # Materials tab (sessions page)
-        'materials': 'materials',
-        'material': 'materials',
-        'course materials': 'materials',
-        'session materials': 'materials',
-        'class materials': 'materials',
-        'files': 'materials',
-        'documents': 'materials',
-        # Insights tab (sessions page)
-        'insights': 'insights',
-        'insight': 'insights',
-        'session insights': 'insights',
-        'analytics': 'insights',
-        'session analytics': 'insights',
-        'engagement': 'insights',
-        'session engagement': 'insights',
-        # Create tab
-        'create': 'create',
-        'creation': 'create',
-        'create session': 'create',
-        'new session': 'create',
-        # View sessions tab
-        'sessions': 'sessions',
-        'session': 'sessions',
-        'view sessions': 'sessions',
-        'list': 'sessions',
-        'session list': 'sessions',
-        # Reports page tabs
-        'summary': 'summary',
-        'report summary': 'summary',
-        'overview': 'summary',
-        'participation': 'participation',
-        'participation tab': 'participation',
-        'scoring': 'scoring',
-        'scores': 'scoring',
-        'grades': 'scoring',
-        'answer scores': 'scoring',
-        'report analytics': 'analytics',
-        'data analytics': 'analytics',
-    }
+    result = extractor.extract(
+        user_input=transcript,
+        all_tabs=ui_context.get("all_tabs", []),
+    )
 
-    # First try exact match
-    if tab_name in tab_aliases:
-        return {"tabName": tab_aliases[tab_name]}
+    if result.ui_target and result.ui_target.element_type == "tab":
+        voice_id = result.ui_target.voice_id
+        if voice_id:
+            # Remove "tab-" prefix if present for backward compatibility
+            tab_name = voice_id.replace("tab-", "") if voice_id.startswith("tab-") else voice_id
+            return {"tabName": tab_name}
 
-    # Then try partial match
-    for alias, normalized in tab_aliases.items():
-        if alias in tab_name or tab_name in alias:
-            return {"tabName": normalized}
-
-    return {"tabName": tab_name}
+    # Fallback: return cleaned transcript as tab name
+    return {"tabName": transcript.lower().strip()}
 
 
 def extract_dropdown_selection(transcript: str) -> Dict[str, Any]:
-    """Extract dropdown selection info from transcript."""
-    text_lower = transcript.lower()
+    """
+    Extract dropdown selection info from transcript using LLM.
 
-    # Extract ordinal or name
-    ordinals = {
-        'first': 0, 'second': 1, 'third': 2, 'fourth': 3, 'fifth': 4,
-        'last': -1, '1st': 0, '2nd': 1, '3rd': 2, '4th': 3, '5th': 4,
-        'one': 0, 'two': 1, 'three': 2, 'four': 3, 'five': 4,
-    }
+    Args:
+        transcript: The voice transcript
 
-    for ordinal, index in ordinals.items():
-        if ordinal in text_lower:
-            return {"optionIndex": index, "optionName": ordinal}
+    Returns:
+        Dict with "optionIndex" and/or "optionName" keys
+    """
+    if not transcript or not transcript.strip():
+        return {}
 
-    # Extract the selection name - remove command words
-    for prefix in ['select', 'choose', 'pick', 'use', 'switch to', 'the']:
-        text_lower = re.sub(rf'^{prefix}\s+', '', text_lower)
+    extractor = get_unified_extractor()
+    result = extractor.extract(
+        user_input=transcript,
+        conversation_state="awaiting_dropdown_selection",
+    )
 
-    # Remove type words
-    for suffix in ['course', 'session', 'option', 'item']:
-        text_lower = re.sub(rf'\s+{suffix}\s*$', '', text_lower)
+    if result.selection and result.selection.selection_type != "none":
+        response = {}
 
-    option_name = text_lower.strip()
-    return {"optionName": option_name} if option_name else {}
+        if result.selection.ordinal_index is not None:
+            response["optionIndex"] = result.selection.ordinal_index
+
+        if result.selection.matched_name:
+            response["optionName"] = result.selection.matched_name
+
+        if response:
+            return response
+
+    # Fallback: return the cleaned transcript as option name
+    return {"optionName": transcript.lower().strip()}
 
 
 def is_confirmation(text: str) -> bool:
-    """Check if the text is a confirmation response."""
-    confirmations = [
-        'yes', 'yeah', 'yep', 'yup', 'sure', 'okay', 'ok', 'confirm',
-        'proceed', 'do it', 'go ahead', 'please', 'absolutely',
-        # Spanish confirmations (non-accented for speech recognition)
-        'si', 'sí', 'claro', 'dale', 'vale', 'confirmar', 'hazlo',
-        'adelante', 'por favor', 'correcto', 'exacto',
-    ]
-    text_lower = normalize_spanish_text(text.lower().strip())
-    return any(conf in text_lower for conf in confirmations)
+    """
+    Check if the text is a confirmation response using LLM.
+
+    Args:
+        text: The text to check
+
+    Returns:
+        True if this is a positive confirmation (yes/sure/ok/etc.)
+    """
+    if not text or not text.strip():
+        return False
+
+    extractor = get_unified_extractor()
+    result = extractor.extract(
+        user_input=text,
+        conversation_state="awaiting_confirmation",
+    )
+
+    if result.is_confirmation and result.confirmation_type == "yes":
+        return True
+
+    return False
+
+
+def get_confirmation_type(text: str) -> Optional[str]:
+    """
+    Get the type of confirmation from text using LLM.
+
+    Args:
+        text: The text to analyze
+
+    Returns:
+        "yes", "no", "skip", "cancel", or None
+    """
+    if not text or not text.strip():
+        return None
+
+    extractor = get_unified_extractor()
+    result = extractor.extract(
+        user_input=text,
+        conversation_state="awaiting_confirmation",
+    )
+
+    if result.is_confirmation:
+        return result.confirmation_type
+
+    return None
+
+
+def extract_full_context(
+    transcript: str,
+    current_page: str = "",
+    conversation_state: str = "idle",
+    dropdown_options: Optional[List[Dict[str, str]]] = None,
+    form_fields: Optional[List[str]] = None,
+    active_course: Optional[str] = None,
+    active_session: Optional[str] = None,
+    language: str = "en",
+) -> UnifiedExtractionResult:
+    """
+    Extract all relevant information from a voice transcript in one LLM call.
+
+    This is the recommended function for new code - it returns all extraction
+    results in a single structured object.
+
+    Args:
+        transcript: The voice transcript
+        current_page: Current page path
+        conversation_state: Current conversation state
+        dropdown_options: Options if awaiting dropdown selection
+        form_fields: Field names if in form filling state
+        active_course: Name of active course
+        active_session: Name of active session
+        language: User's preferred language
+
+    Returns:
+        UnifiedExtractionResult with all extracted information
+    """
+    extractor = get_unified_extractor()
+    ui_context = aggregate_all_ui_elements()
+
+    return extractor.extract(
+        user_input=transcript,
+        current_page=current_page,
+        conversation_state=conversation_state,
+        all_tabs=ui_context.get("all_tabs", []),
+        all_buttons=ui_context.get("all_buttons", []),
+        all_dropdowns=ui_context.get("all_dropdowns", []),
+        dropdown_options=dropdown_options,
+        form_fields=form_fields,
+        active_course=active_course,
+        active_session=active_session,
+        language=language,
+    )

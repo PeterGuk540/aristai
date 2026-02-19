@@ -641,38 +641,6 @@ class VoiceIntentClassifier:
 
 
 # ============================================================================
-# FAST CONFIRMATION CHECK (Regex fallback for speed)
-# ============================================================================
-
-import re
-
-FAST_CONFIRM_PATTERNS = {
-    "yes": r"\b(yes|yeah|yep|sure|okay|ok|confirm|go\s*ahead|do\s*it|proceed|si|claro|adelante|hazlo|de\s*acuerdo)\b",
-    "no": r"\b(no|nope|cancel|stop|abort|quit|never\s*mind|cancelar|parar|detener)\b",
-    "skip": r"\b(skip|next|pass|later|omitir|siguiente|saltar)\b",
-}
-
-
-def fast_confirmation_check(text: str) -> Optional[str]:
-    """
-    Fast regex check for simple confirmations.
-    Use this BEFORE the LLM classifier for instant response on yes/no/cancel.
-
-    Returns:
-        "yes", "no", "skip", or None if not a simple confirmation
-    """
-    text_lower = text.lower().strip()
-
-    # Very short responses are likely confirmations
-    if len(text_lower) <= 15:
-        for confirm_type, pattern in FAST_CONFIRM_PATTERNS.items():
-            if re.search(pattern, text_lower, re.IGNORECASE):
-                return confirm_type
-
-    return None
-
-
-# ============================================================================
 # SINGLETON CLASSIFIER INSTANCE
 # ============================================================================
 
@@ -691,33 +659,20 @@ def get_intent_classifier() -> VoiceIntentClassifier:
 def classify_intent(
     user_input: str,
     page_context: Optional[PageContext] = None,
-    use_fast_confirm: bool = True,
 ) -> ClassifiedIntent:
     """
-    Convenience function to classify user intent.
+    Classify user intent using LLM.
+
+    All voice commands go through LLM classification - no regex shortcuts.
 
     Args:
         user_input: The user's voice command
         page_context: Optional context about current page
-        use_fast_confirm: If True, check for simple confirmations first (faster)
 
     Returns:
         ClassifiedIntent with the detected intent
     """
-    # Fast path for simple confirmations
-    if use_fast_confirm:
-        confirm_type = fast_confirmation_check(user_input)
-        if confirm_type:
-            return ClassifiedIntent(
-                category=IntentCategory.CONFIRM,
-                action=confirm_type,
-                parameters=IntentParameters(),
-                confidence=0.95,
-                clarification_needed=False,
-                original_text=user_input,
-            )
-
-    # Use LLM classifier for everything else
+    # Use LLM classifier for all intents (including confirmations)
     classifier = get_intent_classifier()
     return classifier.classify(user_input, page_context)
 

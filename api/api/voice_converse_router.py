@@ -51,6 +51,8 @@ from api.api.voice_extraction import (
     extract_tab_info as _extract_tab_info,
     extract_dropdown_selection as _extract_dropdown_selection,
     is_confirmation,
+    get_confirmation_type,
+    extract_full_context,
 )
 from api.api.voice_helpers import (
     get_page_suggestions,
@@ -80,7 +82,6 @@ from api.api.voice_intent_classifier import (
     classify_intent,
     intent_to_legacy_format,
     build_page_context,
-    fast_confirmation_check,
     IntentCategory,
     PageContext,
     # Form input classification for distinguishing content vs meta-conversation
@@ -624,211 +625,6 @@ def detect_navigation_intent(text: str, context: Optional[List[str]] = None, cur
     return detect_navigation_intent_llm(text, context, current_page)
 
 
-def detect_action_intent(text: str) -> Optional[str]:
-    """Detect if user wants to perform an action.
-
-    Normalizes text to handle Spanish accents (e.g., sesión -> sesion)
-    since speech-to-text often omits diacritics.
-    """
-    # Normalize to handle both accented and non-accented Spanish
-    text_normalized = normalize_spanish_text(text.lower())
-    for action, patterns in ACTION_PATTERNS.items():
-        for pattern in patterns:
-            if re.search(pattern, text_normalized):
-                return action
-    return None
-
-
-def extract_ui_target(text: str, action: str) -> Dict[str, Any]:
-    """Extract the target value from a UI interaction command.
-
-    Normalizes text to handle Spanish accents since speech-to-text often omits diacritics.
-    """
-    text_normalized = normalize_spanish_text(text.lower().strip())
-    result = {"action": action}
-
-    if action == 'ui_select_course':
-        # Extract course name or ordinal (English + Spanish)
-        match = re.search(r'(course|class|curso|clase)\s+(.+?)(?:\s+please|\s+now|\s+por favor|\s+ahora|\s*$)', text_normalized)
-        if match:
-            result["target"] = "select-course"
-            result["optionName"] = match.group(2).strip()
-        # Check for ordinal patterns (English + Spanish: primero, segundo, tercero, ultimo)
-        ordinal_match = re.search(r'(first|second|third|last|primero?|segundo?|tercero?|ultimo?|\d+(?:st|nd|rd|th)?)\s+(course|class|curso|clase)', text_normalized)
-        if ordinal_match:
-            result["target"] = "select-course"
-            result["optionName"] = ordinal_match.group(1)
-
-    elif action == 'ui_select_session':
-        # Extract session name or ordinal (English + Spanish)
-        match = re.search(r'(session|sesion)\s+(.+?)(?:\s+please|\s+now|\s+por favor|\s+ahora|\s*$)', text_normalized)
-        if match:
-            result["target"] = "select-session"
-            result["optionName"] = match.group(1).strip()
-        # Check for ordinal patterns (English + Spanish)
-        ordinal_match = re.search(r'(first|second|third|last|primero?|segundo?|tercero?|ultimo?|\d+(?:st|nd|rd|th)?)\s+(session|sesion)', text_normalized)
-        if ordinal_match:
-            result["target"] = "select-session"
-            result["optionName"] = ordinal_match.group(1)
-
-    elif action == 'ui_switch_tab':
-        # Extract tab name - order matters (longer phrases first)
-        # Includes both English and Spanish tab keywords
-        tab_keywords = {
-            # Multi-word phrases first (longer phrases before shorter)
-            'case studies': 'cases',
-            'case-studies': 'cases',
-            'ai copilot': 'copilot',
-            'ai assistant': 'copilot',
-            'answer scores': 'scoring',
-            'answer-scores': 'scoring',
-            'instructor tools': 'tools',
-            'instructor-tools': 'tools',
-            'instructor requests': 'requests',
-            'instructor-requests': 'requests',
-            'manage status': 'manage',
-            'manage-status': 'manage',
-            'session insights': 'insights',
-            'session-insights': 'insights',
-            'view sessions': 'sessions',
-            'view courses': 'courses',
-            'lms integrations': 'integrations',
-            'canvas integrations': 'integrations',
-            # Spanish keywords -> tab value (non-accented: discusion, participacion, etc.)
-            'estudios de caso': 'cases',
-            'casos de estudio': 'cases',
-            'asistente de ia': 'copilot',
-            'asistente ia': 'copilot',
-            'herramientas del instructor': 'tools',
-            'solicitudes del instructor': 'requests',
-            'discusion': 'discussion',
-            'participacion': 'participation',
-            'puntuacion': 'scoring',
-            'avanzado': 'advanced',
-            'inscripcion': 'advanced',
-            'resumen': 'summary',
-            'encuestas': 'polls',
-            'solicitudes': 'requests',
-            'lista': 'roster',
-            'analiticas': 'analytics',
-            'materiales': 'materials',
-            'integraciones': 'integrations',
-            # Simple English keywords (single words)
-            'summary': 'summary',
-            'participation': 'participation',
-            'scoring': 'scoring',
-            'analytics': 'analytics',
-            'integrations': 'integrations',
-            'advanced': 'advanced',
-            'enrollment': 'advanced',
-            'instructor': 'advanced',
-            'create': 'create',
-            'manage': 'manage',
-            'sessions': 'sessions',
-            'courses': 'courses',
-            'discussion': 'discussion',
-            'cases': 'cases',
-            'copilot': 'copilot',
-            'polls': 'polls',
-            'poll': 'polls',
-            'requests': 'requests',
-            'roster': 'roster',
-            'tools': 'tools',
-            'insights': 'insights',
-            'materials': 'materials',
-            'my-performance': 'myperformance',
-            'best-practice': 'bestpractice',
-        }
-        for keyword, tab_value in tab_keywords.items():
-            keyword_normalized = keyword.replace('-', ' ')
-            if keyword in text_normalized or keyword_normalized in text_normalized:
-                result["tabName"] = tab_value
-                result["target"] = f"tab-{tab_value}"
-                break
-
-    elif action == 'ui_click_button':
-        # Extract button target (English + Spanish)
-        button_mappings = {
-            # English
-            'get started': 'intro-get-started',
-            'voice commands': 'intro-voice-commands',
-            'notifications': 'notifications-button',
-            'notification': 'notifications-button',
-            'change language': 'toggle-language',
-            'switch language': 'toggle-language',
-            'toggle language': 'toggle-language',
-            'refresh poll results': 'refresh-poll-results',
-            'refresh instructor requests': 'refresh-instructor-requests',
-            'approve request': 'approve-instructor-request',
-            'reject request': 'reject-instructor-request',
-            'generate report': 'generate-report',
-            'regenerate report': 'regenerate-report',
-            'refresh': 'refresh',
-            'refresh report': 'refresh-report',
-            'start copilot': 'start-copilot',
-            'stop copilot': 'stop-copilot',
-            'create poll': 'create-poll',
-            'post case': 'post-case',
-            'go live': 'go-live',
-            'complete': 'complete-session',
-            'complete session': 'complete-session',
-            'enroll': 'enroll-students',
-            'upload roster': 'upload-roster',
-            'submit': 'submit-post',
-            'create course': 'create-course',
-            'create session': 'create-session',
-            'edit session': 'edit-session',
-            'edit': 'edit-session',
-            'modify session': 'edit-session',
-            'delete session': 'delete-session',
-            'remove session': 'delete-session',
-            # Spanish (non-accented)
-            'comenzar': 'intro-get-started',
-            'comandos de voz': 'intro-voice-commands',
-            'notificaciones': 'notifications-button',
-            'notificacion': 'notifications-button',
-            'cambiar idioma': 'toggle-language',
-            'actualizar resultados de encuesta': 'refresh-poll-results',
-            'actualizar solicitudes': 'refresh-instructor-requests',
-            'generar reporte': 'generate-report',
-            'regenerar reporte': 'regenerate-report',
-            'actualizar': 'refresh',
-            'actualizar reporte': 'refresh-report',
-            'iniciar copilot': 'start-copilot',
-            'detener copilot': 'stop-copilot',
-            'crear encuesta': 'create-poll',
-            'publicar caso': 'post-case',
-            'en vivo': 'go-live',
-            'completar': 'complete-session',
-            'completar sesion': 'complete-session',
-            'inscribir': 'enroll-students',
-            'subir lista': 'upload-roster',
-            'enviar': 'submit-post',
-            'crear curso': 'create-course',
-            'crear sesion': 'create-session',
-            'editar sesion': 'edit-session',
-            'modificar sesion': 'edit-session',
-            'eliminar sesion': 'delete-session',
-            'borrar sesion': 'delete-session',
-        }
-        for phrase, target in button_mappings.items():
-            if phrase in text_normalized:
-                result["target"] = target
-                result["buttonLabel"] = phrase
-                break
-
-    return result
-
-
-def is_confirmation(text: str) -> bool:
-    """Return True if transcript is a confirmation to proceed.
-
-    Normalizes text to handle Spanish accents since speech-to-text often omits diacritics.
-    """
-    text_normalized = normalize_spanish_text(text.lower())
-    return bool(re.search(CONFIRMATION_PATTERNS, text_normalized))
-
-
 def build_confirmation_message(steps: List[Dict[str, Any]]) -> str:
     """Build a confirmation prompt for write actions."""
     summaries = []
@@ -1303,19 +1099,13 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         print(f"🔍 DROPDOWN STATE: Checking cancel for transcript: '{transcript}'")
         print(f"🔍 DROPDOWN STATE: active_dropdown={conv_context.active_dropdown}, options_count={len(conv_context.dropdown_options)}")
 
-        # Check for explicit cancel/exit keywords BEFORE trying to match selection.
-        # Avoid substring false positives like matching "no" inside "now".
+        # Check for explicit cancel/exit/skip intent using LLM
         transcript_lower = normalize_spanish_text(transcript.lower())
-        cancel_phrases = [
-            'cancel', 'cancelar', 'stop', 'exit', 'quit', 'abort',
-            'nevermind', 'never mind', 'go back', 'atras', 'volver',
-            'no thanks', "don't want", "dont want", 'none', 'ninguno', 'ninguna'
-        ]
-        matched_cancel = [phrase for phrase in cancel_phrases if phrase in transcript_lower]
-        explicit_short_cancel = re.fullmatch(r"\s*(no|nope|skip)\s*[.!?]*\s*", transcript_lower) is not None
-        print(f"🔍 DROPDOWN STATE: Cancel words matched: {matched_cancel}")
+        confirmation_type = get_confirmation_type(transcript)
+        is_cancel_intent = confirmation_type in ("no", "skip", "cancel")
+        print(f"🔍 DROPDOWN STATE: Confirmation type: {confirmation_type}, is_cancel: {is_cancel_intent}")
 
-        if matched_cancel or explicit_short_cancel:
+        if is_cancel_intent:
             result = conversation_manager.cancel_dropdown_selection(request.user_id)
             return ConverseResponse(
                 message=sanitize_speech(result["message"]),
@@ -1805,31 +1595,30 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 suggestions=suggestions,
             )
 
-        # Check for "I'm done" / "finished" patterns
-        done_patterns = [
-            (r'\b(i\'?m\s+done|i\s+am\s+done)\b', 'done'),
-            (r'\b(that\'?s\s+it|that\s+is\s+it)\b', 'that'),
-            (r'\b(finished|i\'?m\s+finished|i\s+am\s+finished)\b', 'finished'),
-            (r'\b(it\'?s\s+over|it\s+is\s+over)\b', 'over'),
-            (r'\b(end|done|complete|finish)\s*(it|now|dictation|post)?\s*$', 'end'),
-            (r'^done\.?$', 'done'),
-            (r'^finished\.?$', 'finished'),
-        ]
+        # Check for "I'm done" / "finished" using LLM extraction
+        extraction_result = extract_full_context(
+            transcript=transcript,
+            conversation_state="awaiting_dictation_completion",
+            language=language,
+        )
 
-        # Check if any done pattern matches
-        done_match = None
+        # Detect completion signals: done, finished, that's it, etc.
+        is_done_signal = (
+            extraction_result.dictation
+            and extraction_result.dictation.is_command
+            and extraction_result.dictation.command_type in ("done", "finished", "complete", "end")
+        ) or (
+            extraction_result.is_confirmation
+            and extraction_result.confirmation_type == "yes"
+            and extraction_result.intent_category == "confirm"
+        )
+
+        # Extract any content before the completion signal
         content_before_done = None
-        for pattern, _ in done_patterns:
-            match = re.search(pattern, transcript_lower)
-            if match:
-                done_match = match
-                # Extract content BEFORE the done keyword (user might say "This is my post. Finished.")
-                content_before_done = transcript[:match.start()].strip()
-                # Clean up trailing punctuation from the content
-                content_before_done = re.sub(r'[.,;:!?\s]+$', '', content_before_done)
-                break
+        if is_done_signal and extraction_result.dictation and extraction_result.dictation.content:
+            content_before_done = extraction_result.dictation.content.rstrip('.,;:!? ')
 
-        if done_match:
+        if is_done_signal:
             # If there's content before the "done" keyword, save it first!
             if content_before_done:
                 conversation_manager.append_post_content(request.user_id, content_before_done)
@@ -3769,436 +3558,6 @@ def _resolve_session_id(db: Session, current_page: Optional[str], user_id: Optio
     return session.id if session else None
 
 
-def _extract_dictated_content(transcript: str, action: str) -> Optional[str]:
-    """Extract dictated content from transcript for form filling."""
-    text = transcript.strip()
-
-    # Remove common prefixes that indicate dictation
-    prefixes_to_remove = [
-        r'^(?:the\s+)?(?:course\s+)?(?:title\s+)?(?:is\s+)?(?:called\s+)?',
-        r'^(?:the\s+)?(?:session\s+)?(?:title\s+)?(?:is\s+)?(?:called\s+)?',
-        r'^(?:name|title|call)\s+(?:it|the\s+\w+)\s+',
-        r'^(?:it\'?s?\s+called\s+)',
-        r'^(?:the\s+)?(?:poll\s+)?question\s+(?:is|should\s+be)\s+',
-        r'^(?:ask|poll)\s+(?:them|students|the\s+class)\s+',
-        r'^(?:post\s+(?:this|the\s+following):\s*)',
-        r'^(?:the\s+)?(?:post|message|content)\s+(?:is|should\s+be)\s+',
-    ]
-
-    for prefix in prefixes_to_remove:
-        match = re.match(prefix, text, re.IGNORECASE)
-        if match:
-            text = text[match.end():].strip()
-            break
-
-    # Remove quotes if present
-    if text.startswith('"') and text.endswith('"'):
-        text = text[1:-1]
-    elif text.startswith("'") and text.endswith("'"):
-        text = text[1:-1]
-
-    # Return None if the result is too short or looks like a command
-    if len(text) < 2:
-        return None
-
-    # Check if this looks like an actual dictation (not a command)
-    command_indicators = ['go to', 'navigate', 'open', 'show', 'create', 'start', 'stop', 'help']
-    text_lower = text.lower()
-    for indicator in command_indicators:
-        if text_lower.startswith(indicator):
-            return None
-
-    return text
-
-
-def _extract_universal_dictation(transcript: str) -> Optional[Dict[str, str]]:
-    """
-    UNIVERSAL dictation extraction - works for ANY input field.
-    Extracts field name and value from natural speech patterns.
-    """
-    text = transcript.strip()
-    text_lower = text.lower()
-
-    # Pattern: "the [field] is [value]" or "[field] is [value]"
-    match = re.match(r'^(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:is|should\s+be|will\s+be)\s+(.+)$', text, re.IGNORECASE)
-    if match:
-        field = match.group(1).strip().lower().replace(' ', '-')
-        value = match.group(2).strip()
-        return {"field": field, "value": value}
-
-    # Pattern: "set [field] to [value]"
-    match = re.match(r'^(?:set|make|change)\s+(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:to|as)\s+(.+)$', text, re.IGNORECASE)
-    if match:
-        field = match.group(1).strip().lower().replace(' ', '-')
-        value = match.group(2).strip()
-        return {"field": field, "value": value}
-
-    # Pattern: "[field]: [value]"
-    match = re.match(r'^(\w+(?:\s+\w+)?):\s*(.+)$', text)
-    if match:
-        field = match.group(1).strip().lower().replace(' ', '-')
-        value = match.group(2).strip()
-        return {"field": field, "value": value}
-
-    # Pattern: "for [field], use [value]"
-    match = re.match(r'^for\s+(?:the\s+)?(\w+(?:\s+\w+)?),?\s+(?:use|put|enter|type|write)\s+(.+)$', text, re.IGNORECASE)
-    if match:
-        field = match.group(1).strip().lower().replace(' ', '-')
-        value = match.group(2).strip()
-        return {"field": field, "value": value}
-
-    # Pattern: "type/enter/write [value]" - fill focused/first input
-    match = re.match(r'^(?:type|enter|write|put|input|fill(?:\s+in)?)\s+(.+)$', text, re.IGNORECASE)
-    if match:
-        value = match.group(1).strip()
-        return {"field": "focused-input", "value": value}
-
-    # If nothing matched but it looks like content (not a command), treat as dictation for focused input
-    command_starters = ['go', 'navigate', 'open', 'show', 'create', 'start', 'stop', 'help', 'select', 'choose', 'click', 'switch']
-    first_word = text_lower.split()[0] if text_lower.split() else ""
-    if first_word not in command_starters and len(text) > 3:
-        return {"field": "focused-input", "value": text}
-
-    return None
-
-
-def _extract_dropdown_hint(transcript: str) -> str:
-    """Extract which dropdown the user is referring to, or return empty for any dropdown."""
-    text_lower = transcript.lower()
-
-    # Look for specific dropdown mentions
-    # IMPORTANT: Order matters! Check more specific phrases BEFORE generic ones.
-    # e.g., "provider connection" must be checked before "provider"
-    dropdown_keywords = [
-        # Multi-word phrases first (more specific)
-        ('provider connection', 'select-provider-connection'),
-        ('source provider', 'select-integration-provider'),
-        ('external course', 'select-external-course'),
-        ('target course', 'select-target-course'),
-        ('target session', 'select-target-session'),
-        ('saved mapping', 'select-integration-mapping'),
-        # Single words last (less specific)
-        ('connection', 'select-provider-connection'),
-        ('provider', 'select-integration-provider'),
-        ('mapping', 'select-integration-mapping'),
-        ('course', 'select-course'),
-        ('session', 'select-session'),
-        ('student', 'select-student'),
-        ('instructor', 'select-instructor'),
-        ('status', 'select-status'),
-        ('type', 'select-type'),
-    ]
-
-    for keyword, target in dropdown_keywords:
-        if keyword in text_lower:
-            return target
-
-    return ""  # Empty means find any dropdown on the page
-
-
-def _extract_button_info(transcript: str) -> Dict[str, str]:
-    """Extract button target from transcript for button clicks."""
-    text_lower = transcript.lower()
-
-    # Direct button mappings
-    button_mappings = {
-        'get started': 'intro-get-started',
-        'start now': 'intro-get-started',
-        'voice commands': 'intro-voice-commands',
-        'voice command': 'intro-voice-commands',
-        'open voice commands': 'intro-voice-commands',
-        'notifications': 'notifications-button',
-        'notification': 'notifications-button',
-        'open notifications': 'notifications-button',
-        'open notification': 'notifications-button',
-        'top notification': 'notifications-button',
-        'top-bar notification': 'notifications-button',
-        'change language': 'toggle-language',
-        'switch language': 'toggle-language',
-        'toggle language': 'toggle-language',
-        'language': 'toggle-language',
-        'cambiar idioma': 'toggle-language',
-        'cambiar el idioma': 'toggle-language',
-        'notificaciones': 'notifications-button',
-        'notificacion': 'notifications-button',
-        'comandos de voz': 'intro-voice-commands',
-        'comenzar': 'intro-get-started',
-        'refresh poll results': 'refresh-poll-results',
-        'refresh instructor requests': 'refresh-instructor-requests',
-        'approve request': 'approve-instructor-request',
-        'reject request': 'reject-instructor-request',
-        'generate report': 'generate-report',
-        'regenerate report': 'regenerate-report',
-        'refresh': 'refresh',
-        'start copilot': 'start-copilot',
-        'stop copilot': 'stop-copilot',
-        'create poll': 'create-poll',
-        'post case': 'post-case',
-        'go live': 'go-live',
-        'complete session': 'complete-session',
-        'edit session': 'edit-session',
-        'modify session': 'edit-session',
-        'delete session': 'delete-session',
-        'remove session': 'delete-session',
-        'enroll': 'enroll-students',
-        'upload roster': 'upload-roster',
-        'submit': 'submit-post',
-        'create course': 'create-course-with-plans',
-        'create session': 'create-session',
-        'create and generate': 'create-course-with-plans',
-        'generate plans': 'create-course-with-plans',
-        'add connection': 'add-provider-connection',
-        'connect canvas': 'connect-canvas-oauth',
-        'connect upp': 'connect-canvas-oauth',
-        'connect provider': 'connect-canvas-oauth',
-        'test selected': 'test-provider-connection',
-        'set default': 'activate-provider-connection',
-        'create forum course': 'import-external-course',
-        'save mapping': 'save-course-mapping',
-        'sync all': 'sync-all-materials',
-        'sync students': 'sync-roster',
-        'import selected materials': 'import-external-materials',
-        'import materials': 'import-external-materials',
-        'select all materials': 'select-all-external-materials',
-        'clear materials': 'clear-external-materials',
-    }
-
-    for phrase, target in button_mappings.items():
-        if phrase in text_lower:
-            return {"target": target, "label": phrase.title()}
-
-    return {}
-
-
-def _extract_search_query(transcript: str) -> Optional[str]:
-    """Extract the intended search query for workspace search navigation."""
-    text = normalize_spanish_text((transcript or "").strip().lower())
-    if not text:
-        return None
-
-    patterns = [
-        r'^(?:search|find|look\s+for)\s+(?:for\s+)?(.+)$',
-        r'^(?:busca|buscar)\s+(.+)$',
-        r'^(?:open|go\s+to)\s+(.+?)\s+(?:using\s+)?search$',
-        r'^(?:abrir|ir\s+a)\s+(.+?)\s+(?:con\s+)?busqueda$',
-    ]
-
-    query = None
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            query = match.group(1).strip()
-            break
-
-    if not query:
-        if any(k in text for k in ["search", "find", "look for", "busca", "buscar"]):
-            query = text
-        else:
-            return None
-
-    # Remove common filler words that hurt matching.
-    query = re.sub(r'\b(page|tab|section|panel|the|a|an|please|for me|por favor)\b', '', query).strip()
-    query = re.sub(r'\s+', ' ', query)
-
-    return query if len(query) >= 2 else None
-
-
-def _extract_student_name(transcript: str) -> Optional[str]:
-    """Extract student name from transcript for student selection."""
-    text = transcript.strip()
-
-    # Remove common prefixes
-    prefixes = [
-        r'^(select|choose|pick|click|check|enroll)\s+(the\s+)?student\s+',
-        r'^(select|choose|pick|click|check|enroll)\s+',
-        r'^student\s+',
-    ]
-    for prefix in prefixes:
-        text = re.sub(prefix, '', text, flags=re.IGNORECASE)
-
-    # Remove common suffixes
-    suffixes = [
-        r'\s+(from|in)\s+(the\s+)?(student\s+)?pool$',
-        r'\s+please$',
-        r'\s+now$',
-    ]
-    for suffix in suffixes:
-        text = re.sub(suffix, '', text, flags=re.IGNORECASE)
-
-    # Clean up and return
-    text = text.strip()
-    if text and len(text) > 1:
-        return text
-    return None
-
-
-def _extract_tab_info(transcript: str) -> Dict[str, str]:
-    """Extract tab name from transcript for universal tab switching."""
-    text_lower = transcript.lower()
-
-    # Remove common prefixes
-    for prefix in ['go to', 'open', 'show', 'switch to', 'view', 'the']:
-        text_lower = re.sub(rf'^{prefix}\s+', '', text_lower)
-
-    # Remove tab/panel/section suffix
-    text_lower = re.sub(r'\s*(tab|panel|section)\s*$', '', text_lower)
-
-    # Clean up and extract the tab name
-    tab_name = text_lower.strip()
-
-    # Normalize common variations
-    # Note: Speech recognition may confuse similar-sounding words
-    tab_aliases = {
-        'ai copilot': 'copilot',
-        'ai assistant': 'copilot',
-        'copilot': 'copilot',
-        # Polls tab - handle various transcriptions and mishearings
-        'poll': 'polls',
-        'polls': 'polls',
-        'pulse': 'polls',   # Common mishearing
-        'pose': 'polls',    # Common mishearing
-        'pols': 'polls',    # Common mishearing
-        'paul': 'polls',    # Common mishearing
-        'polling': 'polls',
-        'poles': 'polls',   # Common mishearing
-        'pulls': 'polls',   # Common mishearing
-        'bowls': 'polls',   # Common mishearing
-        'goals': 'polls',   # Common mishearing (unlikely but possible)
-        # Cases tab
-        'case': 'cases',
-        'cases': 'cases',
-        'case study': 'cases',
-        'case studies': 'cases',
-        'casestudies': 'cases',
-        'post case': 'cases',
-        'post cases': 'cases',
-        # Requests tab
-        'request': 'requests',
-        'requests': 'requests',
-        'instructor request': 'requests',
-        'instructor requests': 'requests',
-        # Roster tab
-        'roster': 'roster',
-        'student roster': 'roster',
-        'class roster': 'roster',
-        'roster upload': 'roster',
-        # Courses advanced tab (includes legacy enrollment/instructor language)
-        'advanced': 'advanced',
-        'enroll': 'advanced',
-        'enrollment': 'advanced',
-        'enrollments': 'advanced',
-        'instructor': 'advanced',
-        'instructor access': 'advanced',
-        'manage enrollment': 'advanced',
-        'my performance': 'my-performance',
-        'best practice': 'best-practice',
-        'best practices': 'best-practice',
-        # Session status management tab
-        'manage': 'manage',
-        'management': 'manage',
-        'manage status': 'manage',
-        'managestatus': 'manage',
-        'status': 'manage',
-        'session status': 'manage',
-        'status control': 'manage',
-        # AI Features tab (sessions page)
-        'ai features': 'ai-features',
-        'aifeatures': 'ai-features',
-        'ai-features': 'ai-features',
-        'a i features': 'ai-features',
-        'ai feature': 'ai-features',
-        'ai tools': 'ai-features',
-        'enhanced features': 'ai-features',
-        'enhanced ai': 'ai-features',
-        # AI Insights tab (courses page)
-        'ai insights': 'ai-insights',
-        'aiinsights': 'ai-insights',
-        'ai-insights': 'ai-insights',
-        'a i insights': 'ai-insights',
-        'ai insight': 'ai-insights',
-        'ai analytics': 'ai-insights',
-        'participation insights': 'ai-insights',
-        'objective coverage': 'ai-insights',
-        # Materials tab (sessions page)
-        'materials': 'materials',
-        'material': 'materials',
-        'course materials': 'materials',
-        'session materials': 'materials',
-        'class materials': 'materials',
-        'files': 'materials',
-        'documents': 'materials',
-        # Insights tab (sessions page)
-        'insights': 'insights',
-        'insight': 'insights',
-        'session insights': 'insights',
-        'analytics': 'insights',
-        'session analytics': 'insights',
-        'engagement': 'insights',
-        'session engagement': 'insights',
-        # Create tab
-        'create': 'create',
-        'creation': 'create',
-        'create session': 'create',
-        'new session': 'create',
-        # View sessions tab
-        'sessions': 'sessions',
-        'session': 'sessions',
-        'view sessions': 'sessions',
-        'list': 'sessions',
-        'session list': 'sessions',
-        # Reports page tabs
-        'summary': 'summary',
-        'report summary': 'summary',
-        'overview': 'summary',
-        'participation': 'participation',
-        'participation tab': 'participation',
-        'scoring': 'scoring',
-        'scores': 'scoring',
-        'grades': 'scoring',
-        'answer scores': 'scoring',
-        'report analytics': 'analytics',
-        'data analytics': 'analytics',
-    }
-
-    # First try exact match
-    if tab_name in tab_aliases:
-        return {"tabName": tab_aliases[tab_name]}
-
-    # Then try partial match - if the tab_name contains a key word
-    for alias, normalized in tab_aliases.items():
-        if alias in tab_name or tab_name in alias:
-            return {"tabName": normalized}
-
-    return {"tabName": tab_name}
-
-
-def _extract_dropdown_selection(transcript: str) -> Dict[str, Any]:
-    """Extract dropdown selection info from transcript."""
-    text_lower = transcript.lower()
-
-    # Extract ordinal or name
-    ordinals = {
-        'first': 0, 'second': 1, 'third': 2, 'fourth': 3, 'fifth': 4,
-        'last': -1, '1st': 0, '2nd': 1, '3rd': 2, '4th': 3, '5th': 4,
-        'one': 0, 'two': 1, 'three': 2, 'four': 3, 'five': 4,
-    }
-
-    for ordinal, index in ordinals.items():
-        if ordinal in text_lower:
-            return {"optionIndex": index, "optionName": ordinal}
-
-    # Extract the selection name - remove command words
-    for prefix in ['select', 'choose', 'pick', 'use', 'switch to', 'the']:
-        text_lower = re.sub(rf'^{prefix}\s+', '', text_lower)
-
-    # Remove type words
-    for suffix in ['course', 'session', 'option', 'item']:
-        text_lower = re.sub(rf'\s+{suffix}\s*$', '', text_lower)
-
-    option_name = text_lower.strip()
-    return {"optionName": option_name} if option_name else {}
-
-
 def _execute_tool(db: Session, tool_name: str, args: Dict[str, Any]) -> Optional[Any]:
     tool_info = TOOL_REGISTRY.get(tool_name)
     if not tool_info:
@@ -5909,20 +5268,8 @@ async def execute_action(
             course_id = _resolve_course_id(db, current_page, user_id)
             session_id = _resolve_session_id(db, current_page, user_id, course_id)
 
-            # Try to extract student name from transcript
-            student_name = None
-            name_patterns = [
-                r'\bhow\s+is\s+(\w+)\s+(doing|performing)\b',
-                r'\btell\s+me\s+about\s+(\w+)',
-                r'\bcheck\s+(?:on\s+)?(\w+)\b',
-                r'\blook\s+up\s+(\w+)\b',
-                r'\bwhat\s+about\s+(\w+)\b',
-            ]
-            for pattern in name_patterns:
-                match = re.search(pattern, transcript.lower())
-                if match:
-                    student_name = match.group(1)
-                    break
+            # Try to extract student name from transcript using LLM
+            student_name = _extract_student_name(transcript)
 
             if not student_name:
                 return {

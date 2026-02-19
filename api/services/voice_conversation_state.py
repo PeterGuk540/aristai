@@ -10,7 +10,6 @@ This module enables the voice controller to:
 from __future__ import annotations
 
 import json
-import re
 import time
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -954,10 +953,13 @@ class VoiceConversationManager:
         user_id: Optional[int],
         selection: Union[int, str]
     ) -> Dict[str, Any]:
-        """Process user's dropdown selection.
+        """Process user's dropdown selection using LLM-based understanding.
+
+        All selection matching is done by the LLM - no regex patterns or
+        hard-coded dictionaries.
 
         Args:
-            selection: Either index (1-based) or partial label match
+            selection: The user's voice input (will be processed by LLM)
 
         Returns:
             {
@@ -967,6 +969,8 @@ class VoiceConversationManager:
                 "voice_id": str  # dropdown voice_id for UI action
             }
         """
+        from api.api.voice_llm_extraction import get_unified_extractor
+
         context = self.get_context(user_id)
 
         if context.state != ConversationState.AWAITING_DROPDOWN_SELECTION:
@@ -978,90 +982,43 @@ class VoiceConversationManager:
             }
 
         options = context.dropdown_options
+        selection_str = str(selection).strip()
+
+        # Use LLM to understand the selection
+        extractor = get_unified_extractor()
+        dropdown_options_for_llm = [
+            {"label": opt.label, "value": opt.value}
+            for opt in options
+        ]
+
+        result = extractor.extract(
+            user_input=selection_str,
+            conversation_state="awaiting_dropdown_selection",
+            dropdown_options=dropdown_options_for_llm,
+        )
+
         selected = None
-        selection_str = str(selection).lower().strip()
 
-        # Remove common filler words from selection
-        filler_words = ['the', 'a', 'an', 'please', 'select', 'choose', 'pick', 'use', 'course', 'session', 'option', 'number', 'one', 'called']
-        selection_clean = selection_str
-        for word in filler_words:
-            selection_clean = re.sub(rf'\b{word}\b', '', selection_clean)
-        selection_clean = ' '.join(selection_clean.split())  # Clean up whitespace
+        # Process LLM extraction result
+        if result.selection and result.selection.selection_type != "none":
+            idx = result.selection.ordinal_index
 
-        # Ordinal mapping (first, second, etc.)
-        ordinals = {
-            'first': 1, 'second': 2, 'third': 3, 'fourth': 4, 'fifth': 5,
-            'sixth': 6, 'seventh': 7, 'eighth': 8, 'ninth': 9, 'tenth': 10,
-            'last': len(options),
-            '1st': 1, '2nd': 2, '3rd': 3, '4th': 4, '5th': 5,
-            '6th': 6, '7th': 7, '8th': 8, '9th': 9, '10th': 10,
-        }
+            if idx is not None:
+                # Handle "last" (-1)
+                if idx == -1:
+                    idx = len(options) - 1
 
-        # Word-to-number mapping (one, two, three, etc.)
-        number_words = {
-            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
-            'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
-        }
-
-        # Try to match by ordinal (first, second, etc.)
-        for ordinal, idx in ordinals.items():
-            if ordinal in selection_str:
-                if 0 < idx <= len(options):
-                    selected = options[idx - 1]
-                    break
-
-        # Try to match by number word (one, two, three, six, etc.)
-        if not selected:
-            for word, num in number_words.items():
-                if word in selection_str:
-                    if 0 < num <= len(options):
-                        selected = options[num - 1]
-                        break
-
-        # Try to match by numeric index (1, 2, 3...)
-        if not selected:
-            numbers = re.findall(r'\b(\d+)\b', selection_str)
-            if numbers:
-                idx = int(numbers[0]) - 1
+                # Validate index is in range
                 if 0 <= idx < len(options):
                     selected = options[idx]
 
-        # Try to match by exact label
-        if not selected:
-            for opt in options:
-                if selection_clean == opt.label.lower():
-                    selected = opt
-                    break
-
-        # Try to match by partial label (selection in label OR label in selection)
-        if not selected:
-            for opt in options:
-                opt_lower = opt.label.lower()
-                if selection_clean in opt_lower or opt_lower in selection_clean:
-                    selected = opt
-                    break
-
-        # Try to match by ID in value
-        if not selected:
-            for opt in options:
-                if selection_clean == opt.value or selection_clean in opt.value:
-                    selected = opt
-                    break
-
-        # Try to match by any significant word overlap
-        if not selected:
-            selection_words = set(selection_clean.split())
-            best_match = None
-            best_score = 0
-            for opt in options:
-                opt_words = set(opt.label.lower().split())
-                overlap = len(selection_words & opt_words)
-                if overlap > best_score:
-                    best_score = overlap
-                    best_match = opt
-            if best_score > 0:
-                selected = best_match
+            # If no index, try name matching from LLM result
+            if not selected and result.selection.matched_name:
+                matched_lower = result.selection.matched_name.lower()
+                for opt in options:
+                    if matched_lower in opt.label.lower() or opt.label.lower() in matched_lower:
+                        selected = opt
+                        break
 
         if not selected:
             # Offer options again

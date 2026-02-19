@@ -908,15 +908,26 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           }
         }
 
-        // ARCHITECTURE: ElevenLabs handles all speech via delegate_to_mcp.
-        // We only send MCP_RESPONSE if SEND_MCP_RESPONSE is true AND response contains
-        // backend-only data (dropdown options, course lists, etc.)
+        // ARCHITECTURE: Send SPEAK: to ElevenLabs when backend has important info
+        // CRITICAL: If a tool was used or ui_action was returned, we MUST speak the response
+        // to prevent ElevenLabs from generating its own (incorrect) response
         if (SEND_MCP_RESPONSE && response.spoken_response && response.spoken_response.length > 5) {
           const msg = response.spoken_response.toLowerCase();
 
+          // ALWAYS send SPEAK: if a tool was used (backend did something)
+          const toolWasUsed = !!response.tool_used;
+          const hasUiAction = !!response.ui_action;
+
           // Check if response contains DATA that only backend knows
           const containsBackendData =
+            toolWasUsed ||  // Tool executed - speak the result
+            hasUiAction ||  // UI action dispatched - confirm it
             /\d+\.\s/.test(msg) ||  // Numbered lists
+            msg.includes('generated') ||  // AI-generated content
+            msg.includes('created') ||  // Created something
+            msg.includes('filled') ||  // Filled a form
+            msg.includes('syllabus') ||  // Syllabus related
+            msg.includes('objectives') ||  // Learning objectives
             msg.includes('options are') ||
             msg.includes('available:') ||
             msg.includes('here are') ||
@@ -925,7 +936,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             msg.includes('your sessions');
 
           if (containsBackendData) {
-            console.log('📢 Speaking backend data via ElevenLabs');
+            console.log('📢 Speaking backend response via ElevenLabs:', response.spoken_response);
             speakViaElevenLabs(response.spoken_response);
           } else {
             console.log('ℹ️ Skipping MCP_RESPONSE - ElevenLabs handles via delegate_to_mcp');

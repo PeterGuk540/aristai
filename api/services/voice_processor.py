@@ -192,6 +192,15 @@ Active Session: {active_session}
 4. If simple action on current page, use appropriate tool
 5. Always provide current_route when using smart_switch_tab
 
+### CRITICAL: AI Content Generation
+When user asks to CREATE/GENERATE/WRITE/MAKE content, use these tools:
+- "generate/create/write syllabus" → generate_syllabus (FILLS the syllabus form field)
+- "generate/create/write objectives" → generate_objectives (FILLS the objectives form field)
+- "generate/create/write session plan" → generate_session_plan (FILLS the session description field)
+
+These tools will AUTOMATICALLY fill the form fields with AI-generated content.
+DO NOT just respond conversationally - CALL THE TOOL to actually generate and fill!
+
 ### Ordinal Handling (0-indexed):
 - "first" / "primero" → selection_index: 0
 - "second" / "segundo" → selection_index: 1
@@ -204,15 +213,18 @@ Active Session: {active_session}
 
 ## Response Format
 
+IMPORTANT: You MUST call a tool for actionable requests. DO NOT respond conversationally.
+If the user wants something done, find the appropriate tool and call it.
+
 Return ONLY valid JSON (no markdown, no explanation):
 {{
     "tool_name": "name of tool to call",
     "parameters": {{ ... tool parameters ... }},
     "confidence": 0.0-1.0,
-    "spoken_response": "Brief response to speak to user (in {language})"
+    "spoken_response": "Brief confirmation of what you're doing (in {language})"
 }}
 
-If unclear, return:
+Only return tool_name: null if the request is truly incomprehensible:
 {{
     "tool_name": null,
     "parameters": {{}},

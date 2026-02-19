@@ -3557,15 +3557,21 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                     if isinstance(results_list[0], dict):
                         results_list[0]["ui_actions"] = results_list[0].get("ui_actions", []) + ui_actions
 
-                # Generate message mentioning the tab
-                action_msg = generate_conversational_response(
-                    'execute',
-                    action,
-                    results=result,
-                    context=request.context,
-                    current_page=request.current_page,
-                    language=language,
-                )
+                # Check if action handler already provided a message (e.g., dropdown options list)
+                if isinstance(result, dict) and result.get("message"):
+                    action_msg = result["message"]
+                else:
+                    # Generate message using LLM
+                    action_msg = generate_conversational_response(
+                        'execute',
+                        action,
+                        results=result,
+                        context=request.context,
+                        current_page=request.current_page,
+                        language=language,
+                    )
+
+                # Append tab switch info to message
                 if language == 'es':
                     action_msg = action_msg.rstrip('.!') + f" en la pestaña {tab_display}."
                 else:
@@ -3581,15 +3587,23 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             # No tab needed - just execute the action
             result = await execute_action(action, request.user_id, request.current_page, db, transcript, intent_result.get("parameters"), language)
             results_list = [result] if result and not isinstance(result, list) else result
-            return ConverseResponse(
-                message=sanitize_speech(generate_conversational_response(
+
+            # Check if action handler already provided a message (e.g., dropdown options list)
+            if isinstance(result, dict) and result.get("message"):
+                response_message = result["message"]
+            else:
+                # Generate message using LLM
+                response_message = generate_conversational_response(
                     'execute',
                     action,
                     results=result,
                     context=request.context,
                     current_page=request.current_page,
                     language=language,
-                )),
+                )
+
+            return ConverseResponse(
+                message=sanitize_speech(response_message),
                 action=ActionResponse(type='execute', executed=True),
                 results=results_list,
                 suggestions=get_action_suggestions(action, language),

@@ -316,12 +316,12 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           console.log('✅ Executing pending action:', pendingResult.action);
 
           // Speak the response through ElevenLabs
+          // NOTE: Do NOT call addAssistantMessage here - ElevenLabs will echo
+          // the message back via onMessage(source="ai"), which handles adding
+          // the message to the chat. Calling both causes duplicate messages.
           if (conversationRef.current) {
             conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${pendingResult.message}`);
           }
-
-          // Add to chat messages
-          addAssistantMessage(pendingResult.message);
         }
       } catch (error) {
         console.error('❌ Failed to check/execute pending action:', error);

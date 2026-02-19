@@ -1038,6 +1038,12 @@ def _build_response_situation(intent_type: str, intent_value: str, results: Any)
             return "Not sure what page user is on."
         if intent_value == 'get_help':
             return "User needs help. Explain what the voice assistant can help with: navigation, courses, sessions, polls, forum, reports."
+        if intent_value == 'open_question':
+            # If we got here, the _handle_open_question result was not used properly
+            # Use the answer from the result if available
+            if isinstance(results, dict) and results.get("message"):
+                return results["message"]
+            return "I can help you navigate pages, create courses and sessions, manage live discussions, run polls, generate reports, and use AI features like copilot suggestions."
 
         # === UNDO/CONTEXT ===
         if intent_value == 'undo_action':
@@ -3533,8 +3539,13 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             # Check if LLM detected a tab to switch to (even when already on correct page)
             # This allows "I want to create a course" to switch to create tab when on /courses
             llm_tab = intent.parameters.tab_name if intent.parameters else None
+            # For query-type actions like open_question, don't switch tabs even if user mentions one
+            # (e.g., "what can you do for this forum?" should NOT switch to forum tab)
+            if action in {'open_question', 'get_help', 'get_status'}:
+                llm_tab = None
             # Fallback to ACTION_TARGET_TABS only if LLM didn't detect a tab
             target_tab = llm_tab or ACTION_TARGET_TABS.get(action)
+            print(f"🔍 [VOICE] Tab detection for action '{action}': llm_tab={llm_tab}, ACTION_TARGET_TABS={ACTION_TARGET_TABS.get(action)}, target_tab={target_tab}")
 
             # If there's a tab to switch to, include it in the action
             if target_tab:
@@ -3558,10 +3569,13 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                         results_list[0]["ui_actions"] = results_list[0].get("ui_actions", []) + ui_actions
 
                 # Check if action handler already provided a message (e.g., dropdown options list)
+                print(f"🔍 [VOICE] Tab path - result type: {type(result)}, has message: {isinstance(result, dict) and 'message' in result if result else False}")
                 if isinstance(result, dict) and result.get("message"):
                     action_msg = result["message"]
+                    print(f"✅ [VOICE] Tab path - using handler message: '{action_msg[:100]}...' " if len(action_msg) > 100 else f"✅ [VOICE] Tab path - using handler message: '{action_msg}'")
                 else:
                     # Generate message using LLM
+                    print(f"⚠️ [VOICE] Tab path - no handler message, generating via LLM for action '{action}'")
                     action_msg = generate_conversational_response(
                         'execute',
                         action,
@@ -3585,14 +3599,18 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
                 )
 
             # No tab needed - just execute the action
+            print(f"✅ [VOICE] Executing action '{action}' without tab switch")
             result = await execute_action(action, request.user_id, request.current_page, db, transcript, intent_result.get("parameters"), language)
             results_list = [result] if result and not isinstance(result, list) else result
+            print(f"✅ [VOICE] Action result type: {type(result)}, has message: {isinstance(result, dict) and 'message' in result if result else False}")
 
-            # Check if action handler already provided a message (e.g., dropdown options list)
+            # Check if action handler already provided a message (e.g., dropdown options list, open_question answer)
             if isinstance(result, dict) and result.get("message"):
                 response_message = result["message"]
+                print(f"✅ [VOICE] Using action handler message: '{response_message[:100]}...' " if len(response_message) > 100 else f"✅ [VOICE] Using action handler message: '{response_message}'")
             else:
                 # Generate message using LLM
+                print(f"⚠️ [VOICE] No message in result, generating via LLM for action '{action}'")
                 response_message = generate_conversational_response(
                     'execute',
                     action,
@@ -6093,15 +6111,20 @@ async def _handle_open_question(question: str, current_page: Optional[str] = Non
     """
     from workflows.llm_utils import get_llm_with_tracking, invoke_llm_with_metrics
 
+    print(f"🔍 [OPEN_QUESTION] Processing question: '{question}' on page: {current_page}")
+
     llm, model_name = get_llm_with_tracking()
 
     if not llm:
+        print(f"❌ [OPEN_QUESTION] LLM not available!")
         return {
             "message": "I'm having trouble accessing my knowledge base right now. "
                        "You can ask me to navigate to any page, list your courses, "
                        "or help with specific tasks like creating sessions or polls.",
             "action": "open_question",
         }
+
+    print(f"✅ [OPEN_QUESTION] LLM available: {model_name}")
 
     prompt = OPEN_QUESTION_PROMPT.format(
         current_page=current_page or "unknown",
@@ -6110,6 +6133,7 @@ async def _handle_open_question(question: str, current_page: Optional[str] = Non
 
     try:
         response = invoke_llm_with_metrics(llm, prompt, model_name)
+        print(f"✅ [OPEN_QUESTION] LLM response success={response.success}, content_len={len(response.content) if response.content else 0}")
 
         if response.success and response.content:
             # Clean up the response for TTS
@@ -6122,17 +6146,21 @@ async def _handle_open_question(question: str, current_page: Optional[str] = Non
                 sentences = answer.split(". ")
                 answer = ". ".join(sentences[:3]) + "."
 
+            print(f"✅ [OPEN_QUESTION] Returning message: '{answer[:100]}...'")
             return {
                 "message": answer,
                 "action": "open_question",
             }
         else:
+            print(f"⚠️ [OPEN_QUESTION] LLM failed or no content, error: {response.metrics.error_message}")
             return {
                 "message": "I couldn't process that question. Could you try rephrasing it?",
                 "action": "open_question",
             }
     except Exception as e:
-        print(f"Error in _handle_open_question: {e}")
+        print(f"❌ [OPEN_QUESTION] Exception: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "message": "I encountered an error while processing your question. "
                        "Please try asking again or ask about a specific feature.",

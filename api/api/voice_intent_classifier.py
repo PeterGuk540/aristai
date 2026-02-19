@@ -1230,12 +1230,24 @@ whether their response is:
 - "Skip this part" → COMMAND
 - "Let's skip to the main topics" → could be CONTENT for syllabus
 
+### CONTENT vs AI_GENERATE (Semantic Distinction)
+The key distinction is WHO is providing the content:
+- **CONTENT**: The user's utterance IS the field value (they are authoring it)
+- **AI_GENERATE**: The user is DELEGATING content creation to the system (they want the system to author it)
+
+Ask yourself: Is the user GIVING me content, or ASKING me to PRODUCE content?
+- If the utterance would make sense AS the field value → CONTENT
+- If the utterance is a REQUEST for the system to create something → AI_GENERATE
+
+When AI_GENERATE, extract any context the user provides (course name, topic, subject) into ai_context.
+
 ### Important Context Clues:
 - Very short responses (<5 words) that aren't proper nouns are likely META or COMMAND
 - Responses with filler words (um, uh, well, hmm) are likely META
 - Responses phrased as questions are likely META
 - Responses with clear hesitation markers are META
 - Responses with task-related verbs (cancel, skip, help, go to) are COMMAND
+- If the user's intent is to have the SYSTEM do the work of writing/creating, it's AI_GENERATE
 
 ## Response Format:
 Return a JSON object:

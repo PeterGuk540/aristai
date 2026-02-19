@@ -844,10 +844,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
     return uniqueActions;
   };
 
-  // MCP Response prefix for data-driven responses
-  const MCP_RESPONSE_PREFIX = 'MCP_RESPONSE:';
-
   // Speak data-driven content via ElevenLabs agent
+  // Uses the global MCP_RESPONSE_PREFIX = 'SPEAK: ' defined at top of file
   // Used when backend provides dynamic content (dropdown options, student data, etc.)
   const speakViaElevenLabs = (text: string) => {
     if (!text || !conversationRef.current) {

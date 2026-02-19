@@ -348,10 +348,11 @@ export const createFillInputAction = (
 
 export const createToastAction = (
   message: string,
-  variant?: 'info' | 'success' | 'warning' | 'error'
+  variant?: 'info' | 'success' | 'warning' | 'error',
+  duration?: number
 ): ToastAction => ({
   type: 'ui.toast',
-  payload: { message, variant: variant ?? 'info' },
+  payload: { message, variant: variant ?? 'info', duration: duration ?? 5000 },
   correlationId: generateCorrelationId(),
   timestamp: Date.now(),
 });

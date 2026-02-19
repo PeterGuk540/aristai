@@ -746,7 +746,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   };
 
   const handleTranscript = async (transcript: string) => {
+    console.log('🔥 [handleTranscript] CALLED with:', transcript);
     if (!transcript || isProcessingTranscriptRef.current) {
+      console.log('🔥 [handleTranscript] SKIPPED - empty or already processing');
       return;
     }
 

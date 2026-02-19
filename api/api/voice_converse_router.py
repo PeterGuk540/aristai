@@ -3308,10 +3308,15 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         )
 
         # Classify intent using LLM (all confirmations go through LLM)
+        print(f"🎯 [VOICE] Classifying intent for: '{transcript}'")
+        print(f"🎯 [VOICE] Page context: page={request.current_page}, tabs={request.available_tabs}, buttons={request.available_buttons}")
         intent = classify_intent(transcript, page_context)
+        print(f"🎯 [VOICE] LLM classification: category={intent.category}, action={intent.action}, confidence={intent.confidence}")
+        print(f"🎯 [VOICE] Parameters: {intent.parameters}")
 
         # Convert to legacy format for compatibility with existing action execution
         intent_result = intent_to_legacy_format(intent)
+        print(f"🎯 [VOICE] Legacy format: type={intent_result.get('type')}, value={intent_result.get('value')}")
 
         # Handle low confidence - ask for intelligent clarification (no regex fallback)
         # Phase 1: Trust LLM fully, provide helpful context-aware suggestions
@@ -3344,10 +3349,23 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
         # Handle navigation intent
         if intent_result["type"] == "navigate":
             nav_path = intent_result["value"]
+            print(f"✅ [VOICE] NAVIGATION INTENT MATCHED! Navigating to: {nav_path}")
             message = sanitize_speech(generate_conversational_response('navigate', nav_path, language=language))
             # Generate toast message in correct language
             page_name = nav_path.strip('/').replace('-', ' ').title()
             toast_msg = f"Navegando a {page_name}" if language == 'es' else f"Navigating to {page_name}"
+            response_data = {
+                "message": message,
+                "action": {"type": "navigate", "target": nav_path},
+                "results": [{
+                    "ui_actions": [
+                        {"type": "ui.navigate", "payload": {"path": nav_path}},
+                        {"type": "ui.toast", "payload": {"message": toast_msg, "type": "info"}},
+                    ]
+                }],
+                "suggestions": get_page_suggestions(nav_path, language)
+            }
+            print(f"✅ [VOICE] FULL RESPONSE DATA: {response_data}")
             return ConverseResponse(
                 message=message,
                 action=ActionResponse(type='navigate', target=nav_path),
@@ -3466,6 +3484,7 @@ async def voice_converse(request: ConverseRequest, db: Session = Depends(get_db)
             )
 
         # Fallback for unclear intent
+        print(f"⚠️ [VOICE] FALLBACK: No intent matched for '{transcript}' - type={intent_result.get('type')}, value={intent_result.get('value')}")
         fallback_message = generate_fallback_response(transcript, request.context, request.current_page, language)
 
     # NOTE: Legacy regex-based intent detection (else branch) has been removed in Phase 1 refactor.

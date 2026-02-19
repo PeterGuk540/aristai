@@ -129,6 +129,11 @@ ACTION_REQUIRED_PAGES: Dict[str, List[str]] = {
     "create_course": ["/courses"],
     "create_course_flow": ["/courses"],
 
+    # Enrollment actions - REQUIRE /courses page with advanced tab
+    "manage_enrollments": ["/courses"],
+    "enroll_students": ["/courses"],
+    "list_enrollments": ["/courses"],
+
     # Session actions - require session or course context
     "create_session": ["/courses/", "/sessions"],
     "start_session": ["/sessions/"],

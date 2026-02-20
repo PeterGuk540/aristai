@@ -153,6 +153,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
             className="px-3 py-1.5 text-sm border rounded-lg"
             value={filter.status || ''}
             onChange={(e) => setFilter({ ...filter, status: e.target.value || undefined })}
+            data-voice-id="question-status-filter"
           >
             <option value="">All Status</option>
             <option value="draft">Draft</option>
@@ -163,6 +164,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
             className="px-3 py-1.5 text-sm border rounded-lg"
             value={filter.question_type || ''}
             onChange={(e) => setFilter({ ...filter, question_type: e.target.value || undefined })}
+            data-voice-id="question-type-filter"
           >
             <option value="">All Types</option>
             <option value="mcq">Multiple Choice</option>
@@ -174,6 +176,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
             className="px-3 py-1.5 text-sm border rounded-lg"
             value={filter.difficulty || ''}
             onChange={(e) => setFilter({ ...filter, difficulty: e.target.value || undefined })}
+            data-voice-id="question-difficulty-filter"
           >
             <option value="">All Difficulty</option>
             <option value="easy">Easy</option>
@@ -197,7 +200,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
             <HelpCircle className="w-12 h-12 mx-auto mb-4 text-gray-300" />
             <p>No questions found</p>
             {sessionId && (
-              <Button className="mt-4" onClick={generateQuestions} disabled={generating}>
+              <Button className="mt-4" onClick={generateQuestions} disabled={generating} data-voice-id="generate-questions-alt">
                 Generate Questions from Discussion
               </Button>
             )}
@@ -263,6 +266,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
                         variant="ghost"
                         onClick={() => updateQuestionStatus(question.id, 'approved')}
                         title="Approve"
+                        data-voice-id={`approve-question-${question.id}`}
                       >
                         <CheckCircle className="w-4 h-4 text-green-600" />
                       </Button>
@@ -273,6 +277,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
                         variant="ghost"
                         onClick={() => updateQuestionStatus(question.id, 'archived')}
                         title="Archive"
+                        data-voice-id={`archive-question-${question.id}`}
                       >
                         <XCircle className="w-4 h-4 text-gray-400" />
                       </Button>
@@ -282,6 +287,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
                       variant="ghost"
                       onClick={() => deleteQuestion(question.id)}
                       title="Delete"
+                      data-voice-id={`delete-question-${question.id}`}
                     >
                       <Trash2 className="w-4 h-4 text-red-500" />
                     </Button>

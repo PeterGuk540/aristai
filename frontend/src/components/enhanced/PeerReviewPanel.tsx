@@ -158,6 +158,7 @@ export function PeerReviewPanelComponent({ sessionId, userId, isInstructor = fal
                   key={rating}
                   onClick={() => setFeedback({ ...feedback, overall_rating: rating })}
                   className="p-2"
+                  data-voice-id={`rating-star-${rating}`}
                 >
                   <Star
                     className={`w-6 h-6 ${rating <= feedback.overall_rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
@@ -227,15 +228,16 @@ export function PeerReviewPanelComponent({ sessionId, userId, isInstructor = fal
               onChange={(e) => setFeedback({ ...feedback, specific_comments: e.target.value })}
               placeholder="Any other feedback..."
               rows={4}
+              data-voice-id="peer-review-comments"
             />
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={submitReview}>
+            <Button onClick={submitReview} data-voice-id="submit-peer-review">
               <Send className="w-4 h-4 mr-2" />
               Submit Review
             </Button>
-            <Button variant="secondary" onClick={() => setSelectedReview(null)}>
+            <Button variant="secondary" onClick={() => setSelectedReview(null)} data-voice-id="cancel-peer-review">
               Cancel
             </Button>
           </div>
@@ -287,7 +289,7 @@ export function PeerReviewPanelComponent({ sessionId, userId, isInstructor = fal
                     )}
                   </div>
                   {review.status !== 'submitted' && (
-                    <Button size="sm" onClick={() => setSelectedReview(review)}>
+                    <Button size="sm" onClick={() => setSelectedReview(review)} data-voice-id={`start-review-${review.id}`}>
                       Start Review
                     </Button>
                   )}

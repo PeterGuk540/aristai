@@ -106,6 +106,7 @@ export function StudentProgressComponent({ courseId }: StudentProgressProps) {
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               placeholder="Search for a student..."
               className="w-full p-2 pl-8 border rounded"
+              data-voice-id="student-search-input"
             />
             <Search className="w-4 h-4 text-gray-400 absolute left-2 top-3" />
           </div>
@@ -113,6 +114,7 @@ export function StudentProgressComponent({ courseId }: StudentProgressProps) {
             onClick={handleSearch}
             disabled={searching}
             className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50"
+            data-voice-id="student-search-button"
           >
             {searching ? '...' : 'Search'}
           </button>

@@ -1415,9 +1415,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             className="flex items-center justify-center w-full h-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-lg"
           >
             <img
-              src="/AristAI_logo.png"
+              src="/AristAI_icon.png"
               alt="AristAI"
-              className="w-8 h-8 object-contain"
+              className="w-10 h-10 object-contain"
               onError={(e) => {
                 // Fallback to MessageSquare icon if image fails to load
                 e.currentTarget.style.display = 'none';

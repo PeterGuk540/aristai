@@ -109,6 +109,7 @@ export default function SessionsPage() {
   }>>([]);
 
   // Sessions page tab mappings
+  // Note: 'manage' tab removed - all management functions now in 'sessions' tab
   const sessionsTabMap = mergeTabMappings({
     'sessions': 'sessions',
     'session': 'sessions',
@@ -118,12 +119,13 @@ export default function SessionsPage() {
     'creation': 'create',
     'createsession': 'create',
     'newsession': 'create',
-    'manage': 'manage',
-    'management': 'manage',
-    'managestatus': 'manage',
-    'status': 'manage',
-    'sessionstatus': 'manage',
-    'statuscontrol': 'manage',
+    // Redirect old 'manage' commands to 'sessions' (consolidated)
+    'manage': 'sessions',
+    'management': 'sessions',
+    'managestatus': 'sessions',
+    'status': 'sessions',
+    'sessionstatus': 'sessions',
+    'statuscontrol': 'sessions',
   });
 
   // Voice tab handler
@@ -561,7 +563,6 @@ export default function SessionsPage() {
               {t('sessions.materials')}
             </TabsTrigger>
             {hasInstructorPrivileges && <TabsTrigger value="create" data-voice-id="tab-create">{t('sessions.createSession')}</TabsTrigger>}
-            {hasInstructorPrivileges && <TabsTrigger value="manage" data-voice-id="tab-manage">{t('sessions.manageStatus')}</TabsTrigger>}
             {hasInstructorPrivileges && (
               <TabsTrigger value="insights" data-voice-id="tab-insights">
                 Insights
@@ -646,22 +647,283 @@ export default function SessionsPage() {
                 </div>
 
                 {/* Session Details */}
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2 space-y-4">
                   {selectedSession ? (
-                    <Card variant="default">
-                      <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <CardTitle>{selectedSession.title}</CardTitle>
-                          <Badge variant={statusColors[selectedSession.status]}>
-                            {selectedSession.status.toUpperCase()}
-                          </Badge>
-                        </div>
-                        <CardDescription>
-                          Created: {formatTimestamp(selectedSession.created_at)}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>{renderPlan(selectedSession)}</CardContent>
-                    </Card>
+                    <>
+                      <Card variant="default">
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <CardTitle>{selectedSession.title}</CardTitle>
+                            <Badge variant={statusColors[selectedSession.status]}>
+                              {selectedSession.status.toUpperCase()}
+                            </Badge>
+                          </div>
+                          <CardDescription>
+                            Created: {formatTimestamp(selectedSession.created_at)}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                          {/* Session Plan */}
+                          {renderPlan(selectedSession)}
+
+                          {/* Instructor Controls */}
+                          {hasInstructorPrivileges && (
+                            <>
+                              {/* Status Control */}
+                              <div className="pt-4 border-t border-neutral-200 dark:border-neutral-700">
+                                <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
+                                  {t('sessions.statusControl')}
+                                </h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {selectedSession.status !== 'draft' && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleStatusChange(selectedSession.id, 'draft')}
+                                      data-voice-id="set-to-draft"
+                                    >
+                                      {t('sessions.setToDraft')}
+                                    </Button>
+                                  )}
+                                  {selectedSession.status === 'draft' && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleStatusChange(selectedSession.id, 'scheduled')}
+                                      data-voice-id="schedule-session"
+                                    >
+                                      {t('sessions.schedule')}
+                                    </Button>
+                                  )}
+                                  {(selectedSession.status === 'draft' ||
+                                    selectedSession.status === 'scheduled') && (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleStatusChange(selectedSession.id, 'live')}
+                                      data-voice-id="go-live"
+                                    >
+                                      <Play className="h-4 w-4 mr-2" />
+                                      {t('sessions.goLive')}
+                                    </Button>
+                                  )}
+                                  {selectedSession.status === 'live' && (
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={() => handleStatusChange(selectedSession.id, 'completed')}
+                                      data-voice-id="complete-session"
+                                    >
+                                      <CheckCircle className="h-4 w-4 mr-2" />
+                                      {t('sessions.complete')}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Edit and Delete */}
+                              <div className="flex gap-2 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEditSession(selectedSession)}
+                                  data-voice-id="edit-session"
+                                >
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit Session
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setShowDeleteConfirm(true)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                                  data-voice-id="delete-session"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Session
+                                </Button>
+                              </div>
+                            </>
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      {/* Canvas Integration - Instructor Only */}
+                      {hasInstructorPrivileges && (
+                        <Card variant="default">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                              <Send className="h-5 w-5 text-primary-600" />
+                              Canvas Integration
+                            </CardTitle>
+                            <CardDescription>
+                              Push AI summary or notify students of session status changes.
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {canvasMappings.length === 0 ? (
+                              <div className="text-center py-4">
+                                <p className="text-neutral-500 dark:text-neutral-400 mb-2">
+                                  No Canvas connections found. Set up a Canvas integration first.
+                                </p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => window.location.href = '/integrations'}
+                                >
+                                  Go to Integrations
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                {/* Canvas Connection Select */}
+                                <Select
+                                  label="Canvas Connection"
+                                  value={selectedCanvasConnection?.toString() || ''}
+                                  onChange={(e) => setSelectedCanvasConnection(e.target.value ? Number(e.target.value) : null)}
+                                  data-voice-id="select-canvas-connection"
+                                >
+                                  <option value="">Select a Canvas connection...</option>
+                                  {canvasMappings.map((mapping) => (
+                                    <option key={mapping.connection_id} value={mapping.connection_id}>
+                                      {mapping.connection_label}
+                                      {mapping.has_mapping ? ` → ${mapping.external_course_name || mapping.external_course_id}` : ' (no course mapped)'}
+                                    </option>
+                                  ))}
+                                </Select>
+
+                                {/* Push Type Selection */}
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                    Push as
+                                  </label>
+                                  <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 cursor-pointer" data-voice-id="push-type-announcement">
+                                      <input
+                                        type="radio"
+                                        name="pushType"
+                                        value="announcement"
+                                        checked={pushType === 'announcement'}
+                                        onChange={() => setPushType('announcement')}
+                                        className="text-primary-600"
+                                      />
+                                      <Megaphone className="h-4 w-4 text-blue-600" />
+                                      <span className="text-sm">Announcement</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer" data-voice-id="push-type-assignment">
+                                      <input
+                                        type="radio"
+                                        name="pushType"
+                                        value="assignment"
+                                        checked={pushType === 'assignment'}
+                                        onChange={() => setPushType('assignment')}
+                                        className="text-primary-600"
+                                      />
+                                      <ClipboardList className="h-4 w-4 text-green-600" />
+                                      <span className="text-sm">Reflection Assignment</span>
+                                    </label>
+                                  </div>
+                                </div>
+
+                                {/* Push Buttons */}
+                                <div className="grid grid-cols-2 gap-2">
+                                  <Button
+                                    onClick={handlePushToCanvas}
+                                    disabled={pushing || !selectedCanvasConnection || !canvasMappings.find(m => m.connection_id === selectedCanvasConnection)?.has_mapping}
+                                    className="w-full"
+                                    data-voice-id="push-to-canvas"
+                                  >
+                                    {pushing ? (
+                                      <>
+                                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                        Pushing...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Send className="h-4 w-4 mr-2" />
+                                        Push Summary
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    onClick={handleNotifyCanvasStatus}
+                                    disabled={pushing || !selectedCanvasConnection || !canvasMappings.find(m => m.connection_id === selectedCanvasConnection)?.has_mapping}
+                                    variant="secondary"
+                                    className="w-full"
+                                    data-voice-id="notify-canvas-status"
+                                  >
+                                    {pushing ? (
+                                      <>
+                                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                        Notifying...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Bell className="h-4 w-4 mr-2" />
+                                        Notify Status
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+
+                                {/* Status Message */}
+                                {pushMessage && (
+                                  <div className={`p-3 rounded-lg text-sm ${
+                                    pushMessage.startsWith('Success')
+                                      ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                                      : pushMessage.startsWith('Error') || pushMessage.startsWith('Failed')
+                                      ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                                      : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                                  }`}>
+                                    {pushMessage}
+                                  </div>
+                                )}
+
+                                {/* Push History */}
+                                {pushHistory.length > 0 && (
+                                  <div className="mt-4">
+                                    <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                                      Recent Pushes
+                                    </h4>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                      {pushHistory.slice(0, 5).map((push) => (
+                                        <div
+                                          key={push.id}
+                                          className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg text-sm"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            {push.push_type === 'announcement' ? (
+                                              <Megaphone className="h-4 w-4 text-blue-600" />
+                                            ) : (
+                                              <ClipboardList className="h-4 w-4 text-green-600" />
+                                            )}
+                                            <span className="font-medium truncate max-w-[200px]">{push.title}</span>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <Badge
+                                              variant={
+                                                push.status === 'completed' ? 'success' :
+                                                push.status === 'failed' ? 'danger' :
+                                                push.status === 'running' ? 'warning' : 'default'
+                                              }
+                                              size="sm"
+                                            >
+                                              {push.status}
+                                            </Badge>
+                                            <span className="text-xs text-neutral-500">
+                                              {new Date(push.created_at).toLocaleDateString()}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </>
                   ) : (
                     <Card variant="default" padding="lg">
                       <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
@@ -723,375 +985,6 @@ export default function SessionsPage() {
                   </Button>
                 </CardContent>
               </Card>
-            </TabsContent>
-          )}
-
-          {hasInstructorPrivileges && (
-            <TabsContent value="manage">
-              <div className="space-y-6">
-                <Card variant="default">
-                  <CardHeader>
-                    <CardTitle>{t('sessions.statusControl')}</CardTitle>
-                    <CardDescription>Update lifecycle state for the selected session.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {selectedSession ? (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-4 p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl">
-                          <span className="font-medium text-neutral-900 dark:text-white">{selectedSession.title}</span>
-                          <Badge variant={statusColors[selectedSession.status]}>
-                            {t(`sessions.status.${selectedSession.status}`)}
-                          </Badge>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          {selectedSession.status !== 'draft' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleStatusChange(selectedSession.id, 'draft')}
-                              data-voice-id="set-to-draft"
-                            >
-                              {t('sessions.setToDraft')}
-                            </Button>
-                          )}
-                          {selectedSession.status === 'draft' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleStatusChange(selectedSession.id, 'scheduled')}
-                              data-voice-id="schedule-session"
-                            >
-                              {t('sessions.schedule')}
-                            </Button>
-                          )}
-                          {(selectedSession.status === 'draft' ||
-                            selectedSession.status === 'scheduled') && (
-                            <Button
-                              size="sm"
-                              onClick={() => handleStatusChange(selectedSession.id, 'live')}
-                              data-voice-id="go-live"
-                            >
-                              <Play className="h-4 w-4 mr-2" />
-                              {t('sessions.goLive')}
-                            </Button>
-                          )}
-                          {selectedSession.status === 'live' && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => handleStatusChange(selectedSession.id, 'completed')}
-                              data-voice-id="complete-session"
-                            >
-                              <CheckCircle className="h-4 w-4 mr-2" />
-                              {t('sessions.complete')}
-                            </Button>
-                          )}
-                        </div>
-
-                        {/* Edit and Delete buttons */}
-                        <div className="flex gap-2 mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditSession(selectedSession)}
-                            data-voice-id="edit-session"
-                          >
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Edit Session
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowDeleteConfirm(true)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                            data-voice-id="delete-session"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Session
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-neutral-500 dark:text-neutral-400">{t('sessions.selectSession')}</p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Edit Session Modal */}
-                {editingSession && (
-                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto py-8">
-                    <Card variant="default" className="w-full max-w-2xl mx-4 my-auto">
-                      <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <CardTitle>Edit Session</CardTitle>
-                          <button
-                            onClick={() => setEditingSession(null)}
-                            className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
-                          >
-                            <X className="h-5 w-5" />
-                          </button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4 max-h-[70vh] overflow-y-auto">
-                        <Input
-                          label="Session Title"
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          placeholder="Enter session title"
-                        />
-                        <Textarea
-                          label="Goals / Learning Objectives"
-                          value={editGoals}
-                          onChange={(e) => setEditGoals(e.target.value)}
-                          placeholder="Enter learning goals (one per line)"
-                          rows={3}
-                        />
-                        <Textarea
-                          label="Discussion Prompts"
-                          value={editDiscussionPrompts}
-                          onChange={(e) => setEditDiscussionPrompts(e.target.value)}
-                          placeholder="Enter discussion prompts (one per line)"
-                          rows={4}
-                        />
-                        <Textarea
-                          label="Case Study Scenario"
-                          value={editCaseScenario}
-                          onChange={(e) => setEditCaseScenario(e.target.value)}
-                          placeholder="Enter the case study scenario"
-                          rows={5}
-                        />
-                        <div className="flex justify-end gap-2 pt-2 border-t border-neutral-200 dark:border-neutral-700">
-                          <Button
-                            variant="outline"
-                            onClick={() => setEditingSession(null)}
-                            data-voice-id="cancel-edit-session"
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            onClick={handleSaveEdit}
-                            disabled={saving || !editTitle.trim()}
-                            data-voice-id="save-edit-session"
-                          >
-                            {saving ? 'Saving...' : 'Save Changes'}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-
-                {/* Delete Confirmation Modal */}
-                {showDeleteConfirm && selectedSession && (
-                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <Card variant="default" className="w-full max-w-md mx-4">
-                      <CardHeader>
-                        <CardTitle className="text-red-600 dark:text-red-400">Delete Session</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <p className="text-neutral-600 dark:text-neutral-400">
-                          Are you sure you want to delete <strong>"{selectedSession.title}"</strong>? This action cannot be undone.
-                        </p>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => setShowDeleteConfirm(false)}
-                            data-voice-id="cancel-delete-session"
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            variant="danger"
-                            onClick={handleDeleteSession}
-                            disabled={deleting}
-                            data-voice-id="confirm-delete-session"
-                          >
-                            {deleting ? 'Deleting...' : 'Delete Session'}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-
-                {/* Push to Canvas Section */}
-                {selectedSession && (
-                  <Card variant="default">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Send className="h-5 w-5 text-primary-600" />
-                        Canvas Integration
-                      </CardTitle>
-                      <CardDescription>
-                        Push AI summary or notify students of session status changes via Canvas announcements.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {canvasMappings.length === 0 ? (
-                        <div className="text-center py-4">
-                          <p className="text-neutral-500 dark:text-neutral-400 mb-2">
-                            No Canvas connections found. Set up a Canvas integration first.
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.location.href = '/integrations'}
-                          >
-                            Go to Integrations
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Canvas Connection Select */}
-                          <Select
-                            label="Canvas Connection"
-                            value={selectedCanvasConnection?.toString() || ''}
-                            onChange={(e) => setSelectedCanvasConnection(e.target.value ? Number(e.target.value) : null)}
-                            data-voice-id="select-canvas-connection"
-                          >
-                            <option value="">Select a Canvas connection...</option>
-                            {canvasMappings.map((mapping) => (
-                              <option key={mapping.connection_id} value={mapping.connection_id}>
-                                {mapping.connection_label}
-                                {mapping.has_mapping ? ` → ${mapping.external_course_name || mapping.external_course_id}` : ' (no course mapped)'}
-                              </option>
-                            ))}
-                          </Select>
-
-                          {/* Push Type Selection */}
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                              Push as
-                            </label>
-                            <div className="flex gap-4">
-                              <label className="flex items-center gap-2 cursor-pointer" data-voice-id="push-type-announcement">
-                                <input
-                                  type="radio"
-                                  name="pushType"
-                                  value="announcement"
-                                  checked={pushType === 'announcement'}
-                                  onChange={() => setPushType('announcement')}
-                                  className="text-primary-600"
-                                />
-                                <Megaphone className="h-4 w-4 text-blue-600" />
-                                <span className="text-sm">Announcement</span>
-                              </label>
-                              <label className="flex items-center gap-2 cursor-pointer" data-voice-id="push-type-assignment">
-                                <input
-                                  type="radio"
-                                  name="pushType"
-                                  value="assignment"
-                                  checked={pushType === 'assignment'}
-                                  onChange={() => setPushType('assignment')}
-                                  className="text-primary-600"
-                                />
-                                <ClipboardList className="h-4 w-4 text-green-600" />
-                                <span className="text-sm">Reflection Assignment</span>
-                              </label>
-                            </div>
-                          </div>
-
-                          {/* Push Buttons */}
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button
-                              onClick={handlePushToCanvas}
-                              disabled={pushing || !selectedCanvasConnection || !canvasMappings.find(m => m.connection_id === selectedCanvasConnection)?.has_mapping}
-                              className="w-full"
-                              data-voice-id="push-to-canvas"
-                            >
-                              {pushing ? (
-                                <>
-                                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                  Pushing...
-                                </>
-                              ) : (
-                                <>
-                                  <Send className="h-4 w-4 mr-2" />
-                                  Push Summary
-                                </>
-                              )}
-                            </Button>
-                            <Button
-                              onClick={handleNotifyCanvasStatus}
-                              disabled={pushing || !selectedCanvasConnection || !canvasMappings.find(m => m.connection_id === selectedCanvasConnection)?.has_mapping}
-                              variant="secondary"
-                              className="w-full"
-                              data-voice-id="notify-canvas-status"
-                            >
-                              {pushing ? (
-                                <>
-                                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                  Notifying...
-                                </>
-                              ) : (
-                                <>
-                                  <Bell className="h-4 w-4 mr-2" />
-                                  Notify Status
-                                </>
-                              )}
-                            </Button>
-                          </div>
-
-                          {/* Status Message */}
-                          {pushMessage && (
-                            <div className={`p-3 rounded-lg text-sm ${
-                              pushMessage.startsWith('Success')
-                                ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-                                : pushMessage.startsWith('Error') || pushMessage.startsWith('Failed')
-                                ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-                                : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                            }`}>
-                              {pushMessage}
-                            </div>
-                          )}
-
-                          {/* Push History */}
-                          {pushHistory.length > 0 && (
-                            <div className="mt-4">
-                              <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                                Recent Pushes
-                              </h4>
-                              <div className="space-y-2 max-h-48 overflow-y-auto">
-                                {pushHistory.slice(0, 5).map((push) => (
-                                  <div
-                                    key={push.id}
-                                    className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg text-sm"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      {push.push_type === 'announcement' ? (
-                                        <Megaphone className="h-4 w-4 text-blue-600" />
-                                      ) : (
-                                        <ClipboardList className="h-4 w-4 text-green-600" />
-                                      )}
-                                      <span className="font-medium truncate max-w-[200px]">{push.title}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <Badge
-                                        variant={
-                                          push.status === 'completed' ? 'success' :
-                                          push.status === 'failed' ? 'danger' :
-                                          push.status === 'running' ? 'warning' : 'default'
-                                        }
-                                        size="sm"
-                                      >
-                                        {push.status}
-                                      </Badge>
-                                      <span className="text-xs text-neutral-500">
-                                        {new Date(push.created_at).toLocaleDateString()}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
             </TabsContent>
           )}
 
@@ -1258,6 +1151,103 @@ export default function SessionsPage() {
                 )}
               </div>
             </TabsContent>
+          )}
+
+          {/* Edit Session Modal - accessible from any tab */}
+          {editingSession && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto py-8">
+              <Card variant="default" className="w-full max-w-2xl mx-4 my-auto">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Edit Session</CardTitle>
+                    <button
+                      onClick={() => setEditingSession(null)}
+                      className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 max-h-[70vh] overflow-y-auto">
+                  <Input
+                    label="Session Title"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    placeholder="Enter session title"
+                  />
+                  <Textarea
+                    label="Goals / Learning Objectives"
+                    value={editGoals}
+                    onChange={(e) => setEditGoals(e.target.value)}
+                    placeholder="Enter learning goals (one per line)"
+                    rows={3}
+                  />
+                  <Textarea
+                    label="Discussion Prompts"
+                    value={editDiscussionPrompts}
+                    onChange={(e) => setEditDiscussionPrompts(e.target.value)}
+                    placeholder="Enter discussion prompts (one per line)"
+                    rows={4}
+                  />
+                  <Textarea
+                    label="Case Study Scenario"
+                    value={editCaseScenario}
+                    onChange={(e) => setEditCaseScenario(e.target.value)}
+                    placeholder="Enter the case study scenario"
+                    rows={5}
+                  />
+                  <div className="flex justify-end gap-2 pt-2 border-t border-neutral-200 dark:border-neutral-700">
+                    <Button
+                      variant="outline"
+                      onClick={() => setEditingSession(null)}
+                      data-voice-id="cancel-edit-session"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleSaveEdit}
+                      disabled={saving || !editTitle.trim()}
+                      data-voice-id="save-edit-session"
+                    >
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Delete Confirmation Modal - accessible from any tab */}
+          {showDeleteConfirm && selectedSession && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <Card variant="default" className="w-full max-w-md mx-4">
+                <CardHeader>
+                  <CardTitle className="text-red-600 dark:text-red-400">Delete Session</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-neutral-600 dark:text-neutral-400">
+                    Are you sure you want to delete <strong>"{selectedSession.title}"</strong>? This action cannot be undone.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      data-voice-id="cancel-delete-session"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={handleDeleteSession}
+                      disabled={deleting}
+                      data-voice-id="confirm-delete-session"
+                    >
+                      {deleting ? 'Deleting...' : 'Delete Session'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </Tabs>
       )}

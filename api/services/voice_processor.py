@@ -201,6 +201,11 @@ When user asks to CREATE/GENERATE/WRITE/MAKE content, use these tools:
 These tools will AUTOMATICALLY fill the form fields with AI-generated content.
 DO NOT just respond conversationally - CALL THE TOOL to actually generate and fill!
 
+**IMPORTANT**: When generating content, ALWAYS extract the course_name from the Form Inputs above!
+- Look at the "course-title" or "title" input field to get the actual course name
+- Do NOT use phrases from the user's speech as the course name
+- Example: If "course-title" input shows value "Intro to Financial Analysis", use that as course_name
+
 ### Ordinal Handling (0-indexed):
 - "first" / "primero" → selection_index: 0
 - "second" / "segundo" → selection_index: 1

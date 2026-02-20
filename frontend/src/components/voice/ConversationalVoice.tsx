@@ -367,6 +367,16 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   // This prevents unwanted auto-starting and flipping behavior
 
   const cleanup = async () => {
+    // Clear any pending transcript timeout to prevent callbacks after unmount
+    if ((window as any).__pendingTranscriptTimeout) {
+      clearTimeout((window as any).__pendingTranscriptTimeout);
+      (window as any).__pendingTranscriptTimeout = null;
+    }
+
+    // Reset speaking state
+    isSpeakingRef.current = false;
+    speakQueueRef.current = null;
+
     if (conversationRef.current) {
       try {
         await conversationRef.current.endSession();
@@ -406,11 +416,20 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
   // Language switch detection - reconnect ElevenLabs when locale changes
   // This ensures the voice assistant responds in the newly selected language
+  const isReconnectingRef = useRef(false);
+
   useEffect(() => {
     const previousLocale = previousLocaleRef.current;
 
     // Only act if locale actually changed and conversation is active
     if (previousLocale !== locale && conversationRef.current) {
+      // Prevent multiple simultaneous reconnects
+      if (isReconnectingRef.current) {
+        console.log('🌐 Language switch already in progress, skipping');
+        previousLocaleRef.current = locale; // Still update the ref
+        return;
+      }
+
       console.log(`🌐 Language changed from ${previousLocale} to ${locale} - reconnecting voice assistant`);
 
       // Update ref first
@@ -419,7 +438,14 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       // Trigger a silent refresh to reconnect with new language
       // The signed URL will be fetched with the new locale
       const reconnectWithNewLanguage = async () => {
+        isReconnectingRef.current = true;
         isRefreshingRef.current = true; // Skip greeting on reconnect
+
+        // Clear any pending timeouts before disconnecting
+        if ((window as any).__pendingTranscriptTimeout) {
+          clearTimeout((window as any).__pendingTranscriptTimeout);
+          (window as any).__pendingTranscriptTimeout = null;
+        }
 
         // End current session
         if (conversationRef.current) {
@@ -436,11 +462,18 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
         // Reinitialize with new language (will use updated locale from hook)
         isInitializingRef.current = false;
-        await initializeConversation();
 
-        console.log(`✅ Voice assistant reconnected with language: ${locale}`);
+        try {
+          await initializeConversation();
+          console.log(`✅ Voice assistant reconnected with language: ${locale}`);
+        } catch (error) {
+          console.error('Failed to reconnect voice assistant:', error);
+        } finally {
+          isReconnectingRef.current = false;
+        }
       };
 
+      // Execute reconnect (don't block the effect)
       reconnectWithNewLanguage();
     } else {
       // Just update the ref without reconnecting
@@ -847,17 +880,51 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   // Speak data-driven content via ElevenLabs agent
   // Uses the global MCP_RESPONSE_PREFIX = 'SPEAK: ' defined at top of file
   // Used when backend provides dynamic content (dropdown options, student data, etc.)
+  //
+  // DEDUPLICATION: Prevents multiple speak calls in quick succession
+  const isSpeakingRef = useRef(false);
+  const speakQueueRef = useRef<string | null>(null);
+
   const speakViaElevenLabs = (text: string) => {
     if (!text || !conversationRef.current) {
       return;
     }
+
+    // Prevent duplicate speaks within 2 seconds
+    const timeSinceLastSpeak = Date.now() - lastMcpResponseTimeRef.current;
+    if (timeSinceLastSpeak < 2000 && lastMcpResponseContentRef.current === text) {
+      console.log('🔇 Skipping duplicate speak (same content within 2s)');
+      return;
+    }
+
+    // Prevent overlapping speaks - queue if already speaking
+    if (isSpeakingRef.current) {
+      console.log('🔇 Already speaking, queuing new message');
+      speakQueueRef.current = text;
+      return;
+    }
+
     try {
       console.log('🔊 Speaking via ElevenLabs:', text.substring(0, 100) + '...');
+      isSpeakingRef.current = true;
+
       // Track when and what we sent so we can filter duplicate AI responses
       lastMcpResponseTimeRef.current = Date.now();
       lastMcpResponseContentRef.current = text;
       conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
+
+      // Reset speaking flag after a delay (estimated speak time)
+      setTimeout(() => {
+        isSpeakingRef.current = false;
+        // Process queued message if any
+        if (speakQueueRef.current) {
+          const queued = speakQueueRef.current;
+          speakQueueRef.current = null;
+          speakViaElevenLabs(queued);
+        }
+      }, 3000); // Assume average speak takes ~3 seconds
     } catch (error) {
+      isSpeakingRef.current = false;
       console.error('❌ Failed to send MCP message to ElevenLabs:', error);
     }
   };

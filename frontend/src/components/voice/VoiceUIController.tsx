@@ -736,52 +736,71 @@ export const VoiceUIController = () => {
   // EVENT LISTENER SETUP
   // ========================================================================
 
+  // Store handlers in refs to avoid event listener duplication
+  // This prevents the useEffect from re-running when callbacks change
+  const handlersRef = useRef<Record<string, (event: CustomEvent) => void>>({});
+
+  // Update refs when handlers change (no effect re-run needed)
+  handlersRef.current = {
+    'ui.selectDropdown': handleSelectDropdown,
+    'ui.expandDropdown': handleExpandDropdown,
+    'ui.clickButton': handleClickButton,
+    'ui.openMenuAndClick': handleOpenMenuAndClick,
+    'ui.fillInput': handleFillInput,
+    'ui.clearInput': handleClearInput,
+    'ui.switchTab': handleSwitchTab,
+    'ui.selectListItem': handleSelectListItem,
+    'ui.searchAndNavigate': handleSearchAndNavigate,
+    'ui.getUiState': handleGetUiState as any,
+    'ui.getAvailableElements': handleGetAvailableElements as any,
+    'ui.navigate': handleNavigate,
+    'ui.workflow': handleWorkflow as any,
+  };
+
   useEffect(() => {
-    const handlers: Record<string, (event: CustomEvent) => void> = {
-      'ui.selectDropdown': handleSelectDropdown,
-      'ui.expandDropdown': handleExpandDropdown,
-      'ui.clickButton': handleClickButton,
-      'ui.openMenuAndClick': handleOpenMenuAndClick,
-      'ui.fillInput': handleFillInput,
-      'ui.clearInput': handleClearInput,
-      'ui.switchTab': handleSwitchTab,
-      'ui.selectListItem': handleSelectListItem,
-      'ui.searchAndNavigate': handleSearchAndNavigate,
-      'ui.getUiState': handleGetUiState as any,
-      'ui.getAvailableElements': handleGetAvailableElements as any,
-      'ui.navigate': handleNavigate,
-      'ui.workflow': handleWorkflow as any,
+    // Create stable wrapper functions that delegate to refs
+    // This ensures we add listeners only ONCE
+    const eventTypes = [
+      'ui.selectDropdown',
+      'ui.expandDropdown',
+      'ui.clickButton',
+      'ui.openMenuAndClick',
+      'ui.fillInput',
+      'ui.clearInput',
+      'ui.switchTab',
+      'ui.selectListItem',
+      'ui.searchAndNavigate',
+      'ui.getUiState',
+      'ui.getAvailableElements',
+      'ui.navigate',
+      'ui.workflow',
+    ];
+
+    // Stable handler that delegates to the ref
+    const createStableHandler = (eventType: string) => (event: Event) => {
+      const handler = handlersRef.current[eventType];
+      if (handler) {
+        handler(event as CustomEvent);
+      }
     };
 
-    // Add all event listeners
-    Object.entries(handlers).forEach(([event, handler]) => {
-      window.addEventListener(event, handler as EventListener);
+    // Create and store stable handlers
+    const stableHandlers: Record<string, EventListener> = {};
+    eventTypes.forEach(eventType => {
+      stableHandlers[eventType] = createStableHandler(eventType);
+      window.addEventListener(eventType, stableHandlers[eventType]);
     });
 
-    log('Initialized on', pathname);
+    log('Initialized voice UI controller');
 
-    // Cleanup
+    // Cleanup - remove the stable handlers (only runs on unmount)
     return () => {
-      Object.entries(handlers).forEach(([event, handler]) => {
-        window.removeEventListener(event, handler as EventListener);
+      eventTypes.forEach(eventType => {
+        window.removeEventListener(eventType, stableHandlers[eventType]);
       });
+      log('Cleaned up voice UI controller');
     };
-  }, [
-    pathname,
-    handleSelectDropdown,
-    handleExpandDropdown,
-    handleClickButton,
-    handleOpenMenuAndClick,
-    handleFillInput,
-    handleClearInput,
-    handleSwitchTab,
-    handleSelectListItem,
-    handleSearchAndNavigate,
-    handleGetUiState,
-    handleGetAvailableElements,
-    handleNavigate,
-    handleWorkflow,
-  ]);
+  }, []); // Empty dependency array - listeners added only once
 
   return null;
 };

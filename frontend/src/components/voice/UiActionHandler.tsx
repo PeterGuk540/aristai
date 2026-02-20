@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
 /**
@@ -186,16 +186,32 @@ export const UiActionHandler = () => {
     showToast(message, type);
   }, []);
 
+  // Store handlers in refs to prevent event listener duplication
+  const handleOpenModalRef = useRef(handleOpenModal);
+  const handleToastRef = useRef(handleToast);
+
+  // Keep refs updated with latest handlers
+  handleOpenModalRef.current = handleOpenModal;
+  handleToastRef.current = handleToast;
+
   useEffect(() => {
-    // Listen for UI action events
-    window.addEventListener('ui.openModal', handleOpenModal as EventListener);
-    window.addEventListener('ui.toast', handleToast as EventListener);
+    // Create stable wrapper functions that delegate to refs
+    const stableOpenModalHandler = (event: Event) => {
+      handleOpenModalRef.current(event as CustomEvent);
+    };
+    const stableToastHandler = (event: Event) => {
+      handleToastRef.current(event as CustomEvent);
+    };
+
+    // Listen for UI action events - only added once
+    window.addEventListener('ui.openModal', stableOpenModalHandler);
+    window.addEventListener('ui.toast', stableToastHandler);
 
     return () => {
-      window.removeEventListener('ui.openModal', handleOpenModal as EventListener);
-      window.removeEventListener('ui.toast', handleToast as EventListener);
+      window.removeEventListener('ui.openModal', stableOpenModalHandler);
+      window.removeEventListener('ui.toast', stableToastHandler);
     };
-  }, [handleOpenModal, handleToast]);
+  }, []); // Empty dependency - listeners added only once
 
   return null;
 };

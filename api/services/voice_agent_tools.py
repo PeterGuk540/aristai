@@ -1304,7 +1304,7 @@ def handle_generate_syllabus(
 ) -> ToolResult:
     """Generate a syllabus for a course using LLM and fill the form field."""
     try:
-        llm = get_fast_voice_llm()
+        llm, model_name = get_fast_voice_llm()
         if not llm:
             return ToolResult(
                 status=ToolResultStatus.FAILURE,
@@ -1329,7 +1329,7 @@ The syllabus should include:
 Generate a well-structured syllabus in plain text format (no markdown headers, just clear sections).
 Keep it concise but comprehensive (300-500 words)."""
 
-        response = invoke_llm_with_metrics(llm, prompt, "syllabus-generation")
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
 
         if not response.success or not response.content:
             return ToolResult(
@@ -1366,7 +1366,7 @@ def handle_generate_objectives(
 ) -> ToolResult:
     """Generate learning objectives for a course using LLM and fill the form field."""
     try:
-        llm = get_fast_voice_llm()
+        llm, model_name = get_fast_voice_llm()
         if not llm:
             return ToolResult(
                 status=ToolResultStatus.FAILURE,
@@ -1389,7 +1389,7 @@ Each objective should:
 Format: One objective per line, numbered 1-7. No bullet points or dashes.
 Keep each objective concise (1-2 sentences max)."""
 
-        response = invoke_llm_with_metrics(llm, prompt, "objectives-generation")
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
 
         if not response.success or not response.content:
             return ToolResult(
@@ -1427,7 +1427,7 @@ def handle_generate_session_plan(
 ) -> ToolResult:
     """Generate a session plan/description using LLM and fill the form field."""
     try:
-        llm = get_fast_voice_llm()
+        llm, model_name = get_fast_voice_llm()
         if not llm:
             return ToolResult(
                 status=ToolResultStatus.FAILURE,
@@ -1452,7 +1452,7 @@ The plan should include:
 Format as a clear, readable plan in plain text (no markdown).
 Keep it practical and actionable (200-400 words)."""
 
-        response = invoke_llm_with_metrics(llm, prompt, "session-plan-generation")
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
 
         if not response.success or not response.content:
             return ToolResult(
@@ -1640,7 +1640,7 @@ def handle_get_copilot_suggestions() -> ToolResult:
 def handle_get_facilitation_suggestions() -> ToolResult:
     """Get facilitation suggestions using LLM."""
     try:
-        llm = get_fast_voice_llm()
+        llm, model_name = get_fast_voice_llm()
         if not llm:
             return ToolResult(
                 status=ToolResultStatus.FAILURE,
@@ -1656,7 +1656,7 @@ Focus on:
 
 Keep each suggestion to 1-2 sentences. Be practical and actionable."""
 
-        response = invoke_llm_with_metrics(llm, prompt, "facilitation-suggestions")
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
 
         if response.success and response.content:
             return ToolResult(
@@ -1798,7 +1798,7 @@ def handle_get_student_questions() -> ToolResult:
 def handle_get_poll_suggestions() -> ToolResult:
     """Get AI-suggested poll questions."""
     try:
-        llm = get_fast_voice_llm()
+        llm, model_name = get_fast_voice_llm()
         if not llm:
             return ToolResult(
                 status=ToolResultStatus.FAILURE,
@@ -1814,7 +1814,7 @@ Each poll should:
 
 Format as numbered list with question and options."""
 
-        response = invoke_llm_with_metrics(llm, prompt, "poll-suggestions")
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
 
         if response.success and response.content:
             return ToolResult(
@@ -1855,7 +1855,7 @@ def handle_read_posts(count: int = 5) -> ToolResult:
 def handle_generate_ai_draft(question: str, context: Optional[str] = None) -> ToolResult:
     """Generate AI response draft."""
     try:
-        llm = get_fast_voice_llm()
+        llm, model_name = get_fast_voice_llm()
         if not llm:
             return ToolResult(
                 status=ToolResultStatus.FAILURE,
@@ -1870,7 +1870,7 @@ Question: {question}{ctx}
 
 Provide a thoughtful response (2-3 paragraphs max)."""
 
-        response = invoke_llm_with_metrics(llm, prompt, "ai-draft-generation")
+        response = invoke_llm_with_metrics(llm, prompt, model_name)
 
         if response.success and response.content:
             return ToolResult(

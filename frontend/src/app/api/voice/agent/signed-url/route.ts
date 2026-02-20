@@ -19,7 +19,9 @@ const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: numbe
 
 export async function GET(request: NextRequest) {
   try {
-    const targetUrl = `${BACKEND_BASE}/api/voice/agent/signed-url`;
+    // Extract language parameter from query string and forward to backend
+    const language = request.nextUrl.searchParams.get('language') || 'en';
+    const targetUrl = `${BACKEND_BASE}/api/voice/agent/signed-url?language=${language}`;
 
     const response = await fetchWithTimeout(targetUrl, {
       method: 'GET',

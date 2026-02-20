@@ -20,8 +20,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from api.core.database import SessionLocal
-from api.models.session import Session as SessionModel
+from api.models.session import Session as SessionModel, Case
 from api.models.course import Course
+from api.models.course_material import CourseMaterial
 from api.models.post import Post
 from api.models.user import User
 from api.models.enrollment import Enrollment
@@ -120,16 +121,28 @@ Generate personalized feedback with:
 }}
 """
 
-QUESTION_GENERATION_PROMPT = """You are an educational AI assistant. Generate quiz questions based on this discussion.
+QUESTION_GENERATION_PROMPT = """You are an educational AI assistant. Generate quiz questions based on the session content.
 
 Session: {session_title}
-Topic: {topics}
+Topics: {topics}
 
-Discussion Posts:
+=== DISCUSSION POSTS ===
 {posts_formatted}
+
+=== CASE STUDIES ===
+{cases_formatted}
+
+=== COURSE MATERIALS ===
+{materials_formatted}
+
+=== SESSION TRANSCRIPTS ===
+{transcripts_formatted}
 
 Generate {num_questions} questions of types: {question_types}
 Difficulty level: {difficulty}
+
+Use ALL available content sources above to create comprehensive, relevant questions.
+Prioritize content that students have engaged with (discussion posts, cases).
 
 Provide a JSON response:
 {{
@@ -550,13 +563,14 @@ def generate_questions(
     num_questions: int = 5,
     difficulty: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Generate quiz questions from session discussion."""
+    """Generate quiz questions from session content (posts, cases, materials, transcripts)."""
     db = SessionLocal()
     try:
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
         if not session:
             return {"error": "Session not found"}
 
+        # 1. Fetch discussion posts
         posts = db.query(Post).filter(Post.session_id == session_id).order_by(Post.created_at.asc()).all()
         posts_data = [
             {
@@ -568,8 +582,44 @@ def generate_questions(
             }
             for p in posts
         ]
-
         posts_formatted = format_posts_for_prompt(posts_data[:30])
+
+        # 2. Fetch case studies
+        cases = db.query(Case).filter(Case.session_id == session_id).all()
+        if cases:
+            cases_formatted = "\n".join([
+                f"Case {i+1}: {c.prompt[:500]}{'...' if len(c.prompt) > 500 else ''}"
+                for i, c in enumerate(cases)
+            ])
+        else:
+            cases_formatted = "No case studies for this session."
+
+        # 3. Fetch course materials (metadata only)
+        materials = db.query(CourseMaterial).filter(
+            CourseMaterial.course_id == session.course_id
+        ).all()
+        if materials:
+            materials_formatted = "\n".join([
+                f"- {m.filename} ({m.file_type}): {m.description or 'No description'}"
+                for m in materials[:10]
+            ])
+        else:
+            materials_formatted = "No course materials uploaded."
+
+        # 4. Fetch session transcripts (if available)
+        recordings = db.query(SessionRecording).filter(
+            SessionRecording.session_id == session_id
+        ).all()
+        if recordings:
+            transcripts_formatted = "\n".join([
+                f"Recording: {r.transcript_text[:1000]}{'...' if r.transcript_text and len(r.transcript_text) > 1000 else ''}"
+                for r in recordings if r.transcript_text
+            ])
+            if not transcripts_formatted:
+                transcripts_formatted = "No transcripts available."
+        else:
+            transcripts_formatted = "No session recordings."
+
         topics = session.plan_json.get("topics", []) if session.plan_json else []
 
         llm, model_name = get_llm_with_tracking()
@@ -580,6 +630,9 @@ def generate_questions(
             session_title=session.title,
             topics=", ".join(topics) if topics else "General discussion",
             posts_formatted=posts_formatted,
+            cases_formatted=cases_formatted,
+            materials_formatted=materials_formatted,
+            transcripts_formatted=transcripts_formatted,
             num_questions=num_questions,
             question_types=", ".join(question_types),
             difficulty=difficulty or "mixed",
@@ -606,7 +659,7 @@ def generate_questions(
                 difficulty=q.get("difficulty", "medium"),
                 learning_objective=q.get("learning_objective"),
                 tags=q.get("tags", []),
-                status="draft",
+                status="approved",  # Auto-approve generated questions
             )
             db.add(question)
             db.flush()

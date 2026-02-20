@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText, BookOpen, Copy, LayoutTemplate, Send, Megaphone, ClipboardList, Pencil, Trash2, X } from 'lucide-react';
+import { Calendar, Play, CheckCircle, Clock, FileEdit, RefreshCw, ChevronRight, FileText, BookOpen, Copy, LayoutTemplate, Send, Megaphone, ClipboardList, Pencil, Trash2, X, Bell } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
@@ -294,6 +294,35 @@ export default function SessionsPage() {
       setTimeout(pollForCompletion, 2000);
     } catch (error: any) {
       setPushMessage(`Error: ${error.message || 'Failed to push to Canvas'}`);
+      setPushing(false);
+    }
+  };
+
+  const handleNotifyCanvasStatus = async () => {
+    if (!selectedSession || !selectedCanvasConnection) return;
+
+    const mapping = canvasMappings.find(m => m.connection_id === selectedCanvasConnection);
+    if (!mapping || !mapping.external_course_id) {
+      setPushMessage('No Canvas course mapping found. Please set up the mapping in Integrations first.');
+      return;
+    }
+
+    setPushing(true);
+    setPushMessage(null);
+
+    try {
+      const result = await api.notifyCanvasStatus(selectedSession.id, {
+        connection_id: selectedCanvasConnection,
+        external_course_id: mapping.external_course_id,
+      });
+
+      setPushMessage(`Success! Status notification "${result.title}" sent to Canvas.`);
+      setPushing(false);
+      // Refresh history
+      const history = await api.getCanvasPushHistory(selectedSession.id);
+      setPushHistory(history);
+    } catch (error: any) {
+      setPushMessage(`Error: ${error.message || 'Failed to notify Canvas'}`);
       setPushing(false);
     }
   };
@@ -892,10 +921,10 @@ export default function SessionsPage() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Send className="h-5 w-5 text-primary-600" />
-                        Push to Canvas
+                        Canvas Integration
                       </CardTitle>
                       <CardDescription>
-                        Generate an AI summary of this session and push it to Canvas as an announcement or assignment.
+                        Push AI summary or notify students of session status changes via Canvas announcements.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -963,25 +992,46 @@ export default function SessionsPage() {
                             </div>
                           </div>
 
-                          {/* Push Button */}
-                          <Button
-                            onClick={handlePushToCanvas}
-                            disabled={pushing || !selectedCanvasConnection || !canvasMappings.find(m => m.connection_id === selectedCanvasConnection)?.has_mapping}
-                            className="w-full"
-                            data-voice-id="push-to-canvas"
-                          >
-                            {pushing ? (
-                              <>
-                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                Pushing...
-                              </>
-                            ) : (
-                              <>
-                                <Send className="h-4 w-4 mr-2" />
-                                Push to Canvas
-                              </>
-                            )}
-                          </Button>
+                          {/* Push Buttons */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              onClick={handlePushToCanvas}
+                              disabled={pushing || !selectedCanvasConnection || !canvasMappings.find(m => m.connection_id === selectedCanvasConnection)?.has_mapping}
+                              className="w-full"
+                              data-voice-id="push-to-canvas"
+                            >
+                              {pushing ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                  Pushing...
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="h-4 w-4 mr-2" />
+                                  Push Summary
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              onClick={handleNotifyCanvasStatus}
+                              disabled={pushing || !selectedCanvasConnection || !canvasMappings.find(m => m.connection_id === selectedCanvasConnection)?.has_mapping}
+                              variant="secondary"
+                              className="w-full"
+                              data-voice-id="notify-canvas-status"
+                            >
+                              {pushing ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                  Notifying...
+                                </>
+                              ) : (
+                                <>
+                                  <Bell className="h-4 w-4 mr-2" />
+                                  Notify Status
+                                </>
+                              )}
+                            </Button>
+                          </div>
 
                           {/* Status Message */}
                           {pushMessage && (

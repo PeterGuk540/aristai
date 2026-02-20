@@ -433,3 +433,109 @@ def get_canvas_course_for_session(db, session_id: int, connection_id: int) -> Op
         return mapping.external_course_id
 
     return None
+
+
+# ============ Status Notification Workflow ============
+
+STATUS_MESSAGES = {
+    "draft": "Session '{title}' has been created and is in draft mode. Stay tuned for when it goes live!",
+    "scheduled": "Session '{title}' has been scheduled. Mark your calendar!",
+    "live": "🔴 Session '{title}' is now LIVE! Join the discussion now.",
+    "completed": "Session '{title}' has ended. Thank you for participating! A summary will be available soon.",
+}
+
+
+def push_status_notification(
+    session_id: int,
+    connection_id: int,
+    external_course_id: str,
+    custom_message: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Push a session status notification to Canvas as an announcement.
+
+    Args:
+        session_id: ID of the session
+        connection_id: ID of the Canvas connection
+        external_course_id: Canvas course ID to push to
+        custom_message: Optional custom message (overrides default status message)
+
+    Returns:
+        Dict with result
+    """
+    db = SessionLocal()
+    try:
+        # Get session
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        if not session:
+            return {"error": "Session not found"}
+
+        # Get Canvas connection
+        connection = db.query(IntegrationProviderConnection).filter(
+            IntegrationProviderConnection.id == connection_id
+        ).first()
+
+        if not connection:
+            return {"error": f"Canvas connection {connection_id} not found"}
+
+        if connection.provider != "canvas":
+            return {"error": f"Connection {connection_id} is not a Canvas connection"}
+
+        api_base_url = connection.api_base_url.rstrip("/")
+        api_token = decrypt_secret(connection.api_token_encrypted)
+
+        # Generate message based on status
+        status = session.status or "draft"
+        if custom_message:
+            message = custom_message
+        else:
+            message_template = STATUS_MESSAGES.get(status, STATUS_MESSAGES["draft"])
+            message = message_template.format(title=session.title)
+
+        # Generate title
+        status_labels = {
+            "draft": "New Session Created",
+            "scheduled": "Session Scheduled",
+            "live": "🔴 Session Now Live",
+            "completed": "Session Completed",
+        }
+        title = f"{status_labels.get(status, 'Session Update')}: {session.title}"
+
+        # Format as HTML
+        html_message = f"""
+        <p><strong>{message}</strong></p>
+        <p>Session: {session.title}</p>
+        <p>Status: {status.upper()}</p>
+        """
+
+        # Push to Canvas as announcement
+        result = create_canvas_announcement(
+            api_base_url=api_base_url,
+            api_token=api_token,
+            course_id=external_course_id,
+            title=title,
+            message=html_message,
+        )
+
+        external_id = str(result.get("id", ""))
+
+        logger.info(f"Canvas status notification sent: '{title}' to course {external_course_id}")
+
+        return {
+            "status": "completed",
+            "external_id": external_id,
+            "title": title,
+            "session_status": status,
+            "canvas_course_id": external_course_id,
+        }
+
+    except Exception as e:
+        error_message = str(e)
+        logger.exception(f"Canvas status notification failed: {error_message}")
+        return {
+            "status": "failed",
+            "error": error_message,
+        }
+
+    finally:
+        db.close()

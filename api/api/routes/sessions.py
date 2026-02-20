@@ -448,6 +448,62 @@ def get_canvas_push_status(push_id: int, db: Session = Depends(get_db)):
     }
 
 
+class CanvasStatusNotifyRequest(BaseModel):
+    """Request to notify Canvas of session status change."""
+    connection_id: int
+    external_course_id: str
+    custom_message: Optional[str] = None
+
+
+@router.post("/{session_id}/notify-canvas-status")
+def notify_canvas_of_status(
+    session_id: int,
+    request: CanvasStatusNotifyRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Notify Canvas of session status change via announcement.
+
+    Sends a simple notification about the session's current status
+    (draft, scheduled, live, completed) to the linked Canvas course.
+    """
+    from workflows.canvas_push import push_status_notification
+
+    # Verify session exists
+    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Verify connection exists and is Canvas
+    connection = db.query(IntegrationProviderConnection).filter(
+        IntegrationProviderConnection.id == request.connection_id
+    ).first()
+
+    if not connection:
+        raise HTTPException(status_code=404, detail="Canvas connection not found")
+
+    if connection.provider != "canvas":
+        raise HTTPException(status_code=400, detail="Connection is not a Canvas connection")
+
+    # Push status notification (synchronous - it's quick)
+    result = push_status_notification(
+        session_id=session_id,
+        connection_id=request.connection_id,
+        external_course_id=request.external_course_id,
+        custom_message=request.custom_message,
+    )
+
+    if result.get("status") == "failed":
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to notify Canvas"))
+
+    return {
+        "status": "completed",
+        "message": f"Canvas notified of session status: {session.status}",
+        "external_id": result.get("external_id"),
+        "title": result.get("title"),
+    }
+
+
 @router.get("/{session_id}/canvas-mappings")
 def get_canvas_mappings_for_session(session_id: int, db: Session = Depends(get_db)):
     """

@@ -1063,6 +1063,21 @@ export const api = {
       message: string;
     }>(`/sessions/${sessionId}/push-to-canvas`, { method: 'POST', body: JSON.stringify(data) }),
 
+  notifyCanvasStatus: (
+    sessionId: number,
+    data: {
+      connection_id: number;
+      external_course_id: string;
+      custom_message?: string;
+    }
+  ) =>
+    fetchApi<{
+      status: string;
+      message: string;
+      external_id: string;
+      title: string;
+    }>(`/sessions/${sessionId}/notify-canvas-status`, { method: 'POST', body: JSON.stringify(data) }),
+
   getCanvasPushHistory: (sessionId: number) =>
     fetchApi<Array<{
       id: number;

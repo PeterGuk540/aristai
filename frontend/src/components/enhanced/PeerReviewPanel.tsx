@@ -315,7 +315,7 @@ export function PeerReviewPanelComponent({ sessionId, userId, isInstructor = fal
                   Manage peer review workflow
                 </CardDescription>
               </div>
-              <Button onClick={createAssignments} disabled={creating}>
+              <Button onClick={createAssignments} disabled={creating} data-voice-id="match-peer-reviews">
                 {creating ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 ) : (

@@ -113,6 +113,7 @@ export function LiveSummaryComponent({ sessionId }: LiveSummaryProps) {
             size="sm"
             onClick={generateSummary}
             disabled={generating}
+            data-voice-id="generate-live-summary"
           >
             {generating ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -134,7 +135,7 @@ export function LiveSummaryComponent({ sessionId }: LiveSummaryProps) {
         {!summary && !error && (
           <div className="text-center py-8 text-gray-500">
             <p className="mb-4">No summary available yet</p>
-            <Button onClick={generateSummary} disabled={generating}>
+            <Button onClick={generateSummary} disabled={generating} data-voice-id="generate-live-summary-alt">
               {generating ? 'Generating...' : 'Generate Summary'}
             </Button>
           </div>

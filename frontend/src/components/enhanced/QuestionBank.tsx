@@ -134,6 +134,7 @@ export function QuestionBankComponent({ courseId, sessionId }: QuestionBankProps
               onClick={generateQuestions}
               disabled={generating}
               size="sm"
+              data-voice-id="generate-questions"
             >
               {generating ? (
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />

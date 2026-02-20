@@ -884,21 +884,83 @@ Examples: "course analytics", "course statistics", "how is the course going", "c
     # =========================================================================
     {
         "name": "push_to_canvas",
-        "description": """Push session content/summary to Canvas LMS.
+        "description": """Push AI-generated session summary to Canvas LMS as announcement or assignment.
 
-Examples: "push to Canvas", "send to Canvas", "sync with Canvas", "upload to LMS".""",
+Examples: "push summary to Canvas", "send summary to Canvas", "push to Canvas", "create Canvas announcement".""",
         "parameters": {
             "type": "object",
             "properties": {
-                "content_type": {
+                "push_type": {
                     "type": "string",
-                    "enum": ["summary", "announcement", "assignment", "grades"],
-                    "description": "Type of content to push",
-                    "default": "summary"
+                    "enum": ["announcement", "assignment"],
+                    "description": "Type of Canvas content to create",
+                    "default": "announcement"
                 }
             },
             "required": []
         }
+    },
+    {
+        "name": "notify_canvas_status",
+        "description": """Notify students on Canvas about session status change (draft, scheduled, live, completed).
+
+Examples: "notify Canvas about status", "send status notification to Canvas", "tell students on Canvas the session is live".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "edit_session",
+        "description": """Open the edit modal for the currently selected session.
+
+Examples: "edit session", "edit this session", "modify session", "change session details", "update session".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "delete_session",
+        "description": """Delete the currently selected session (with confirmation).
+
+Examples: "delete session", "remove session", "delete this session".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "generate_questions",
+        "description": """Generate AI quiz questions from session content for the question bank.
+
+Examples: "generate questions", "create quiz questions", "build question bank", "generate quiz from discussion".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "description": "Number of questions to generate",
+                    "default": 5
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "create_peer_reviews",
+        "description": """Match students for peer review assignments.
+
+Examples: "create peer reviews", "match students for review", "set up peer review", "assign peer reviews".""",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "reviews_per_submission": {
+                    "type": "integer",
+                    "description": "Number of reviewers per submission",
+                    "default": 2
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "generate_live_summary",
+        "description": """Generate an AI summary of the current live discussion.
+
+Examples: "generate summary", "summarize discussion", "create live summary", "what are students discussing".""",
+        "parameters": {"type": "object", "properties": {}, "required": []}
     },
     # =========================================================================
     # UTILITY TOOLS
@@ -2008,15 +2070,90 @@ def handle_get_course_analytics() -> ToolResult:
 # LMS INTEGRATION HANDLERS
 # ============================================================================
 
-def handle_push_to_canvas(content_type: str = "summary") -> ToolResult:
-    """Push content to Canvas LMS."""
+def handle_push_to_canvas(push_type: str = "announcement") -> ToolResult:
+    """Push AI summary to Canvas LMS."""
+    # First select the push type, then click the push button
     return ToolResult(
         status=ToolResultStatus.SUCCESS,
-        message=f"Pushing {content_type} to Canvas",
-        data={"content_type": content_type},
+        message=f"Pushing session summary to Canvas as {push_type}",
+        data={"push_type": push_type},
         ui_action={
-            "type": "ui.pushToCanvas",
-            "payload": {"contentType": content_type}
+            "type": "ui.clickButton",
+            "payload": {"voiceId": "push-to-canvas"}
+        }
+    )
+
+
+def handle_notify_canvas_status() -> ToolResult:
+    """Notify Canvas about session status change."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Sending session status notification to Canvas",
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"voiceId": "notify-canvas-status"}
+        }
+    )
+
+
+def handle_edit_session() -> ToolResult:
+    """Open edit session modal."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Opening session editor",
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"voiceId": "edit-session"}
+        }
+    )
+
+
+def handle_delete_session() -> ToolResult:
+    """Delete the selected session."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Opening delete confirmation. Say 'confirm' to delete or 'cancel' to abort.",
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"voiceId": "delete-session"}
+        }
+    )
+
+
+def handle_generate_questions(count: int = 5) -> ToolResult:
+    """Generate quiz questions from session content."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Generating {count} quiz questions from the session content",
+        data={"count": count},
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"voiceId": "generate-questions"}
+        }
+    )
+
+
+def handle_create_peer_reviews(reviews_per_submission: int = 2) -> ToolResult:
+    """Match students for peer review."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message=f"Matching students for peer review ({reviews_per_submission} reviewers per submission)",
+        data={"reviews_per_submission": reviews_per_submission},
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"voiceId": "match-peer-reviews"}
+        }
+    )
+
+
+def handle_generate_live_summary() -> ToolResult:
+    """Generate live discussion summary."""
+    return ToolResult(
+        status=ToolResultStatus.SUCCESS,
+        message="Generating live discussion summary",
+        ui_action={
+            "type": "ui.clickButton",
+            "payload": {"voiceId": "generate-live-summary"}
         }
     )
 
@@ -2319,7 +2456,27 @@ def execute_voice_tool(tool_name: str, parameters: Dict[str, Any]) -> ToolResult
 
         # LMS Integration tools
         elif tool_name == "push_to_canvas":
-            return handle_push_to_canvas(parameters.get("content_type", "summary"))
+            return handle_push_to_canvas(parameters.get("push_type", "announcement"))
+
+        elif tool_name == "notify_canvas_status":
+            return handle_notify_canvas_status()
+
+        # Session management tools
+        elif tool_name == "edit_session":
+            return handle_edit_session()
+
+        elif tool_name == "delete_session":
+            return handle_delete_session()
+
+        # Enhanced AI feature tools
+        elif tool_name == "generate_questions":
+            return handle_generate_questions(parameters.get("count", 5))
+
+        elif tool_name == "create_peer_reviews":
+            return handle_create_peer_reviews(parameters.get("reviews_per_submission", 2))
+
+        elif tool_name == "generate_live_summary":
+            return handle_generate_live_summary()
 
         # Utility tools
         elif tool_name == "undo_action":

@@ -600,7 +600,7 @@ def generate_questions(
         ).all()
         if materials:
             materials_formatted = "\n".join([
-                f"- {m.filename} ({m.file_type}): {m.description or 'No description'}"
+                f"- {m.filename} ({m.content_type}): {m.description or 'No description'}"
                 for m in materials[:10]
             ])
         else:

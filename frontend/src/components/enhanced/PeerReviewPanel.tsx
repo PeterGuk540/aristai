@@ -319,9 +319,9 @@ export function PeerReviewPanelComponent({ sessionId, userId, isInstructor = fal
                 {creating ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 ) : (
-                  <Plus className="w-4 h-4 mr-2" />
+                  <Users className="w-4 h-4 mr-2" />
                 )}
-                Create Assignments
+                Match Students for Review
               </Button>
             </div>
           </CardHeader>

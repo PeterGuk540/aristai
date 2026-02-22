@@ -703,120 +703,123 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             const aiContent = message?.toLowerCase() || '';
 
             // ================================================================
-            // MULTIPLE RESPONSE FIX: Aggressive suppression while processing
+            // MULTIPLE RESPONSE FIX: Response Gating Architecture
+            // ================================================================
+            // The core problem: ElevenLabs agent has its own LLM that responds
+            // BEFORE our backend can process and send SPEAK:. This causes
+            // dual responses (agent's response + our SPEAK: response).
+            //
+            // Solution: GATE all AI responses. Only allow responses that are
+            // CLEARLY our SPEAK: content (sent via sendUserMessage).
             // ================================================================
 
-            // Check if we're currently processing a user request
-            const isProcessing = processingStartTimeRef.current > 0;
-            const timeSinceUserSpoke = Date.now() - processingStartTimeRef.current;
-            const hasSentMcpResponse = lastMcpResponseTimeRef.current > processingStartTimeRef.current;
+            // Check timing context
+            const now = Date.now();
+            const timeSinceUserSpoke = now - processingStartTimeRef.current;
+            const timeSinceMcpSent = now - lastMcpResponseTimeRef.current;
+            const isWaitingForBackend = processingStartTimeRef.current > 0 &&
+                                        lastMcpResponseTimeRef.current < processingStartTimeRef.current;
+            const mcpWasSent = lastMcpResponseTimeRef.current > 0;
 
-            // PHASE 1: Suppress ALL agent responses while waiting for backend
-            // Extended window to 8 seconds to account for slower backend responses
-            if (isProcessing && timeSinceUserSpoke < 8000 && !hasSentMcpResponse) {
-              console.log('🔇 Suppressing agent response (waiting for backend SPEAK:)', {
-                timeSinceUserSpoke,
-                hasSentMcpResponse
+            // GATE 1: Block ALL responses while waiting for backend (before SPEAK: is sent)
+            // This is the primary defense against ElevenLabs' own LLM responding
+            if (isWaitingForBackend && timeSinceUserSpoke < 15000) {
+              console.log('🔇 GATED: Blocking response while waiting for backend SPEAK:', {
+                timeSinceUserSpoke: `${timeSinceUserSpoke}ms`,
+                message: message?.substring(0, 40)
               });
               return;
             }
 
-            // PHASE 2: Filter duplicate/echo responses after MCP_RESPONSE was sent
-            const timeSinceMcpResponse = Date.now() - lastMcpResponseTimeRef.current;
-            const recentMcpResponse = timeSinceMcpResponse < 12000; // Extended to 12 seconds
-
-            if (recentMcpResponse && lastMcpResponseContentRef.current) {
+            // GATE 2: After SPEAK: is sent, only allow the FIRST matching echo
+            if (mcpWasSent && timeSinceMcpSent < 15000 && lastMcpResponseContentRef.current) {
               const mcpContent = lastMcpResponseContentRef.current.toLowerCase();
 
-              // Check for content overlap - indicates this is an echo of MCP content
-              const hasSignificantOverlap = (() => {
-                // Direct substring match
-                if (mcpContent.includes(aiContent.substring(0, 40)) ||
-                    aiContent.includes(mcpContent.substring(0, 40))) {
-                  return true;
-                }
+              // Check if this AI response matches our SPEAK: content
+              const isOurSpeakContent = (() => {
+                // Very strict matching - first 50 chars should match
+                const mcpStart = mcpContent.substring(0, 50).replace(/[^\w\s]/g, '');
+                const aiStart = aiContent.substring(0, 50).replace(/[^\w\s]/g, '');
+                if (mcpStart === aiStart) return true;
 
-                // Word-based overlap detection
-                const mcpWords = mcpContent.split(/\s+/).filter(w => w.length > 3);
-                const aiWords = aiContent.split(/\s+/).filter(w => w.length > 3);
+                // Word overlap check (at least 50% of first 10 words match)
+                const mcpWords = mcpContent.split(/\s+/).slice(0, 10).filter(w => w.length > 2);
+                const aiWords = aiContent.split(/\s+/).slice(0, 10).filter(w => w.length > 2);
+                if (mcpWords.length === 0) return false;
+
                 let matchCount = 0;
-                for (const word of mcpWords.slice(0, 8)) {
-                  if (aiWords.some(aw => aw.includes(word) || word.includes(aw))) {
-                    matchCount++;
-                  }
+                for (const word of mcpWords) {
+                  if (aiWords.includes(word)) matchCount++;
                 }
-                // If 3+ significant words match, it's likely an echo
-                return matchCount >= 3;
+                return matchCount >= Math.ceil(mcpWords.length * 0.5);
               })();
 
-              if (hasSignificantOverlap) {
+              if (isOurSpeakContent) {
+                // This is the echo of our SPEAK: content
                 if (mcpResponseDisplayedRef.current) {
-                  // Already displayed MCP content - filter this duplicate
-                  console.log('🔇 Filtering duplicate MCP echo:', message?.substring(0, 50));
+                  // Already displayed - block duplicate
+                  console.log('🔇 GATED: Duplicate SPEAK echo blocked:', message?.substring(0, 40));
                   return;
                 }
-                // First time seeing MCP content spoken - allow it
+                // First time - allow and mark as displayed
                 mcpResponseDisplayedRef.current = true;
-                console.log('✅ Displaying MCP response (first time):', message?.substring(0, 50));
-              } else if (timeSinceMcpResponse > 2000 && timeSinceMcpResponse < 10000) {
-                // Non-overlapping response shortly after MCP - likely a follow-up to suppress
-                console.log('🔇 Filtering follow-up AI response after MCP:', message?.substring(0, 50));
+                console.log('✅ ALLOWED: SPEAK echo (first time):', message?.substring(0, 40));
+                // Fall through to display
+              } else {
+                // Not our content - this is ElevenLabs' own response, block it
+                console.log('🔇 GATED: Non-SPEAK response blocked after SPEAK sent:', {
+                  timeSinceMcpSent: `${timeSinceMcpSent}ms`,
+                  message: message?.substring(0, 40)
+                });
                 return;
               }
             }
 
-            // PHASE 3: Filter ElevenLabs' own responses that shouldn't be shown
-            // These are responses the agent generates before/without backend guidance
-            const briefAcks = [
+            // GATE 3: Filter known ElevenLabs auto-responses (acknowledgments, denials, confusion)
+            // These are responses generated by ElevenLabs' agent before backend processes
+            const autoResponsePatterns = [
+              // Acknowledgments (agent trying to be helpful while "processing")
               "i'm retrieving", "retrieving your", "let me get", "let me check",
               "checking", "one moment", "just a moment", "getting that",
               "fetching", "loading", "looking up", "i'll get", "i will get",
+              "processing", "working on", "handling", "please wait",
               "un momento", "buscando", "obteniendo", "espera", "espere",
-              "processing", "working on", "handling"
+              // Denials (agent doesn't know what to do)
+              "couldn't process", "cannot process", "unable to assist",
+              "not available", "don't have access", "not able to do",
+              "outside my capabilities", "cannot help", "can't help",
+              "no puedo ayudar", "no tengo acceso",
+              // Confusion (agent doesn't understand)
+              "not sure what you", "please clarify", "didn't understand",
+              "can you repeat", "what would you like", "how can i help you today",
+              "what can i do for you", "no entendí", "puede repetir",
+              // Generic filler
+              "certainly", "of course", "sure thing", "absolutely",
             ];
 
-            const genericDenials = [
-              "couldn't process that request",
-              "couldn't process your request",
-              "cannot process your request",
-              "unable to assist with that",
-              "that feature is not available",
-              "i don't have access to that",
-              "i'm not able to do that",
-              "that's outside my capabilities",
-              "i cannot help with",
-              "i can't help with",
-              "no puedo ayudar",
-              "no tengo acceso"
-            ];
-
-            // Also filter responses that indicate confusion/misunderstanding
-            const confusionPhrases = [
-              "i'm not sure what you",
-              "could you please clarify",
-              "i didn't understand",
-              "can you repeat that",
-              "what would you like me to",
-              "how can i help you today",
-              "what can i do for you",
-              "no entendí",
-              "puede repetir"
-            ];
-
-            const isAck = briefAcks.some(ack => aiContent.includes(ack));
-            const isGenericDenial = genericDenials.some(p => aiContent.includes(p));
-            const isConfusion = confusionPhrases.some(p => aiContent.includes(p));
-
-            // If this looks like ElevenLabs' own response (not our SPEAK: content), filter it
-            if (isAck || isGenericDenial || isConfusion) {
-              console.log('🔇 Filtering agent-generated response:', message?.substring(0, 50));
+            const isAutoResponse = autoResponsePatterns.some(p => aiContent.includes(p));
+            if (isAutoResponse) {
+              console.log('🔇 GATED: Auto-response pattern detected:', message?.substring(0, 40));
               return;
             }
 
-            // PHASE 4: Only display meaningful responses
+            // GATE 4: If we reach here without having sent SPEAK:, block everything
+            // This catches edge cases where agent responds before we even start processing
+            if (!mcpWasSent || timeSinceMcpSent > 20000) {
+              // No recent SPEAK: sent - be very conservative
+              // Only allow if it's been a long time since any activity (fresh conversation)
+              const timeSinceAnyActivity = Math.min(timeSinceUserSpoke || Infinity, timeSinceMcpSent || Infinity);
+              if (timeSinceAnyActivity < 20000) {
+                console.log('🔇 GATED: No recent SPEAK - blocking unexpected response:', message?.substring(0, 40));
+                return;
+              }
+            }
+
+            // PASSED ALL GATES: Display the response
             if (message && message.length > 5) {
               const cleanMessage = stripMcpPrefix(message);
               if (cleanMessage.length > 0) {
+                console.log('✅ ALLOWED: Response passed all gates:', cleanMessage.substring(0, 40));
                 addAssistantMessage(cleanMessage);
               }
             }

@@ -1327,12 +1327,26 @@ def handle_smart_switch_tab(tab_voice_id: str, current_route: Optional[str] = No
     """Intelligently switch to a tab, navigating first if necessary.
 
     This tool knows the application topology and will:
-    1. Check if the tab exists on the current page
+    1. FIRST check if the tab exists on the CURRENT page (prefer staying on current page)
     2. If not, find which page has the tab
     3. Navigate to that page first
     4. Then switch to the tab
+
+    IMPORTANT: When multiple pages have the same tab (e.g., tab-create on /courses AND /sessions,
+    or tab-cases on /console AND /forum), we PREFER the current page to avoid unnecessary navigation.
     """
-    # Find which page has this tab
+    # Get the base route of the current page
+    current_base = ""
+    if current_route:
+        current_base = "/" + current_route.strip("/").split("/")[0]
+
+    # FIRST: Check if the tab exists on the CURRENT page
+    # This prevents navigating away when user is already on the right page
+    if current_base and is_tab_on_page(tab_voice_id, current_base):
+        logger.info(f"Tab '{tab_voice_id}' found on current page '{current_base}' - switching without navigation")
+        return handle_switch_tab(tab_voice_id)
+
+    # Tab not on current page - find which page has it
     target_page = find_tab_page(tab_voice_id)
 
     if not target_page:
@@ -1341,19 +1355,9 @@ def handle_smart_switch_tab(tab_voice_id: str, current_route: Optional[str] = No
             message=f"Tab '{tab_voice_id}' not found in any page"
         )
 
-    # Check if we need to navigate
-    if current_route:
-        current_base = "/" + current_route.strip("/").split("/")[0]
-        needs_navigation = current_base != target_page
-    else:
-        needs_navigation = True  # Assume we might need to navigate
-
-    if needs_navigation:
-        # Use navigate_and_switch_tab
-        return handle_navigate_and_switch_tab(tab_voice_id, current_route or "/")
-    else:
-        # Just switch tab
-        return handle_switch_tab(tab_voice_id)
+    # Navigate to the target page and switch tab
+    logger.info(f"Tab '{tab_voice_id}' not on current page '{current_base}' - navigating to '{target_page}'")
+    return handle_navigate_and_switch_tab(tab_voice_id, current_route or "/")
 
 
 # ============================================================================

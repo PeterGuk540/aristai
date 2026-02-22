@@ -79,12 +79,13 @@ export function createVoiceTabHandler(
     console.log(`🎤 ${pageName}: Voice tab switch request:`, rawTab, '→', normalizedTab);
 
     // Strategy 1: Try exact mapping first
-    let targetTab = pageTabMap[normalizedTab];
+    let targetTab: string = pageTabMap[normalizedTab] || '';
 
     // Strategy 2: If no exact match, use fuzzy matching against available tabs
     if (!targetTab) {
-      targetTab = findBestTabMatch(normalizedTab, availableTabIds) || undefined;
-      if (targetTab) {
+      const fuzzyMatch = findBestTabMatch(normalizedTab, availableTabIds);
+      if (fuzzyMatch) {
+        targetTab = fuzzyMatch;
         console.log(`🎤 ${pageName}: Fuzzy matched to tab:`, targetTab);
       }
     }

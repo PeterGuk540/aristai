@@ -120,8 +120,15 @@ export const executeUiAction = (action: UiAction, router: ReturnType<typeof useR
 
 /**
  * Execute a multi-step workflow directly.
- * This handles navigation + tab switching without relying on VoiceUIController event listeners,
- * which can be lost when navigation causes component remount.
+ *
+ * KEY INSIGHT: When navigating to a new page AND switching tabs,
+ * we combine them into a single navigation with ?tab= parameter.
+ * This is more reliable than event dispatching after navigation,
+ * and doesn't require hardcoded tab mappings in each page.
+ *
+ * Pages already handle tab switching via URL params:
+ *   const tabFromUrl = searchParams?.get('tab');
+ *   if (tabFromUrl) setActiveTab(tabFromUrl);
  */
 const executeWorkflow = (
   payload: { workflow?: string; steps?: Array<{ type: string; payload: Record<string, any>; waitForLoad?: boolean }> },
@@ -135,7 +142,30 @@ const executeWorkflow = (
     return;
   }
 
-  // Process steps sequentially
+  // OPTIMIZATION: If workflow has navigate + switchTab, combine into single URL with ?tab=
+  // This is more reliable than dispatching events after navigation
+  if (steps.length >= 2) {
+    const navigateStep = steps.find(s => s.type === 'ui.navigate');
+    const switchTabStep = steps.find(s => s.type === 'ui.switchTab');
+
+    if (navigateStep && switchTabStep) {
+      const path = navigateStep.payload?.path;
+      const tabName = switchTabStep.payload?.tabName || switchTabStep.payload?.voiceId || '';
+      // Extract actual tab value (e.g., "tab-ai-features" -> "ai-features")
+      const tabValue = tabName.toLowerCase().replace(/^tab-/, '');
+
+      if (path && tabValue) {
+        // Combine into single navigation with tab parameter
+        const urlWithTab = `${path}?tab=${tabValue}`;
+        console.log('🧭 Workflow: Combined navigation with tab:', urlWithTab);
+        router.push(urlWithTab);
+        console.log('✅ Workflow completed:', workflow);
+        return;
+      }
+    }
+  }
+
+  // Fallback: Process steps sequentially (for other workflow types)
   let currentStepIndex = 0;
 
   const executeNextStep = () => {
@@ -148,13 +178,11 @@ const executeWorkflow = (
     console.log(`📍 Executing step ${currentStepIndex + 1}/${steps.length}:`, step.type, step.payload);
 
     if (step.type === 'ui.navigate') {
-      // Handle navigation directly
       const path = step.payload?.path;
       if (path) {
         console.log('🧭 Workflow: Navigating to:', path);
         router.push(path);
         currentStepIndex++;
-        // Wait for navigation to complete before next step
         setTimeout(executeNextStep, 800);
       } else {
         console.warn('⚠️ ui.navigate step missing path');
@@ -162,26 +190,18 @@ const executeWorkflow = (
         executeNextStep();
       }
     } else if (step.type === 'ui.switchTab') {
-      // Handle tab switch - dispatch voice-select-tab which pages listen for
       const tabName = step.payload?.tabName || step.payload?.voiceId || '';
-      const normalizedTab = tabName.toLowerCase().replace(/^tab-/, '').replace(/-/g, '');
-      console.log('📑 Workflow: Switching to tab:', tabName, '(normalized:', normalizedTab, ')');
+      const tabValue = tabName.toLowerCase().replace(/^tab-/, '');
+      console.log('📑 Workflow: Switching to tab:', tabValue);
 
-      // Dispatch voice-select-tab event (pages handle this)
-      window.dispatchEvent(new CustomEvent('voice-select-tab', {
-        detail: { tab: normalizedTab }
-      }));
-
-      // Also dispatch ui.switchTab for VoiceUIController (if it's mounted)
+      // Dispatch ui.switchTab for VoiceUIController
       window.dispatchEvent(new CustomEvent('ui.switchTab', {
-        detail: step.payload
+        detail: { ...step.payload, tabName: tabValue, voiceId: `tab-${tabValue}` }
       }));
 
       currentStepIndex++;
-      // Short delay before next step
       setTimeout(executeNextStep, 300);
     } else {
-      // For other action types, dispatch as event
       console.log('🎤 Workflow: Dispatching', step.type);
       window.dispatchEvent(new CustomEvent(step.type, { detail: step.payload }));
       currentStepIndex++;
@@ -189,7 +209,6 @@ const executeWorkflow = (
     }
   };
 
-  // Start executing steps
   executeNextStep();
 }
 

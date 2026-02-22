@@ -101,6 +101,12 @@ export const executeUiAction = (action: UiAction, router: ReturnType<typeof useR
         }));
       }
       break;
+    case 'ui.workflow':
+      // Handle workflow directly to avoid component remount issues
+      // When we navigate, VoiceUIController remounts and loses event listeners
+      console.log('🔄 Executing workflow:', payload);
+      executeWorkflow(payload, router);
+      break;
     default:
       // For any unknown action types, try dispatching as a custom event
       if (type.startsWith('ui.')) {
@@ -111,6 +117,81 @@ export const executeUiAction = (action: UiAction, router: ReturnType<typeof useR
       }
   }
 };
+
+/**
+ * Execute a multi-step workflow directly.
+ * This handles navigation + tab switching without relying on VoiceUIController event listeners,
+ * which can be lost when navigation causes component remount.
+ */
+const executeWorkflow = (
+  payload: { workflow?: string; steps?: Array<{ type: string; payload: Record<string, any>; waitForLoad?: boolean }> },
+  router: ReturnType<typeof useRouter>
+) => {
+  const { workflow, steps } = payload;
+  console.log('🔄 executeWorkflow:', { workflow, stepCount: steps?.length });
+
+  if (!steps || !Array.isArray(steps) || steps.length === 0) {
+    console.warn('⚠️ No workflow steps provided');
+    return;
+  }
+
+  // Process steps sequentially
+  let currentStepIndex = 0;
+
+  const executeNextStep = () => {
+    if (currentStepIndex >= steps.length) {
+      console.log('✅ Workflow completed:', workflow);
+      return;
+    }
+
+    const step = steps[currentStepIndex];
+    console.log(`📍 Executing step ${currentStepIndex + 1}/${steps.length}:`, step.type, step.payload);
+
+    if (step.type === 'ui.navigate') {
+      // Handle navigation directly
+      const path = step.payload?.path;
+      if (path) {
+        console.log('🧭 Workflow: Navigating to:', path);
+        router.push(path);
+        currentStepIndex++;
+        // Wait for navigation to complete before next step
+        setTimeout(executeNextStep, 800);
+      } else {
+        console.warn('⚠️ ui.navigate step missing path');
+        currentStepIndex++;
+        executeNextStep();
+      }
+    } else if (step.type === 'ui.switchTab') {
+      // Handle tab switch - dispatch voice-select-tab which pages listen for
+      const tabName = step.payload?.tabName || step.payload?.voiceId || '';
+      const normalizedTab = tabName.toLowerCase().replace(/^tab-/, '').replace(/-/g, '');
+      console.log('📑 Workflow: Switching to tab:', tabName, '(normalized:', normalizedTab, ')');
+
+      // Dispatch voice-select-tab event (pages handle this)
+      window.dispatchEvent(new CustomEvent('voice-select-tab', {
+        detail: { tab: normalizedTab }
+      }));
+
+      // Also dispatch ui.switchTab for VoiceUIController (if it's mounted)
+      window.dispatchEvent(new CustomEvent('ui.switchTab', {
+        detail: step.payload
+      }));
+
+      currentStepIndex++;
+      // Short delay before next step
+      setTimeout(executeNextStep, 300);
+    } else {
+      // For other action types, dispatch as event
+      console.log('🎤 Workflow: Dispatching', step.type);
+      window.dispatchEvent(new CustomEvent(step.type, { detail: step.payload }));
+      currentStepIndex++;
+      setTimeout(executeNextStep, 100);
+    }
+  };
+
+  // Start executing steps
+  executeNextStep();
+}
 
 export const useUiActionStream = (
   userId: number | undefined,

@@ -700,64 +700,81 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
             // Track the agent's response
             lastAgentResponseRef.current = message || '';
+            const aiContent = message?.toLowerCase() || '';
 
-            // CRITICAL FIX: Suppress agent's OWN responses while we're waiting for backend
-            // This prevents the dual-response issue where agent responds before our SPEAK: arrives
+            // ================================================================
+            // MULTIPLE RESPONSE FIX: Aggressive suppression while processing
+            // ================================================================
+
+            // Check if we're currently processing a user request
             const isProcessing = processingStartTimeRef.current > 0;
             const timeSinceUserSpoke = Date.now() - processingStartTimeRef.current;
             const hasSentMcpResponse = lastMcpResponseTimeRef.current > processingStartTimeRef.current;
 
-            if (isProcessing && timeSinceUserSpoke < 5000 && !hasSentMcpResponse) {
-              // We're still waiting for backend to respond - suppress agent's own response
-              console.log('🔇 Suppressing agent response (waiting for backend SPEAK:)');
+            // PHASE 1: Suppress ALL agent responses while waiting for backend
+            // Extended window to 8 seconds to account for slower backend responses
+            if (isProcessing && timeSinceUserSpoke < 8000 && !hasSentMcpResponse) {
+              console.log('🔇 Suppressing agent response (waiting for backend SPEAK:)', {
+                timeSinceUserSpoke,
+                hasSentMcpResponse
+              });
               return;
             }
 
-            // CRITICAL: Filter out duplicate responses after MCP_RESPONSE
-            // If we just sent MCP_RESPONSE (within last 10 seconds), check if this AI response
-            // is a duplicate/follow-up that should be suppressed
+            // PHASE 2: Filter duplicate/echo responses after MCP_RESPONSE was sent
             const timeSinceMcpResponse = Date.now() - lastMcpResponseTimeRef.current;
-            const recentMcpResponse = timeSinceMcpResponse < 10000; // Within 10 seconds
+            const recentMcpResponse = timeSinceMcpResponse < 12000; // Extended to 12 seconds
 
             if (recentMcpResponse && lastMcpResponseContentRef.current) {
               const mcpContent = lastMcpResponseContentRef.current.toLowerCase();
-              const aiContent = message?.toLowerCase() || '';
 
-              // Check if this AI response is related to the MCP content
-              const isMcpRelated = mcpContent.includes(aiContent.substring(0, 30)) ||
-                                   aiContent.includes(mcpContent.substring(0, 30)) ||
-                                   // Check for significant overlap
-                                   mcpContent.split(' ').slice(0, 5).some(word =>
-                                     word.length > 3 && aiContent.includes(word)
-                                   );
+              // Check for content overlap - indicates this is an echo of MCP content
+              const hasSignificantOverlap = (() => {
+                // Direct substring match
+                if (mcpContent.includes(aiContent.substring(0, 40)) ||
+                    aiContent.includes(mcpContent.substring(0, 40))) {
+                  return true;
+                }
 
-              if (isMcpRelated) {
-                // This is ElevenLabs speaking the MCP content
+                // Word-based overlap detection
+                const mcpWords = mcpContent.split(/\s+/).filter(w => w.length > 3);
+                const aiWords = aiContent.split(/\s+/).filter(w => w.length > 3);
+                let matchCount = 0;
+                for (const word of mcpWords.slice(0, 8)) {
+                  if (aiWords.some(aw => aw.includes(word) || word.includes(aw))) {
+                    matchCount++;
+                  }
+                }
+                // If 3+ significant words match, it's likely an echo
+                return matchCount >= 3;
+              })();
+
+              if (hasSignificantOverlap) {
                 if (mcpResponseDisplayedRef.current) {
-                  // We already displayed this MCP content - filter duplicate
+                  // Already displayed MCP content - filter this duplicate
                   console.log('🔇 Filtering duplicate MCP echo:', message?.substring(0, 50));
                   return;
                 }
-                // First time - mark as displayed and let it through
+                // First time seeing MCP content spoken - allow it
                 mcpResponseDisplayedRef.current = true;
                 console.log('✅ Displaying MCP response (first time):', message?.substring(0, 50));
-              } else if (timeSinceMcpResponse > 1500) {
-                // This is a follow-up response after MCP was spoken - filter it
+              } else if (timeSinceMcpResponse > 2000 && timeSinceMcpResponse < 10000) {
+                // Non-overlapping response shortly after MCP - likely a follow-up to suppress
                 console.log('🔇 Filtering follow-up AI response after MCP:', message?.substring(0, 50));
                 return;
               }
             }
 
-            // Display agent responses in chatbox
-            // Skip brief acknowledgments and generic denials - backend is authoritative.
+            // PHASE 3: Filter ElevenLabs' own responses that shouldn't be shown
+            // These are responses the agent generates before/without backend guidance
             const briefAcks = [
               "i'm retrieving", "retrieving your", "let me get", "let me check",
               "checking", "one moment", "just a moment", "getting that",
-              "fetching", "loading", "looking up", "i'll get",
-              "un momento", "buscando", "obteniendo"
+              "fetching", "loading", "looking up", "i'll get", "i will get",
+              "un momento", "buscando", "obteniendo", "espera", "espere",
+              "processing", "working on", "handling"
             ];
-            // Only filter out clear denial phrases that indicate ElevenLabs is rejecting
-            // the request before MCP has a chance to respond.
+
             const genericDenials = [
               "couldn't process that request",
               "couldn't process your request",
@@ -767,12 +784,37 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
               "i don't have access to that",
               "i'm not able to do that",
               "that's outside my capabilities",
+              "i cannot help with",
+              "i can't help with",
+              "no puedo ayudar",
+              "no tengo acceso"
             ];
-            const isAck = message && briefAcks.some(ack => message.toLowerCase().includes(ack));
-            const isGenericDenial = message && genericDenials.some(p => message.toLowerCase().includes(p));
 
-            if (message && message.length > 5 && !isAck && !isGenericDenial) {
-              // Strip MCP_RESPONSE: prefix if ElevenLabs echoed it back
+            // Also filter responses that indicate confusion/misunderstanding
+            const confusionPhrases = [
+              "i'm not sure what you",
+              "could you please clarify",
+              "i didn't understand",
+              "can you repeat that",
+              "what would you like me to",
+              "how can i help you today",
+              "what can i do for you",
+              "no entendí",
+              "puede repetir"
+            ];
+
+            const isAck = briefAcks.some(ack => aiContent.includes(ack));
+            const isGenericDenial = genericDenials.some(p => aiContent.includes(p));
+            const isConfusion = confusionPhrases.some(p => aiContent.includes(p));
+
+            // If this looks like ElevenLabs' own response (not our SPEAK: content), filter it
+            if (isAck || isGenericDenial || isConfusion) {
+              console.log('🔇 Filtering agent-generated response:', message?.substring(0, 50));
+              return;
+            }
+
+            // PHASE 4: Only display meaningful responses
+            if (message && message.length > 5) {
               const cleanMessage = stripMcpPrefix(message);
               if (cleanMessage.length > 0) {
                 addAssistantMessage(cleanMessage);
@@ -927,8 +969,10 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       // Track when and what we sent so we can filter duplicate AI responses
       lastMcpResponseTimeRef.current = Date.now();
       lastMcpResponseContentRef.current = text;
-      // Clear processing flag - SPEAK: is being sent, agent responses after this are the real ones
-      // (but keep processingStartTimeRef for comparison in filter logic)
+      // Reset MCP displayed flag for new response
+      mcpResponseDisplayedRef.current = false;
+
+      // Send the SPEAK: command to ElevenLabs
       conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
 
       // Reset speaking flag after a delay (estimated speak time)
@@ -1129,9 +1173,22 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       console.error('❌ Backend call failed:', error);
       // Don't show error to user - agent already responded
       // UI actions just won't execute
+
+      // Reset processing state on error so agent responses aren't suppressed forever
+      processingStartTimeRef.current = 0;
     } finally {
       isProcessingTranscriptRef.current = false;
       pendingTranscriptRef.current = null;
+
+      // Reset processing state after a delay to allow MCP echo to be processed
+      // This ensures we don't suppress legitimate agent responses for too long
+      setTimeout(() => {
+        // Only reset if no new user input has started
+        const timeSinceProcessing = Date.now() - processingStartTimeRef.current;
+        if (timeSinceProcessing > 5000) {
+          processingStartTimeRef.current = 0;
+        }
+      }, 6000);
     }
   };
 

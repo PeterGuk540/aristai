@@ -398,6 +398,56 @@ WORKFLOW_REGISTRY: Dict[str, WorkflowDefinition] = {
             WorkflowStep("switch_tab", "tab-materials", "Switch to materials tab"),
         ]
     ),
+
+    "create_session": WorkflowDefinition(
+        name="create_session",
+        description="Navigate to create a new session",
+        triggers=[
+            "create session", "new session", "add session", "crear sesion", "nueva sesion"
+        ],
+        steps=[
+            WorkflowStep("navigate", "/sessions", "Go to sessions page", wait_for_load=True),
+            WorkflowStep("switch_tab", "tab-create", "Switch to create tab"),
+        ]
+    ),
+
+    "view_session_insights": WorkflowDefinition(
+        name="view_session_insights",
+        description="View session engagement insights and analytics",
+        triggers=[
+            "session insights", "view insights", "engagement insights", "session analytics",
+            "ver insights", "analisis de sesion"
+        ],
+        steps=[
+            WorkflowStep("navigate", "/sessions", "Go to sessions page", wait_for_load=True),
+            WorkflowStep("switch_tab", "tab-insights", "Switch to insights tab"),
+        ]
+    ),
+
+    "manage_session": WorkflowDefinition(
+        name="manage_session",
+        description="Navigate to session status management",
+        triggers=[
+            "manage session", "session status", "manage status", "gestionar sesion"
+        ],
+        steps=[
+            WorkflowStep("navigate", "/sessions", "Go to sessions page", wait_for_load=True),
+            WorkflowStep("switch_tab", "tab-manage", "Switch to manage tab"),
+        ]
+    ),
+
+    "view_instructor_tools": WorkflowDefinition(
+        name="view_instructor_tools",
+        description="Navigate to instructor tools (timer, breakout groups, heatmap)",
+        triggers=[
+            "instructor tools", "tools", "timer tools", "breakout tools",
+            "herramientas", "herramientas del instructor"
+        ],
+        steps=[
+            WorkflowStep("navigate", "/console", "Go to console page", wait_for_load=True),
+            WorkflowStep("switch_tab", "tab-tools", "Switch to tools tab"),
+        ]
+    ),
 }
 
 

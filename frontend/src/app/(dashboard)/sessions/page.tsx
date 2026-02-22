@@ -110,15 +110,14 @@ export default function SessionsPage() {
 
   // Sessions page tab mappings
   // Note: 'manage' tab removed - all management functions now in 'sessions' tab
+  // These mappings serve as HINTS for the universal fuzzy matching system
   const sessionsTabMap = mergeTabMappings({
+    // Sessions/View tab
     'sessions': 'sessions',
     'session': 'sessions',
     'viewsessions': 'sessions',
     'list': 'sessions',
-    'create': 'create',
-    'creation': 'create',
-    'createsession': 'create',
-    'newsession': 'create',
+    'view': 'sessions',
     // Redirect old 'manage' commands to 'sessions' (consolidated)
     'manage': 'sessions',
     'management': 'sessions',
@@ -126,6 +125,42 @@ export default function SessionsPage() {
     'status': 'sessions',
     'sessionstatus': 'sessions',
     'statuscontrol': 'sessions',
+
+    // Create tab
+    'create': 'create',
+    'creation': 'create',
+    'createsession': 'create',
+    'newsession': 'create',
+    'new': 'create',
+    'add': 'create',
+    'addsession': 'create',
+
+    // Materials tab
+    'materials': 'materials',
+    'material': 'materials',
+    'files': 'materials',
+    'documents': 'materials',
+    'uploads': 'materials',
+
+    // Insights tab - IMPORTANT: These were missing!
+    'insights': 'insights',
+    'insight': 'insights',
+    'sessioninsights': 'insights',
+    'preclassinsights': 'insights',
+    'preclass': 'insights',
+    'postclass': 'insights',
+    'analytics': 'insights',
+    'summary': 'insights',
+    'progress': 'insights',
+
+    // AI Features tab
+    'aifeatures': 'ai-features',
+    'aifeature': 'ai-features',
+    'ai': 'ai-features',
+    'features': 'ai-features',
+    'livesummary': 'ai-features',
+    'questionbank': 'ai-features',
+    'peerreview': 'ai-features',
   });
 
   // Voice tab handler

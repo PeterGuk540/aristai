@@ -58,6 +58,161 @@ function warn(message: string, ...args: unknown[]) {
 // ============================================================================
 
 /**
+ * Calculate similarity score between two strings (0-1)
+ * Uses a combination of substring matching and word overlap
+ */
+function calculateSimilarity(str1: string, str2: string): number {
+  const s1 = str1.toLowerCase().replace(/[-_\s]/g, '');
+  const s2 = str2.toLowerCase().replace(/[-_\s]/g, '');
+
+  // Exact match
+  if (s1 === s2) return 1.0;
+
+  // One contains the other
+  if (s1.includes(s2) || s2.includes(s1)) return 0.9;
+
+  // Word-based matching
+  const words1 = str1.toLowerCase().split(/[-_\s]+/).filter(w => w.length > 2);
+  const words2 = str2.toLowerCase().split(/[-_\s]+/).filter(w => w.length > 2);
+
+  let matchedWords = 0;
+  for (const w1 of words1) {
+    for (const w2 of words2) {
+      if (w1.includes(w2) || w2.includes(w1)) {
+        matchedWords++;
+        break;
+      }
+    }
+  }
+
+  if (words1.length > 0 && matchedWords > 0) {
+    return 0.5 + (0.4 * matchedWords / Math.max(words1.length, words2.length));
+  }
+
+  // Prefix matching
+  const minLen = Math.min(s1.length, s2.length);
+  let prefixMatch = 0;
+  for (let i = 0; i < minLen; i++) {
+    if (s1[i] === s2[i]) prefixMatch++;
+    else break;
+  }
+
+  if (prefixMatch >= 3) {
+    return 0.3 + (0.3 * prefixMatch / Math.max(s1.length, s2.length));
+  }
+
+  return 0;
+}
+
+/**
+ * Dynamically discover all tabs on the current page
+ * Returns array of tab elements with their semantic identities
+ */
+function discoverAllTabs(): Array<{
+  element: HTMLElement;
+  identities: string[];  // All possible names for this tab
+  isActive: boolean;
+}> {
+  const tabs: Array<{ element: HTMLElement; identities: string[]; isActive: boolean }> = [];
+
+  // Find all tab-like elements using multiple selectors
+  const tabSelectors = [
+    '[role="tab"]',
+    '[data-radix-collection-item]',
+    'button[data-state]',
+    '[data-voice-id^="tab-"]',
+  ];
+
+  const seenElements = new Set<HTMLElement>();
+
+  for (const selector of tabSelectors) {
+    const elements = document.querySelectorAll(selector);
+    for (const el of elements) {
+      const element = el as HTMLElement;
+      if (seenElements.has(element)) continue;
+      seenElements.add(element);
+
+      // Extract all possible identities for this tab
+      const identities: string[] = [];
+
+      // 1. data-voice-id (highest priority)
+      const voiceId = element.getAttribute('data-voice-id');
+      if (voiceId) {
+        identities.push(voiceId);
+        identities.push(voiceId.replace('tab-', ''));
+      }
+
+      // 2. value attribute (Radix tabs)
+      const value = element.getAttribute('value');
+      if (value) identities.push(value);
+
+      // 3. aria-controls
+      const ariaControls = element.getAttribute('aria-controls');
+      if (ariaControls) {
+        identities.push(ariaControls);
+        identities.push(ariaControls.replace('-tab', '').replace('-panel', ''));
+      }
+
+      // 4. Text content (cleaned)
+      const text = element.textContent?.trim().replace(/\(\d+\)/g, '').trim();
+      if (text && text.length < 50) identities.push(text);
+
+      // 5. aria-label
+      const ariaLabel = element.getAttribute('aria-label');
+      if (ariaLabel) identities.push(ariaLabel);
+
+      // 6. id attribute
+      const id = element.getAttribute('id');
+      if (id) identities.push(id);
+
+      // Determine if tab is active
+      const isActive = element.getAttribute('aria-selected') === 'true' ||
+                       element.getAttribute('data-state') === 'active' ||
+                       element.classList.contains('active');
+
+      if (identities.length > 0) {
+        tabs.push({ element, identities, isActive });
+      }
+    }
+  }
+
+  return tabs;
+}
+
+/**
+ * Find the best matching tab for a given intent using fuzzy matching
+ * NO hardcoded mappings - purely dynamic discovery
+ */
+function findTabByIntent(tabIntent: string): HTMLElement | null {
+  const tabs = discoverAllTabs();
+
+  if (tabs.length === 0) {
+    log('No tabs found on current page');
+    return null;
+  }
+
+  log(`Discovered ${tabs.length} tabs on page:`, tabs.map(t => t.identities[0]));
+
+  let bestMatch: { element: HTMLElement; score: number } | null = null;
+
+  for (const tab of tabs) {
+    for (const identity of tab.identities) {
+      const score = calculateSimilarity(tabIntent, identity);
+      if (score > 0.5 && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { element: tab.element, score };
+      }
+    }
+  }
+
+  if (bestMatch) {
+    log(`Best tab match for "${tabIntent}": score=${bestMatch.score.toFixed(2)}`);
+    return bestMatch.element;
+  }
+
+  return null;
+}
+
+/**
  * Find an element by voice-id or fallback strategies.
  * NO hardcoded element registry - all discovery is dynamic.
  */
@@ -505,99 +660,43 @@ export const VoiceUIController = () => {
   }, []);
 
   // ========================================================================
-  // SWITCH TAB - with cross-page navigation support
+  // SWITCH TAB - Universal dynamic discovery (NO hardcoded mappings)
   // ========================================================================
 
-  // Tab-to-page mapping for cross-page navigation
-  // When a tab isn't found on current page, navigate to the correct page first
-  const TAB_PAGE_MAP: Record<string, string> = {
-    // Sessions page tabs
-    'tab-courses': '/sessions',
-    'tab-manage': '/sessions',
-    'tab-create': '/sessions',
-    'tab-materials': '/sessions',
-    'tab-ai-features': '/sessions',
-    'ai-features': '/sessions',
-    'aifeatures': '/sessions',
-    // Courses page tabs
-    'tab-browse': '/courses',
-    'tab-advanced': '/courses',
-    'tab-ai-insights': '/courses',
-    'ai-insights': '/courses',
-    'aiinsights': '/courses',
-    // Console page tabs
-    'tab-polls': '/console',
-    'tab-copilot': '/console',
-    'polls': '/console',
-    'copilot': '/console',
-    // Forum page tabs
-    'tab-all-posts': '/forum',
-    'tab-my-posts': '/forum',
-  };
-
   const handleSwitchTab = useCallback((event: CustomEvent) => {
-    const { target, voiceId, tabName } = event.detail || {};
+    const { target, voiceId, tabName, targetPage } = event.detail || {};
     const searchName = tabName || target || voiceId || '';
-    log('switchTab', { searchName });
+    log('switchTab (universal)', { searchName, targetPage });
 
     if (!searchName) {
       warn('No tab name provided');
       return;
     }
 
-    const searchLower = searchName.toLowerCase().replace(/tab|panel|section/g, '').trim();
-    const searchNormalized = searchLower.replace(/-/g, '');
+    // Normalize the search term
+    const searchNormalized = searchName.toLowerCase()
+      .replace(/tab|panel|section/g, '')
+      .replace(/[-_\s]/g, '')
+      .trim();
 
-    // Dispatch voice-select-tab for pages that handle it
+    // Dispatch voice-select-tab for pages that handle it via their own handlers
     window.dispatchEvent(new CustomEvent('voice-select-tab', {
-      detail: { tab: searchNormalized }
+      detail: { tab: searchNormalized, tabName: searchName }
     }));
 
-    let element: HTMLElement | null = null;
+    // UNIVERSAL APPROACH: Use dynamic tab discovery with fuzzy matching
+    let element = findTabByIntent(searchName);
 
-    // 1. Try direct voice-id lookup
-    element = findElement(searchName) || findElement(`tab-${searchLower}`);
-
-    // 2. Try Radix TabsTrigger by value
+    // If not found, try additional variations
     if (!element) {
-      const radixTabs = document.querySelectorAll('[data-radix-collection-item]');
-      for (const tab of radixTabs) {
-        const tabValue = tab.getAttribute('value')?.toLowerCase() || '';
-        if (tabValue === searchLower || tabValue.replace(/-/g, '') === searchNormalized) {
-          element = tab as HTMLElement;
-          break;
-        }
-      }
-    }
-
-    // 3. Try role="tab" with aria-controls
-    if (!element) {
-      const roleTabs = document.querySelectorAll('[role="tab"]');
-      for (const tab of roleTabs) {
-        const ariaControls = tab.getAttribute('aria-controls')?.toLowerCase() || '';
-        const tabId = tab.getAttribute('id')?.toLowerCase() || '';
-        if (ariaControls.includes(searchLower) || tabId.includes(searchLower)) {
-          element = tab as HTMLElement;
-          break;
-        }
-      }
-    }
-
-    // 4. Try text content match
-    if (!element) {
-      const tabSelectors = ['[role="tab"]', '[data-radix-collection-item]', 'button[class*="tab"]'];
-      for (const selector of tabSelectors) {
-        const tabs = document.querySelectorAll(selector);
-        for (const tab of tabs) {
-          const tabText = tab.textContent?.toLowerCase().replace(/\(\d+\)/g, '').trim() || '';
-          const voiceIdAttr = tab.getAttribute('data-voice-id')?.toLowerCase() || '';
-          if (tabText === searchLower || tabText.startsWith(searchLower) ||
-              tabText.replace(/-/g, '') === searchNormalized ||
-              voiceIdAttr.includes(searchLower)) {
-            element = tab as HTMLElement;
-            break;
-          }
-        }
+      const variations = [
+        searchName,
+        searchName.replace(/[-_]/g, ' '),
+        searchName.replace(/\s+/g, '-'),
+        `tab-${searchNormalized}`,
+      ];
+      for (const variant of variations) {
+        element = findTabByIntent(variant);
         if (element) break;
       }
     }
@@ -612,46 +711,48 @@ export const VoiceUIController = () => {
       }
 
       element.click();
-      log('Switched to tab:', searchName);
+      log('Switched to tab via dynamic discovery:', searchName);
+
+      // Notify success
+      window.dispatchEvent(new CustomEvent('voice-tab-switched', {
+        detail: { tabName: searchName, success: true }
+      }));
     } else {
-      // Tab not found on current page - try cross-page navigation
-      log('Tab not found on current page, checking cross-page map...');
-
-      // Find the page for this tab
-      const normalizedTabName = searchName.toLowerCase().replace(/-/g, '');
-      let targetPage: string | null = null;
-
-      // Check various forms of the tab name
-      const tabVariants = [
-        searchName,
-        `tab-${searchLower}`,
-        searchLower,
-        searchNormalized,
-      ];
-
-      for (const variant of tabVariants) {
-        if (TAB_PAGE_MAP[variant]) {
-          targetPage = TAB_PAGE_MAP[variant];
-          break;
-        }
-      }
-
+      // Tab not found on current page
+      // Check if backend provided a target page for cross-page navigation
       if (targetPage && pathname !== targetPage) {
-        log(`Tab '${searchName}' is on ${targetPage}, navigating...`);
+        log(`Tab '${searchName}' requires navigation to ${targetPage}`);
 
-        // Navigate to the page first
+        // Navigate to the target page first
         router.push(targetPage);
 
-        // After navigation, dispatch the tab switch event again
-        // The page will handle the voice-select-tab event
+        // After navigation, re-dispatch the tab switch event
+        // The page's voice handler will pick it up
         setTimeout(() => {
-          log(`Re-dispatching voice-select-tab for ${searchNormalized}`);
+          log(`Re-dispatching voice-select-tab after navigation for: ${searchName}`);
           window.dispatchEvent(new CustomEvent('voice-select-tab', {
-            detail: { tab: searchNormalized }
+            detail: { tab: searchNormalized, tabName: searchName }
           }));
+          // Also try direct tab discovery after page loads
+          setTimeout(() => {
+            const tabAfterNav = findTabByIntent(searchName);
+            if (tabAfterNav) {
+              tabAfterNav.click();
+              log('Clicked tab after navigation:', searchName);
+            }
+          }, 300);
         }, 800); // Wait for navigation to complete
       } else {
-        warn('Tab not found:', searchName);
+        // Log available tabs to help debug
+        const availableTabs = discoverAllTabs();
+        warn(`Tab "${searchName}" not found. Available tabs:`, availableTabs.map(t => t.identities[0]));
+
+        window.dispatchEvent(new CustomEvent('voice-tab-not-found', {
+          detail: {
+            tabName: searchName,
+            availableTabs: availableTabs.map(t => t.identities[0])
+          }
+        }));
       }
     }
   }, [router, pathname]);

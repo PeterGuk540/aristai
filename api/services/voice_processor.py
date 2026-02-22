@@ -154,9 +154,9 @@ Active Tab: {active_tab}
 ## Available Tools
 {tools_json}
 
-## CRITICAL: Multi-Step Workflows
+## CRITICAL: Multi-Step Workflows (for common tasks)
 
-For common tasks that require navigation + tab switch, use execute_workflow:
+For these SPECIFIC common tasks, use execute_workflow:
 - "enroll students" / "add students" → execute_workflow(workflow_name="enroll_students")
 - "AI features" / "live summary" / "question bank" → execute_workflow(workflow_name="view_ai_features")
 - "create poll" / "launch poll" → execute_workflow(workflow_name="create_poll")
@@ -165,15 +165,43 @@ For common tasks that require navigation + tab switch, use execute_workflow:
 - "participation insights" → execute_workflow(workflow_name="view_participation")
 - "upload materials" → execute_workflow(workflow_name="upload_materials")
 
-## CRITICAL: Tab Location Awareness
+## CRITICAL: Universal Tab Switching with smart_switch_tab
 
-Before switching tabs, CHECK if the tab exists on the current page:
-- If tab-ai-features is requested but you're on /courses → use execute_workflow("view_ai_features")
-- If tab-advanced is requested but you're on /sessions → use execute_workflow("enroll_students")
-- If tab-polls is requested but you're on /courses → use execute_workflow("create_poll")
+For ANY OTHER tab not listed above, use smart_switch_tab. This tool:
+1. Automatically finds which page the tab is on
+2. Navigates to that page first if needed
+3. Switches to the tab
+
+USE smart_switch_tab FOR THESE TABS (not covered by execute_workflow):
+- /sessions page:
+  - tab-create → "create session", "new session"
+  - tab-insights → "session insights", "view insights"
+  - tab-manage → just viewing manage tab (NOT going live)
+- /console page (ALL tabs):
+  - tab-copilot → "copilot", "AI assistant"
+  - tab-cases → "cases", "case studies"
+  - tab-tools → "tools", "timer", "breakout groups"
+  - tab-requests → "requests", "access requests"
+  - tab-roster → "roster", "student roster"
+- /forum page:
+  - tab-discussion → "discussion", "posts"
+  - tab-cases → "cases"
+- /reports page:
+  - tab-summary → "summary", "report summary"
+  - tab-participation → "participation report"
+  - tab-scoring → "scoring", "grades"
+  - tab-analytics → "analytics"
+- /courses page:
+  - tab-join → "join course"
+
+ALWAYS provide current_route when using smart_switch_tab!
+Example: smart_switch_tab(tab_voice_id="tab-create", current_route="/sessions")
+
+## Tab Location Awareness
 
 NEVER use switch_tab for tabs that don't exist on the current page!
-Instead, use execute_workflow or smart_switch_tab.
+- If the tab is on a DIFFERENT page, use smart_switch_tab (it will navigate automatically)
+- If a predefined workflow exists, prefer execute_workflow for better UX
 
 ## Conversation Context
 State: {conversation_state}

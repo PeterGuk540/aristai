@@ -298,6 +298,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const lastMcpResponseContentRef = useRef<string>(''); // Track MCP_RESPONSE content to detect duplicates
   const mcpResponseDisplayedRef = useRef<boolean>(false); // Track if MCP_RESPONSE has been displayed already
   const previousPathnameRef = useRef<string | null>(null); // Phase 2.5: Track pathname for pending action detection
+  const processingStartTimeRef = useRef<number>(0); // Track when we started processing user input (to suppress agent responses until SPEAK: arrives)
 
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = Number.MAX_SAFE_INTEGER;
@@ -662,6 +663,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             lastMcpResponseContentRef.current = '';
             mcpResponseDisplayedRef.current = false;
 
+            // Mark that we're processing - suppress agent responses until SPEAK: arrives
+            processingStartTimeRef.current = Date.now();
+
             // Emit transcription event
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('voice-transcription', {
@@ -696,6 +700,18 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
             // Track the agent's response
             lastAgentResponseRef.current = message || '';
+
+            // CRITICAL FIX: Suppress agent's OWN responses while we're waiting for backend
+            // This prevents the dual-response issue where agent responds before our SPEAK: arrives
+            const isProcessing = processingStartTimeRef.current > 0;
+            const timeSinceUserSpoke = Date.now() - processingStartTimeRef.current;
+            const hasSentMcpResponse = lastMcpResponseTimeRef.current > processingStartTimeRef.current;
+
+            if (isProcessing && timeSinceUserSpoke < 5000 && !hasSentMcpResponse) {
+              // We're still waiting for backend to respond - suppress agent's own response
+              console.log('🔇 Suppressing agent response (waiting for backend SPEAK:)');
+              return;
+            }
 
             // CRITICAL: Filter out duplicate responses after MCP_RESPONSE
             // If we just sent MCP_RESPONSE (within last 10 seconds), check if this AI response
@@ -911,6 +927,8 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       // Track when and what we sent so we can filter duplicate AI responses
       lastMcpResponseTimeRef.current = Date.now();
       lastMcpResponseContentRef.current = text;
+      // Clear processing flag - SPEAK: is being sent, agent responses after this are the real ones
+      // (but keep processingStartTimeRef for comparison in filter logic)
       conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
 
       // Reset speaking flag after a delay (estimated speak time)

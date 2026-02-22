@@ -505,8 +505,35 @@ export const VoiceUIController = () => {
   }, []);
 
   // ========================================================================
-  // SWITCH TAB
+  // SWITCH TAB - with cross-page navigation support
   // ========================================================================
+
+  // Tab-to-page mapping for cross-page navigation
+  // When a tab isn't found on current page, navigate to the correct page first
+  const TAB_PAGE_MAP: Record<string, string> = {
+    // Sessions page tabs
+    'tab-courses': '/sessions',
+    'tab-manage': '/sessions',
+    'tab-create': '/sessions',
+    'tab-materials': '/sessions',
+    'tab-ai-features': '/sessions',
+    'ai-features': '/sessions',
+    'aifeatures': '/sessions',
+    // Courses page tabs
+    'tab-browse': '/courses',
+    'tab-advanced': '/courses',
+    'tab-ai-insights': '/courses',
+    'ai-insights': '/courses',
+    'aiinsights': '/courses',
+    // Console page tabs
+    'tab-polls': '/console',
+    'tab-copilot': '/console',
+    'polls': '/console',
+    'copilot': '/console',
+    // Forum page tabs
+    'tab-all-posts': '/forum',
+    'tab-my-posts': '/forum',
+  };
 
   const handleSwitchTab = useCallback((event: CustomEvent) => {
     const { target, voiceId, tabName } = event.detail || {};
@@ -587,9 +614,47 @@ export const VoiceUIController = () => {
       element.click();
       log('Switched to tab:', searchName);
     } else {
-      warn('Tab not found:', searchName);
+      // Tab not found on current page - try cross-page navigation
+      log('Tab not found on current page, checking cross-page map...');
+
+      // Find the page for this tab
+      const normalizedTabName = searchName.toLowerCase().replace(/-/g, '');
+      let targetPage: string | null = null;
+
+      // Check various forms of the tab name
+      const tabVariants = [
+        searchName,
+        `tab-${searchLower}`,
+        searchLower,
+        searchNormalized,
+      ];
+
+      for (const variant of tabVariants) {
+        if (TAB_PAGE_MAP[variant]) {
+          targetPage = TAB_PAGE_MAP[variant];
+          break;
+        }
+      }
+
+      if (targetPage && pathname !== targetPage) {
+        log(`Tab '${searchName}' is on ${targetPage}, navigating...`);
+
+        // Navigate to the page first
+        router.push(targetPage);
+
+        // After navigation, dispatch the tab switch event again
+        // The page will handle the voice-select-tab event
+        setTimeout(() => {
+          log(`Re-dispatching voice-select-tab for ${searchNormalized}`);
+          window.dispatchEvent(new CustomEvent('voice-select-tab', {
+            detail: { tab: searchNormalized }
+          }));
+        }, 800); // Wait for navigation to complete
+      } else {
+        warn('Tab not found:', searchName);
+      }
     }
-  }, []);
+  }, [router, pathname]);
 
   // ========================================================================
   // SELECT LIST ITEM

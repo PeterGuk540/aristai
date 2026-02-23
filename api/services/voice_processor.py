@@ -268,6 +268,41 @@ Only return tool_name: null if the request is truly incomprehensible:
 
 
 # ============================================================================
+# CONVERSATIONAL FALLBACK PROMPT
+# ============================================================================
+
+CONVERSATIONAL_FALLBACK_PROMPT = """You are AristAI, a helpful voice assistant for an educational discussion platform.
+
+The user's input doesn't match a specific action command. Respond conversationally and helpfully.
+
+## Context
+- Current page: {route}
+- Language: {language}
+- User said: "{user_input}"
+
+## What You Can Help With
+- Navigation: go to courses, sessions, forum, reports, integrations, console
+- Tab switching: switch to any tab on the current page
+- Workflows: enroll students, create courses/sessions, go live, create polls
+- AI features: live summary, question bank, peer review
+- General questions about the platform
+
+## Guidelines
+1. Be concise (1-2 sentences max)
+2. If asking about capabilities: briefly list what you can do
+3. If asking about language: confirm you'll use the requested language
+4. If greeting: respond warmly and ask how you can help
+5. If ambiguous or unclear: ask ONE clarifying question
+6. NEVER say "I don't understand" or "No entendí" - always try to be helpful
+7. If they seem to want an action but you're unsure which: suggest the most likely option
+
+## Response Format
+Respond with ONLY the text to speak (no JSON, no prefixes).
+Respond ONLY in {language}.
+"""
+
+
+# ============================================================================
 # VOICE PROCESSOR CLASS
 # ============================================================================
 
@@ -366,6 +401,48 @@ class VoiceProcessor:
             user_input=user_input,
         )
 
+    def _generate_conversational_fallback(
+        self,
+        user_input: str,
+        ui_state: Optional[UiState],
+        language: str,
+    ) -> str:
+        """
+        Generate a conversational response when no tool matches.
+
+        This provides helpful responses for open questions, greetings,
+        and ambiguous requests instead of returning "I didn't understand".
+        """
+        if not self._ensure_llm():
+            return "I'm here to help!" if language == "en" else "¡Estoy aquí para ayudar!"
+
+        route = ui_state.route if ui_state else "/dashboard"
+        lang_name = "English" if language == "en" else "Spanish"
+
+        prompt = CONVERSATIONAL_FALLBACK_PROMPT.format(
+            route=route,
+            language=lang_name,
+            user_input=user_input,
+        )
+
+        try:
+            response = invoke_llm_with_metrics(self._llm, prompt, self._model_name)
+            if response.success and response.content:
+                # Clean up the response
+                content = response.content.strip()
+                # Remove any JSON formatting if LLM returns JSON
+                if content.startswith('{') or content.startswith('['):
+                    logger.warning(f"Fallback LLM returned JSON, using default: {content[:100]}")
+                    return "How can I help you?" if language == "en" else "¿Cómo puedo ayudarte?"
+                # Remove quotes if wrapped
+                if content.startswith('"') and content.endswith('"'):
+                    content = content[1:-1]
+                return content
+        except Exception as e:
+            logger.error(f"Fallback LLM error: {e}")
+
+        return "How can I help you?" if language == "en" else "¿Cómo puedo ayudarte?"
+
     def process(
         self,
         user_input: str,
@@ -444,12 +521,19 @@ class VoiceProcessor:
             confidence = float(parsed.get("confidence", 0.0))
             spoken_response = parsed.get("spoken_response", "")
 
-            # If no tool matched
+            # If no tool matched - use conversational fallback instead of error
             if not tool_name:
+                # Generate a helpful conversational response
+                fallback_response = self._generate_conversational_fallback(
+                    user_input=user_input,
+                    ui_state=ui_state,
+                    language=language,
+                )
+                logger.info(f"No tool matched, using conversational fallback: {fallback_response[:50]}...")
                 return VoiceProcessorResponse(
-                    success=False,
-                    spoken_response=spoken_response or "I didn't understand that.",
-                    confidence=confidence,
+                    success=True,  # Conversational response is still a success
+                    spoken_response=fallback_response,
+                    confidence=0.5,  # Medium confidence for conversational responses
                 )
 
             # Execute the tool

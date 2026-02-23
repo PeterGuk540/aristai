@@ -314,6 +314,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const expectedSpeakContentRef = useRef<string>(''); // Content we sent via SPEAK:
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timeout to auto-reset from PROCESSING
 
+  // Volume control for muting agent during processing (prevents double responses)
+  const originalVolumeRef = useRef<number>(1);
+
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = Number.MAX_SAFE_INTEGER;
 
@@ -537,6 +540,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           'Authorization': `Bearer dummy-token`, // TODO: Replace with real auth
           'Content-Type': 'application/json',
         },
+        cache: 'no-store',  // CRITICAL: Prevent browser caching for language switch
       });
       
       console.log('🔗 Voice API response status:', response.status);
@@ -692,6 +696,19 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // Strip MCP prefix from user messages (in case it appears in transcript)
             const cleanMessage = stripMcpPrefix(message);
 
+            // CRITICAL: Filter out empty/placeholder transcripts (like "..." or just punctuation)
+            // These can be sent by ElevenLabs as interim placeholders and should NOT trigger backend calls
+            const isEmptyOrPlaceholder = !cleanMessage ||
+              cleanMessage === '...' ||
+              cleanMessage === '…' ||
+              /^[\s.…,!?;:]+$/.test(cleanMessage) ||  // Only whitespace/punctuation
+              cleanMessage.length < 2;  // Too short to be meaningful
+
+            if (isEmptyOrPlaceholder) {
+              console.log('🔇 Ignoring empty/placeholder transcript:', message);
+              return;  // Don't process, don't change state machine
+            }
+
             // Reset MCP response tracking - new user turn starts
             lastMcpResponseTimeRef.current = 0;
             lastMcpResponseContentRef.current = '';
@@ -705,6 +722,14 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             expectedSpeakContentRef.current = '';
             console.log('🔒 [STATE] → PROCESSING (blocking all agent responses)');
 
+            // CRITICAL: Mute agent audio to prevent it from speaking during processing
+            // This is the key fix for double responses - setVolume(0) stops audio output
+            if (conversationRef.current?.setVolume) {
+              originalVolumeRef.current = 1; // Store original volume
+              conversationRef.current.setVolume({ volume: 0 });
+              console.log('🔇 [MUTED] Agent audio muted during processing');
+            }
+
             // Set timeout to auto-reset from PROCESSING if backend takes too long (15s)
             if (processingTimeoutRef.current) {
               clearTimeout(processingTimeoutRef.current);
@@ -714,6 +739,11 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
                 console.log('⏰ [STATE] Processing timeout - resetting to IDLE');
                 voiceGateStateRef.current = 'idle';
                 processingStartTimeRef.current = 0;
+                // Restore volume on timeout
+                if (conversationRef.current?.setVolume) {
+                  conversationRef.current.setVolume({ volume: originalVolumeRef.current });
+                  console.log('🔊 [UNMUTED] Agent audio restored (timeout recovery)');
+                }
               }
             }, 15000);
 
@@ -1013,6 +1043,13 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       expectedSpeakContentRef.current = text.toLowerCase().trim();
       console.log('🔊 [STATE] → SPEAK_SENT:', text.substring(0, 50));
 
+      // CRITICAL: Unmute agent audio before sending SPEAK:
+      // This allows ElevenLabs to speak our backend response
+      if (conversationRef.current?.setVolume) {
+        conversationRef.current.setVolume({ volume: originalVolumeRef.current });
+        console.log('🔊 [UNMUTED] Agent audio restored for SPEAK:');
+      }
+
       // Send the SPEAK: command to ElevenLabs
       conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
 
@@ -1092,6 +1129,11 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           if (processingTimeoutRef.current) {
             clearTimeout(processingTimeoutRef.current);
             processingTimeoutRef.current = null;
+          }
+          // Restore volume when no backend response
+          if (conversationRef.current?.setVolume) {
+            conversationRef.current.setVolume({ volume: originalVolumeRef.current });
+            console.log('🔊 [UNMUTED] Agent audio restored (no backend response)');
           }
         }
 
@@ -1178,6 +1220,11 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       if (processingTimeoutRef.current) {
         clearTimeout(processingTimeoutRef.current);
         processingTimeoutRef.current = null;
+      }
+      // Restore volume on error recovery
+      if (conversationRef.current?.setVolume) {
+        conversationRef.current.setVolume({ volume: originalVolumeRef.current });
+        console.log('🔊 [UNMUTED] Agent audio restored (error recovery)');
       }
       console.log('⚠️ [STATE] → IDLE (error recovery)');
     } finally {

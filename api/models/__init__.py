@@ -8,6 +8,7 @@ from api.models.intervention import Intervention
 from api.models.report import Report
 from api.models.enrollment import Enrollment
 from api.models.voice_audit import VoiceAudit
+from api.models.ui_action_run import UIActionRun, ActionRunStatus, ActionRiskTier
 from api.models.course_material import CourseMaterial
 from api.models.engagement import (
     StudentEngagement,
@@ -43,6 +44,9 @@ __all__ = [
     "Report",
     "Enrollment",
     "VoiceAudit",
+    "UIActionRun",
+    "ActionRunStatus",
+    "ActionRiskTier",
     "CourseMaterial",
     # New engagement models
     "StudentEngagement",

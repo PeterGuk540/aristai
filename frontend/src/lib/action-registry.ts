@@ -458,6 +458,7 @@ export async function clickButton(
 
 /**
  * Fill an input field using natural language target
+ * Uses native setter to properly trigger React state updates
  */
 export async function fillInput(
   target: string,
@@ -467,9 +468,33 @@ export async function fillInput(
   const field = resolveTarget(target, 'input') as HTMLInputElement | HTMLTextAreaElement | null;
 
   if (field) {
-    field.value = content;
-    field.dispatchEvent(new Event('input', { bubbles: true }));
-    field.dispatchEvent(new Event('change', { bubbles: true }));
+    // Use native setter to trigger React's internal tracking
+    // This is necessary because React uses synthetic events and tracks value changes internally
+    const isTextArea = field.tagName === 'TEXTAREA';
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      isTextArea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
+      'value'
+    )?.set;
+
+    if (nativeSetter) {
+      nativeSetter.call(field, content);
+    } else {
+      // Fallback for older browsers
+      field.value = content;
+    }
+
+    // Dispatch input event with bubbles to trigger React's onChange
+    field.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+    field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+
+    // Also try to trigger React 17+ fiber events
+    const inputEvent = new InputEvent('input', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertText',
+      data: content,
+    });
+    field.dispatchEvent(inputEvent);
 
     return {
       ok: true,

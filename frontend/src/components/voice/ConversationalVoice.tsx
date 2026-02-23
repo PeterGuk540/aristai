@@ -625,6 +625,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           // Add assistant message to UI
           addAssistantMessage(spokenResponse);
 
+          // Reset processing state - we're done
+          processingStartTimeRef.current = 0;
+
           // Return with SPEAK: prefix for agent to speak
           console.log('🔧 [mcp_converse] Returning:', `SPEAK: ${spokenResponse}`);
           return `SPEAK: ${spokenResponse}`;
@@ -635,6 +638,10 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             ? 'Lo siento, hubo un error. Por favor intenta de nuevo.'
             : 'Sorry, there was an error. Please try again.';
           addAssistantMessage(errorMsg);
+
+          // Reset processing state on error
+          processingStartTimeRef.current = 0;
+
           return `SPEAK: ${errorMsg}`;
         }
       };
@@ -796,7 +803,29 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             const aiContent = message?.toLowerCase() || '';
 
             // ================================================================
-            // MULTIPLE RESPONSE FIX: Response Gating Architecture
+            // CLIENT TOOL PATTERN: Skip gating - no dual response problem
+            // ================================================================
+            // With Client Tool pattern, the agent ONLY speaks what the tool
+            // returns. There's no dual response issue, so we don't need to
+            // gate responses. Just display whatever the agent says.
+            // ================================================================
+            if (USE_CLIENT_TOOL) {
+              // With Client Tool, agent only speaks tool's return value
+              // No gating needed - just display the response
+              if (message && message.length > 0) {
+                const cleanMessage = stripMcpPrefix(message);
+                if (cleanMessage.length > 0) {
+                  console.log('✅ [CLIENT_TOOL] Displaying agent response:', cleanMessage.substring(0, 40));
+                  // Note: handleMcpConverse already called addAssistantMessage,
+                  // so we skip adding here to avoid duplicates
+                  // The audio will play and that's what matters
+                }
+              }
+              return;
+            }
+
+            // ================================================================
+            // LEGACY GATING (only for non-Client Tool mode)
             // ================================================================
             // The core problem: ElevenLabs agent has its own LLM that responds
             // BEFORE our backend can process and send SPEAK:. This causes

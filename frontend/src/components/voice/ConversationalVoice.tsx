@@ -300,6 +300,20 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
   const previousPathnameRef = useRef<string | null>(null); // Phase 2.5: Track pathname for pending action detection
   const processingStartTimeRef = useRef<number>(0); // Track when we started processing user input (to suppress agent responses until SPEAK: arrives)
 
+  // ============================================================================
+  // STATE MACHINE FOR RESPONSE GATING (Option A - Strict State Machine)
+  // ============================================================================
+  // States: IDLE → PROCESSING → SPEAK_SENT → IDLE
+  //
+  // IDLE:        Allow AI responses (greetings, initial messages)
+  // PROCESSING:  Block ALL AI responses (backend is processing user input)
+  // SPEAK_SENT:  Only allow AI responses that match SPEAK: content we sent
+  // ============================================================================
+  type VoiceGateState = 'idle' | 'processing' | 'speak_sent';
+  const voiceGateStateRef = useRef<VoiceGateState>('idle');
+  const expectedSpeakContentRef = useRef<string>(''); // Content we sent via SPEAK:
+  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timeout to auto-reset from PROCESSING
+
   // Session refresh threshold - restart to prevent context buildup slowdown
   const MAX_MESSAGES_BEFORE_REFRESH = Number.MAX_SAFE_INTEGER;
 
@@ -373,6 +387,17 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       clearTimeout((window as any).__pendingTranscriptTimeout);
       (window as any).__pendingTranscriptTimeout = null;
     }
+
+    // Clear processing timeout
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+      processingTimeoutRef.current = null;
+    }
+
+    // Reset state machine
+    voiceGateStateRef.current = 'idle';
+    expectedSpeakContentRef.current = '';
+    processingStartTimeRef.current = 0;
 
     // Reset speaking state
     isSpeakingRef.current = false;
@@ -600,6 +625,15 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           conversationRef.current = null;
           onActiveChange?.(false);
 
+          // Reset state machine on disconnect
+          voiceGateStateRef.current = 'idle';
+          expectedSpeakContentRef.current = '';
+          processingStartTimeRef.current = 0;
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
+          }
+
           // REMOVED auto-reconnect - user must manually click Start button
           // This prevents the flipping back and forth issue
         },
@@ -666,6 +700,23 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // Mark that we're processing - suppress agent responses until SPEAK: arrives
             processingStartTimeRef.current = Date.now();
 
+            // STATE MACHINE: Enter PROCESSING state - block ALL agent responses
+            voiceGateStateRef.current = 'processing';
+            expectedSpeakContentRef.current = '';
+            console.log('🔒 [STATE] → PROCESSING (blocking all agent responses)');
+
+            // Set timeout to auto-reset from PROCESSING if backend takes too long (15s)
+            if (processingTimeoutRef.current) {
+              clearTimeout(processingTimeoutRef.current);
+            }
+            processingTimeoutRef.current = setTimeout(() => {
+              if (voiceGateStateRef.current === 'processing') {
+                console.log('⏰ [STATE] Processing timeout - resetting to IDLE');
+                voiceGateStateRef.current = 'idle';
+                processingStartTimeRef.current = 0;
+              }
+            }, 15000);
+
             // Emit transcription event
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('voice-transcription', {
@@ -700,126 +751,103 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
             // Track the agent's response
             lastAgentResponseRef.current = message || '';
-            const aiContent = message?.toLowerCase() || '';
+            const aiContent = message?.toLowerCase().trim() || '';
+            const currentGateState = voiceGateStateRef.current;
 
             // ================================================================
-            // MULTIPLE RESPONSE FIX: Response Gating Architecture
+            // STATE MACHINE GATING (Option A - Strict State Machine)
             // ================================================================
-            // The core problem: ElevenLabs agent has its own LLM that responds
-            // BEFORE our backend can process and send SPEAK:. This causes
-            // dual responses (agent's response + our SPEAK: response).
+            // States: IDLE → PROCESSING → SPEAK_SENT → IDLE
             //
-            // Solution: GATE all AI responses. Only allow responses that are
-            // CLEARLY our SPEAK: content (sent via sendUserMessage).
+            // IDLE:        Allow AI responses (greetings, initial messages)
+            // PROCESSING:  Block ALL AI responses (backend is processing)
+            // SPEAK_SENT:  Only allow AI responses that match SPEAK: content
             // ================================================================
 
-            // Check timing context
-            const now = Date.now();
-            const timeSinceUserSpoke = now - processingStartTimeRef.current;
-            const timeSinceMcpSent = now - lastMcpResponseTimeRef.current;
-            const isWaitingForBackend = processingStartTimeRef.current > 0 &&
-                                        lastMcpResponseTimeRef.current < processingStartTimeRef.current;
-            const mcpWasSent = lastMcpResponseTimeRef.current > 0;
+            console.log(`🔒 [STATE=${currentGateState}] Checking AI response:`, message?.substring(0, 40));
 
-            // GATE 1: Block ALL responses while waiting for backend (before SPEAK: is sent)
-            // This is the primary defense against ElevenLabs' own LLM responding
-            if (isWaitingForBackend && timeSinceUserSpoke < 15000) {
-              console.log('🔇 GATED: Blocking response while waiting for backend SPEAK:', {
-                timeSinceUserSpoke: `${timeSinceUserSpoke}ms`,
-                message: message?.substring(0, 40)
-              });
+            // STATE: PROCESSING - Block ALL agent responses
+            // Backend is processing user input, agent should not speak
+            if (currentGateState === 'processing') {
+              console.log('🔇 [BLOCKED] State=PROCESSING - blocking agent response');
               return;
             }
 
-            // GATE 2: After SPEAK: is sent, only allow the FIRST matching echo
-            if (mcpWasSent && timeSinceMcpSent < 15000 && lastMcpResponseContentRef.current) {
-              const mcpContent = lastMcpResponseContentRef.current.toLowerCase();
+            // STATE: SPEAK_SENT - Only allow responses matching our SPEAK: content
+            if (currentGateState === 'speak_sent') {
+              const expected = expectedSpeakContentRef.current;
 
-              // Check if this AI response matches our SPEAK: content
-              const isOurSpeakContent = (() => {
-                // Very strict matching - first 50 chars should match
-                const mcpStart = mcpContent.substring(0, 50).replace(/[^\w\s]/g, '');
-                const aiStart = aiContent.substring(0, 50).replace(/[^\w\s]/g, '');
-                if (mcpStart === aiStart) return true;
+              // Check if AI response matches what we sent via SPEAK:
+              const isMatch = (() => {
+                if (!expected || !aiContent) return false;
 
-                // Word overlap check (at least 50% of first 10 words match)
-                const mcpWords = mcpContent.split(/\s+/).slice(0, 10).filter(w => w.length > 2);
-                const aiWords = aiContent.split(/\s+/).slice(0, 10).filter(w => w.length > 2);
-                if (mcpWords.length === 0) return false;
+                // Exact match (normalized)
+                if (aiContent === expected) return true;
 
-                let matchCount = 0;
-                for (const word of mcpWords) {
-                  if (aiWords.includes(word)) matchCount++;
+                // Prefix match (first 30 chars)
+                const expectedStart = expected.substring(0, 30).replace(/[^\w\s]/g, '');
+                const aiStart = aiContent.substring(0, 30).replace(/[^\w\s]/g, '');
+                if (expectedStart && aiStart && expectedStart === aiStart) return true;
+
+                // Word overlap (50% of first 8 words)
+                const expectedWords = expected.split(/\s+/).slice(0, 8).filter(w => w.length > 2);
+                const aiWords = aiContent.split(/\s+/).slice(0, 8).filter(w => w.length > 2);
+                if (expectedWords.length > 0) {
+                  let matchCount = 0;
+                  for (const word of expectedWords) {
+                    if (aiWords.includes(word)) matchCount++;
+                  }
+                  if (matchCount >= Math.ceil(expectedWords.length * 0.5)) return true;
                 }
-                return matchCount >= Math.ceil(mcpWords.length * 0.5);
+
+                return false;
               })();
 
-              if (isOurSpeakContent) {
-                // This is the echo of our SPEAK: content
+              if (isMatch) {
+                // Check for duplicate (already displayed)
                 if (mcpResponseDisplayedRef.current) {
-                  // Already displayed - block duplicate
-                  console.log('🔇 GATED: Duplicate SPEAK echo blocked:', message?.substring(0, 40));
+                  console.log('🔇 [BLOCKED] State=SPEAK_SENT - duplicate echo');
                   return;
                 }
-                // First time - allow and mark as displayed
+
+                // First match - allow and transition to IDLE
                 mcpResponseDisplayedRef.current = true;
-                console.log('✅ ALLOWED: SPEAK echo (first time):', message?.substring(0, 40));
-                // Fall through to display
+                voiceGateStateRef.current = 'idle';
+                processingStartTimeRef.current = 0;
+                console.log('✅ [ALLOWED] State=SPEAK_SENT - SPEAK echo matched, → IDLE');
+
+                // Display the response (strip prefix)
+                const cleanMessage = stripMcpPrefix(message);
+                if (cleanMessage && cleanMessage.length > 0) {
+                  addAssistantMessage(cleanMessage);
+                }
+                return;
               } else {
-                // Not our content - this is ElevenLabs' own response, block it
-                console.log('🔇 GATED: Non-SPEAK response blocked after SPEAK sent:', {
-                  timeSinceMcpSent: `${timeSinceMcpSent}ms`,
-                  message: message?.substring(0, 40)
-                });
+                // Not our content - block it
+                console.log('🔇 [BLOCKED] State=SPEAK_SENT - content mismatch');
                 return;
               }
             }
 
-            // GATE 3: Filter known ElevenLabs auto-responses (acknowledgments, denials, confusion)
-            // These are responses generated by ElevenLabs' agent before backend processes
+            // STATE: IDLE - Allow responses (greetings, fresh conversation)
+            // But still filter obvious auto-responses as a safety net
             const autoResponsePatterns = [
-              // Acknowledgments (agent trying to be helpful while "processing")
-              "i'm retrieving", "retrieving your", "let me get", "let me check",
-              "checking", "one moment", "just a moment", "getting that",
-              "fetching", "loading", "looking up", "i'll get", "i will get",
-              "processing", "working on", "handling", "please wait",
-              "un momento", "buscando", "obteniendo", "espera", "espere",
-              // Denials (agent doesn't know what to do)
-              "couldn't process", "cannot process", "unable to assist",
-              "not available", "don't have access", "not able to do",
-              "outside my capabilities", "cannot help", "can't help",
-              "no puedo ayudar", "no tengo acceso",
-              // Confusion (agent doesn't understand)
-              "not sure what you", "please clarify", "didn't understand",
-              "can you repeat", "what would you like", "how can i help you today",
-              "what can i do for you", "no entendí", "puede repetir",
-              // Generic filler
-              "certainly", "of course", "sure thing", "absolutely",
+              "i'm retrieving", "let me check", "one moment", "please wait",
+              "couldn't process", "unable to assist", "don't have access",
+              "not sure what you", "please clarify", "can you repeat",
             ];
 
             const isAutoResponse = autoResponsePatterns.some(p => aiContent.includes(p));
             if (isAutoResponse) {
-              console.log('🔇 GATED: Auto-response pattern detected:', message?.substring(0, 40));
+              console.log('🔇 [BLOCKED] State=IDLE - auto-response pattern detected');
               return;
             }
 
-            // GATE 4: If we reach here without having sent SPEAK:, block everything
-            // This catches edge cases where agent responds before we even start processing
-            if (!mcpWasSent || timeSinceMcpSent > 20000) {
-              // No recent SPEAK: sent - be very conservative
-              // Only allow if it's been a long time since any activity (fresh conversation)
-              const timeSinceAnyActivity = Math.min(timeSinceUserSpoke || Infinity, timeSinceMcpSent || Infinity);
-              if (timeSinceAnyActivity < 20000) {
-                console.log('🔇 GATED: No recent SPEAK - blocking unexpected response:', message?.substring(0, 40));
-                return;
-              }
-            }
-
-            // PASSED ALL GATES: Display the response
-            if (message && message.length > 5) {
+            // ALLOWED: Display the response
+            if (message && message.length > 0) {
               const cleanMessage = stripMcpPrefix(message);
-              if (cleanMessage.length > 0) {
-                console.log('✅ ALLOWED: Response passed all gates:', cleanMessage.substring(0, 40));
+              if (cleanMessage && cleanMessage.length > 0) {
+                console.log('✅ [ALLOWED] State=IDLE - response allowed:', cleanMessage.substring(0, 40));
                 addAssistantMessage(cleanMessage);
               }
             }
@@ -974,6 +1002,16 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       lastMcpResponseContentRef.current = text;
       // Reset MCP displayed flag for new response
       mcpResponseDisplayedRef.current = false;
+
+      // STATE MACHINE: Transition to SPEAK_SENT - only allow matching responses
+      // Clear the processing timeout since we're moving to next state
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+        processingTimeoutRef.current = null;
+      }
+      voiceGateStateRef.current = 'speak_sent';
+      expectedSpeakContentRef.current = text.toLowerCase().trim();
+      console.log('🔊 [STATE] → SPEAK_SENT:', text.substring(0, 50));
 
       // Send the SPEAK: command to ElevenLabs
       conversationRef.current.sendUserMessage(`${MCP_RESPONSE_PREFIX}${text}`);
@@ -1179,19 +1217,23 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
 
       // Reset processing state on error so agent responses aren't suppressed forever
       processingStartTimeRef.current = 0;
+
+      // STATE MACHINE: Reset to IDLE on error
+      voiceGateStateRef.current = 'idle';
+      expectedSpeakContentRef.current = '';
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+        processingTimeoutRef.current = null;
+      }
+      console.log('⚠️ [STATE] → IDLE (error recovery)');
     } finally {
       isProcessingTranscriptRef.current = false;
       pendingTranscriptRef.current = null;
 
-      // Reset processing state after a delay to allow MCP echo to be processed
-      // This ensures we don't suppress legitimate agent responses for too long
-      setTimeout(() => {
-        // Only reset if no new user input has started
-        const timeSinceProcessing = Date.now() - processingStartTimeRef.current;
-        if (timeSinceProcessing > 5000) {
-          processingStartTimeRef.current = 0;
-        }
-      }, 6000);
+      // NOTE: State machine handles reset automatically:
+      // - SPEAK_SENT → IDLE when echo is matched
+      // - PROCESSING → IDLE via timeout (15s)
+      // - Error → IDLE in catch block
     }
   };
 

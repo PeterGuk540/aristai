@@ -714,6 +714,16 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             lastMcpResponseContentRef.current = '';
             mcpResponseDisplayedRef.current = false;
 
+            // CRITICAL: Mute agent IMMEDIATELY to prevent it from responding
+            // We'll unmute later if intent is conversational
+            if (conversationRef.current?.setVolume) {
+              originalVolumeRef.current = 1;
+              conversationRef.current.setVolume({ volume: 0 });
+              console.log('🔇 [MUTED] Agent audio muted immediately on user speech');
+            }
+            voiceGateStateRef.current = 'processing';
+            processingStartTimeRef.current = Date.now();
+
             // Emit transcription event
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('voice-transcription', {
@@ -751,23 +761,12 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
                 console.log(`🎯 Intent classified: ${intent}`);
 
                 if (intent === 'action') {
-                  // ACTION: Mute agent, route to backend for UI control
-                  console.log('🔧 [ACTION] Routing to backend for UI control');
+                  // ACTION: Keep muted (already muted above), route to backend for UI control
+                  console.log('🔧 [ACTION] Routing to backend for UI control (staying muted)');
 
-                  // Mark that we're processing - suppress agent responses until SPEAK: arrives
-                  processingStartTimeRef.current = Date.now();
-
-                  // STATE MACHINE: Enter PROCESSING state - block ALL agent responses
-                  voiceGateStateRef.current = 'processing';
+                  // Agent is already muted from above, just update state
                   expectedSpeakContentRef.current = '';
-                  console.log('🔒 [STATE] → PROCESSING (blocking all agent responses)');
-
-                  // CRITICAL: Mute agent audio to prevent it from speaking during processing
-                  if (conversationRef.current?.setVolume) {
-                    originalVolumeRef.current = 1;
-                    conversationRef.current.setVolume({ volume: 0 });
-                    console.log('🔇 [MUTED] Agent audio muted for action processing');
-                  }
+                  console.log('🔒 [STATE] Staying in PROCESSING for action');
 
                   // Set timeout to auto-reset from PROCESSING if backend takes too long (15s)
                   if (processingTimeoutRef.current) {
@@ -789,10 +788,16 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
                   handleTranscript(cleanMessage);
 
                 } else {
-                  // CONVERSATIONAL: Let ElevenLabs respond directly (faster, better quality)
-                  console.log('💬 [CONVERSATIONAL] Letting ElevenLabs respond naturally');
+                  // CONVERSATIONAL: UNMUTE agent and let ElevenLabs respond directly
+                  console.log('💬 [CONVERSATIONAL] Unmuting agent - letting ElevenLabs respond');
 
-                  // Keep state as IDLE - don't mute, don't block agent responses
+                  // CRITICAL: Unmute the agent so it can respond
+                  if (conversationRef.current?.setVolume) {
+                    conversationRef.current.setVolume({ volume: originalVolumeRef.current });
+                    console.log('🔊 [UNMUTED] Agent audio restored for conversational response');
+                  }
+
+                  // Reset state to IDLE - allow agent responses
                   voiceGateStateRef.current = 'idle';
                   processingStartTimeRef.current = 0;
 
@@ -807,15 +812,9 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
                 console.error('Intent classification failed, defaulting to action:', error);
 
                 // Fallback to action (safer - ensures UI actions work)
-                processingStartTimeRef.current = Date.now();
-                voiceGateStateRef.current = 'processing';
+                // Agent is already muted from above, just set timeout and process
                 expectedSpeakContentRef.current = '';
-
-                if (conversationRef.current?.setVolume) {
-                  originalVolumeRef.current = 1;
-                  conversationRef.current.setVolume({ volume: 0 });
-                  console.log('🔇 [MUTED] Agent audio muted (fallback to action)');
-                }
+                console.log('🔧 [FALLBACK] Classification failed, treating as action (staying muted)');
 
                 // Set timeout
                 if (processingTimeoutRef.current) {

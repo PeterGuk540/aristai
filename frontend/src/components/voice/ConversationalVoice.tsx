@@ -45,35 +45,40 @@ interface ConversationalVoiceProps {
   className?: string;
 }
 
-// MCP_RESPONSE_PREFIX removed - not needed with Option A architecture
-// ElevenLabs agent handles all responses, backend only executes UI actions
-
-// Prefix used to send MCP responses through ElevenLabs
-// IMPORTANT: Use "SPEAK:" instead of "MCP_RESPONSE:" - simpler for LLM to understand
-// The ElevenLabs prompt tells it to repeat whatever follows "SPEAK:" verbatim
-const MCP_RESPONSE_PREFIX = 'SPEAK: ';
+// ============================================================================
+// CLIENT TOOL ARCHITECTURE (Fixes Dual Response Issue)
+// ============================================================================
+//
+// PROBLEM: Old architecture used sendUserMessage("SPEAK: ...") which created
+// an extra "user turn" causing the agent to respond twice.
+//
+// SOLUTION: Use ElevenLabs Client Tool pattern:
+// 1. User speaks → Agent transcribes
+// 2. Agent calls mcp_converse tool with { transcript }
+// 3. Frontend tool handler receives the call
+// 4. Handler calls backend API → gets response + UI actions
+// 5. Handler executes UI actions locally
+// 6. Handler returns "SPEAK: <response>" to agent
+// 7. Agent speaks ONLY that response (no dual response!)
+//
+// IMPORTANT: Do NOT use sendUserMessage("SPEAK: ...") anymore!
+// ============================================================================
 
 // Feature flag: Use V2 LLM-based processing (no regex, pure LLM)
-// Set to true to use the new architecture
 const USE_VOICE_V2 = true;
 
-// ARCHITECTURE NOTE:
-// Since ElevenLabs webhooks require HTTPS and we use HTTP backend,
-// we handle ALL processing in the frontend:
-//
-// Flow:
-// 1. User speaks → ElevenLabs transcribes → onMessage(source='user')
-// 2. Frontend IMMEDIATELY calls HTTP backend with transcript
-// 3. Backend returns voice_response + ui_actions
-// 4. UI actions execute locally
-// 5. Frontend sends MCP_RESPONSE:voice_response to ElevenLabs
-// 6. ElevenLabs speaks the response (prompt tells it to ONLY speak MCP_RESPONSE content)
-//
-// NOTE: MCP_RESPONSE prefix is stripped from both transcripts and voice output.
-const SEND_MCP_RESPONSE = true;  // Enable MCP response injection
+// Feature flag: Use Client Tool pattern (fixes dual response)
+// When true, uses mcp_converse tool instead of sendUserMessage
+const USE_CLIENT_TOOL = true;
 
-// Backend API base for voice processing calls
-const BACKEND_API_BASE = '/api/proxy';
+// Legacy constants for V1/V2 non-client-tool mode
+// SEND_MCP_RESPONSE: When true, sends backend response to ElevenLabs via sendUserMessage
+// This is disabled when USE_CLIENT_TOOL is true since mcp_converse handles responses
+const SEND_MCP_RESPONSE = !USE_CLIENT_TOOL;
+
+// Prefix for spoken responses sent to ElevenLabs agent
+// The agent is configured to speak any content after "SPEAK:" prefix
+const MCP_RESPONSE_PREFIX = 'SPEAK: ';
 
 // Helper to strip MCP_RESPONSE or SPEAK prefix from any string
 const stripMcpPrefix = (text: string): string => {
@@ -561,15 +566,91 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
       const { signed_url } = await response.json();
       console.log('✅ Got signed URL:', signed_url.substring(0, 50) + '...');
 
+      // ========================================================================
+      // CLIENT TOOL HANDLER: mcp_converse
+      // ========================================================================
+      // This is called by the ElevenLabs agent when user speaks.
+      // The agent passes { transcript } and waits for our response.
+      // We call the backend, execute UI actions, and return SPEAK: <response>
+      // ========================================================================
+      const handleMcpConverse = async (params: { transcript: string }): Promise<string> => {
+        const { transcript } = params;
+        console.log('🔧 [mcp_converse] Tool called with transcript:', transcript);
+
+        if (!transcript || transcript.trim().length === 0) {
+          console.log('🔧 [mcp_converse] Empty transcript, returning acknowledgment');
+          return locale === 'es' ? 'SPEAK: No escuché nada.' : 'SPEAK: I didn\'t hear anything.';
+        }
+
+        try {
+          // Update UI with user message
+          const cleanTranscript = transcript.trim();
+          addUserMessage(cleanTranscript);
+
+          // Get current page context
+          const currentPage = typeof window !== 'undefined' ? window.location.pathname : '/';
+          const uiState = collectUiStateV2();
+          const pageContext = collectPageContext();
+
+          console.log('🔧 [mcp_converse] Calling backend API...');
+
+          // Call backend V2 API
+          const response = await api.voiceProcessV2({
+            user_id: currentUser?.id || 0,
+            transcript: cleanTranscript,
+            language: locale,
+            ui_state: uiState,
+            conversation_state: 'idle',
+            active_course_name: pageContext.active_course_name,
+            active_session_name: pageContext.active_session_name,
+          });
+
+          console.log('🔧 [mcp_converse] Backend response:', JSON.stringify(response, null, 2));
+
+          // Execute UI action if present
+          if (response.ui_action) {
+            console.log('🔧 [mcp_converse] Executing UI action:', response.ui_action);
+            try {
+              executeUiAction(response.ui_action as UiAction, router);
+              console.log('✅ [mcp_converse] UI action executed successfully');
+            } catch (actionError) {
+              console.error('❌ [mcp_converse] UI action failed:', actionError);
+            }
+          }
+
+          // Get the spoken response
+          const spokenResponse = response.spoken_response ||
+            (locale === 'es' ? 'Hecho.' : 'Done.');
+
+          // Add assistant message to UI
+          addAssistantMessage(spokenResponse);
+
+          // Return with SPEAK: prefix for agent to speak
+          console.log('🔧 [mcp_converse] Returning:', `SPEAK: ${spokenResponse}`);
+          return `SPEAK: ${spokenResponse}`;
+
+        } catch (error: any) {
+          console.error('❌ [mcp_converse] Error:', error);
+          const errorMsg = locale === 'es'
+            ? 'Lo siento, hubo un error. Por favor intenta de nuevo.'
+            : 'Sorry, there was an error. Please try again.';
+          addAssistantMessage(errorMsg);
+          return `SPEAK: ${errorMsg}`;
+        }
+      };
+
       // Start the conversation session using the official SDK
-      // NOTE: We don't use ElevenLabs tools - frontend handles all processing
-      // and injects responses via MCP_RESPONSE prefix
-      console.log('🚀 Starting conversation session...');
+      // Using Client Tool pattern - agent calls mcp_converse, we return SPEAK: response
+      console.log('🚀 Starting conversation session with Client Tool...');
       console.log('🔗 Using signed URL:', signed_url.substring(0, 80) + '...');
 
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
         connectionType: "websocket",
+        // CLIENT TOOLS: Handle mcp_converse calls from agent
+        clientTools: USE_CLIENT_TOOL ? {
+          mcp_converse: handleMcpConverse,
+        } : undefined,
         onConnect: ({ conversationId }: { conversationId: string }) => {
           console.log('✅ Connected to ElevenLabs:', conversationId);
           setState('connected');
@@ -680,20 +761,32 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // This prevents processing interim transcripts (user still speaking)
             pendingTranscriptRef.current = cleanMessage;
 
-            // Debounce: Wait 500ms after last transcript update before processing
-            // This catches the final transcript after interim updates stop
-            if ((window as any).__pendingTranscriptTimeout) {
-              clearTimeout((window as any).__pendingTranscriptTimeout);
-            }
-            (window as any).__pendingTranscriptTimeout = setTimeout(() => {
-              // Double-check: only process if this is still the pending transcript
-              // AND we're not already processing another request
-              if (pendingTranscriptRef.current === cleanMessage && !isProcessingTranscriptRef.current) {
-                console.log('🎯 Processing final transcript:', cleanMessage.substring(0, 50));
-                handleTranscript(cleanMessage);
+            // ================================================================
+            // CLIENT TOOL PATTERN: Skip handleTranscript() when enabled
+            // ================================================================
+            // When USE_CLIENT_TOOL is true, the ElevenLabs agent calls
+            // mcp_converse tool which handles the backend API call.
+            // We do NOT call handleTranscript() here to avoid duplicate
+            // backend calls and the dual response problem.
+            // ================================================================
+            if (!USE_CLIENT_TOOL) {
+              // Legacy V1/V2 path: Debounce transcript and call backend
+              if ((window as any).__pendingTranscriptTimeout) {
+                clearTimeout((window as any).__pendingTranscriptTimeout);
               }
-              (window as any).__pendingTranscriptTimeout = null;
-            }, 500);
+              (window as any).__pendingTranscriptTimeout = setTimeout(() => {
+                // Double-check: only process if this is still the pending transcript
+                // AND we're not already processing another request
+                if (pendingTranscriptRef.current === cleanMessage && !isProcessingTranscriptRef.current) {
+                  console.log('🎯 Processing final transcript:', cleanMessage.substring(0, 50));
+                  handleTranscript(cleanMessage);
+                }
+                (window as any).__pendingTranscriptTimeout = null;
+              }, 500);
+            } else {
+              // CLIENT TOOL path: mcp_converse handles everything
+              console.log('ℹ️ [CLIENT_TOOL] Transcript displayed - mcp_converse will handle backend call');
+            }
           } else if (source === 'ai') {
             // ElevenLabs agent responses - display what the agent speaks
             console.log('🤖 ElevenLabs agent response:', message);

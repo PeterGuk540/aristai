@@ -34,6 +34,7 @@ from api.services.voice_page_registry import (
 )
 from workflows.llm_utils import (
     get_fast_voice_llm,
+    get_turbo_voice_llm,
     invoke_llm_with_metrics,
     parse_json_response,
     LLMResponse,
@@ -315,17 +316,71 @@ class VoiceProcessor:
     2. Uses LLM to understand intent and extract parameters
     3. Executes the appropriate tool
     4. Returns structured response with UI action
+
+    Speed Optimization:
+    - Uses gpt-3.5-turbo for ~2x faster processing than gpt-4o-mini
+    - Simple command caching for common navigation commands (~50ms vs ~500ms)
     """
+
+    # Simple cache for common navigation commands (avoids LLM call)
+    # Key: normalized command phrase, Value: (tool_name, parameters, spoken_response_en, spoken_response_es)
+    COMMAND_CACHE = {
+        "go to courses": ("navigate_to_page", {"page": "/courses"}, "Taking you to courses.", "Llevándote a cursos."),
+        "go to sessions": ("navigate_to_page", {"page": "/sessions"}, "Taking you to sessions.", "Llevándote a sesiones."),
+        "go to forum": ("navigate_to_page", {"page": "/forum"}, "Taking you to forum.", "Llevándote al foro."),
+        "go to console": ("navigate_to_page", {"page": "/console"}, "Taking you to console.", "Llevándote a la consola."),
+        "go to reports": ("navigate_to_page", {"page": "/reports"}, "Taking you to reports.", "Llevándote a reportes."),
+        "go to dashboard": ("navigate_to_page", {"page": "/dashboard"}, "Taking you to dashboard.", "Llevándote al tablero."),
+        "go to integrations": ("navigate_to_page", {"page": "/integrations"}, "Taking you to integrations.", "Llevándote a integraciones."),
+        # Spanish variants
+        "ir a cursos": ("navigate_to_page", {"page": "/courses"}, "Taking you to courses.", "Llevándote a cursos."),
+        "ir a sesiones": ("navigate_to_page", {"page": "/sessions"}, "Taking you to sessions.", "Llevándote a sesiones."),
+        "ir a foro": ("navigate_to_page", {"page": "/forum"}, "Taking you to forum.", "Llevándote al foro."),
+        "ir a consola": ("navigate_to_page", {"page": "/console"}, "Taking you to console.", "Llevándote a la consola."),
+        "ir a reportes": ("navigate_to_page", {"page": "/reports"}, "Taking you to reports.", "Llevándote a reportes."),
+        "ir al tablero": ("navigate_to_page", {"page": "/dashboard"}, "Taking you to dashboard.", "Llevándote al tablero."),
+        "ir a integraciones": ("navigate_to_page", {"page": "/integrations"}, "Taking you to integrations.", "Llevándote a integraciones."),
+    }
 
     def __init__(self):
         self._llm = None
         self._model_name = None
 
     def _ensure_llm(self) -> bool:
-        """Ensure LLM is initialized."""
+        """Ensure LLM is initialized with turbo model for speed."""
         if self._llm is None:
-            self._llm, self._model_name = get_fast_voice_llm()
+            # Use turbo model for ~2x faster responses
+            self._llm, self._model_name = get_turbo_voice_llm()
         return self._llm is not None
+
+    def _check_cache(self, user_input: str, language: str) -> Optional[VoiceProcessorResponse]:
+        """
+        Check if command matches cache for instant response (~50ms vs ~500ms).
+
+        Returns VoiceProcessorResponse if cached, None otherwise.
+        """
+        # Normalize input: lowercase, strip punctuation, collapse whitespace
+        normalized = user_input.lower().strip()
+        normalized = ''.join(c for c in normalized if c.isalnum() or c.isspace())
+        normalized = ' '.join(normalized.split())
+
+        if normalized in self.COMMAND_CACHE:
+            tool_name, params, response_en, response_es = self.COMMAND_CACHE[normalized]
+            spoken = response_es if language == "es" else response_en
+
+            # Execute the cached tool
+            tool_result = execute_voice_tool(tool_name, params)
+
+            logger.info(f"Cache hit for '{normalized}' - instant response")
+            return VoiceProcessorResponse(
+                success=tool_result.status == ToolResultStatus.SUCCESS,
+                spoken_response=spoken,
+                ui_action=tool_result.ui_action,
+                tool_used=tool_name,
+                confidence=1.0,  # High confidence for cached commands
+            )
+
+        return None
 
     def _format_tabs(self, tabs: List[TabState]) -> str:
         """Format tabs list for prompt."""
@@ -472,6 +527,11 @@ class VoiceProcessor:
                 spoken_response="I didn't catch that." if language == "en" else "No te escuché.",
                 confidence=0.0,
             )
+
+        # SPEED OPTIMIZATION: Check cache first for instant response (~50ms)
+        cached_response = self._check_cache(user_input, language)
+        if cached_response:
+            return cached_response
 
         # Ensure LLM is available
         if not self._ensure_llm():

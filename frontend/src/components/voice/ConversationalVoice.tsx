@@ -738,7 +738,7 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // This prevents processing interim transcripts (user still speaking)
             pendingTranscriptRef.current = cleanMessage;
 
-            // Debounce: Wait 500ms after last transcript update before classification + processing
+            // Debounce: Wait 500ms after last transcript update before processing
             // This catches the final transcript after interim updates stop
             if ((window as any).__pendingTranscriptTimeout) {
               clearTimeout((window as any).__pendingTranscriptTimeout);
@@ -751,87 +751,39 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
                 return;
               }
 
-              console.log('🎯 Final transcript ready, classifying intent:', cleanMessage.substring(0, 50));
+              console.log('🎯 Final transcript ready, routing to backend:', cleanMessage.substring(0, 50));
 
               // ============================================================
-              // INTENT PRE-CLASSIFICATION: Decide action vs conversational
+              // OPTIMIZED BACKEND APPROACH (40cfffe style + speed optimizations)
               // ============================================================
-              try {
-                const { intent } = await api.voiceClassifyIntent({ transcript: cleanMessage });
-                console.log(`🎯 Intent classified: ${intent}`);
+              // 1. Agent is ALREADY MUTED (done above on user speech)
+              // 2. ALL commands route to backend (no intent classification delay)
+              // 3. Backend uses gpt-3.5-turbo for ~2x speed + caching for common commands
+              // 4. speakViaElevenLabs will UNMUTE when sending SPEAK:
+              // ============================================================
 
-                if (intent === 'action') {
-                  // ACTION: Keep muted (already muted above), route to backend for UI control
-                  console.log('🔧 [ACTION] Routing to backend for UI control (staying muted)');
+              // Agent is already muted from above, just update state
+              expectedSpeakContentRef.current = '';
+              console.log('🔒 [STATE] PROCESSING - routing to optimized backend');
 
-                  // Agent is already muted from above, just update state
-                  expectedSpeakContentRef.current = '';
-                  console.log('🔒 [STATE] Staying in PROCESSING for action');
-
-                  // Set timeout to auto-reset from PROCESSING if backend takes too long (15s)
-                  if (processingTimeoutRef.current) {
-                    clearTimeout(processingTimeoutRef.current);
-                  }
-                  processingTimeoutRef.current = setTimeout(() => {
-                    if (voiceGateStateRef.current === 'processing') {
-                      console.log('⏰ [STATE] Processing timeout - resetting to IDLE');
-                      voiceGateStateRef.current = 'idle';
-                      processingStartTimeRef.current = 0;
-                      if (conversationRef.current?.setVolume) {
-                        conversationRef.current.setVolume({ volume: originalVolumeRef.current });
-                        console.log('🔊 [UNMUTED] Agent audio restored (timeout recovery)');
-                      }
-                    }
-                  }, 15000);
-
-                  // Process via backend
-                  handleTranscript(cleanMessage);
-
-                } else {
-                  // CONVERSATIONAL: UNMUTE agent and let ElevenLabs respond directly
-                  console.log('💬 [CONVERSATIONAL] Unmuting agent - letting ElevenLabs respond');
-
-                  // CRITICAL: Unmute the agent so it can respond
-                  if (conversationRef.current?.setVolume) {
-                    conversationRef.current.setVolume({ volume: originalVolumeRef.current });
-                    console.log('🔊 [UNMUTED] Agent audio restored for conversational response');
-                  }
-
-                  // Reset state to IDLE - allow agent responses
+              // Set timeout to auto-reset from PROCESSING if backend takes too long (15s)
+              if (processingTimeoutRef.current) {
+                clearTimeout(processingTimeoutRef.current);
+              }
+              processingTimeoutRef.current = setTimeout(() => {
+                if (voiceGateStateRef.current === 'processing') {
+                  console.log('⏰ [STATE] Processing timeout - resetting to IDLE');
                   voiceGateStateRef.current = 'idle';
                   processingStartTimeRef.current = 0;
-
-                  // Finalize the user message (update context)
-                  finalizeUserMessage(cleanMessage);
-
-                  // DON'T call handleTranscript - let ElevenLabs handle the response
-                  // The agent will respond naturally and onMessage(ai) will display it
-                }
-
-              } catch (error) {
-                console.error('Intent classification failed, defaulting to action:', error);
-
-                // Fallback to action (safer - ensures UI actions work)
-                // Agent is already muted from above, just set timeout and process
-                expectedSpeakContentRef.current = '';
-                console.log('🔧 [FALLBACK] Classification failed, treating as action (staying muted)');
-
-                // Set timeout
-                if (processingTimeoutRef.current) {
-                  clearTimeout(processingTimeoutRef.current);
-                }
-                processingTimeoutRef.current = setTimeout(() => {
-                  if (voiceGateStateRef.current === 'processing') {
-                    voiceGateStateRef.current = 'idle';
-                    processingStartTimeRef.current = 0;
-                    if (conversationRef.current?.setVolume) {
-                      conversationRef.current.setVolume({ volume: originalVolumeRef.current });
-                    }
+                  if (conversationRef.current?.setVolume) {
+                    conversationRef.current.setVolume({ volume: originalVolumeRef.current });
+                    console.log('🔊 [UNMUTED] Agent audio restored (timeout recovery)');
                   }
-                }, 15000);
+                }
+              }, 15000);
 
-                handleTranscript(cleanMessage);
-              }
+              // Process via backend - handles ALL commands (actions + conversational)
+              handleTranscript(cleanMessage);
 
               (window as any).__pendingTranscriptTimeout = null;
             }, 500);

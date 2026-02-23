@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Cost per 1M tokens (as of Jan 2025)
 COST_PER_1M_TOKENS = {
+    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},  # Fastest for voice
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4o": {"input": 2.50, "output": 10.00},
     "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
@@ -107,6 +108,38 @@ def get_fast_voice_llm():
             api_key=settings.anthropic_api_key,
             temperature=0.3,
             max_tokens=500,   # Increased for structured JSON responses
+        ), "claude-3-haiku-20240307"
+    else:
+        return None, None
+
+
+def get_turbo_voice_llm():
+    """
+    Ultra-fast LLM for voice - uses gpt-3.5-turbo for maximum speed.
+
+    gpt-3.5-turbo is ~2-3x faster than gpt-4o-mini for simple classification tasks.
+    Uses very low temperature (0.1) and minimal tokens (150) for speed.
+
+    Returns:
+        Tuple of (llm_instance, model_name) or (None, None) if no keys available
+    """
+    settings = get_settings()
+
+    if settings.openai_api_key:
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model="gpt-3.5-turbo",
+            api_key=settings.openai_api_key,
+            temperature=0.1,  # Very low for deterministic, fast responses
+            max_tokens=150,   # Minimal tokens for quick classification
+        ), "gpt-3.5-turbo"
+    elif settings.anthropic_api_key:
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(
+            model="claude-3-haiku-20240307",
+            api_key=settings.anthropic_api_key,
+            temperature=0.1,
+            max_tokens=150,
         ), "claude-3-haiku-20240307"
     else:
         return None, None

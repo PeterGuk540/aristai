@@ -714,39 +714,6 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             lastMcpResponseContentRef.current = '';
             mcpResponseDisplayedRef.current = false;
 
-            // Mark that we're processing - suppress agent responses until SPEAK: arrives
-            processingStartTimeRef.current = Date.now();
-
-            // STATE MACHINE: Enter PROCESSING state - block ALL agent responses
-            voiceGateStateRef.current = 'processing';
-            expectedSpeakContentRef.current = '';
-            console.log('🔒 [STATE] → PROCESSING (blocking all agent responses)');
-
-            // CRITICAL: Mute agent audio to prevent it from speaking during processing
-            // This is the key fix for double responses - setVolume(0) stops audio output
-            if (conversationRef.current?.setVolume) {
-              originalVolumeRef.current = 1; // Store original volume
-              conversationRef.current.setVolume({ volume: 0 });
-              console.log('🔇 [MUTED] Agent audio muted during processing');
-            }
-
-            // Set timeout to auto-reset from PROCESSING if backend takes too long (15s)
-            if (processingTimeoutRef.current) {
-              clearTimeout(processingTimeoutRef.current);
-            }
-            processingTimeoutRef.current = setTimeout(() => {
-              if (voiceGateStateRef.current === 'processing') {
-                console.log('⏰ [STATE] Processing timeout - resetting to IDLE');
-                voiceGateStateRef.current = 'idle';
-                processingStartTimeRef.current = 0;
-                // Restore volume on timeout
-                if (conversationRef.current?.setVolume) {
-                  conversationRef.current.setVolume({ volume: originalVolumeRef.current });
-                  console.log('🔊 [UNMUTED] Agent audio restored (timeout recovery)');
-                }
-              }
-            }, 15000);
-
             // Emit transcription event
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('voice-transcription', {
@@ -761,18 +728,112 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
             // This prevents processing interim transcripts (user still speaking)
             pendingTranscriptRef.current = cleanMessage;
 
-            // Debounce: Wait 500ms after last transcript update before processing
+            // Debounce: Wait 500ms after last transcript update before classification + processing
             // This catches the final transcript after interim updates stop
             if ((window as any).__pendingTranscriptTimeout) {
               clearTimeout((window as any).__pendingTranscriptTimeout);
             }
-            (window as any).__pendingTranscriptTimeout = setTimeout(() => {
+            (window as any).__pendingTranscriptTimeout = setTimeout(async () => {
               // Double-check: only process if this is still the pending transcript
               // AND we're not already processing another request
-              if (pendingTranscriptRef.current === cleanMessage && !isProcessingTranscriptRef.current) {
-                console.log('🎯 Processing final transcript:', cleanMessage.substring(0, 50));
+              if (pendingTranscriptRef.current !== cleanMessage || isProcessingTranscriptRef.current) {
+                (window as any).__pendingTranscriptTimeout = null;
+                return;
+              }
+
+              console.log('🎯 Final transcript ready, classifying intent:', cleanMessage.substring(0, 50));
+
+              // ============================================================
+              // INTENT PRE-CLASSIFICATION: Decide action vs conversational
+              // ============================================================
+              try {
+                const { intent } = await api.voiceClassifyIntent({ transcript: cleanMessage });
+                console.log(`🎯 Intent classified: ${intent}`);
+
+                if (intent === 'action') {
+                  // ACTION: Mute agent, route to backend for UI control
+                  console.log('🔧 [ACTION] Routing to backend for UI control');
+
+                  // Mark that we're processing - suppress agent responses until SPEAK: arrives
+                  processingStartTimeRef.current = Date.now();
+
+                  // STATE MACHINE: Enter PROCESSING state - block ALL agent responses
+                  voiceGateStateRef.current = 'processing';
+                  expectedSpeakContentRef.current = '';
+                  console.log('🔒 [STATE] → PROCESSING (blocking all agent responses)');
+
+                  // CRITICAL: Mute agent audio to prevent it from speaking during processing
+                  if (conversationRef.current?.setVolume) {
+                    originalVolumeRef.current = 1;
+                    conversationRef.current.setVolume({ volume: 0 });
+                    console.log('🔇 [MUTED] Agent audio muted for action processing');
+                  }
+
+                  // Set timeout to auto-reset from PROCESSING if backend takes too long (15s)
+                  if (processingTimeoutRef.current) {
+                    clearTimeout(processingTimeoutRef.current);
+                  }
+                  processingTimeoutRef.current = setTimeout(() => {
+                    if (voiceGateStateRef.current === 'processing') {
+                      console.log('⏰ [STATE] Processing timeout - resetting to IDLE');
+                      voiceGateStateRef.current = 'idle';
+                      processingStartTimeRef.current = 0;
+                      if (conversationRef.current?.setVolume) {
+                        conversationRef.current.setVolume({ volume: originalVolumeRef.current });
+                        console.log('🔊 [UNMUTED] Agent audio restored (timeout recovery)');
+                      }
+                    }
+                  }, 15000);
+
+                  // Process via backend
+                  handleTranscript(cleanMessage);
+
+                } else {
+                  // CONVERSATIONAL: Let ElevenLabs respond directly (faster, better quality)
+                  console.log('💬 [CONVERSATIONAL] Letting ElevenLabs respond naturally');
+
+                  // Keep state as IDLE - don't mute, don't block agent responses
+                  voiceGateStateRef.current = 'idle';
+                  processingStartTimeRef.current = 0;
+
+                  // Finalize the user message (update context)
+                  finalizeUserMessage(cleanMessage);
+
+                  // DON'T call handleTranscript - let ElevenLabs handle the response
+                  // The agent will respond naturally and onMessage(ai) will display it
+                }
+
+              } catch (error) {
+                console.error('Intent classification failed, defaulting to action:', error);
+
+                // Fallback to action (safer - ensures UI actions work)
+                processingStartTimeRef.current = Date.now();
+                voiceGateStateRef.current = 'processing';
+                expectedSpeakContentRef.current = '';
+
+                if (conversationRef.current?.setVolume) {
+                  originalVolumeRef.current = 1;
+                  conversationRef.current.setVolume({ volume: 0 });
+                  console.log('🔇 [MUTED] Agent audio muted (fallback to action)');
+                }
+
+                // Set timeout
+                if (processingTimeoutRef.current) {
+                  clearTimeout(processingTimeoutRef.current);
+                }
+                processingTimeoutRef.current = setTimeout(() => {
+                  if (voiceGateStateRef.current === 'processing') {
+                    voiceGateStateRef.current = 'idle';
+                    processingStartTimeRef.current = 0;
+                    if (conversationRef.current?.setVolume) {
+                      conversationRef.current.setVolume({ volume: originalVolumeRef.current });
+                    }
+                  }
+                }, 15000);
+
                 handleTranscript(cleanMessage);
               }
+
               (window as any).__pendingTranscriptTimeout = null;
             }, 500);
           } else if (source === 'ai') {

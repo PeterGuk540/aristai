@@ -133,6 +133,19 @@ export const api = {
     });
   },
 
+  // Voice intent pre-classification - fast binary classification
+  // Used to decide: action (mute agent, route to backend) vs conversational (let ElevenLabs handle)
+  voiceClassifyIntent: async (request: {
+    transcript: string;
+  }): Promise<{
+    intent: 'action' | 'conversational';
+  }> => {
+    return fetchApi('/voice-converse/voice/classify-intent', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
   // Voice V2 API - Pure LLM-based processing with tools
   // This is the new architecture: no regex, no hardcoded patterns
   voiceProcessV2: async (request: {

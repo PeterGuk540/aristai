@@ -1078,41 +1078,21 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
           }
         }
 
-        // ARCHITECTURE: Send SPEAK: to ElevenLabs when backend has important info
-        // CRITICAL: If a tool was used or ui_action was returned, we MUST speak the response
-        // to prevent ElevenLabs from generating its own (incorrect) response
-        if (SEND_MCP_RESPONSE && response.spoken_response && response.spoken_response.length > 5) {
-          const msg = response.spoken_response.toLowerCase();
-
-          // ALWAYS send SPEAK: if a tool was used (backend did something)
-          const toolWasUsed = !!response.tool_used;
-          const hasUiAction = !!response.ui_action;
-
-          // Check if response contains DATA that only backend knows
-          const containsBackendData =
-            toolWasUsed ||  // Tool executed - speak the result
-            hasUiAction ||  // UI action dispatched - confirm it
-            /\d+\.\s/.test(msg) ||  // Numbered lists
-            msg.includes('generated') ||  // AI-generated content
-            msg.includes('created') ||  // Created something
-            msg.includes('filled') ||  // Filled a form
-            msg.includes('syllabus') ||  // Syllabus related
-            msg.includes('objectives') ||  // Learning objectives
-            msg.includes('options are') ||
-            msg.includes('available:') ||
-            msg.includes('here are') ||
-            msg.includes('i found') ||
-            msg.includes('your courses') ||
-            msg.includes('your sessions');
-
-          if (containsBackendData) {
-            console.log('📢 Speaking backend response via ElevenLabs:', response.spoken_response);
-            speakViaElevenLabs(response.spoken_response);
-          } else {
-            console.log('ℹ️ Skipping MCP_RESPONSE - ElevenLabs handles via delegate_to_mcp');
+        // ARCHITECTURE: ALWAYS send SPEAK: to ElevenLabs when backend has a response
+        // The state machine (PROCESSING → SPEAK_SENT) handles blocking agent's own responses
+        // We MUST send SPEAK: for every backend response so user gets feedback
+        if (SEND_MCP_RESPONSE && response.spoken_response && response.spoken_response.length > 0) {
+          console.log('📢 Speaking backend response via ElevenLabs:', response.spoken_response);
+          speakViaElevenLabs(response.spoken_response);
+        } else if (!response.spoken_response) {
+          // No spoken response from backend - reset state to IDLE so agent can respond
+          console.log('⚠️ No spoken_response from backend - resetting state to IDLE');
+          voiceGateStateRef.current = 'idle';
+          processingStartTimeRef.current = 0;
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
           }
-        } else if (response.spoken_response) {
-          console.log('ℹ️ MCP_RESPONSE disabled - ElevenLabs handles speech via delegate_to_mcp');
         }
 
         // Reset and finalize
@@ -1163,46 +1143,20 @@ export function ConversationalVoice(props: ConversationalVoiceProps) {
         console.log('ℹ️ No UI actions needed');
       }
 
-      // V1 ARCHITECTURE: Same as V2 - ElevenLabs handles speech via delegate_to_mcp.
-      // Only send MCP_RESPONSE if flag is enabled AND response contains backend-only data.
-      if (SEND_MCP_RESPONSE && response?.message) {
-        const mcpMessage = response.message.toLowerCase();
-
-        // Detect if MCP response contains DATA that ElevenLabs doesn't have
-        const mcpHasData =
-          /\b\d+\.\s/.test(mcpMessage) ||
-          mcpMessage.includes('options are') ||
-          mcpMessage.includes('available options') ||
-          mcpMessage.includes('your courses') ||
-          mcpMessage.includes('your sessions') ||
-          mcpMessage.includes('which would you like') ||
-          mcpMessage.includes('please choose') ||
-          mcpMessage.includes('please select') ||
-          mcpMessage.includes('here are') ||
-          mcpMessage.includes('i found') ||
-          mcpMessage.includes('there are') ||
-          mcpMessage.includes('what is the') ||
-          mcpMessage.includes('please provide') ||
-          mcpMessage.includes('please enter') ||
-          mcpMessage.includes('what would you like to') ||
-          mcpMessage.includes('error:') ||
-          mcpMessage.includes('failed to') ||
-          mcpMessage.includes('summary:') ||
-          mcpMessage.includes('report:') ||
-          mcpMessage.includes('students') ||
-          mcpMessage.includes('participants') ||
-          mcpMessage.includes('would you like me to') ||
-          mcpMessage.includes('should i') ||
-          mcpMessage.includes('do you want');
-
-        if (mcpHasData) {
-          console.log('📢 Speaking MCP data response via ElevenLabs');
-          speakViaElevenLabs(response.message);
-        } else {
-          console.log('ℹ️ Skipping MCP simple confirmation (no unique data)');
+      // V1 ARCHITECTURE: ALWAYS send SPEAK: for backend responses
+      // The state machine handles blocking agent's own responses
+      if (SEND_MCP_RESPONSE && response?.message && response.message.length > 0) {
+        console.log('📢 Speaking V1 response via ElevenLabs:', response.message);
+        speakViaElevenLabs(response.message);
+      } else if (!response?.message) {
+        // No message from backend - reset state to IDLE
+        console.log('⚠️ No message from V1 backend - resetting state to IDLE');
+        voiceGateStateRef.current = 'idle';
+        processingStartTimeRef.current = 0;
+        if (processingTimeoutRef.current) {
+          clearTimeout(processingTimeoutRef.current);
+          processingTimeoutRef.current = null;
         }
-      } else if (response?.message) {
-        console.log('ℹ️ MCP_RESPONSE disabled - ElevenLabs handles speech via delegate_to_mcp');
       }
 
       // Reset agent response tracking

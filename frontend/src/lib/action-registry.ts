@@ -692,7 +692,5 @@ export async function run_ui_action(
 }
 
 // =============================================================================
-// EXPORTS
+// EXPORTS (ActionResult, ActionContext already exported at definition)
 // =============================================================================
-
-export type { ActionResult, ActionContext };

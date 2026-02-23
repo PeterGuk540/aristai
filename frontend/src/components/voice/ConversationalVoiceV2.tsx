@@ -28,9 +28,11 @@ import {
   fillInput,
   selectItem,
   getPageInfo,
+  generateContent,
   isHighRiskAction,
   ActionContext,
   ActionResult,
+  ContentType,
 } from '@/lib/action-registry';
 
 // =============================================================================
@@ -236,6 +238,25 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
     });
   }, []);
 
+  /**
+   * Handle generate_content tool call
+   * Uses backend OpenAI API to generate content and optionally fill a form field
+   */
+  const handleGenerateContent = useCallback(async (params: {
+    content_type: ContentType;
+    context: string;
+    target_field?: string;
+  }): Promise<string> => {
+    console.log('[Voice] Tool: generate_content', params);
+    const result = await generateContent(
+      params.content_type,
+      params.context,
+      params.target_field,
+      getActionContext()
+    );
+    return JSON.stringify(result);
+  }, [getActionContext]);
+
   // =============================================================================
   // INITIALIZATION
   // =============================================================================
@@ -289,7 +310,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
 
-        // Client Tools - only 6 tools with string parameters!
+        // Client Tools - 7 tools with string parameters!
         clientTools: {
           navigate: handleNavigate,
           switch_tab: handleSwitchTab,
@@ -297,6 +318,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           fill_input: handleFillInput,
           select_item: handleSelectItem,
           get_page_info: handleGetPageInfo,
+          generate_content: handleGenerateContent,
         },
 
         onConnect: ({ conversationId }: { conversationId: string }) => {

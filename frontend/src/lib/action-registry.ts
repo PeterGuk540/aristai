@@ -717,5 +717,105 @@ export async function run_ui_action(
 }
 
 // =============================================================================
+// AI CONTENT GENERATION
+// =============================================================================
+
+export type ContentType = 'syllabus' | 'objectives' | 'description' | 'poll_question' | 'case_study' | 'summary';
+
+export interface GenerateContentResult extends ActionResult {
+  content?: string;
+  tokens_used?: number;
+  model?: string;
+}
+
+/**
+ * Generate AI content using the backend OpenAI integration
+ *
+ * @param contentType - Type of content to generate
+ * @param context - Context for generation (e.g., course title)
+ * @param targetField - Optional field to fill with generated content
+ * @param ctx - Action context
+ */
+export async function generateContent(
+  contentType: ContentType,
+  context: string,
+  targetField: string | undefined,
+  ctx: ActionContext
+): Promise<GenerateContentResult> {
+  console.log(`[ActionRegistry] generateContent: type=${contentType}, context=${context}, target=${targetField}`);
+
+  try {
+    // Call the backend API to generate content
+    const response = await fetch('/api/voice/generate-content', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer dummy-token',
+      },
+      body: JSON.stringify({
+        content_type: contentType,
+        context: context,
+        language: ctx.locale,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[ActionRegistry] Content generation failed:', errorText);
+      return {
+        ok: false,
+        did: 'content generation failed',
+        error: `Failed to generate content: ${response.status}`,
+        hint: ctx.locale === 'es'
+          ? 'Lo siento, no pude generar el contenido. Por favor intenta de nuevo.'
+          : 'Sorry, I could not generate the content. Please try again.',
+      };
+    }
+
+    const data = await response.json();
+    const generatedContent = data.content;
+
+    // If a target field is specified, fill it
+    if (targetField && generatedContent) {
+      const fillResult = await fillInput(targetField, generatedContent, ctx);
+      if (!fillResult.ok) {
+        // Content generated but couldn't fill field - return content anyway
+        return {
+          ok: true,
+          did: `generated ${contentType}`,
+          content: generatedContent,
+          tokens_used: data.tokens_used,
+          model: data.model,
+          hint: ctx.locale === 'es'
+            ? `Contenido generado. No pude encontrar el campo ${targetField}.`
+            : `Content generated. Could not find field ${targetField}.`,
+        };
+      }
+    }
+
+    return {
+      ok: true,
+      did: `generated ${contentType}${targetField ? ` and filled ${targetField}` : ''}`,
+      content: generatedContent,
+      tokens_used: data.tokens_used,
+      model: data.model,
+      hint: ctx.locale === 'es'
+        ? targetField ? 'Contenido generado y aplicado.' : 'Contenido generado.'
+        : targetField ? 'Content generated and applied.' : 'Content generated.',
+    };
+  } catch (error) {
+    console.error('[ActionRegistry] Content generation error:', error);
+    return {
+      ok: false,
+      did: 'content generation error',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      hint: ctx.locale === 'es'
+        ? 'Ocurrió un error al generar el contenido.'
+        : 'An error occurred while generating content.',
+    };
+  }
+}
+
+// =============================================================================
 // EXPORTS (ActionResult, ActionContext already exported at definition)
 // =============================================================================

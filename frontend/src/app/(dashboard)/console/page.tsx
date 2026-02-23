@@ -92,12 +92,22 @@ export default function ConsolePage() {
 
   // Console page tab mappings
   const consoleTabMap = mergeTabMappings({
+    // Copilot tab
     'copilot': 'copilot',
-    'requests': 'requests',
-    'request': 'requests',
-    'instructorrequests': 'requests',
-    'roster': 'roster',
-    'rosterupload': 'roster',
+    'aiassistant': 'copilot',
+    'assistant': 'copilot',
+    // Polls tab
+    'polls': 'polls',
+    'poll': 'polls',
+    'createpoll': 'polls',
+    'newpoll': 'polls',
+    'polling': 'polls',
+    // Cases tab
+    'cases': 'cases',
+    'case': 'cases',
+    'casestudy': 'cases',
+    'postcase': 'cases',
+    // Tools tab
     'tools': 'tools',
     'instructortools': 'tools',
     'heatmap': 'tools',
@@ -107,6 +117,16 @@ export default function ConsolePage() {
     'breakoutgroups': 'tools',
     'groups': 'tools',
     'aidrafts': 'tools',
+    // Roster tab
+    'roster': 'roster',
+    'rosterupload': 'roster',
+    'students': 'roster',
+    'studentlist': 'roster',
+    // Requests tab (admin)
+    'requests': 'requests',
+    'request': 'requests',
+    'instructorrequests': 'requests',
+    'pendingrequests': 'requests',
   });
 
   // Voice tab handler with session-required check

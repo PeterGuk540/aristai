@@ -120,21 +120,61 @@ export function setupVoiceTabListeners(
 
 // Common tab name normalizations shared across pages
 export const COMMON_TAB_MAPPINGS: Record<string, string> = {
+  // Create tab (common across pages)
+  'create': 'create',
+  'tabcreate': 'create',
+  'new': 'create',
+  'add': 'create',
+  'createnew': 'create',
+  'createcourse': 'create',
+  'createsession': 'create',
+  'newcourse': 'create',
+  'newsession': 'create',
+
+  // Join tab (courses)
+  'join': 'join',
+  'tabjoin': 'join',
+  'joincourse': 'join',
+  'joinwithcode': 'join',
+  'entercode': 'join',
+
+  // Manage tab (sessions)
+  'manage': 'manage',
+  'tabmanage': 'manage',
+  'managesession': 'manage',
+  'sessionmanage': 'manage',
+  'golive': 'manage',
+
+  // Overview tab
+  'overview': 'overview',
+  'taboverview': 'overview',
+  'summary': 'summary',
+  'tabsummary': 'summary',
+
+  // Edit tab
+  'edit': 'edit',
+  'tabedit': 'edit',
+  'modify': 'edit',
+  'update': 'edit',
+
   // AI-related
   'aifeatures': 'ai-features',
   'aifeature': 'ai-features',
   'aitools': 'ai-features',
   'enhancedfeatures': 'ai-features',
   'enhancedai': 'ai-features',
+  'tabaifeatures': 'ai-features',
   'aiinsights': 'ai-insights',
   'aiinsight': 'ai-insights',
   'aianalytics': 'ai-insights',
+  'tabaiinsights': 'ai-insights',
   'aicopilot': 'copilot',
   'aiassistant': 'copilot',
 
   // Common tabs
   'materials': 'materials',
   'material': 'materials',
+  'tabmaterials': 'materials',
   'coursematerials': 'materials',
   'sessionmaterials': 'materials',
   'files': 'materials',
@@ -143,26 +183,75 @@ export const COMMON_TAB_MAPPINGS: Record<string, string> = {
   // Insights/Analytics
   'insights': 'insights',
   'insight': 'insights',
+  'tabinsights': 'insights',
   'sessioninsights': 'insights',
   'analytics': 'analytics',
+  'tabanalytics': 'analytics',
   'sessionanalytics': 'insights',
   'engagement': 'insights',
 
+  // Advanced/Enrollment
+  'advanced': 'advanced',
+  'tabadvanced': 'advanced',
+  'enrollment': 'advanced',
+  'tabenrollment': 'advanced',
+  'enroll': 'advanced',
+  'enrollstudents': 'advanced',
+  'students': 'advanced',
+  'roster': 'roster',
+  'tabroster': 'roster',
+
   // Participation
   'participation': 'participation',
+  'tabparticipation': 'participation',
   'participationinsights': 'participation',
 
   // Polls
   'polls': 'polls',
   'poll': 'polls',
+  'tabpolls': 'polls',
   'polling': 'polls',
+  'createpoll': 'polls',
 
   // Cases
   'cases': 'cases',
   'case': 'cases',
+  'tabcases': 'cases',
   'casestudy': 'cases',
   'casestudies': 'cases',
   'postcase': 'cases',
+
+  // Tools
+  'tools': 'tools',
+  'tabtools': 'tools',
+  'timer': 'tools',
+  'breakout': 'tools',
+  'breakoutgroups': 'tools',
+
+  // Copilot
+  'copilot': 'copilot',
+  'tabcopilot': 'copilot',
+  'assistant': 'copilot',
+
+  // Discussion
+  'discussion': 'discussion',
+  'tabdiscussion': 'discussion',
+  'discussions': 'discussion',
+  'forum': 'discussion',
+
+  // Scoring
+  'scoring': 'scoring',
+  'tabscoring': 'scoring',
+  'grades': 'scoring',
+  'grading': 'scoring',
+
+  // Canvas/UPP integrations
+  'canvas': 'canvas',
+  'tabcanvas': 'canvas',
+  'canvaslms': 'canvas',
+  'upp': 'upp',
+  'tabupp': 'upp',
+  'uppsystem': 'upp',
 };
 
 /**

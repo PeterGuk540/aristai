@@ -66,9 +66,23 @@ export default function CoursesPage() {
 
   // Courses page tab mappings
   const coursesTabMap = mergeTabMappings({
+    // Courses tab
     'courses': 'courses',
     'course': 'courses',
     'mycourses': 'courses',
+    'viewcourses': 'courses',
+    'listcourses': 'courses',
+    // Create tab
+    'create': 'create',
+    'createcourse': 'create',
+    'newcourse': 'create',
+    'addcourse': 'create',
+    // Join tab
+    'join': 'join',
+    'joincourse': 'join',
+    'joinwithcode': 'join',
+    'entercode': 'join',
+    // Advanced/Enrollment tab
     'advanced': 'advanced',
     'enrollment': 'advanced',
     'enroll': 'advanced',
@@ -76,9 +90,12 @@ export default function CoursesPage() {
     'instructor': 'advanced',
     'instructoraccess': 'advanced',
     'manageenrollment': 'advanced',
+    'managestudents': 'advanced',
+    // AI Insights tab
     'aiinsights': 'ai-insights',
     'aiinsight': 'ai-insights',
     'objectivecoverage': 'ai-insights',
+    'courseinsights': 'ai-insights',
   });
 
   // Voice tab handler

@@ -93,6 +93,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
   const sessionIdRef = useRef<string>('');
   const previousLocaleRef = useRef<string>(locale);
   const isReconnectingRef = useRef(false);
+  const hasUserActivatedRef = useRef(false); // Track if user has started a session
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -110,16 +111,24 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
   useEffect(() => {
     const previousLocale = previousLocaleRef.current;
 
-    if (previousLocale !== locale && conversationRef.current && !isReconnectingRef.current) {
+    // Only reconnect if language actually changed and user has activated voice at least once
+    if (previousLocale !== locale && hasUserActivatedRef.current && !isReconnectingRef.current) {
       console.log(`[Voice] Language changed: ${previousLocale} → ${locale}, reconnecting...`);
       previousLocaleRef.current = locale;
 
+      // Capture the new locale to avoid closure issues
+      const newLocale = locale;
+
       const reconnect = async () => {
         isReconnectingRef.current = true;
-        await cleanup();
+        // Clean up existing conversation if any
+        if (conversationRef.current) {
+          await cleanup();
+        }
         await new Promise(resolve => setTimeout(resolve, 300));
         isInitializingRef.current = false;
-        await initializeConversation();
+        // Pass the new locale explicitly to avoid stale closure
+        await initializeConversation(newLocale);
         isReconnectingRef.current = false;
       };
 
@@ -231,9 +240,12 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
   // INITIALIZATION
   // =============================================================================
 
-  const initializeConversation = async () => {
+  const initializeConversation = async (targetLocale?: string) => {
     if (isInitializingRef.current) return;
     isInitializingRef.current = true;
+
+    // Use passed locale or current locale (to avoid closure issues)
+    const langToUse = targetLocale || locale;
 
     setState('connecting');
     setError('');
@@ -254,8 +266,8 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
       }
 
       // Get signed URL with language parameter
-      console.log(`[Voice] Getting signed URL (language=${locale})...`);
-      const response = await fetch(`/api/voice/agent/signed-url?language=${locale}`, {
+      console.log(`[Voice] Getting signed URL (language=${langToUse})...`);
+      const response = await fetch(`/api/voice/agent/signed-url?language=${langToUse}`, {
         method: 'GET',
         headers: {
           'Authorization': 'Bearer dummy-token',
@@ -294,9 +306,9 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           onActiveChange?.(true);
           isInitializingRef.current = false;
 
-          // Add greeting message
-          const userName = currentUser?.name?.split(' ')[0] || (locale === 'es' ? 'amigo' : 'there');
-          const greetingMsg = greeting || (locale === 'es'
+          // Add greeting message (use langToUse to avoid closure issues)
+          const userName = currentUser?.name?.split(' ')[0] || (langToUse === 'es' ? 'amigo' : 'there');
+          const greetingMsg = greeting || (langToUse === 'es'
             ? `¡Hola ${userName}! Soy tu asistente AristAI. ¿Qué te gustaría hacer?`
             : `Hello ${userName}! I'm your AristAI assistant. What would you like to do?`);
           addMessage('assistant', greetingMsg);
@@ -365,6 +377,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
 
   const toggleConversation = async () => {
     if (state === 'disconnected' || state === 'error') {
+      hasUserActivatedRef.current = true; // User manually started
       await initializeConversation();
     } else if (conversationRef.current) {
       await conversationRef.current.endSession();
@@ -374,6 +387,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
   };
 
   const restartConversation = async () => {
+    hasUserActivatedRef.current = true; // User manually restarted
     await cleanup();
     setMessages([]);
     isInitializingRef.current = false;

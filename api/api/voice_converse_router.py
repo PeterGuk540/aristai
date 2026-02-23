@@ -393,6 +393,9 @@ async def check_pending_action(request: PendingActionRequest, db: Session = Depe
 # Used by frontend to decide whether to mute agent and route to backend
 # ============================================================================
 
+# Logger for intent classification
+intent_logger = logging.getLogger(__name__)
+
 class ClassifyIntentRequest(BaseModel):
     transcript: str
 
@@ -432,7 +435,7 @@ async def classify_voice_intent(request: ClassifyIntentRequest):
 
         llm, model_name = get_fast_voice_llm()
         if not llm:
-            logger.warning("No LLM available for intent classification, defaulting to action")
+            intent_logger.warning("No LLM available for intent classification, defaulting to action")
             return ClassifyIntentResponse(intent="action")
 
         prompt = INTENT_PRECLASSIFY_PROMPT.format(transcript=transcript)
@@ -440,7 +443,7 @@ async def classify_voice_intent(request: ClassifyIntentRequest):
 
         if response.success and response.content:
             result = response.content.strip().lower()
-            logger.info(f"Intent classification: '{transcript[:50]}...' -> '{result}'")
+            intent_logger.info(f"Intent classification: '{transcript[:50]}...' -> '{result}'")
 
             # Check for action keywords in response
             if "action" in result:
@@ -449,14 +452,14 @@ async def classify_voice_intent(request: ClassifyIntentRequest):
                 return ClassifyIntentResponse(intent="conversational")
             else:
                 # Ambiguous response - default to action for safety
-                logger.warning(f"Ambiguous intent classification: {result}, defaulting to action")
+                intent_logger.warning(f"Ambiguous intent classification: {result}, defaulting to action")
                 return ClassifyIntentResponse(intent="action")
         else:
-            logger.error(f"Intent classification failed: {response.metrics.error_message}")
+            intent_logger.error(f"Intent classification failed: {response.metrics.error_message}")
             return ClassifyIntentResponse(intent="action")
 
     except Exception as e:
-        logger.exception(f"Intent classification error: {e}")
+        intent_logger.exception(f"Intent classification error: {e}")
         # Default to action to ensure UI actions still work
         return ClassifyIntentResponse(intent="action")
 

@@ -1,17 +1,19 @@
 // Voice assistant components
-// V1: SPEAK: prefix mechanism (legacy)
-export { ConversationalVoice } from './ConversationalVoice';
-export type { ConversationState } from './ConversationalVoice';
+// ========================================
+// Architecture: ElevenLabs Client Tools with smart frontend resolution
+// - 6 Client Tools with string parameters (no enums)
+// - Frontend fuzzy matching via resolveTarget() in action-registry.ts
+// - Single response guaranteed (no muting, no SPEAK: prefix)
+// ========================================
 
-// V2: ElevenLabs Client Tools architecture (new)
+// Main voice component (Client Tools architecture)
 export { ConversationalVoiceV2 } from './ConversationalVoiceV2';
-export type { ConversationState as ConversationStateV2 } from './ConversationalVoiceV2';
+export type { ConversationState } from './ConversationalVoiceV2';
+
+// Legacy V1 component (SPEAK: prefix mechanism - deprecated)
+export { ConversationalVoice as ConversationalVoiceLegacy } from './ConversationalVoice';
 
 // Supporting components
 export { VoiceOnboarding } from './VoiceOnboarding';
 export { VoiceCommandGuide } from './VoiceCommandGuide';
 export { VoiceWaveformMini } from './VoiceWaveformMini';
-
-// Feature flag for switching between V1 and V2
-// Set to true to use the new Client Tools architecture
-export const USE_VOICE_V2 = true;

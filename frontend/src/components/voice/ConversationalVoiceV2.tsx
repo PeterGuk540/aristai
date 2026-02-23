@@ -1,36 +1,36 @@
 'use client';
 
 /**
- * ConversationalVoiceV2 - ElevenLabs Client Tools Architecture
+ * ConversationalVoiceV2 - ElevenLabs Client Tools with Smart Resolution
  *
- * This component uses ElevenLabs as the "brain" with Client Tools for UI actions.
- * Key differences from V1:
+ * This component uses ElevenLabs as the "brain" with only 6 Client Tools.
+ * No enums needed - natural language targets are resolved by the frontend.
+ *
+ * Key features:
  * - NO SPEAK: prefix mechanism
  * - NO volume muting
- * - NO state machine for response gating
- * - ElevenLabs handles all conversation logic
- * - Client Tools execute UI actions directly
- *
- * Architecture:
- * 1. User speaks → ElevenLabs transcribes and decides action
- * 2. ElevenLabs calls Client Tool (e.g., navigate, switch_tab)
- * 3. Client Tool handler executes via Action Registry
- * 4. Handler returns result → ElevenLabs speaks response
+ * - NO state machine
+ * - Single response guaranteed (ElevenLabs controls flow)
+ * - Smart resolution of natural language targets
  */
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Conversation } from '@elevenlabs/client';
-import { Volume2, Mic, MicOff, Settings, Minimize2, Maximize2, Sparkles, Globe } from 'lucide-react';
+import { Mic, MicOff, Minimize2, Maximize2, Sparkles, Globe } from 'lucide-react';
 import { useUser } from '@/lib/context';
 import { useLanguage } from '@/lib/i18n-provider';
 import { cn } from '@/lib/utils';
 import {
-  run_ui_action,
+  navigate,
+  switchTab,
+  clickButton,
+  fillInput,
+  selectItem,
+  getPageInfo,
+  isHighRiskAction,
   ActionContext,
   ActionResult,
-  getAvailableActions,
-  requiresConfirmation,
 } from '@/lib/action-registry';
 
 // =============================================================================
@@ -52,10 +52,6 @@ interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
-  action?: {
-    type: string;
-    result?: ActionResult;
-  };
 }
 
 interface ConversationalVoiceProps {
@@ -65,69 +61,6 @@ interface ConversationalVoiceProps {
   greeting?: string;
   className?: string;
 }
-
-// =============================================================================
-// CLIENT TOOLS DEFINITIONS
-// =============================================================================
-
-/**
- * These are the tools that ElevenLabs will call.
- * They map to actions in our Action Registry.
- */
-const CLIENT_TOOLS = {
-  // Navigation tools
-  navigate: {
-    description: 'Navigate to a page in the application',
-    parameters: {
-      page: { type: 'string', description: 'Page name: courses, sessions, forum, console, reports, dashboard, integrations' },
-    },
-  },
-  switch_tab: {
-    description: 'Switch to a tab on the current page',
-    parameters: {
-      tab_voice_id: { type: 'string', description: 'Tab voice ID (e.g., tab-courses, tab-create, tab-advanced)' },
-    },
-  },
-  click_button: {
-    description: 'Click a button by its voice ID',
-    parameters: {
-      button_voice_id: { type: 'string', description: 'Button voice ID' },
-    },
-  },
-  fill_input: {
-    description: 'Fill a form input field',
-    parameters: {
-      field_voice_id: { type: 'string', description: 'Field voice ID' },
-      content: { type: 'string', description: 'Content to fill' },
-    },
-  },
-  select_dropdown: {
-    description: 'Select an option from a dropdown',
-    parameters: {
-      dropdown_voice_id: { type: 'string', description: 'Dropdown voice ID' },
-      selection_index: { type: 'number', description: 'Option index (0-based)' },
-      selection_text: { type: 'string', description: 'Option text to select' },
-    },
-  },
-  confirm_action: {
-    description: 'Confirm or cancel a pending action',
-    parameters: {
-      confirmed: { type: 'boolean', description: 'true to confirm, false to cancel' },
-    },
-  },
-  go_live: {
-    description: 'Start a live session',
-    parameters: {},
-  },
-  end_session: {
-    description: 'End the current live session',
-    parameters: {},
-  },
-  get_ui_state: {
-    description: 'Get current UI state (tabs, buttons, inputs)',
-    parameters: {},
-  },
-};
 
 // =============================================================================
 // COMPONENT
@@ -152,8 +85,6 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
-  const [continuousMode, setContinuousMode] = useState(true);
 
   // Refs
   const conversationRef = useRef<any>(null);
@@ -175,12 +106,12 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
     };
   }, []);
 
-  // Language switch detection
+  // Language switch detection - reconnect when language changes
   useEffect(() => {
     const previousLocale = previousLocaleRef.current;
 
     if (previousLocale !== locale && conversationRef.current && !isReconnectingRef.current) {
-      console.log(`🌐 Language changed from ${previousLocale} to ${locale} - reconnecting`);
+      console.log(`[Voice] Language changed: ${previousLocale} → ${locale}, reconnecting...`);
       previousLocaleRef.current = locale;
 
       const reconnect = async () => {
@@ -203,146 +134,98 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
       try {
         await conversationRef.current.endSession();
       } catch (error) {
-        console.error('Error ending conversation:', error);
+        console.error('[Voice] Error ending conversation:', error);
       }
       conversationRef.current = null;
     }
   };
 
   // =============================================================================
+  // ACTION CONTEXT
+  // =============================================================================
+
+  const getActionContext = useCallback((): ActionContext => ({
+    router,
+    locale,
+    userId: currentUser?.id,
+    currentRoute: pathname,
+    sessionId: sessionIdRef.current,
+  }), [router, locale, currentUser?.id, pathname]);
+
+  // =============================================================================
   // CLIENT TOOL HANDLERS
   // =============================================================================
 
   /**
-   * Handle Client Tool calls from ElevenLabs.
-   * Maps tool calls to Action Registry and returns results.
+   * Handle navigate tool call
    */
-  const handleClientToolCall = useCallback(async (
-    toolName: string,
-    parameters: Record<string, unknown>
-  ): Promise<string> => {
-    console.log(`🔧 Client Tool called: ${toolName}`, parameters);
-
-    // Build action context
-    const ctx: ActionContext = {
-      router,
-      locale,
-      userId: currentUser?.id,
-      currentRoute: pathname,
-      sessionId: sessionIdRef.current,
-    };
-
-    // Map tool calls to Action Registry
-    let actionId: string;
-    let args: Record<string, unknown> = parameters;
-
-    switch (toolName) {
-      case 'navigate':
-        actionId = 'NAVIGATE';
-        break;
-      case 'switch_tab':
-        actionId = 'SWITCH_TAB';
-        break;
-      case 'click_button':
-        actionId = 'CLICK_BUTTON';
-        break;
-      case 'fill_input':
-        actionId = 'FILL_INPUT';
-        break;
-      case 'select_dropdown':
-        actionId = 'SELECT_DROPDOWN';
-        break;
-      case 'confirm_action':
-        actionId = parameters.confirmed ? 'CONFIRM' : 'CANCEL';
-        args = {};
-        break;
-      case 'go_live':
-        actionId = 'GO_LIVE';
-        break;
-      case 'end_session':
-        actionId = 'END_SESSION';
-        break;
-      case 'get_ui_state':
-        return JSON.stringify(collectUiState());
-      default:
-        // Try direct action ID mapping (e.g., NAV_COURSES)
-        actionId = toolName.toUpperCase();
-    }
-
-    // Check if action requires confirmation
-    if (requiresConfirmation(actionId)) {
-      // For high-risk actions, return a prompt for confirmation
-      const confirmHint = locale === 'es'
-        ? 'Esta es una acción de alto riesgo. ¿Estás seguro?'
-        : 'This is a high-risk action. Are you sure?';
-      return JSON.stringify({ ok: true, did: 'awaiting confirmation', hint: confirmHint, requiresConfirmation: true });
-    }
-
-    // Execute the action
-    const result = await run_ui_action(actionId, args, ctx);
-
-    // Add action to messages
-    addMessage('system', `Action: ${actionId}`, { type: actionId, result });
-
-    // Return result for ElevenLabs to speak
+  const handleNavigate = useCallback(async (params: { page: string }): Promise<string> => {
+    console.log('[Voice] Tool: navigate', params);
+    const result = await navigate(params.page, getActionContext());
     return JSON.stringify(result);
-  }, [router, locale, currentUser?.id, pathname]);
+  }, [getActionContext]);
 
-  // =============================================================================
-  // UI STATE COLLECTION
-  // =============================================================================
+  /**
+   * Handle switch_tab tool call
+   */
+  const handleSwitchTab = useCallback(async (params: { target: string }): Promise<string> => {
+    console.log('[Voice] Tool: switch_tab', params);
+    const result = await switchTab(params.target, getActionContext());
+    return JSON.stringify(result);
+  }, [getActionContext]);
 
-  const collectUiState = useCallback(() => {
-    if (typeof window === 'undefined') {
-      return { route: pathname, tabs: [], buttons: [], inputs: [] };
+  /**
+   * Handle click_button tool call
+   */
+  const handleClickButton = useCallback(async (params: { target: string }): Promise<string> => {
+    console.log('[Voice] Tool: click_button', params);
+
+    // Check if high-risk action
+    if (isHighRiskAction(params.target)) {
+      return JSON.stringify({
+        ok: true,
+        did: 'awaiting confirmation',
+        hint: locale === 'es'
+          ? `Esta es una acción importante. ¿Estás seguro de que quieres ${params.target}?`
+          : `This is an important action. Are you sure you want to ${params.target}?`,
+        requiresConfirmation: true,
+      });
     }
 
-    const state: {
-      route: string;
-      activeTab?: string;
-      tabs: { id: string; label: string; active: boolean }[];
-      buttons: { id: string; label: string }[];
-      inputs: { id: string; label: string; value: string }[];
-      dropdowns: { id: string; label: string; options: string[] }[];
-    } = {
-      route: pathname,
-      tabs: [],
-      buttons: [],
-      inputs: [],
-      dropdowns: [],
-    };
+    const result = await clickButton(params.target, getActionContext());
+    return JSON.stringify(result);
+  }, [getActionContext, locale]);
 
-    // Collect tabs
-    document.querySelectorAll('[data-voice-id^="tab-"], [role="tab"]').forEach((tab) => {
-      const id = tab.getAttribute('data-voice-id') || '';
-      const label = tab.textContent?.trim() || '';
-      const isActive = tab.getAttribute('aria-selected') === 'true' ||
-                       tab.getAttribute('data-state') === 'active';
-      if (id || label) {
-        state.tabs.push({ id, label, active: isActive });
-        if (isActive) state.activeTab = id;
-      }
+  /**
+   * Handle fill_input tool call
+   */
+  const handleFillInput = useCallback(async (params: { target: string; content: string }): Promise<string> => {
+    console.log('[Voice] Tool: fill_input', params);
+    const result = await fillInput(params.target, params.content, getActionContext());
+    return JSON.stringify(result);
+  }, [getActionContext]);
+
+  /**
+   * Handle select_item tool call
+   */
+  const handleSelectItem = useCallback(async (params: { target: string; selection: string }): Promise<string> => {
+    console.log('[Voice] Tool: select_item', params);
+    const result = await selectItem(params.target, params.selection, getActionContext());
+    return JSON.stringify(result);
+  }, [getActionContext]);
+
+  /**
+   * Handle get_page_info tool call
+   */
+  const handleGetPageInfo = useCallback(async (): Promise<string> => {
+    console.log('[Voice] Tool: get_page_info');
+    const info = getPageInfo();
+    return JSON.stringify({
+      ok: true,
+      did: 'retrieved page info',
+      data: info,
     });
-
-    // Collect buttons
-    document.querySelectorAll('[data-voice-id]:not([data-voice-id^="tab-"])').forEach((btn) => {
-      const id = btn.getAttribute('data-voice-id') || '';
-      const label = btn.textContent?.trim() || btn.getAttribute('aria-label') || '';
-      if (id && label.length < 50) {
-        state.buttons.push({ id, label });
-      }
-    });
-
-    // Collect inputs
-    document.querySelectorAll('input[data-voice-id], textarea[data-voice-id]').forEach((input) => {
-      const el = input as HTMLInputElement;
-      const id = el.getAttribute('data-voice-id') || '';
-      const label = el.getAttribute('placeholder') || el.getAttribute('aria-label') || '';
-      state.inputs.push({ id, label, value: el.value || '' });
-    });
-
-    return state;
-  }, [pathname]);
+  }, []);
 
   // =============================================================================
   // INITIALIZATION
@@ -357,21 +240,21 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
 
     try {
       // Request microphone permission
-      console.log('🎤 Requesting microphone permission...');
+      console.log('[Voice] Requesting microphone permission...');
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
-        console.log('✅ Microphone permission granted');
+        console.log('[Voice] Microphone permission granted');
       } catch (micError) {
-        console.error('❌ Microphone permission denied:', micError);
+        console.error('[Voice] Microphone permission denied:', micError);
         setState('error');
         setError('Microphone access is required. Please allow microphone access and try again.');
         isInitializingRef.current = false;
         return;
       }
 
-      // Get signed URL
-      console.log(`🔑 Getting signed URL (language=${locale})...`);
+      // Get signed URL with language parameter
+      console.log(`[Voice] Getting signed URL (language=${locale})...`);
       const response = await fetch(`/api/voice/agent/signed-url?language=${locale}`, {
         method: 'GET',
         headers: {
@@ -386,70 +269,48 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
       }
 
       const { signed_url } = await response.json();
-      console.log('✅ Got signed URL');
+      console.log('[Voice] Got signed URL');
 
       // Start conversation with Client Tools
-      console.log('🚀 Starting conversation with Client Tools...');
+      console.log('[Voice] Starting conversation with Client Tools...');
 
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
-        connectionType: 'websocket',
 
-        // Client Tools configuration
+        // Client Tools - only 6 tools with string parameters!
         clientTools: {
-          navigate: async (params: { page: string }) => {
-            return handleClientToolCall('navigate', params);
-          },
-          switch_tab: async (params: { tab_voice_id: string }) => {
-            return handleClientToolCall('switch_tab', params);
-          },
-          click_button: async (params: { button_voice_id: string }) => {
-            return handleClientToolCall('click_button', params);
-          },
-          fill_input: async (params: { field_voice_id: string; content: string }) => {
-            return handleClientToolCall('fill_input', params);
-          },
-          select_dropdown: async (params: { dropdown_voice_id: string; selection_index?: number; selection_text?: string }) => {
-            return handleClientToolCall('select_dropdown', params);
-          },
-          confirm_action: async (params: { confirmed: boolean }) => {
-            return handleClientToolCall('confirm_action', params);
-          },
-          go_live: async () => {
-            return handleClientToolCall('go_live', {});
-          },
-          end_session: async () => {
-            return handleClientToolCall('end_session', {});
-          },
-          get_ui_state: async () => {
-            return handleClientToolCall('get_ui_state', {});
-          },
+          navigate: handleNavigate,
+          switch_tab: handleSwitchTab,
+          click_button: handleClickButton,
+          fill_input: handleFillInput,
+          select_item: handleSelectItem,
+          get_page_info: handleGetPageInfo,
         },
 
         onConnect: ({ conversationId }: { conversationId: string }) => {
-          console.log('✅ Connected:', conversationId);
+          console.log('[Voice] Connected:', conversationId);
           sessionIdRef.current = conversationId;
           setState('connected');
           onActiveChange?.(true);
           isInitializingRef.current = false;
 
-          // Add greeting
+          // Add greeting message
           const userName = currentUser?.name?.split(' ')[0] || (locale === 'es' ? 'amigo' : 'there');
-          const greetingMessage = greeting || (locale === 'es'
+          const greetingMsg = greeting || (locale === 'es'
             ? `¡Hola ${userName}! Soy tu asistente AristAI. ¿Qué te gustaría hacer?`
             : `Hello ${userName}! I'm your AristAI assistant. What would you like to do?`);
-          addMessage('assistant', greetingMessage);
+          addMessage('assistant', greetingMsg);
         },
 
         onDisconnect: () => {
-          console.log('🔌 Disconnected');
+          console.log('[Voice] Disconnected');
           setState('disconnected');
           conversationRef.current = null;
           onActiveChange?.(false);
         },
 
         onStatusChange: ({ status }: { status: string }) => {
-          console.log('📊 Status:', status);
+          console.log('[Voice] Status:', status);
           switch (status) {
             case 'connecting': setState('connecting'); break;
             case 'connected': setState('connected'); break;
@@ -461,21 +322,22 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
         },
 
         onMessage: ({ source, message }: { source: 'user' | 'ai'; message: string }) => {
-          console.log(`💬 ${source}:`, message);
+          // Show exactly what was said in the chatbox
           if (message && message.trim()) {
+            console.log(`[Voice] ${source}:`, message);
             addMessage(source === 'user' ? 'user' : 'assistant', message);
           }
         },
 
         onError: (error: string) => {
-          console.error('❌ Error:', error);
+          console.error('[Voice] Error:', error);
           setError(error);
           setState('error');
         },
       });
 
     } catch (error: any) {
-      console.error('❌ Failed to initialize:', error);
+      console.error('[Voice] Failed to initialize:', error);
       setError(error.message || 'Failed to initialize voice assistant');
       setState('error');
       onActiveChange?.(false);
@@ -487,13 +349,12 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
   // MESSAGE HELPERS
   // =============================================================================
 
-  const addMessage = (role: 'user' | 'assistant' | 'system', content: string, action?: Message['action']) => {
+  const addMessage = (role: 'user' | 'assistant' | 'system', content: string) => {
     const message: Message = {
-      id: Date.now().toString(),
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       role,
       content,
       timestamp: new Date(),
-      action,
     };
     setMessages(prev => [...prev, message]);
   };
@@ -514,6 +375,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
 
   const restartConversation = async () => {
     await cleanup();
+    setMessages([]);
     isInitializingRef.current = false;
     await initializeConversation();
   };
@@ -549,6 +411,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
             </div>
 
             <div className="flex items-center gap-1">
+              {/* Language toggle */}
               <button
                 onClick={() => setLocale(locale === 'en' ? 'es' : 'en')}
                 className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
@@ -584,12 +447,12 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
               {state === 'error' && <div className="w-2 h-2 bg-red-600 rounded-full" />}
 
               <span className="text-gray-600 dark:text-gray-400 capitalize">
-                {state === 'connecting' && 'Connecting...'}
-                {state === 'connected' && 'Ready'}
-                {state === 'listening' && 'Listening...'}
-                {state === 'processing' && 'Thinking...'}
-                {state === 'speaking' && 'Speaking...'}
-                {state === 'disconnected' && 'Disconnected'}
+                {state === 'connecting' && (locale === 'es' ? 'Conectando...' : 'Connecting...')}
+                {state === 'connected' && (locale === 'es' ? 'Listo' : 'Ready')}
+                {state === 'listening' && (locale === 'es' ? 'Escuchando...' : 'Listening...')}
+                {state === 'processing' && (locale === 'es' ? 'Pensando...' : 'Thinking...')}
+                {state === 'speaking' && (locale === 'es' ? 'Hablando...' : 'Speaking...')}
+                {state === 'disconnected' && (locale === 'es' ? 'Desconectado' : 'Disconnected')}
                 {state === 'error' && 'Error'}
               </span>
             </div>
@@ -602,7 +465,9 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           )}>
             {messages.length === 0 ? (
               <div className="text-center text-gray-500 dark:text-gray-400 text-sm py-4">
-                {isReady ? 'Listening... Speak now.' : 'Click Start to begin'}
+                {isReady
+                  ? (locale === 'es' ? 'Escuchando... Habla ahora.' : 'Listening... Speak now.')
+                  : (locale === 'es' ? 'Haz clic en Iniciar para comenzar' : 'Click Start to begin')}
               </div>
             ) : (
               messages.filter(m => m.role !== 'system').map((msg) => (
@@ -658,12 +523,12 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
                 {state === 'disconnected' || state === 'error' ? (
                   <>
                     <Mic className="w-4 h-4" />
-                    Start
+                    {locale === 'es' ? 'Iniciar' : 'Start'}
                   </>
                 ) : (
                   <>
                     <MicOff className="w-4 h-4" />
-                    Stop
+                    {locale === 'es' ? 'Detener' : 'Stop'}
                   </>
                 )}
               </button>
@@ -673,33 +538,10 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
                   onClick={restartConversation}
                   className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
                 >
-                  Restart
-                </button>
-              )}
-
-              {!isExpanded && (
-                <button
-                  onClick={() => setShowSettings(!showSettings)}
-                  className="p-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                >
-                  <Settings className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                  {locale === 'es' ? 'Reiniciar' : 'Restart'}
                 </button>
               )}
             </div>
-
-            {showSettings && !isExpanded && (
-              <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={continuousMode}
-                    onChange={(e) => setContinuousMode(e.target.checked)}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-gray-700 dark:text-gray-300">Continuous listening</span>
-                </label>
-              </div>
-            )}
           </div>
         </div>
       ) : (
@@ -707,7 +549,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
         <div className="flex items-center justify-center h-full">
           <button
             onClick={() => setIsMinimized(false)}
-            className="flex items-center justify-center w-full h-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-lg"
+            className="flex items-center justify-center w-full h-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors rounded-lg relative"
           >
             <img
               src="/AristAI_icon.png"

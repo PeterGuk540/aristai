@@ -27,10 +27,7 @@ import { User } from '@/types';
 import { UserMenu } from './UserMenu';
 import { Onboarding, useOnboarding } from './Onboarding';
 import { VoiceOnboarding } from './voice/VoiceOnboarding';
-import { ConversationalVoice, ConversationalVoiceV2, USE_VOICE_V2 } from './voice';
-import { VoiceUiActionBridge } from './voice/VoiceUiActionBridge';
-import { UiActionHandler } from './voice/UiActionHandler';
-import { VoiceUIController } from './voice/VoiceUIController';
+import { ConversationalVoiceV2 } from './voice';
 import { ToastProvider } from './ui/Toast';
 import { LanguageToggleCompact } from './LanguageToggle';
 import { cn } from '@/lib/utils';
@@ -679,33 +676,14 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         />
       )}
 
-      {/* Conversational Voice Assistant - always on for instructors after onboarding */}
+      {/* Conversational Voice Assistant - uses Client Tools architecture */}
       {(isInstructor || isAdmin) && onboardingComplete && (
-        <>
-          {/* V1 uses VoiceUiActionBridge, V2 uses Client Tools directly */}
-          {!USE_VOICE_V2 && (
-            <>
-              <VoiceUiActionBridge userId={currentUser?.id} onStatusChange={setVoiceConnected} />
-              <UiActionHandler />
-              <VoiceUIController />
-            </>
-          )}
-          {USE_VOICE_V2 ? (
-            <ConversationalVoiceV2
-              onNavigate={handleVoiceNavigate}
-              onActiveChange={setVoiceActive}
-              autoStart={false}
-              greeting={`Welcome back, ${currentUser?.name.split(' ')[0]}! How can I help you today?`}
-            />
-          ) : (
-            <ConversationalVoice
-              onNavigate={handleVoiceNavigate}
-              onActiveChange={setVoiceActive}
-              autoStart={false}
-              greeting={`Welcome back, ${currentUser?.name.split(' ')[0]}! How can I help you today?`}
-            />
-          )}
-        </>
+        <ConversationalVoiceV2
+          onNavigate={handleVoiceNavigate}
+          onActiveChange={setVoiceActive}
+          autoStart={false}
+          greeting={`Welcome back, ${currentUser?.name.split(' ')[0]}! How can I help you today?`}
+        />
       )}
     </div>
     </ToastProvider>

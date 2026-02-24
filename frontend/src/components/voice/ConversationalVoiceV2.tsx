@@ -29,6 +29,7 @@ import {
   selectItem,
   getPageInfo,
   generateContent,
+  getSmartContext,
   isHighRiskAction,
   ActionContext,
   ActionResult,
@@ -257,6 +258,18 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
     return JSON.stringify(result);
   }, [getActionContext]);
 
+  /**
+   * Handle get_smart_context tool call
+   * Queries the backend for intelligent database context
+   */
+  const handleGetSmartContext = useCallback(async (params: {
+    query: string;
+  }): Promise<string> => {
+    console.log('[Voice] Tool: get_smart_context', params);
+    const result = await getSmartContext(params.query, getActionContext());
+    return JSON.stringify(result);
+  }, [getActionContext]);
+
   // =============================================================================
   // INITIALIZATION
   // =============================================================================
@@ -310,19 +323,11 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
 
-        // Override agent settings including language
-        overrides: {
-          agent: {
-            language: langToUse as 'en' | 'es',
-          },
-        },
+        // Note: Dynamic variables are passed via the signed URL query params
+        // (dynamic_variables[language]=es) from the backend.
+        // SDK overrides may not work with signedUrl, so we rely on URL params.
 
-        // Pass language as dynamic variable for prompt template {{language}}
-        dynamicVariables: {
-          language: langToUse,
-        },
-
-        // Client Tools - 7 tools with string parameters!
+        // Client Tools - 8 tools with string parameters!
         clientTools: {
           navigate: handleNavigate,
           switch_tab: handleSwitchTab,
@@ -331,6 +336,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           select_item: handleSelectItem,
           get_page_info: handleGetPageInfo,
           generate_content: handleGenerateContent,
+          get_smart_context: handleGetSmartContext,
         },
 
         onConnect: ({ conversationId }: { conversationId: string }) => {
@@ -339,6 +345,18 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           setState('connected');
           onActiveChange?.(true);
           isInitializingRef.current = false;
+
+          // Log current page context for debugging
+          const pageInfo = getPageInfo();
+          console.log('[Voice] Current page context:', {
+            route: pageInfo.route,
+            tabs: pageInfo.tabs,
+            dropdowns: pageInfo.dropdowns.map(d => ({
+              name: d.name,
+              optionCount: d.options.length,
+              options: d.options.slice(0, 5), // Show first 5
+            })),
+          });
 
           // Add greeting message (use langToUse to avoid closure issues)
           const userName = currentUser?.name?.split(' ')[0] || (langToUse === 'es' ? 'amigo' : 'there');

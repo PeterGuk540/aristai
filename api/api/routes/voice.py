@@ -336,3 +336,158 @@ async def generate_content(request: Request, data: GenerateContentRequest):
         "estimated_cost_usd": response.metrics.estimated_cost_usd,
         "processing_time_seconds": round(processing_time, 2),
     }
+
+
+class SmartContextRequest(BaseModel):
+    """Request for smart context from database."""
+    query: str = Field(..., min_length=1, description="Natural language query about user's data")
+    user_id: Optional[int] = Field(default=None, description="User ID for context")
+    current_page: Optional[str] = Field(default=None, description="Current page path")
+
+
+SMART_CONTEXT_PROMPT = """You are a helpful assistant that answers questions about a user's educational platform data.
+
+Based on the query and available data, provide a concise, helpful response.
+
+User's Query: {query}
+
+Available Data:
+{data}
+
+Instructions:
+- Answer the query directly and concisely
+- If listing items, use a simple numbered or bulleted format
+- If no relevant data, say so briefly
+- Keep response under 100 words
+"""
+
+
+@router.post("/smart-context", status_code=status.HTTP_200_OK)
+async def get_smart_context(request: Request, data: SmartContextRequest, db: Session = Depends(get_db)):
+    """
+    Get intelligent context from the database using LLM.
+
+    This endpoint queries the database based on the user's natural language query
+    and returns a smart, contextual response.
+    """
+    import time
+    import uuid
+    from api.models.course import Course
+    from api.models.session import Session as SessionModel
+    from api.models.enrollment import Enrollment
+
+    request_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+
+    logger.info(f"[{request_id}] POST /api/voice/smart-context - query='{data.query}'")
+
+    # Simple auth check
+    require_auth(request)
+
+    # Get user_id from query param or request body
+    user_id = data.user_id
+    if not user_id:
+        # Try to get from query params
+        user_id = request.query_params.get('user_id')
+        if user_id:
+            user_id = int(user_id)
+
+    # Gather relevant data based on query keywords
+    context_data = []
+    query_lower = data.query.lower()
+
+    try:
+        # Fetch courses if query mentions courses
+        if any(word in query_lower for word in ['course', 'courses', 'class', 'classes', 'curso', 'cursos']):
+            if user_id:
+                courses = db.query(Course).filter(Course.created_by == user_id).all()
+            else:
+                courses = db.query(Course).limit(10).all()
+
+            if courses:
+                course_list = [f"- {c.title} (ID: {c.id}, Code: {c.join_code or 'N/A'})" for c in courses]
+                context_data.append(f"User's Courses ({len(courses)}):\n" + "\n".join(course_list))
+
+        # Fetch sessions if query mentions sessions
+        if any(word in query_lower for word in ['session', 'sessions', 'class', 'sesión', 'sesiones']):
+            if user_id:
+                # Get sessions for user's courses
+                user_courses = db.query(Course).filter(Course.created_by == user_id).all()
+                course_ids = [c.id for c in user_courses]
+                sessions = db.query(SessionModel).filter(SessionModel.course_id.in_(course_ids)).order_by(SessionModel.id.desc()).limit(20).all()
+            else:
+                sessions = db.query(SessionModel).limit(10).all()
+
+            if sessions:
+                session_list = [f"- {s.title} (Status: {s.status}, Course ID: {s.course_id})" for s in sessions]
+                context_data.append(f"Sessions ({len(sessions)}):\n" + "\n".join(session_list))
+
+        # Fetch enrollments if query mentions students or enrollment
+        if any(word in query_lower for word in ['student', 'students', 'enrolled', 'enrollment', 'estudiante', 'estudiantes']):
+            if user_id:
+                user_courses = db.query(Course).filter(Course.created_by == user_id).all()
+                course_ids = [c.id for c in user_courses]
+                enrollments = db.query(Enrollment).filter(Enrollment.course_id.in_(course_ids)).limit(50).all()
+            else:
+                enrollments = db.query(Enrollment).limit(20).all()
+
+            if enrollments:
+                # Group by course
+                by_course = {}
+                for e in enrollments:
+                    if e.course_id not in by_course:
+                        by_course[e.course_id] = 0
+                    by_course[e.course_id] += 1
+
+                enrollment_summary = [f"- Course {cid}: {count} students" for cid, count in by_course.items()]
+                context_data.append(f"Enrollments:\n" + "\n".join(enrollment_summary))
+
+        # If no specific data found, provide general info
+        if not context_data:
+            if user_id:
+                course_count = db.query(Course).filter(Course.created_by == user_id).count()
+                context_data.append(f"User has {course_count} courses in total.")
+            else:
+                context_data.append("No specific data found for this query.")
+
+    except Exception as e:
+        logger.error(f"[{request_id}] Database query error: {e}")
+        context_data.append(f"Error fetching data: {str(e)}")
+
+    # Use LLM to generate a smart response
+    llm, model_name = get_llm_with_tracking()
+    if not llm:
+        # Return raw data if no LLM configured
+        return {
+            "response": "\n\n".join(context_data),
+            "raw_data": context_data,
+            "model": None,
+        }
+
+    prompt = SMART_CONTEXT_PROMPT.format(
+        query=data.query,
+        data="\n\n".join(context_data) if context_data else "No data available."
+    )
+
+    llm_response = invoke_llm_with_metrics(llm, prompt, model_name)
+
+    processing_time = time.time() - start_time
+
+    if not llm_response.success:
+        logger.error(f"[{request_id}] LLM error: {llm_response.metrics.error_message}")
+        return {
+            "response": "\n\n".join(context_data),
+            "raw_data": context_data,
+            "model": None,
+            "error": llm_response.metrics.error_message,
+        }
+
+    logger.info(f"[{request_id}] Smart context generated - tokens={llm_response.metrics.total_tokens}, time={processing_time:.2f}s")
+
+    return {
+        "response": llm_response.content,
+        "raw_data": context_data,
+        "model": model_name,
+        "tokens_used": llm_response.metrics.total_tokens,
+        "processing_time_seconds": round(processing_time, 2),
+    }

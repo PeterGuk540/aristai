@@ -906,5 +906,77 @@ export async function generateContent(
 }
 
 // =============================================================================
+// SMART CONTEXT - Backend database queries via LLM
+// =============================================================================
+
+export interface SmartContextResult extends ActionResult {
+  response?: string;
+  raw_data?: string[];
+  model?: string;
+}
+
+/**
+ * Get smart context from the backend database using LLM
+ *
+ * @param query - Natural language query about user's data
+ * @param ctx - Action context
+ */
+export async function getSmartContext(
+  query: string,
+  ctx: ActionContext
+): Promise<SmartContextResult> {
+  console.log(`[ActionRegistry] getSmartContext: query="${query}"`);
+
+  try {
+    const response = await fetch('/api/voice/smart-context', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer dummy-token',
+      },
+      body: JSON.stringify({
+        query: query,
+        user_id: ctx.userId,
+        current_page: ctx.currentRoute,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[ActionRegistry] Smart context failed:', errorText);
+      return {
+        ok: false,
+        did: 'smart context query failed',
+        error: `Failed to get context: ${response.status}`,
+        hint: ctx.locale === 'es'
+          ? 'No pude obtener la información solicitada.'
+          : 'Could not retrieve the requested information.',
+      };
+    }
+
+    const data = await response.json();
+
+    return {
+      ok: true,
+      did: 'retrieved smart context',
+      response: data.response,
+      raw_data: data.raw_data,
+      model: data.model,
+      hint: data.response,
+    };
+  } catch (error) {
+    console.error('[ActionRegistry] Smart context error:', error);
+    return {
+      ok: false,
+      did: 'smart context error',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      hint: ctx.locale === 'es'
+        ? 'Ocurrió un error al consultar la información.'
+        : 'An error occurred while querying information.',
+    };
+  }
+}
+
+// =============================================================================
 // EXPORTS (ActionResult, ActionContext already exported at definition)
 // =============================================================================

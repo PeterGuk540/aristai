@@ -760,6 +760,8 @@ export default function CoursesPage() {
                             alert('Failed to start plan generation');
                           }
                         }}
+                        data-voice-id="generate-plans"
+                        data-voice-label={`Generate plans for ${course.title}`}
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         {t('courses.generatePlans')}

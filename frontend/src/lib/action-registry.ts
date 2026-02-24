@@ -124,6 +124,10 @@ const BUTTON_ALIASES: Record<string, string> = {
   'questions': 'generate-questions',
   'match reviews': 'match-peer-reviews',
   'peer review': 'match-peer-reviews',
+  'generate plans': 'generate-plans',
+  'generate plan': 'generate-plans',
+  'create plans': 'generate-plans',
+  'session plans': 'generate-plans',
 
   // Timer
   'start timer': 'start-session-timer',

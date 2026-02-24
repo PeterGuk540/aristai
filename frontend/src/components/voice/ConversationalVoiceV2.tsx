@@ -305,10 +305,22 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
       console.log('[Voice] Got signed URL');
 
       // Start conversation with Client Tools
-      console.log('[Voice] Starting conversation with Client Tools...');
+      console.log(`[Voice] Starting conversation with Client Tools (language=${langToUse})...`);
 
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
+
+        // Override agent settings including language
+        overrides: {
+          agent: {
+            language: langToUse, // 'en' or 'es'
+          },
+        },
+
+        // Pass language as dynamic variable for prompt template {{language}}
+        dynamicVariables: {
+          language: langToUse,
+        },
 
         // Client Tools - 7 tools with string parameters!
         clientTools: {

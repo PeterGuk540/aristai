@@ -323,9 +323,17 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
       conversationRef.current = await Conversation.startSession({
         signedUrl: signed_url,
 
-        // Note: Dynamic variables are passed via the signed URL query params
-        // (dynamic_variables[language]=es) from the backend.
-        // SDK overrides may not work with signedUrl, so we rely on URL params.
+        // Override agent settings including language
+        overrides: {
+          agent: {
+            language: langToUse as 'en' | 'es',
+          },
+        },
+
+        // Pass language as dynamic variable for prompt template {{language}}
+        dynamicVariables: {
+          language: langToUse,
+        },
 
         // Client Tools - 8 tools with string parameters!
         clientTools: {

@@ -515,6 +515,7 @@ export async function fillInput(
 
 /**
  * Select an item from a dropdown using natural language
+ * Handles React-controlled select elements properly
  */
 export async function selectItem(
   target: string,
@@ -523,6 +524,8 @@ export async function selectItem(
 ): Promise<ActionResult> {
   // First try to find the dropdown
   const dropdown = resolveTarget(target, 'dropdown');
+
+  console.log(`[ActionRegistry] selectItem: target="${target}", selection="${selection}", found=${!!dropdown}`);
 
   // Parse selection - could be ordinal ("first") or text ("Statistics 101")
   const ordinalIndex = parseOrdinal(selection);
@@ -541,21 +544,87 @@ export async function selectItem(
     const selectEl = dropdown as HTMLSelectElement;
     const options = Array.from(selectEl.options);
 
-    let optionIndex = ordinalIndex;
-    if (optionIndex === null) {
-      // Find by text match
+    console.log(`[ActionRegistry] Found select with ${options.length} options`);
+
+    // Filter out placeholder/empty options for ordinal selection
+    const realOptions = options.filter(opt => opt.value !== '' && opt.value !== 'undefined');
+    const hasPlaceholder = options.length > realOptions.length;
+
+    let optionIndex: number;
+
+    if (ordinalIndex !== null) {
+      // Ordinal selection (first, second, etc.)
+      if (ordinalIndex === -1) {
+        // "last" → get last real option
+        optionIndex = options.length - 1;
+      } else {
+        // Adjust for placeholder: "first" should select the first REAL option
+        optionIndex = hasPlaceholder ? ordinalIndex + 1 : ordinalIndex;
+      }
+    } else {
+      // Text match - search all options
       optionIndex = options.findIndex(opt =>
         opt.text.toLowerCase().includes(selection.toLowerCase())
       );
-    } else if (optionIndex === -1) {
-      // "last" → get last index
-      optionIndex = options.length - 1;
     }
 
+    console.log(`[ActionRegistry] Selecting option index ${optionIndex} (hasPlaceholder=${hasPlaceholder})`);
+
     if (optionIndex >= 0 && optionIndex < options.length) {
+      const selectedValue = options[optionIndex].value;
+
+      // Use native value setter to trigger React's internal tracking
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLSelectElement.prototype,
+        'value'
+      )?.set;
+
+      if (nativeSetter) {
+        nativeSetter.call(selectEl, selectedValue);
+      } else {
+        selectEl.value = selectedValue;
+      }
+
+      // Also set selectedIndex for good measure
       selectEl.selectedIndex = optionIndex;
-      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Dispatch events to trigger React onChange
+      selectEl.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      selectEl.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+
+      const selectedText = options[optionIndex].text;
+      console.log(`[ActionRegistry] Selected: "${selectedText}" (value=${selectedValue})`);
+
+      return {
+        ok: true,
+        did: `selected ${selectedText}`,
+        hint: ctx.locale === 'es'
+          ? `Seleccionado: ${selectedText}.`
+          : `Selected: ${selectedText}.`,
+      };
+    } else {
+      console.log(`[ActionRegistry] Option index ${optionIndex} out of range`);
+      return {
+        ok: false,
+        did: 'selection failed',
+        error: `Could not find option: ${selection}`,
+        hint: ctx.locale === 'es'
+          ? `No pude encontrar esa opción.`
+          : `Could not find that option.`,
+      };
     }
+  }
+
+  // Dropdown not found or not a native select
+  if (!dropdown) {
+    return {
+      ok: false,
+      did: 'dropdown not found',
+      error: `Dropdown not found: ${target}`,
+      hint: ctx.locale === 'es'
+        ? `No pude encontrar ese menú desplegable.`
+        : `Could not find that dropdown.`,
+    };
   }
 
   return {
@@ -576,7 +645,7 @@ export function getPageInfo(): {
   tabs: string[];
   buttons: string[];
   inputs: string[];
-  dropdowns: string[];
+  dropdowns: { name: string; options: string[]; selected?: string }[];
 } {
   if (typeof window === 'undefined') {
     return { route: '/', tabs: [], buttons: [], inputs: [], dropdowns: [] };
@@ -588,7 +657,7 @@ export function getPageInfo(): {
     tabs: [] as string[],
     buttons: [] as string[],
     inputs: [] as string[],
-    dropdowns: [] as string[],
+    dropdowns: [] as { name: string; options: string[]; selected?: string }[],
   };
 
   // Collect tabs
@@ -623,17 +692,37 @@ export function getPageInfo(): {
     info.inputs.push(id || placeholder || 'input');
   });
 
-  // Collect dropdowns
+  // Collect dropdowns with their options
   document.querySelectorAll('[data-voice-id^="select-"], select[data-voice-id]').forEach(dd => {
     const id = dd.getAttribute('data-voice-id');
-    info.dropdowns.push(id?.replace('select-', '') || 'dropdown');
+    const name = id?.replace('select-', '') || 'dropdown';
+
+    // If it's a native select, get the options
+    if (dd.tagName === 'SELECT') {
+      const selectEl = dd as HTMLSelectElement;
+      const options = Array.from(selectEl.options)
+        .filter(opt => opt.value !== '' && opt.value !== 'undefined') // Skip placeholders
+        .map(opt => opt.text)
+        .slice(0, 10); // Limit to 10 options
+
+      const selectedOption = selectEl.selectedIndex >= 0
+        ? selectEl.options[selectEl.selectedIndex]?.text
+        : undefined;
+
+      info.dropdowns.push({
+        name,
+        options,
+        selected: selectedOption && selectedOption !== 'Select a course...' ? selectedOption : undefined,
+      });
+    } else {
+      info.dropdowns.push({ name, options: [] });
+    }
   });
 
-  // Deduplicate
+  // Deduplicate tabs, buttons, inputs
   info.tabs = [...new Set(info.tabs)];
   info.buttons = [...new Set(info.buttons)];
   info.inputs = [...new Set(info.inputs)];
-  info.dropdowns = [...new Set(info.dropdowns)];
 
   return info;
 }

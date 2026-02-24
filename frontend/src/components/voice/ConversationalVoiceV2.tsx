@@ -313,7 +313,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
         // Override agent settings including language
         overrides: {
           agent: {
-            language: langToUse, // 'en' or 'es'
+            language: langToUse as 'en' | 'es',
           },
         },
 

@@ -335,6 +335,10 @@ export function AppShellHandsFree({ children }: AppShellProps) {
               alt="AristAI"
               className="h-10 w-10 object-contain"
             />
+            <div>
+              <span className="block text-lg font-semibold text-neutral-900 dark:text-white tracking-tight">AristAI</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary-600 dark:text-primary-400">Internal Console</span>
+            </div>
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}

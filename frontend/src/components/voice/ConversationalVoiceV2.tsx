@@ -17,7 +17,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Conversation } from '@elevenlabs/client';
-import { Mic, MicOff, Minimize2, Maximize2, Sparkles, Globe } from 'lucide-react';
+import { Mic, MicOff, Minimize2, Maximize2, Globe } from 'lucide-react';
 import { useUser } from '@/lib/context';
 import { useLanguage } from '@/lib/i18n-provider';
 import { cn } from '@/lib/utils';
@@ -475,9 +475,13 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+              <img
+                src="/AristAI_icon.png"
+                alt="Carol"
+                className="w-4 h-4 object-contain"
+              />
               <span className="text-sm font-medium text-gray-900 dark:text-white">
-                Voice Assistant
+                Carol
               </span>
               {isActive && (
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -550,8 +554,12 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
                   msg.role === 'user' ? 'justify-end' : 'justify-start'
                 )}>
                   {msg.role === 'assistant' && (
-                    <div className="w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center flex-shrink-0">
-                      <Sparkles className="w-3 h-3 text-primary-600 dark:text-primary-400" />
+                    <div className="w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      <img
+                        src="/AristAI_icon.png"
+                        alt="Carol"
+                        className="w-5 h-5 object-contain"
+                      />
                     </div>
                   )}
                   <div className={cn(

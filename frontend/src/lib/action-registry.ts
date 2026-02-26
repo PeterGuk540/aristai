@@ -427,6 +427,7 @@ export async function switchTab(
 
 /**
  * Click a button using natural language target
+ * High-risk actions (create, delete, etc.) require explicit confirmation
  */
 export async function clickButton(
   target: string,
@@ -439,6 +440,31 @@ export async function clickButton(
   const button = resolveTarget(target, 'button');
 
   if (button) {
+    const voiceId = button.getAttribute('data-voice-id') || target;
+
+    // Check if this is a high-risk action that requires confirmation
+    if (isHighRiskAction(voiceId)) {
+      console.log(`[ActionRegistry] High-risk action detected: ${voiceId}, requesting confirmation`);
+
+      // For voice-triggered high-risk actions, dispatch event to let UI handle confirmation
+      // This prevents premature course creation when user hasn't finished the form
+      const confirmMessage = ctx.locale === 'es'
+        ? `¿Estás seguro de que quieres ${target}?`
+        : `Are you sure you want to ${target}?`;
+
+      const confirmed = window.confirm(confirmMessage);
+
+      if (!confirmed) {
+        return {
+          ok: false,
+          did: 'action cancelled by user',
+          hint: ctx.locale === 'es'
+            ? 'Acción cancelada.'
+            : 'Action cancelled.',
+        };
+      }
+    }
+
     button.click();
 
     const result: ActionResult = {
@@ -740,7 +766,8 @@ export function getPageInfo(): {
 
 const HIGH_RISK_KEYWORDS = [
   'delete', 'remove', 'end', 'stop', 'publish', 'send', 'submit',
-  'eliminar', 'borrar', 'terminar', 'publicar', 'enviar',
+  'create-course', 'create-course-with-plans',  // Require confirmation for course creation
+  'eliminar', 'borrar', 'terminar', 'publicar', 'enviar', 'crear-curso',
 ];
 
 /**

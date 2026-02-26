@@ -6,17 +6,21 @@ their API shapes without code changes.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
+import logging
 import mimetypes
 import os
 import re
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 
 from api.services.integrations.base import ExternalCourse, ExternalEnrollment, ExternalMaterial, ExternalSession, LmsProvider
+
+logger = logging.getLogger(__name__)
 
 
 class UppProvider(LmsProvider):
@@ -73,6 +77,11 @@ class UppProvider(LmsProvider):
         self.materials_path_tpl = os.getenv("UPP_MATERIALS_PATH", "/courses/{course_id}/materials").strip()
         self.enrollments_path_tpl = os.getenv("UPP_ENROLLMENTS_PATH", "/courses/{course_id}/enrollments").strip()
         self.download_path_tpl = os.getenv("UPP_DOWNLOAD_PATH", "/materials/{material_id}/download").strip()
+
+        # Browser automation settings for JavaScript-rendered content
+        self.use_browser_fallback = os.getenv("UPP_USE_BROWSER_FALLBACK", "true").lower() == "true"
+        self.browser_timeout = float(os.getenv("UPP_BROWSER_TIMEOUT", "30"))
+        self.extract_videos = os.getenv("UPP_EXTRACT_VIDEOS", "true").lower() == "true"
 
     def is_configured(self) -> bool:
         # Token may be optional for some deployments if SSO/session auth is used.
@@ -915,6 +924,153 @@ class UppProvider(LmsProvider):
 
         return sessions
 
+    # ============ Browser Fallback Methods ============
+
+    def _needs_browser_fallback(self, html: str, materials: list) -> bool:
+        """
+        Detect if browser automation is needed.
+
+        Returns True when:
+        1. No materials found but page has JavaScript indicators
+        2. Page has video content indicators but no video materials extracted
+        """
+        if not self.use_browser_fallback:
+            return False
+
+        # No materials found but page has dynamic content indicators
+        if not materials:
+            js_indicators = [
+                'onclick=', 'javascript:', 'ng-', 'v-', 'react',
+                'data-src=', 'lazy-load', 'ajax', 'fetch(', 'async',
+                'semana', 'Semana', 'accordion', 'collapse',
+            ]
+            return any(ind in html for ind in js_indicators)
+
+        # Check for video content indicators without extracted videos
+        if self.extract_videos:
+            video_indicators = [
+                'video', 'player', 'stream', 'grabadas', 'clases en línea',
+                'recordedclasses', 'onlineclasses', 'multimedia',
+            ]
+            has_video_indicators = any(ind in html.lower() for ind in video_indicators)
+            has_video_materials = any(
+                m.content_type.startswith('video/') or
+                any(ext in (m.source_url or '').lower() for ext in ['.mp4', '.m3u8', '.mpd'])
+                for m in materials
+            )
+            return has_video_indicators and not has_video_materials
+
+        return False
+
+    def _fetch_materials_with_browser(
+        self,
+        course_url: str,
+        course_external_id: str,
+    ) -> list[ExternalMaterial]:
+        """
+        Use Playwright to extract materials from JavaScript-rendered pages.
+
+        This is called as a fallback when static HTML scraping doesn't find
+        materials or detects JavaScript-heavy content.
+        """
+        from api.services.integrations.browser_helper import BrowserMaterialFetcher
+
+        async def _fetch():
+            cookies = self._login_cookies()
+            fetcher = BrowserMaterialFetcher(cookies, self.browser_timeout)
+            raw_materials = await fetcher.fetch_materials_from_page(
+                course_url, self.api_url
+            )
+
+            materials = []
+            for m in raw_materials:
+                external_id = self._encode_url_ref("maturl", m['url'])
+                filename = m['url'].rsplit('/', 1)[-1].split('?')[0] or 'material.bin'
+                content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+
+                materials.append(ExternalMaterial(
+                    provider=self.provider_name,
+                    external_id=external_id,
+                    course_external_id=course_external_id,
+                    title=m.get('title', filename),
+                    filename=filename,
+                    content_type=content_type,
+                    size_bytes=0,
+                    source_url=m['url'],
+                ))
+
+            return materials
+
+        # Run async in sync context
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            # If already in an async context, create a new thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _fetch())
+                return future.result()
+        else:
+            return asyncio.run(_fetch())
+
+    def _extract_video_url_with_browser(self, page_url: str) -> Optional[str]:
+        """Extract video stream URL from a video page using browser."""
+        from api.services.integrations.browser_helper import extract_video_stream_url
+
+        async def _extract():
+            cookies = self._login_cookies()
+            return await extract_video_stream_url(page_url, cookies, self.browser_timeout)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _extract())
+                return future.result()
+        else:
+            return asyncio.run(_extract())
+
+    def _download_with_browser(self, url: str) -> tuple[bytes, str]:
+        """Download file using browser for protected downloads."""
+        from api.services.integrations.browser_helper import download_with_browser
+
+        async def _download():
+            cookies = self._login_cookies()
+            return await download_with_browser(url, cookies, self.browser_timeout)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, _download())
+                return future.result()
+        else:
+            return asyncio.run(_download())
+
+    def _is_video_page(self, url: str) -> bool:
+        """Check if URL is a video page (not a direct video file)."""
+        url_lower = url.lower()
+        # Direct video files - not pages
+        if url_lower.endswith(('.mp4', '.m3u8', '.mpd', '.webm', '.avi', '.mov')):
+            return False
+        # Video page patterns
+        video_page_patterns = [
+            'recordedclasses', 'onlineclasses', 'video', 'player',
+            'multimedia', 'stream', 'watch', 'reproductor',
+        ]
+        return any(pattern in url_lower for pattern in video_page_patterns)
+
     def list_materials(self, course_external_id: str) -> list[ExternalMaterial]:
         course_url = self._decode_url_ref(str(course_external_id), "courseurl")
         raw_materials: list[dict[str, Any]] = []
@@ -984,7 +1140,38 @@ class UppProvider(LmsProvider):
                 for m in scraped:
                     if m.external_id not in unique:
                         unique[m.external_id] = m
-                return list(unique.values())
+                materials = list(unique.values())
+
+                # Check if browser fallback is needed (JS content or missing videos)
+                # Use the last page's HTML for detection
+                if self._needs_browser_fallback(page_html, materials):
+                    logger.info(f"Browser fallback triggered for course {course_external_id}")
+                    try:
+                        browser_materials = self._fetch_materials_with_browser(
+                            course_url, str(course_external_id)
+                        )
+                        # Merge browser results (avoid duplicates)
+                        for bm in browser_materials:
+                            if bm.external_id not in unique:
+                                unique[bm.external_id] = bm
+                        materials = list(unique.values())
+                        logger.info(f"Browser fallback added {len(browser_materials)} materials")
+                    except Exception as e:
+                        logger.warning(f"Browser fallback failed: {e}")
+
+                return materials
+
+            # Static scraping found nothing - try browser fallback
+            if self.use_browser_fallback:
+                logger.info(f"No materials from static scraping, trying browser for {course_url}")
+                try:
+                    browser_materials = self._fetch_materials_with_browser(
+                        course_url, str(course_external_id)
+                    )
+                    if browser_materials:
+                        return browser_materials
+                except Exception as e:
+                    logger.warning(f"Browser fallback failed: {e}")
 
             raise RuntimeError(
                 f"UPP materials could not be discovered from course page: {course_url}. "
@@ -1039,6 +1226,17 @@ class UppProvider(LmsProvider):
     def download_material(self, material_external_id: str) -> tuple[bytes, ExternalMaterial]:
         material_url = self._decode_url_ref(str(material_external_id), "maturl")
         if material_url is not None:
+            # Check if this is a video page that needs browser extraction
+            if self.extract_videos and self.use_browser_fallback and self._is_video_page(material_url):
+                logger.info(f"Detected video page, extracting stream URL: {material_url}")
+                try:
+                    stream_url = self._extract_video_url_with_browser(material_url)
+                    if stream_url:
+                        logger.info(f"Extracted video stream URL: {stream_url[:100]}...")
+                        material_url = stream_url
+                except Exception as e:
+                    logger.warning(f"Video extraction failed, falling back to original URL: {e}")
+
             filename = self._filename_from_url(material_url)
             content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
             meta = ExternalMaterial(
@@ -1057,14 +1255,30 @@ class UppProvider(LmsProvider):
                 cookies=self._login_cookies(),
                 follow_redirects=True,
             ) as client:
-                response = client.get(material_url)
-                response.raise_for_status()
-                if not response.content:
-                    raise RuntimeError(
-                        f"UPP material download returned empty content for URL material {material_url}."
-                    )
-                meta.size_bytes = len(response.content)
-                return response.content, meta
+                try:
+                    response = client.get(material_url)
+                    response.raise_for_status()
+                    if response.content:
+                        meta.size_bytes = len(response.content)
+                        return response.content, meta
+                except Exception as e:
+                    logger.warning(f"Direct download failed: {e}")
+
+                # If direct download fails, try browser fallback
+                if self.use_browser_fallback:
+                    logger.info(f"Trying browser download for: {material_url}")
+                    try:
+                        content, ct = self._download_with_browser(material_url)
+                        if content:
+                            meta.size_bytes = len(content)
+                            meta.content_type = ct
+                            return content, meta
+                    except Exception as browser_error:
+                        logger.warning(f"Browser download also failed: {browser_error}")
+
+                raise RuntimeError(
+                    f"UPP material download failed for URL material {material_url}."
+                )
 
         path = self.download_path_tpl.format(material_id=material_external_id)
         if not self.is_configured():

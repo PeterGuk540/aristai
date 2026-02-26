@@ -582,20 +582,38 @@ class UppProvider(LmsProvider):
     def _looks_like_material_link(self, href: str, label: str) -> bool:
         href_l = href.lower()
         label_l = label.lower()
-        if re.search(r"\.(pdf|docx?|pptx?|xlsx?|csv|txt|zip|rar|mp4|mp3)(\?|$)", href_l):
+
+        # Skip navigation/portal ASP pages - these are pages to crawl, not download
+        # They contain links to actual materials but aren't materials themselves
+        if re.search(r"\.(asp|aspx|php|html?)(\?|$)", href_l):
+            # Exception: ASP pages with download parameters ARE materials
+            if re.search(r"[?&](download|file|archivo|id)=", href_l):
+                return True
+            # Exception: direct file download endpoints
+            if re.search(r"download\.asp|getfile\.asp|archivo\.asp", href_l):
+                return True
+            # Otherwise, ASP/PHP pages are navigation, not materials
+            return False
+
+        # Actual file extensions - these are definitely materials
+        if re.search(r"\.(pdf|docx?|pptx?|xlsx?|csv|txt|zip|rar|mp4|mp3|m3u8|webm|avi|mov)(\?|$)", href_l):
             return True
-        if re.search(
-            r"filemanager|linkmanager|syllabus|silabo|s[ií]labo|onlineclasses|recordedclasses|educationalcontent|academicwork|academicsupport|selectedreadings|webgrafia|evaluations",
-            href_l,
-        ):
-            return True
+
+        # URLs with download-related paths (but not ASP pages which are excluded above)
         if re.search(r"download|archivo|material|recurso|adjunto|file|files|document", href_l):
             return True
+
+        # External video/streaming URLs
+        if re.search(r"youtube\.com|vimeo\.com|drive\.google\.com|dropbox\.com|onedrive\.com", href_l):
+            return True
+
+        # Label-based detection for links that might be materials
         if re.search(
-            r"archivo|material|recurso|adjunto|documento|s[ií]labo|silabo|clases en l[ií]nea|clases grabadas|contenido did[aá]ctico|trabajo acad[eé]mico|ayudas|lecturas seleccionadas|evaluaciones",
+            r"archivo|material|recurso|adjunto|documento|descargar|download",
             label_l,
         ):
             return True
+
         return False
 
     def _filename_from_url(self, href: str) -> str:
@@ -620,11 +638,50 @@ class UppProvider(LmsProvider):
         course_external_id: str,
         session_external_id: str | None = None,
     ) -> list[ExternalMaterial]:
+        # Extract links from <a href> tags
         links = re.findall(
             r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
             html,
             flags=re.IGNORECASE | re.DOTALL,
         )
+
+        # Also extract URLs from onclick handlers (common in UPP)
+        onclick_urls = re.findall(
+            r'onclick=["\'][^"\']*(?:window\.open|location\.href|window\.location)\s*[=\(]\s*["\']([^"\']+)["\']',
+            html,
+            flags=re.IGNORECASE,
+        )
+        for url in onclick_urls:
+            links.append((url, ""))
+
+        # Extract video sources
+        video_sources = re.findall(
+            r'<(?:source|video)[^>]+src=["\']([^"\']+)["\']',
+            html,
+            flags=re.IGNORECASE,
+        )
+        for src in video_sources:
+            links.append((src, "Video"))
+
+        # Extract iframe sources (embedded content)
+        iframe_sources = re.findall(
+            r'<iframe[^>]+src=["\']([^"\']+)["\']',
+            html,
+            flags=re.IGNORECASE,
+        )
+        for src in iframe_sources:
+            if 'youtube' in src.lower() or 'vimeo' in src.lower() or 'video' in src.lower():
+                links.append((src, "Embedded Video"))
+
+        # Extract embed/object sources
+        embed_sources = re.findall(
+            r'<(?:embed|object)[^>]+(?:src|data)=["\']([^"\']+)["\']',
+            html,
+            flags=re.IGNORECASE,
+        )
+        for src in embed_sources:
+            links.append((src, "Embedded Content"))
+
         out: list[ExternalMaterial] = []
         seen: set[str] = set()
         for href_raw, label_html in links:

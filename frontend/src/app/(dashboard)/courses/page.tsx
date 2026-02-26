@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2 } from 'lucide-react';
+import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2, Sparkles } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
@@ -51,6 +51,7 @@ export default function CoursesPage() {
   // Create course form
   const [title, setTitle] = useState('');
   const [syllabus, setSyllabus] = useState('');
+  const [syllabusJson, setSyllabusJson] = useState<Record<string, unknown> | null>(null);  // Structured syllabus from voice generation
   const [objectives, setObjectives] = useState('');
 
   // Syllabus upload state
@@ -63,6 +64,9 @@ export default function CoursesPage() {
   // Auto-extract objectives state
   const [extractingObjectives, setExtractingObjectives] = useState(false);
   const [objectivesExtracted, setObjectivesExtracted] = useState(false);
+
+  // AI syllabus generation state
+  const [generatingSyllabus, setGeneratingSyllabus] = useState(false);
 
   // Courses page tab mappings
   const coursesTabMap = mergeTabMappings({
@@ -108,6 +112,19 @@ export default function CoursesPage() {
   useEffect(() => {
     return setupVoiceTabListeners(handleVoiceSelectTab);
   }, [handleVoiceSelectTab]);
+
+  // Listen for voice-generated syllabus JSON
+  useEffect(() => {
+    const handleSyllabusGenerated = (event: CustomEvent<{ syllabusJson: Record<string, unknown> }>) => {
+      console.log('[Courses] Received syllabus JSON from voice generation:', event.detail.syllabusJson);
+      setSyllabusJson(event.detail.syllabusJson);
+    };
+
+    window.addEventListener('voice-syllabus-generated', handleSyllabusGenerated as EventListener);
+    return () => {
+      window.removeEventListener('voice-syllabus-generated', handleSyllabusGenerated as EventListener);
+    };
+  }, []);
 
   // Update tab when URL changes
   useEffect(() => {
@@ -234,6 +251,59 @@ export default function CoursesPage() {
     }
   }, []);
 
+  const generateSyllabusWithAI = useCallback(async () => {
+    if (!title.trim()) {
+      alert('Please enter a course title first');
+      return;
+    }
+
+    setGeneratingSyllabus(true);
+    try {
+      const response = await fetch('/api/voice/generate-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer dummy-token',
+        },
+        body: JSON.stringify({
+          content_type: 'syllabus',
+          context: title,
+          language: 'en',  // Could be made dynamic based on user preference
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate syllabus');
+      }
+
+      const data = await response.json();
+
+      // Set the text content for display
+      setSyllabus(data.content);
+
+      // Store the structured JSON if available
+      if (data.syllabus_json) {
+        setSyllabusJson(data.syllabus_json);
+        console.log('[Courses] Generated syllabus JSON:', data.syllabus_json);
+      }
+
+      // Auto-extract objectives from the generated syllabus
+      if (data.syllabus_json?.learning_goals) {
+        // Use learning goals directly from the structured JSON
+        setObjectives(data.syllabus_json.learning_goals.join('\n'));
+        setObjectivesExtracted(true);
+      } else if (data.content && data.content.length >= 50) {
+        // Fallback: extract from text
+        extractObjectivesFromSyllabus(data.content);
+      }
+    } catch (error) {
+      console.error('Failed to generate syllabus:', error);
+      alert('Failed to generate syllabus. Please try again.');
+    } finally {
+      setGeneratingSyllabus(false);
+    }
+  }, [title, extractObjectivesFromSyllabus]);
+
   const handleSyllabusFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -274,6 +344,7 @@ export default function CoursesPage() {
 
   const handleSyllabusTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setSyllabus(e.target.value);
+    setSyllabusJson(null);  // Clear structured JSON when user manually edits
     setObjectivesExtracted(false);
   };
 
@@ -296,6 +367,7 @@ export default function CoursesPage() {
       const course = await api.createCourse({
         title,
         syllabus_text: syllabus,
+        syllabus_json: syllabusJson || undefined,  // Pass structured syllabus if available from voice generation
         objectives_json: objectivesList,
         created_by: currentUser?.id,
       });
@@ -320,6 +392,7 @@ export default function CoursesPage() {
 
       setTitle('');
       setSyllabus('');
+      setSyllabusJson(null);  // Clear structured syllabus
       setObjectives('');
       setSyllabusFile(null);
       setSyllabusInputMode('paste');
@@ -797,8 +870,22 @@ export default function CoursesPage() {
 
                 {/* Syllabus Input - Toggle between Upload and Paste */}
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">{t('courses.syllabus')}</label>
-                  <div className="flex gap-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">{t('courses.syllabus')}</label>
+                    {generatingSyllabus && (
+                      <Badge variant="primary" size="sm">
+                        <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                        Generating...
+                      </Badge>
+                    )}
+                    {syllabusJson && !generatingSyllabus && (
+                      <Badge variant="success" size="sm">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        AI Generated
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setSyllabusInputMode('paste')}
@@ -823,7 +910,26 @@ export default function CoursesPage() {
                       <Upload className="h-4 w-4" />
                       {t('courses.uploadFile')}
                     </button>
+                    <button
+                      type="button"
+                      onClick={generateSyllabusWithAI}
+                      disabled={generatingSyllabus || !title.trim()}
+                      className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                      data-voice-id="generate-syllabus"
+                    >
+                      {generatingSyllabus ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      Generate with AI
+                    </button>
                   </div>
+                  {!title.trim() && (
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                      Enter a course title above to enable AI syllabus generation
+                    </p>
+                  )}
 
                   {syllabusInputMode === 'paste' ? (
                     <Textarea

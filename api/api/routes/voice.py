@@ -210,15 +210,41 @@ async def delegate_to_mcp(request: Request, db: Session = Depends(get_db)):
 
 # Content generation prompts for different types
 CONTENT_PROMPTS = {
-    "syllabus": """Create a comprehensive course syllabus for: {context}
+    "syllabus": """Generate a comprehensive course syllabus for: {context}
 
-Include:
-- Course overview (2-3 sentences)
-- Weekly topics (8-12 weeks)
-- Key readings or resources for each week
-- Assessment methods
+You MUST output ONLY valid JSON matching this exact schema (no markdown, no explanations):
+{{
+  "course_info": {{
+    "title": "Course Title",
+    "code": "COURSE-101",
+    "semester": "Fall 2024",
+    "instructor": "TBD",
+    "description": "2-3 sentence course description explaining what students will learn",
+    "prerequisites": "List prerequisites or 'None'"
+  }},
+  "learning_goals": [
+    "By the end of this course, students will be able to... (5-8 specific, measurable objectives)"
+  ],
+  "learning_resources": [
+    "Textbook: Title by Author",
+    "Online resources, articles, etc."
+  ],
+  "schedule": [
+    {{"week": 1, "module": "Introduction", "topic": "Course overview and foundational concepts"}},
+    {{"week": 2, "module": "Module Name", "topic": "Specific topic covered"}}
+  ],
+  "policies": {{
+    "grading": "Assignments: 40%, Midterm: 25%, Final: 35%",
+    "attendance": "Attendance policy description",
+    "academic_integrity": "Academic honesty policy",
+    "accessibility": "Accommodations available upon request",
+    "office_hours": "TBD or by appointment"
+  }}
+}}
 
-Format as clean text, one topic per line for the weekly schedule.
+Generate a complete schedule with 10-14 weeks.
+Include 5-8 learning goals.
+Include 3-5 learning resources.
 {additional}""",
 
     "objectives": """Generate 5-7 clear learning objectives for: {context}
@@ -314,8 +340,9 @@ async def generate_content(request: Request, data: GenerateContentRequest):
 
     logger.info(f"[{request_id}] Invoking {model_name} for {data.content_type} generation")
 
-    # Invoke LLM
-    response = invoke_llm_with_metrics(llm, prompt, model_name)
+    # Invoke LLM - use JSON mode for syllabus to guarantee valid JSON output
+    use_json_mode = data.content_type == "syllabus"
+    response = invoke_llm_with_metrics(llm, prompt, model_name, json_mode=use_json_mode)
 
     processing_time = time.time() - start_time
 
@@ -328,7 +355,8 @@ async def generate_content(request: Request, data: GenerateContentRequest):
 
     logger.info(f"[{request_id}] Content generated successfully - tokens={response.metrics.total_tokens}, cost=${response.metrics.estimated_cost_usd:.4f}, time={processing_time:.2f}s")
 
-    return {
+    # Special handling for syllabus - parse JSON and convert to text
+    result = {
         "content": response.content,
         "content_type": data.content_type,
         "model": model_name,
@@ -336,6 +364,45 @@ async def generate_content(request: Request, data: GenerateContentRequest):
         "estimated_cost_usd": response.metrics.estimated_cost_usd,
         "processing_time_seconds": round(processing_time, 2),
     }
+
+    if data.content_type == "syllabus":
+        import json
+        from api.services.syllabus_formatter import syllabus_json_to_text, validate_syllabus_json
+
+        try:
+            # Parse the JSON response
+            raw_content = response.content.strip()
+            # Remove markdown code blocks if present
+            if raw_content.startswith("```"):
+                raw_content = raw_content.split("```")[1]
+                if raw_content.startswith("json"):
+                    raw_content = raw_content[4:]
+                raw_content = raw_content.strip()
+
+            syllabus_json = json.loads(raw_content)
+
+            # Validate against Pydantic schema to ensure structure matches template
+            is_valid, validation_error = validate_syllabus_json(syllabus_json)
+            if not is_valid:
+                logger.warning(f"[{request_id}] Syllabus JSON validation warning: {validation_error}")
+                # Still proceed - validation is lenient, JSON is usable
+
+            # Convert to readable text for display
+            syllabus_text = syllabus_json_to_text(syllabus_json, data.language)
+
+            result["content"] = syllabus_text  # Text for display
+            result["syllabus_json"] = syllabus_json  # Structured data for storage
+            result["source"] = "structured_generation"
+            result["schema_valid"] = is_valid  # Indicate if it passed strict schema validation
+
+            logger.info(f"[{request_id}] Syllabus JSON parsed successfully with {len(syllabus_json.get('schedule', []))} schedule items, schema_valid={is_valid}")
+
+        except json.JSONDecodeError as e:
+            # If JSON parsing fails, return raw content as before
+            logger.warning(f"[{request_id}] Failed to parse syllabus JSON: {e}. Returning raw content.")
+            result["parse_warning"] = "Generated content was not valid JSON. Returned as raw text."
+
+    return result
 
 
 class SmartContextRequest(BaseModel):

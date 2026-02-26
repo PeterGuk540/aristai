@@ -221,10 +221,10 @@ export const api = {
   getCourse: (id: number) =>
     fetchApi<any>(`/courses/${id}`),
 
-  createCourse: (data: { title: string; syllabus_text?: string; objectives_json?: string[]; created_by?: number }) =>
+  createCourse: (data: { title: string; syllabus_text?: string; syllabus_json?: Record<string, unknown>; objectives_json?: string[]; created_by?: number }) =>
     fetchApi<any>('/courses/', { method: 'POST', body: JSON.stringify(data) }),
 
-  updateCourse: (courseId: number, userId: number, data: { title?: string; syllabus_text?: string; objectives_json?: string[] }) =>
+  updateCourse: (courseId: number, userId: number, data: { title?: string; syllabus_text?: string; syllabus_json?: Record<string, unknown>; objectives_json?: string[] }) =>
     fetchApi<any>(`/courses/${courseId}?user_id=${userId}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   deleteCourse: (courseId: number, userId: number) =>

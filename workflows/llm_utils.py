@@ -167,7 +167,7 @@ def estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 
-def invoke_llm_with_metrics(llm, prompt: str, model_name: str) -> LLMResponse:
+def invoke_llm_with_metrics(llm, prompt: str, model_name: str, json_mode: bool = False) -> LLMResponse:
     """
     Invoke LLM and return response with metrics.
 
@@ -175,6 +175,7 @@ def invoke_llm_with_metrics(llm, prompt: str, model_name: str) -> LLMResponse:
         llm: LangChain LLM instance
         prompt: The prompt to send
         model_name: Name of the model for cost calculation
+        json_mode: If True, enforce JSON output format (OpenAI only)
 
     Returns:
         LLMResponse with content and metrics
@@ -183,7 +184,13 @@ def invoke_llm_with_metrics(llm, prompt: str, model_name: str) -> LLMResponse:
     start_time = time.time()
 
     try:
-        response = llm.invoke(prompt)
+        # Use JSON mode if requested (OpenAI only)
+        if json_mode and "gpt" in model_name.lower():
+            # Bind response_format for JSON mode
+            llm_with_json = llm.bind(response_format={"type": "json_object"})
+            response = llm_with_json.invoke(prompt)
+        else:
+            response = llm.invoke(prompt)
         metrics.execution_time_seconds = round(time.time() - start_time, 3)
 
         # Extract token usage if available

@@ -128,6 +128,9 @@ const BUTTON_ALIASES: Record<string, string> = {
   'generate plan': 'generate-plans',
   'create plans': 'generate-plans',
   'session plans': 'generate-plans',
+  'generate syllabus': 'generate-syllabus',
+  'create syllabus': 'generate-syllabus',
+  'ai syllabus': 'generate-syllabus',
 
   // Timer
   'start timer': 'start-session-timer',
@@ -819,6 +822,7 @@ export interface GenerateContentResult extends ActionResult {
   content?: string;
   tokens_used?: number;
   model?: string;
+  syllabus_json?: Record<string, unknown>;  // Structured syllabus data (when content_type is 'syllabus')
 }
 
 /**
@@ -867,6 +871,7 @@ export async function generateContent(
 
     const data = await response.json();
     const generatedContent = data.content;
+    const syllabusJson = data.syllabus_json;  // Structured syllabus data (if content_type is 'syllabus')
 
     // If a target field is specified, fill it
     if (targetField && generatedContent) {
@@ -879,11 +884,19 @@ export async function generateContent(
           content: generatedContent,
           tokens_used: data.tokens_used,
           model: data.model,
+          syllabus_json: syllabusJson,
           hint: ctx.locale === 'es'
             ? `Contenido generado. No pude encontrar el campo ${targetField}.`
             : `Content generated. Could not find field ${targetField}.`,
         };
       }
+    }
+
+    // Dispatch event with syllabus_json so the courses page can store it
+    if (syllabusJson && contentType === 'syllabus') {
+      window.dispatchEvent(new CustomEvent('voice-syllabus-generated', {
+        detail: { syllabusJson },
+      }));
     }
 
     return {
@@ -892,6 +905,7 @@ export async function generateContent(
       content: generatedContent,
       tokens_used: data.tokens_used,
       model: data.model,
+      syllabus_json: syllabusJson,
       hint: ctx.locale === 'es'
         ? targetField ? 'Contenido generado y aplicado.' : 'Contenido generado.'
         : targetField ? 'Content generated and applied.' : 'Content generated.',

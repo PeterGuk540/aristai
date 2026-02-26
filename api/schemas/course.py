@@ -8,6 +8,7 @@ from api.schemas.base import BaseSchema
 class CourseCreate(BaseModel):
     title: str
     syllabus_text: Optional[str] = None
+    syllabus_json: Optional[dict] = None  # Structured syllabus matching Syllabus Tool schema
     objectives_json: Optional[List[Any]] = None
     created_by: Optional[int] = None
 
@@ -15,6 +16,7 @@ class CourseCreate(BaseModel):
 class CourseUpdate(BaseModel):
     title: Optional[str] = None
     syllabus_text: Optional[str] = None
+    syllabus_json: Optional[dict] = None  # Structured syllabus matching Syllabus Tool schema
     objectives_json: Optional[List[Any]] = None
 
 
@@ -40,6 +42,7 @@ class CourseResponse(BaseSchema):
     id: int
     title: str
     syllabus_text: Optional[str] = None
+    syllabus_json: Optional[dict] = None  # Structured syllabus matching Syllabus Tool schema
     objectives_json: Optional[List[Any]] = None
     join_code: Optional[str] = None
     created_by: Optional[int] = None

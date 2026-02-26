@@ -20,6 +20,7 @@ class Course(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
     syllabus_text = Column(Text, nullable=True)
+    syllabus_json = Column(JSON, nullable=True)  # Structured syllabus matching Syllabus Tool schema
     objectives_json = Column(JSON, nullable=True)
     join_code = Column(String(20), unique=True, nullable=True, index=True)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)

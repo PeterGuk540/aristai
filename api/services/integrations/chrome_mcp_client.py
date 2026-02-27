@@ -371,17 +371,12 @@ class ChromeMCPClient:
                         id: b.dataset?.id || '',
                         onclick: b.getAttribute('onclick')?.substring(0, 100) || '',
                     }));
-                    // Capture element's tag+class for diagnostics
-                    const elTag = el.tagName?.toLowerCase() || '';
-                    const elClass = el.className?.toString?.()?.substring(0, 80) || '';
-
                     if (dataId || links.length > 0 || buttons.length > 0) {
                         fileItems.push({
                             dataId: dataId,
                             text: text,
                             links: links,
                             buttons: buttons,
-                            elInfo: `<${elTag} class="${elClass}">`,
                         });
                     }
                 });
@@ -406,13 +401,7 @@ class ChromeMCPClient:
                     timeout=10.0  # 10 second timeout for JS extraction
                 )
                 mat_names = page_data.get('materialNames', [])
-                file_items_js = page_data.get('fileItems', [])
                 logger.info(f"Chrome MCP: Page data extracted - {len(page_data.get('links', []))} links, {len(page_data.get('iframes', []))} iframes, {len(mat_names)} materialNames")
-                if mat_names:
-                    logger.info(f"Chrome MCP: Material names from DOM: {mat_names[:5]}")
-                # Log first 2 file items for diagnostics
-                for fi in file_items_js[:2]:
-                    logger.info(f"Chrome MCP: fileItem sample: dataId={fi.get('dataId')}, elInfo={fi.get('elInfo','')}, text={fi.get('text','')[:80]}")
             except asyncio.TimeoutError:
                 logger.warning("Chrome MCP: JavaScript extraction timed out (10s), using empty data")
                 page_data = {'title': '', 'links': [], 'iframes': [], 'fileItems': [], 'simplifiedDOM': '', 'materialNames': []}
@@ -497,8 +486,9 @@ class ChromeMCPClient:
                 if file_title_map:
                     logger.info(f"Chrome MCP: File title map from API: {file_title_map}")
 
-            # --- Click preview buttons to extract file URLs from modal iframes ---
-            # For file items with preview buttons that are NOT yet in file_url_map
+            # --- Resolve file URLs for data-id items ---
+            # Strategy: use download URL patterns from JS scripts first (instant),
+            # only click preview buttons for the first 2 items as validation.
             file_items = page_data.get('fileItems', [])
             items_needing_urls = []
             for item in file_items:
@@ -516,16 +506,31 @@ class ChromeMCPClient:
                 if has_preview:
                     items_needing_urls.append(data_id)
 
+            # First, try to construct download URLs from discovered JS patterns
+            # This avoids expensive preview button clicks entirely
+            pattern_resolved = 0
+            if download_patterns and items_needing_urls:
+                for data_id in items_needing_urls:
+                    built_url = self._build_download_url(data_id, download_patterns, page_url)
+                    if built_url:
+                        file_url_map[data_id] = built_url
+                        pattern_resolved += 1
+                if pattern_resolved:
+                    logger.info(f"Chrome MCP: Resolved {pattern_resolved}/{len(items_needing_urls)} URLs from JS patterns (no clicking needed)")
+                # Remove resolved items
+                items_needing_urls = [d for d in items_needing_urls if d not in file_url_map]
+
+            # Only click preview for up to 2 remaining items (validation + fallback)
             if items_needing_urls:
-                logger.info(f"Chrome MCP: Clicking preview buttons for {len(items_needing_urls)} items to extract file URLs")
-                for data_id in items_needing_urls[:8]:  # Cap at 8 clicks per page
+                click_limit = 2
+                logger.info(f"Chrome MCP: Clicking preview for {min(len(items_needing_urls), click_limit)}/{len(items_needing_urls)} remaining items")
+                clicked_ok = 0
+                for data_id in items_needing_urls[:click_limit]:
                     try:
-                        # Find the specific preview button for this data-id
                         btn = await page.query_selector(
                             f'button[data-action="preview"][data-id="{data_id}"]'
                         )
                         if not btn:
-                            # Try the file-material-name inside the parent file-item
                             btn = await page.query_selector(
                                 f'[data-id="{data_id}"] .file-material-name[data-action="preview"]'
                             )
@@ -534,16 +539,14 @@ class ChromeMCPClient:
 
                         await btn.click()
 
-                        # Wait for the preview modal iframe to appear
                         try:
                             await page.wait_for_selector(
                                 '#previewContent iframe[src], #filePreviewModal iframe[src]',
-                                timeout=3000,
+                                timeout=1500,
                             )
                         except Exception:
-                            pass  # timeout — iframe may not have loaded
+                            pass
 
-                        # Use evaluate to get the resolved (absolute) iframe src
                         iframe_src = await page.evaluate('''() => {
                             const iframe = document.querySelector(
                                 '#previewContent iframe[src], #filePreviewModal iframe[src]'
@@ -557,25 +560,36 @@ class ChromeMCPClient:
                             or '/download' in iframe_src.lower()
                         ):
                             file_url_map[data_id] = iframe_src
+                            clicked_ok += 1
                             logger.info(
                                 f"Chrome MCP: Preview click → data-id={data_id} → {iframe_src[:100]}"
                             )
 
-                        # Close the modal
+                        # Close modal
                         close_btn = await page.query_selector(
                             '#filePreviewModal .btn-close, '
                             '#filePreviewModal [data-bs-dismiss="modal"]'
                         )
                         if close_btn:
                             await close_btn.click()
-                            await page.wait_for_timeout(300)
+                            await page.wait_for_timeout(200)
                         else:
-                            # Press Escape as fallback
                             await page.keyboard.press('Escape')
-                            await page.wait_for_timeout(300)
+                            await page.wait_for_timeout(200)
 
                     except Exception as e:
                         logger.debug(f"Chrome MCP: Preview click failed for data-id={data_id}: {e}")
+
+                # If clicks succeeded but we still have unresolved items,
+                # construct download URLs for remaining items using the page URL pattern
+                remaining = [d for d in items_needing_urls if d not in file_url_map]
+                if remaining and clicked_ok > 0:
+                    # Construct download URL from the page's base URL
+                    parsed = urlparse(page_url)
+                    base_download = f"{parsed.scheme}://{parsed.netloc}/coordinador/fileManager/download.asp?id="
+                    for data_id in remaining:
+                        file_url_map[data_id] = base_download + data_id
+                    logger.info(f"Chrome MCP: Constructed download URLs for {len(remaining)} remaining items")
 
             if file_url_map:
                 logger.info(f"Chrome MCP: Final file_url_map has {len(file_url_map)} entries: {list(file_url_map.keys())}")

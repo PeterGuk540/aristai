@@ -654,6 +654,13 @@ def _import_materials_batch(
             if not content_bytes:
                 raise RuntimeError("Downloaded file is empty.")
 
+            # Prefer the human-readable title from list_materials() over
+            # the URL-derived filename that download_material() returns.
+            if material_title_map:
+                better_title = material_title_map.get(external_id, "")
+                if better_title:
+                    material_meta.title = better_title
+
             checksum = hashlib.sha256(content_bytes).hexdigest()
 
             s3_key = s3_service.generate_s3_key(

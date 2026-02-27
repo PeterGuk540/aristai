@@ -114,6 +114,7 @@ class ChromeMCPClient:
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
                 raise RuntimeError("OPENAI_API_KEY is required for LLM-based material extraction")
+            logger.info(f"Chrome MCP: Using OpenAI API key: {api_key[:8]}...{api_key[-4:]}")
             self._openai_client = openai.OpenAI(api_key=api_key)
         return self._openai_client
 
@@ -485,6 +486,7 @@ Return ONLY the JSON array, no other text."""
                 )
 
             result_text = response.choices[0].message.content.strip()
+            logger.info(f"Chrome MCP: OpenAI response received ({len(result_text)} chars)")
 
             # Extract JSON from response
             json_match = re.search(r'\[[\s\S]*\]', result_text)
@@ -513,10 +515,15 @@ Return ONLY the JSON array, no other text."""
             return materials
 
         except json.JSONDecodeError as e:
-            logger.warning(f"LLM returned invalid JSON: {e}")
+            logger.warning(f"Chrome MCP: LLM returned invalid JSON: {e}")
             return []
+        except asyncio.TimeoutError:
+            logger.warning("Chrome MCP: OpenAI API call timed out (20s)")
+            raise
         except Exception as e:
-            logger.error(f"LLM analysis error: {e}")
+            import traceback
+            logger.error(f"Chrome MCP: LLM analysis error: {type(e).__name__}: {e}")
+            logger.debug(f"Chrome MCP: Full traceback: {traceback.format_exc()}")
             raise
 
     def _analyze_with_rules(self, snapshot: PageSnapshot) -> list[ExtractedMaterial]:

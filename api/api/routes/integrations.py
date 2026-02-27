@@ -654,12 +654,26 @@ def _import_materials_batch(
             if not content_bytes:
                 raise RuntimeError("Downloaded file is empty.")
 
-            # Prefer the human-readable title from list_materials() over
-            # the URL-derived filename that download_material() returns.
+            # Pick the best title available. download_material() may return
+            # a Content-Disposition filename (good) or a URL-derived name (bad).
+            # list_materials() may return a DOM-extracted name (good) or also
+            # a URL-derived name (bad). Prefer whichever looks more human-readable.
             if material_title_map:
-                better_title = material_title_map.get(external_id, "")
-                if better_title:
-                    material_meta.title = better_title
+                map_title = material_title_map.get(external_id, "")
+                if map_title:
+                    dl_title = material_meta.title or ""
+                    # A hash-like name has mostly hex/digits separated by underscores/spaces
+                    map_looks_like_hash = bool(re.match(
+                        r'^[\da-fA-F_ \-]{10,}', map_title.strip()
+                    ))
+                    dl_looks_like_hash = bool(re.match(
+                        r'^[\da-fA-F_ \-]{10,}', dl_title.strip()
+                    ))
+                    # Only override if map_title is better than download title
+                    if not map_looks_like_hash and dl_looks_like_hash:
+                        material_meta.title = map_title
+                    elif map_looks_like_hash == dl_looks_like_hash and len(map_title) > len(dl_title):
+                        material_meta.title = map_title
 
             checksum = hashlib.sha256(content_bytes).hexdigest()
 

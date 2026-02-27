@@ -642,6 +642,25 @@ class UppProvider(LmsProvider):
             return name
         return "material.bin"
 
+    @staticmethod
+    def _parse_content_disposition_filename(header: str) -> str:
+        """Extract filename from Content-Disposition header.
+
+        Handles both ``filename="..."`` and ``filename*=UTF-8''...`` forms.
+        """
+        if not header:
+            return ""
+        # Try filename*= (RFC 5987 / RFC 6266) first — supports UTF-8
+        m = re.search(r"filename\*\s*=\s*(?:UTF-8|utf-8)?''(.+?)(?:;|$)", header)
+        if m:
+            from urllib.parse import unquote as _unq
+            return _unq(m.group(1).strip().strip('"'))
+        # Try plain filename=
+        m = re.search(r'filename\s*=\s*"?([^";]+)"?', header)
+        if m:
+            return m.group(1).strip()
+        return ""
+
     def _extract_session_from_url(self, url: str, course_external_id: str) -> str | None:
         """Extract session ID from URL with semana=X parameter."""
         match = re.search(r'[?&]semana=(\d+)', url, flags=re.IGNORECASE)
@@ -1515,6 +1534,19 @@ class UppProvider(LmsProvider):
                     response.raise_for_status()
                     if response.content:
                         meta.size_bytes = len(response.content)
+                        # Extract real filename from Content-Disposition header
+                        cd = response.headers.get("content-disposition", "")
+                        if cd:
+                            cd_name = self._parse_content_disposition_filename(cd)
+                            if cd_name:
+                                logger.info(f"Content-Disposition filename: {cd_name}")
+                                meta.filename = cd_name
+                                meta.title = cd_name
+                                ct = mimetypes.guess_type(cd_name)[0]
+                                if ct:
+                                    meta.content_type = ct
+                        else:
+                            logger.debug(f"No Content-Disposition header for {material_url[:80]}")
                         return response.content, meta
                 except Exception as e:
                     logger.warning(f"Direct download failed: {e}")

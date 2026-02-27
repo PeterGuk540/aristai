@@ -714,22 +714,27 @@ class UppProvider(LmsProvider):
         )
         logger.info(f"Found {len(file_items)} file items with data-id in page")
 
-        for data_id, title_attr, text_content in file_items:
-            # Construct download URL from data-id
-            # UPP likely uses: /coordinador/fileManager/download.asp?id=XXX
-            filename = (title_attr or text_content).strip()
-            if filename and filename != "0":  # "0" is used for links without files
-                # Determine the file manager path based on page context
-                download_url = urljoin(base_url, f"/coordinador/fileManager/download.asp?id={data_id}")
-                links.append((download_url, filename))
-
         # ========== UPP-SPECIFIC: Extract material names for context ==========
         # <div class="file-material-name">SÍLABO - NEGOCIACIÓN...</div>
+        # These correspond 1:1 with file items (same order on page)
         material_names = re.findall(
             r'<div[^>]+class=["\'][^"\']*file-material-name[^"\']*["\'][^>]*>([^<]+)</div>',
             html,
             flags=re.IGNORECASE,
         )
+        logger.info(f"Found {len(material_names)} material names on page")
+
+        for idx, (data_id, title_attr, text_content) in enumerate(file_items):
+            # Construct download URL from data-id
+            # UPP likely uses: /coordinador/fileManager/download.asp?id=XXX
+            filename = (title_attr or text_content).strip()
+            if filename and filename != "0":  # "0" is used for links without files
+                # Use the clean material name if available (1:1 mapping with file items)
+                clean_name = material_names[idx].strip() if idx < len(material_names) else ''
+                label = clean_name or filename
+                # Determine the file manager path based on page context
+                download_url = urljoin(base_url, f"/coordinador/fileManager/download.asp?id={data_id}")
+                links.append((download_url, label))
 
         # Extract embed/object sources
         embed_sources = re.findall(
@@ -1048,6 +1053,8 @@ class UppProvider(LmsProvider):
         Returns True when:
         1. No materials found but page has JavaScript indicators
         2. Page has video content indicators but no video materials extracted
+        3. Page has JS-rendered content (data-id items, dynamic iframes) that
+           static scraping may not fully capture (e.g., syllabus)
         """
         if not self.use_browser_fallback:
             return False
@@ -1061,13 +1068,24 @@ class UppProvider(LmsProvider):
             ]
             return any(ind in html for ind in js_indicators)
 
+        # Always trigger browser fallback when page has JS-rendered file items
+        # (data-id items, preview buttons) — these often have more content than
+        # static scraping can capture (e.g., syllabus iframes rendered by JS)
+        html_lower = html.lower()
+        js_content_indicators = [
+            'data-action="preview"', "data-action='preview'",
+            'filemanager', 'listfile', 'getfile',
+        ]
+        if any(ind in html_lower for ind in js_content_indicators):
+            return True
+
         # Check for video content indicators without extracted videos
         if self.extract_videos:
             video_indicators = [
                 'video', 'player', 'stream', 'grabadas', 'clases en línea',
                 'recordedclasses', 'onlineclasses', 'multimedia',
             ]
-            has_video_indicators = any(ind in html.lower() for ind in video_indicators)
+            has_video_indicators = any(ind in html_lower for ind in video_indicators)
             has_video_materials = any(
                 m.content_type.startswith('video/') or
                 any(ext in (m.source_url or '').lower() for ext in ['.mp4', '.m3u8', '.mpd'])
@@ -1338,13 +1356,21 @@ class UppProvider(LmsProvider):
                 # to stay within time budget (~10 pages × 5s = 50s).
                 _skip_patterns = (
                     'webgrafia', 'evaluations', 'lookwork', 'vertrabajo',
-                    'onlineclasses', 'recordedclasses', 'curso_detalle',
-                    'curso_cargar',
+                    'onlineclasses', 'recordedclasses',
+                )
+                # Always keep pages with file-relevant content even if they match skip patterns
+                _keep_patterns = (
+                    'filemanager', 'silabo', 'sílabo', 'syllabus',
+                    'academicsupport', 'educationalcontent',
+                    'didactico', 'didáctico', 'contenido',
                 )
                 sub_page_urls = [
                     u for u in visited
                     if u != course_url
-                    and not any(p in u.lower() for p in _skip_patterns)
+                    and (
+                        any(p in u.lower() for p in _keep_patterns)
+                        or not any(p in u.lower() for p in _skip_patterns)
+                    )
                 ]
                 # Hard cap to avoid timeout (each page ~4-5s in browser)
                 _MAX_BROWSER_PAGES = 10

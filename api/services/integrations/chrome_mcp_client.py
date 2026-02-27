@@ -364,8 +364,11 @@ class ChromeMCPClient:
                 document.querySelectorAll('[class*="file"], [class*="material"], [class*="download"], [data-id]').forEach(el => {
                     const dataId = el.dataset?.id || '';
                     const text = el.textContent?.trim()?.substring(0, 200) || '';
-                    const materialName = el.querySelector('.file-material-name, [class*="material-name"], [class*="title"]')
-                        ?.textContent?.trim()?.substring(0, 150) || '';
+                    const materialName = (
+                        el.querySelector('.file-material-name, [class*="material-name"]')
+                        || el.closest('[class*="material"]')?.querySelector('.file-material-name, [class*="material-name"]')
+                        || el.previousElementSibling?.matches?.('.file-material-name, [class*="material-name"]') && el.previousElementSibling
+                    )?.textContent?.trim()?.substring(0, 150) || '';
                     const links = Array.from(el.querySelectorAll('a[href]')).map(a => a.href);
                     const buttons = Array.from(el.querySelectorAll('button[data-action], button[onclick]')).map(b => ({
                         action: b.dataset?.action || '',

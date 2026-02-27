@@ -660,8 +660,12 @@ Return ONLY the JSON array, no other text."""
             if item_text == '0' or 'enlace' in item_text.lower():
                 continue
 
-            # Prefer actual links found within the file item element
-            item_links = [l for l in (item.get('links') or []) if self._is_downloadable_url(l)]
+            # Prefer actual file links found within the file item element
+            # Filter out portal/navigation ASP pages — only keep real file URLs
+            item_links = [
+                l for l in (item.get('links') or [])
+                if self._is_downloadable_url(l) and not self._is_portal_page(l)
+            ]
             if item_links:
                 for link_url in item_links:
                     materials.append(ExtractedMaterial(
@@ -672,20 +676,9 @@ Return ONLY the JSON array, no other text."""
                         source='data-id',
                     ))
             else:
-                # No real links found — construct URL based on page context
-                # UPP ASP sites use /coordinador/fileManager/download.asp?id=
-                page_url_lower = snapshot.url.lower()
-                if '.asp' in page_url_lower or 'coordinador' in page_url_lower:
-                    url = f"{self.base_url}/coordinador/fileManager/download.asp?id={data_id}"
-                else:
-                    url = f"{self.base_url}/api/materials/{data_id}/download"
-                materials.append(ExtractedMaterial(
-                    url=url,
-                    title=item_text[:100] or f"Material {data_id}",
-                    file_type='unknown',
-                    confidence=0.7,
-                    source='data-id',
-                ))
+                # No real file links found in this item.
+                # Skip rather than constructing a URL that may 404.
+                logger.debug(f"Chrome MCP: Skipping data-id={data_id} (no file links found, text={item_text[:60]})")
 
         # Extract from links
         for link in snapshot.links:
@@ -750,9 +743,9 @@ Return ONLY the JSON array, no other text."""
 
         # Download-related URL patterns
         download_patterns = [
-            r'/download', r'/file', r'/material', r'/archivo',
-            r'/recurso', r'/attachment', r'/content', r'/books/',
-            r'[?&](download|file|id)=',
+            r'/download', r'/files?/', r'/material', r'/archivo',
+            r'/recurso', r'/attachment', r'/content/', r'/books/',
+            r'[?&](download|file)=',
         ]
         return any(re.search(p, url_lower) for p in download_patterns)
 
@@ -761,18 +754,16 @@ Return ONLY the JSON array, no other text."""
         """Check if URL is a portal/navigation page, not actual content."""
         url_lower = url.lower()
 
-        # ASP/PHP pages without download parameters are usually portals
+        # ASP/PHP/HTML pages are portal pages by default
         if re.search(r'\.(asp|aspx|php|html?)(\?|$)', url_lower):
-            # Unless they have download-related parameters
-            if re.search(r'[?&](download|file|archivo|content|id)=', url_lower):
+            # Exception: known download endpoints ARE content
+            if re.search(r'download\.asp|getfile\.asp|archivo\.asp', url_lower):
                 return False
-            # Common portal page names
-            portal_names = [
-                'index', 'home', 'login', 'logout', 'menu', 'nav',
-                'recordedclasses', 'onlineclasses', 'educationalcontent',
-                'courses', 'syllabus', 'materials',
-            ]
-            return any(p in url_lower for p in portal_names)
+            # Exception: pages with explicit download/file params
+            if re.search(r'[?&](download|file|archivo)=', url_lower):
+                return False
+            # All other ASP/PHP pages are portal/navigation pages
+            return True
 
         return False
 

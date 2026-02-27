@@ -77,6 +77,7 @@ class PageSnapshot:
     download_url_patterns: list[str] = None  # URL patterns found in page scripts
     file_url_map: dict[str, str] | None = None  # data-id → actual file URL (from API intercept or preview click)
     file_title_map: dict[str, str] | None = None  # data-id → title (from API intercept)
+    material_names: list[str] | None = None  # Clean titles from .file-material-name elements
 
 
 class ChromeMCPClient:
@@ -364,27 +365,33 @@ class ChromeMCPClient:
                 document.querySelectorAll('[class*="file"], [class*="material"], [class*="download"], [data-id]').forEach(el => {
                     const dataId = el.dataset?.id || '';
                     const text = el.textContent?.trim()?.substring(0, 200) || '';
-                    const materialName = (
-                        el.querySelector('.file-material-name, [class*="material-name"]')
-                        || el.closest('[class*="material"]')?.querySelector('.file-material-name, [class*="material-name"]')
-                        || el.previousElementSibling?.matches?.('.file-material-name, [class*="material-name"]') && el.previousElementSibling
-                    )?.textContent?.trim()?.substring(0, 150) || '';
                     const links = Array.from(el.querySelectorAll('a[href]')).map(a => a.href);
                     const buttons = Array.from(el.querySelectorAll('button[data-action], button[onclick]')).map(b => ({
                         action: b.dataset?.action || '',
                         id: b.dataset?.id || '',
                         onclick: b.getAttribute('onclick')?.substring(0, 100) || '',
                     }));
+                    // Capture element's tag+class for diagnostics
+                    const elTag = el.tagName?.toLowerCase() || '';
+                    const elClass = el.className?.toString?.()?.substring(0, 80) || '';
 
                     if (dataId || links.length > 0 || buttons.length > 0) {
                         fileItems.push({
                             dataId: dataId,
                             text: text,
-                            materialName: materialName,
                             links: links,
                             buttons: buttons,
+                            elInfo: `<${elTag} class="${elClass}">`,
                         });
                     }
+                });
+
+                // Extract ALL material name elements separately (UPP pattern)
+                // These are independent divs like <div class="file-material-name">Title</div>
+                const materialNames = [];
+                document.querySelectorAll('.file-material-name, [class*="material-name"]').forEach(el => {
+                    const name = el.textContent?.trim()?.substring(0, 150) || '';
+                    if (name) materialNames.push(name);
                 });
 
                 return {
@@ -393,14 +400,22 @@ class ChromeMCPClient:
                     links: links.slice(0, 100),
                     iframes: iframes,
                     fileItems: fileItems.slice(0, 50),
+                    materialNames: materialNames.slice(0, 50),
                 };
             }'''),
                     timeout=10.0  # 10 second timeout for JS extraction
                 )
-                logger.info(f"Chrome MCP: Page data extracted - {len(page_data.get('links', []))} links, {len(page_data.get('iframes', []))} iframes")
+                mat_names = page_data.get('materialNames', [])
+                file_items_js = page_data.get('fileItems', [])
+                logger.info(f"Chrome MCP: Page data extracted - {len(page_data.get('links', []))} links, {len(page_data.get('iframes', []))} iframes, {len(mat_names)} materialNames")
+                if mat_names:
+                    logger.info(f"Chrome MCP: Material names from DOM: {mat_names[:5]}")
+                # Log first 2 file items for diagnostics
+                for fi in file_items_js[:2]:
+                    logger.info(f"Chrome MCP: fileItem sample: dataId={fi.get('dataId')}, elInfo={fi.get('elInfo','')}, text={fi.get('text','')[:80]}")
             except asyncio.TimeoutError:
                 logger.warning("Chrome MCP: JavaScript extraction timed out (10s), using empty data")
-                page_data = {'title': '', 'links': [], 'iframes': [], 'fileItems': [], 'simplifiedDOM': ''}
+                page_data = {'title': '', 'links': [], 'iframes': [], 'fileItems': [], 'simplifiedDOM': '', 'materialNames': []}
 
             # Extract download URL patterns from page scripts
             # (e.g., the JS handler for data-action="preview" buttons)
@@ -565,6 +580,7 @@ class ChromeMCPClient:
             if file_url_map:
                 logger.info(f"Chrome MCP: Final file_url_map has {len(file_url_map)} entries: {list(file_url_map.keys())}")
 
+            js_material_names = page_data.get('materialNames', [])
             snapshot = PageSnapshot(
                 url=page_url,
                 title=page_data.get('title', ''),
@@ -576,6 +592,7 @@ class ChromeMCPClient:
                 download_url_patterns=download_patterns,
                 file_url_map=file_url_map if file_url_map else None,
                 file_title_map=file_title_map if file_title_map else None,
+                material_names=js_material_names if js_material_names else None,
             )
 
         finally:
@@ -947,6 +964,28 @@ Return ONLY the JSON array, no other text."""
                     source='iframe',
                 ))
 
+        # Build a mapping from data-id items to material names.
+        # material_names are extracted separately from .file-material-name divs
+        # and correspond 1:1 (in page order) with file items that have
+        # data-id AND preview/download buttons (the actual file entries).
+        real_file_items = [
+            item for item in snapshot.file_items
+            if item.get('dataId') and any(
+                b.get('action') in ('preview', 'download') and b.get('id')
+                for b in (item.get('buttons') or [])
+            )
+        ]
+        page_material_names = snapshot.material_names or []
+        dataid_to_name: dict[str, str] = {}
+        if page_material_names:
+            for idx, item in enumerate(real_file_items):
+                if idx < len(page_material_names):
+                    dataid_to_name[item['dataId']] = page_material_names[idx]
+            logger.info(
+                f"Chrome MCP: Mapped {len(dataid_to_name)} material names to "
+                f"{len(real_file_items)} real file items (from {len(page_material_names)} names)"
+            )
+
         # Extract from file items with data-id
         for item in snapshot.file_items:
             data_id = item.get('dataId', '')
@@ -954,10 +993,10 @@ Return ONLY the JSON array, no other text."""
                 continue
 
             item_text = (item.get('text', '') or '').strip()
-            # Title priority: API-intercepted title > DOM materialName > concatenated textContent
+            # Title priority: page material name > API-intercepted title > concatenated textContent
+            page_name = dataid_to_name.get(data_id, '')
             api_title = (snapshot.file_title_map or {}).get(data_id, '')
-            dom_title = (item.get('materialName', '') or '').strip()
-            item_title = api_title or dom_title or item_text[:100]
+            item_title = page_name or api_title or item_text[:100]
 
             # Skip non-file entries: "0" placeholder text or "Enlace" (link-type entries)
             if item_text == '0' or 'enlace' in item_text.lower():

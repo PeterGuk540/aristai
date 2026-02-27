@@ -421,6 +421,10 @@ class ChromeMCPClient:
                 logger.info(f"Chrome MCP: Page {i+1}/{len(page_urls)}: {page_url[:80]}...")
                 try:
                     snapshot = await self._take_snapshot_with_context(context, page_url)
+                    logger.info(
+                        f"Chrome MCP: Page {i+1} snapshot: {len(snapshot.links)} links, "
+                        f"{len(snapshot.file_items)} file_items, {len(snapshot.iframes)} iframes"
+                    )
 
                     if self.use_llm:
                         try:
@@ -676,9 +680,13 @@ Return ONLY the JSON array, no other text."""
                         source='data-id',
                     ))
             else:
-                # No real file links found in this item.
-                # Skip rather than constructing a URL that may 404.
-                logger.debug(f"Chrome MCP: Skipping data-id={data_id} (no file links found, text={item_text[:60]})")
+                # No real file links found in this item — log details for debugging
+                raw_links = item.get('links') or []
+                buttons = item.get('buttons') or []
+                logger.info(
+                    f"Chrome MCP: data-id={data_id} has no file links. "
+                    f"text={item_text[:80]!r}, raw_links={raw_links[:3]}, buttons={buttons[:3]}"
+                )
 
         # Extract from links
         for link in snapshot.links:

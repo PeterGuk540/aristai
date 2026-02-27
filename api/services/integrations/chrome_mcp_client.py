@@ -89,7 +89,7 @@ class ChromeMCPClient:
         cookies: dict[str, str],
         base_url: str,
         timeout: float = 30.0,
-        use_llm: bool = True,
+        use_llm: bool = False,  # Disabled by default - use rule-based extraction
     ):
         """
         Initialize the Chrome MCP client.
@@ -467,23 +467,32 @@ Return ONLY the JSON array, no other text."""
 
             # Run blocking OpenAI call in thread pool to allow timeout
             def call_openai():
-                return client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are a web scraping expert that identifies downloadable educational materials from web pages. Return only valid JSON."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.1,
-                    max_tokens=2000,
-                    timeout=15.0,  # OpenAI SDK timeout
-                )
+                logger.info("Chrome MCP: Starting OpenAI API call...")
+                try:
+                    result = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "You are a web scraping expert that identifies downloadable educational materials from web pages. Return only valid JSON."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=2000,
+                        timeout=15.0,  # OpenAI SDK timeout
+                    )
+                    logger.info("Chrome MCP: OpenAI API call completed")
+                    return result
+                except Exception as e:
+                    logger.error(f"Chrome MCP: OpenAI API error in thread: {type(e).__name__}: {e}")
+                    raise
 
+            logger.info("Chrome MCP: Submitting OpenAI call to thread pool...")
             loop = asyncio.get_event_loop()
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 response = await asyncio.wait_for(
                     loop.run_in_executor(executor, call_openai),
                     timeout=20.0  # Overall timeout
                 )
+            logger.info("Chrome MCP: Thread pool execution completed")
 
             result_text = response.choices[0].message.content.strip()
             logger.info(f"Chrome MCP: OpenAI response received ({len(result_text)} chars)")
@@ -667,7 +676,7 @@ async def extract_materials_universal(
     cookies: dict[str, str],
     base_url: str,
     timeout: float = 30.0,
-    use_llm: bool = True,
+    use_llm: bool = False,  # Disabled by default - use rule-based extraction
 ) -> list[ExtractedMaterial]:
     """
     Universal material extraction using Chrome MCP approach.

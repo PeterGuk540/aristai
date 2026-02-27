@@ -486,9 +486,7 @@ class ChromeMCPClient:
                 if file_title_map:
                     logger.info(f"Chrome MCP: File title map from API: {file_title_map}")
 
-            # --- Resolve file URLs for data-id items ---
-            # Strategy: use download URL patterns from JS scripts first (instant),
-            # only click preview buttons for the first 2 items as validation.
+            # --- Click preview buttons to extract actual file URLs from modal iframes ---
             file_items = page_data.get('fileItems', [])
             items_needing_urls = []
             for item in file_items:
@@ -506,21 +504,7 @@ class ChromeMCPClient:
                 if has_preview:
                     items_needing_urls.append(data_id)
 
-            # First, try to construct download URLs from discovered JS patterns
-            # This avoids expensive preview button clicks entirely
-            pattern_resolved = 0
-            if download_patterns and items_needing_urls:
-                for data_id in items_needing_urls:
-                    built_url = self._build_download_url(data_id, download_patterns, page_url)
-                    if built_url:
-                        file_url_map[data_id] = built_url
-                        pattern_resolved += 1
-                if pattern_resolved:
-                    logger.info(f"Chrome MCP: Resolved {pattern_resolved}/{len(items_needing_urls)} URLs from JS patterns (no clicking needed)")
-                # Remove resolved items
-                items_needing_urls = [d for d in items_needing_urls if d not in file_url_map]
-
-            # Click preview buttons to extract actual file URLs from modal iframes
+            # Click preview buttons to discover actual file URLs
             if items_needing_urls:
                 logger.info(f"Chrome MCP: Clicking preview for {min(len(items_needing_urls), 8)} items to extract file URLs")
                 for data_id in items_needing_urls[:8]:
@@ -1025,27 +1009,33 @@ Return ONLY the JSON array, no other text."""
                     for b in buttons
                 )
                 if has_preview and item_text:
-                    # Prefer download URL (serves Content-Disposition with real filename)
-                    # over preview iframe URL (uses hash-based filename)
-                    download_url = self._build_download_url(
-                        data_id, snapshot.download_url_patterns, snapshot.url
-                    )
-                    preview_url = (snapshot.file_url_map or {}).get(data_id, '')
-                    if preview_url and not preview_url.startswith('http'):
-                        preview_url = urljoin(snapshot.url, preview_url)
-
-                    # Use download URL if available, otherwise preview URL
-                    best_url = download_url or preview_url
-                    if best_url:
+                    # 1) Check file_url_map first (from API intercept or preview click)
+                    if snapshot.file_url_map and data_id in snapshot.file_url_map:
+                        file_url = snapshot.file_url_map[data_id]
+                        if not file_url.startswith('http'):
+                            file_url = urljoin(snapshot.url, file_url)
                         materials.append(ExtractedMaterial(
-                            url=best_url,
+                            url=file_url,
                             title=item_title,
-                            file_type=self._detect_file_type(preview_url or best_url),
-                            confidence=0.95 if preview_url else 0.80,
-                            source='download-url' if download_url else 'preview-extract',
+                            file_type=self._detect_file_type(file_url),
+                            confidence=0.95,
+                            source='preview-extract',
                         ))
                     else:
-                        logger.debug(f"Chrome MCP: Skipping data-id={data_id}, no URL found")
+                        # 2) Fallback: try download URL from page scripts or page URL
+                        download_url = self._build_download_url(
+                            data_id, snapshot.download_url_patterns, snapshot.url
+                        )
+                        if download_url:
+                            materials.append(ExtractedMaterial(
+                                url=download_url,
+                                title=item_title,
+                                file_type=self._detect_file_type(item_text),
+                                confidence=0.75,
+                                source='data-id',
+                            ))
+                        else:
+                            logger.debug(f"Chrome MCP: Skipping data-id={data_id}, no URL found")
 
         # Extract from links
         for link in snapshot.links:

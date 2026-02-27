@@ -363,6 +363,8 @@ class ChromeMCPClient:
                 document.querySelectorAll('[class*="file"], [class*="material"], [class*="download"], [data-id]').forEach(el => {
                     const dataId = el.dataset?.id || '';
                     const text = el.textContent?.trim()?.substring(0, 200) || '';
+                    const materialName = el.querySelector('.file-material-name, [class*="material-name"], [class*="title"]')
+                        ?.textContent?.trim()?.substring(0, 150) || '';
                     const links = Array.from(el.querySelectorAll('a[href]')).map(a => a.href);
                     const buttons = Array.from(el.querySelectorAll('button[data-action], button[onclick]')).map(b => ({
                         action: b.dataset?.action || '',
@@ -374,6 +376,7 @@ class ChromeMCPClient:
                         fileItems.push({
                             dataId: dataId,
                             text: text,
+                            materialName: materialName,
                             links: links,
                             buttons: buttons,
                         });
@@ -924,6 +927,7 @@ Return ONLY the JSON array, no other text."""
                 continue
 
             item_text = (item.get('text', '') or '').strip()
+            item_title = (item.get('materialName', '') or '').strip() or item_text[:100]
 
             # Skip non-file entries: "0" placeholder text or "Enlace" (link-type entries)
             if item_text == '0' or 'enlace' in item_text.lower():
@@ -939,7 +943,7 @@ Return ONLY the JSON array, no other text."""
                 for link_url in item_links:
                     materials.append(ExtractedMaterial(
                         url=link_url,
-                        title=item_text[:100] or self._title_from_url(link_url),
+                        title=item_title or self._title_from_url(link_url),
                         file_type=self._detect_file_type(link_url),
                         confidence=0.85,
                         source='data-id',
@@ -959,7 +963,7 @@ Return ONLY the JSON array, no other text."""
                             file_url = urljoin(snapshot.url, file_url)
                         materials.append(ExtractedMaterial(
                             url=file_url,
-                            title=item_text[:100],
+                            title=item_title,
                             file_type=self._detect_file_type(file_url),
                             confidence=0.95,
                             source='preview-extract',
@@ -972,7 +976,7 @@ Return ONLY the JSON array, no other text."""
                         if download_url:
                             materials.append(ExtractedMaterial(
                                 url=download_url,
-                                title=item_text[:100],
+                                title=item_title,
                                 file_type=self._detect_file_type(item_text),
                                 confidence=0.75,
                                 source='data-id',
@@ -998,6 +1002,26 @@ Return ONLY the JSON array, no other text."""
 
         # Post-filter: remove any materials with invalid/template URLs
         materials = [m for m in materials if self._is_downloadable_url(m.url)]
+
+        # Deduplicate by URL, preferring entries with better (non-URL-derived) titles
+        seen: dict[str, ExtractedMaterial] = {}
+        for m in materials:
+            norm_url = m.url.rstrip('/')
+            existing = seen.get(norm_url)
+            if existing is None:
+                seen[norm_url] = m
+            else:
+                # Keep the entry with the better title:
+                # A "good" title is longer and doesn't look like a filename
+                new_looks_like_filename = bool(re.search(r'^[\w_-]+\.\w{2,5}$', m.title.strip()))
+                old_looks_like_filename = bool(re.search(r'^[\w_-]+\.\w{2,5}$', existing.title.strip()))
+                new_is_better = (
+                    (not new_looks_like_filename and old_looks_like_filename)
+                    or (new_looks_like_filename == old_looks_like_filename and len(m.title) > len(existing.title))
+                )
+                if new_is_better:
+                    seen[norm_url] = m
+        materials = list(seen.values())
 
         return materials
 

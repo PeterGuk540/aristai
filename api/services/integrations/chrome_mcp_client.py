@@ -520,11 +520,10 @@ class ChromeMCPClient:
                 # Remove resolved items
                 items_needing_urls = [d for d in items_needing_urls if d not in file_url_map]
 
-            # Only click preview for up to 2 remaining items (validation + fallback)
+            # Click preview for up to 4 remaining items to discover actual file URLs
             if items_needing_urls:
-                click_limit = 2
-                logger.info(f"Chrome MCP: Clicking preview for {min(len(items_needing_urls), click_limit)}/{len(items_needing_urls)} remaining items")
-                clicked_ok = 0
+                click_limit = min(4, len(items_needing_urls))
+                logger.info(f"Chrome MCP: Clicking preview for {click_limit}/{len(items_needing_urls)} items")
                 for data_id in items_needing_urls[:click_limit]:
                     try:
                         btn = await page.query_selector(
@@ -542,7 +541,7 @@ class ChromeMCPClient:
                         try:
                             await page.wait_for_selector(
                                 '#previewContent iframe[src], #filePreviewModal iframe[src]',
-                                timeout=1500,
+                                timeout=2000,
                             )
                         except Exception:
                             pass
@@ -560,7 +559,6 @@ class ChromeMCPClient:
                             or '/download' in iframe_src.lower()
                         ):
                             file_url_map[data_id] = iframe_src
-                            clicked_ok += 1
                             logger.info(
                                 f"Chrome MCP: Preview click → data-id={data_id} → {iframe_src[:100]}"
                             )
@@ -580,16 +578,15 @@ class ChromeMCPClient:
                     except Exception as e:
                         logger.debug(f"Chrome MCP: Preview click failed for data-id={data_id}: {e}")
 
-                # If clicks succeeded but we still have unresolved items,
-                # construct download URLs for remaining items using the page URL pattern
-                remaining = [d for d in items_needing_urls if d not in file_url_map]
-                if remaining and clicked_ok > 0:
-                    # Construct download URL from the page's base URL
-                    parsed = urlparse(page_url)
-                    base_download = f"{parsed.scheme}://{parsed.netloc}/coordinador/fileManager/download.asp?id="
-                    for data_id in remaining:
-                        file_url_map[data_id] = base_download + data_id
-                    logger.info(f"Chrome MCP: Constructed download URLs for {len(remaining)} remaining items")
+            # For any remaining items without URLs, construct download URLs
+            # using the site's download endpoint pattern
+            remaining = [d for d in items_needing_urls if d not in file_url_map]
+            if remaining:
+                parsed = urlparse(page_url)
+                base_download = f"{parsed.scheme}://{parsed.netloc}/coordinador/fileManager/download.asp?id="
+                for data_id in remaining:
+                    file_url_map[data_id] = base_download + data_id
+                logger.info(f"Chrome MCP: Constructed download URLs for {len(remaining)} remaining items")
 
             if file_url_map:
                 logger.info(f"Chrome MCP: Final file_url_map has {len(file_url_map)} entries: {list(file_url_map.keys())}")

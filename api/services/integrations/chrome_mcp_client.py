@@ -133,17 +133,34 @@ class ChromeMCPClient:
         Returns:
             List of ExtractedMaterial objects
         """
+        import time
+        start_time = time.time()
         logger.info(f"Chrome MCP extracting materials from: {page_url}")
 
         # Step 1: Get page snapshot
+        logger.info("Chrome MCP: Taking page snapshot...")
         snapshot = await self._take_snapshot(page_url)
+        snapshot_time = time.time() - start_time
+        logger.info(f"Chrome MCP: Snapshot complete in {snapshot_time:.1f}s - found {len(snapshot.links)} links, {len(snapshot.iframes)} iframes, {len(snapshot.file_items)} file items")
 
-        # Step 2: Analyze with LLM
+        # Step 2: Analyze with LLM (with timeout protection)
+        materials = []
         if self.use_llm:
             try:
-                materials = await self._analyze_with_llm(snapshot)
+                logger.info("Chrome MCP: Analyzing with LLM...")
+                import asyncio
+                # Timeout LLM analysis to 20 seconds max
+                materials = await asyncio.wait_for(
+                    self._analyze_with_llm(snapshot),
+                    timeout=20.0
+                )
+                llm_time = time.time() - start_time - snapshot_time
+                logger.info(f"Chrome MCP: LLM analysis complete in {llm_time:.1f}s - found {len(materials)} materials")
+            except asyncio.TimeoutError:
+                logger.warning("Chrome MCP: LLM analysis timed out, using rule-based fallback")
+                materials = self._analyze_with_rules(snapshot)
             except Exception as e:
-                logger.warning(f"LLM analysis failed, using fallback: {e}")
+                logger.warning(f"Chrome MCP: LLM analysis failed ({e}), using rule-based fallback")
                 materials = self._analyze_with_rules(snapshot)
         else:
             materials = self._analyze_with_rules(snapshot)
@@ -167,7 +184,8 @@ class ChromeMCPClient:
                 seen_urls.add(m.url)
                 unique_materials.append(m)
 
-        logger.info(f"Chrome MCP extracted {len(unique_materials)} materials")
+        total_time = time.time() - start_time
+        logger.info(f"Chrome MCP: Extraction complete in {total_time:.1f}s - {len(unique_materials)} unique materials")
         return unique_materials
 
     async def _take_snapshot(self, page_url: str) -> PageSnapshot:
@@ -209,8 +227,15 @@ class ChromeMCPClient:
         page.on("request", on_request)
 
         try:
-            await page.goto(page_url, timeout=self.timeout)
-            await page.wait_for_load_state("networkidle", timeout=self.timeout)
+            # Use shorter timeout for initial load (15 seconds)
+            load_timeout = min(self.timeout, 15000)
+            await page.goto(page_url, timeout=load_timeout)
+
+            # Wait for network idle with shorter timeout (10 seconds)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=10000)
+            except Exception:
+                logger.debug("Network idle timeout, continuing with available content")
 
             # Expand accordions and collapsed sections
             await self._expand_all_sections(page)

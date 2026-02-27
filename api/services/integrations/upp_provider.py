@@ -1188,7 +1188,14 @@ class UppProvider(LmsProvider):
             materials = []
             for m in extracted:
                 external_id = self._encode_url_ref("maturl", m.url)
-                filename = m.url.rsplit('/', 1)[-1].split('?')[0] or 'material.bin'
+                raw_filename = m.url.rsplit('/', 1)[-1].split('?')[0] or 'material.bin'
+                # For download endpoint URLs (e.g. download.asp?id=...), use a
+                # placeholder filename — the real name comes from Content-Disposition
+                # during download_material().
+                if raw_filename.lower().endswith(('.asp', '.aspx', '.php')):
+                    filename = f"material_{m.url.split('id=')[-1][:20]}.pdf" if 'id=' in m.url else 'material.bin'
+                else:
+                    filename = raw_filename
                 content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
 
                 # Map file_type to content_type

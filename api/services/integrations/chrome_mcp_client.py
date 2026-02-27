@@ -540,7 +540,7 @@ class ChromeMCPClient:
                         try:
                             await page.wait_for_selector(
                                 '#previewContent iframe[src], #filePreviewModal iframe[src]',
-                                timeout=2000,
+                                timeout=3000,
                             )
                         except Exception:
                             pass
@@ -1025,33 +1025,27 @@ Return ONLY the JSON array, no other text."""
                     for b in buttons
                 )
                 if has_preview and item_text:
-                    # 1) Check file_url_map first (from API intercept or preview click)
-                    if snapshot.file_url_map and data_id in snapshot.file_url_map:
-                        file_url = snapshot.file_url_map[data_id]
-                        if not file_url.startswith('http'):
-                            file_url = urljoin(snapshot.url, file_url)
+                    # Prefer download URL (serves Content-Disposition with real filename)
+                    # over preview iframe URL (uses hash-based filename)
+                    download_url = self._build_download_url(
+                        data_id, snapshot.download_url_patterns, snapshot.url
+                    )
+                    preview_url = (snapshot.file_url_map or {}).get(data_id, '')
+                    if preview_url and not preview_url.startswith('http'):
+                        preview_url = urljoin(snapshot.url, preview_url)
+
+                    # Use download URL if available, otherwise preview URL
+                    best_url = download_url or preview_url
+                    if best_url:
                         materials.append(ExtractedMaterial(
-                            url=file_url,
+                            url=best_url,
                             title=item_title,
-                            file_type=self._detect_file_type(file_url),
-                            confidence=0.95,
-                            source='preview-extract',
+                            file_type=self._detect_file_type(preview_url or best_url),
+                            confidence=0.95 if preview_url else 0.80,
+                            source='download-url' if download_url else 'preview-extract',
                         ))
                     else:
-                        # 2) Fallback: try download URL pattern from page scripts
-                        download_url = self._build_download_url(
-                            data_id, snapshot.download_url_patterns, snapshot.url
-                        )
-                        if download_url:
-                            materials.append(ExtractedMaterial(
-                                url=download_url,
-                                title=item_title,
-                                file_type=self._detect_file_type(item_text),
-                                confidence=0.75,
-                                source='data-id',
-                            ))
-                        else:
-                            logger.debug(f"Chrome MCP: Skipping data-id={data_id}, no URL found in file_url_map or patterns")
+                        logger.debug(f"Chrome MCP: Skipping data-id={data_id}, no URL found")
 
         # Extract from links
         for link in snapshot.links:
@@ -1137,7 +1131,21 @@ Return ONLY the JSON array, no other text."""
                         url = urljoin(self.base_url + '/', url)
                     return url
 
-        # No pattern found — don't guess, return None
+        # No explicit JS pattern found — derive from page URL structure.
+        # If the page is a file manager (URL contains fileManager, filemanager,
+        # or similar), construct a download URL using the same path prefix.
+        parsed = urlparse(page_url)
+        path_lower = parsed.path.lower()
+        if 'filemanager' in path_lower or 'file_manager' in path_lower:
+            # Derive download endpoint from the file manager path
+            # e.g., /coordinador/fileManager/listFile.asp → /coordinador/fileManager/download.asp?id=
+            base_idx = path_lower.find('filemanager')
+            fm_segment = parsed.path[base_idx:]          # "fileManager/listFile.asp"
+            fm_dir = fm_segment.split('/')[0]             # "fileManager"
+            base_path = parsed.path[:base_idx + len(fm_dir)]  # "/coordinador/fileManager"
+            url = f"{parsed.scheme}://{parsed.netloc}{base_path}/download.asp?id={data_id}"
+            return url
+
         return None
 
     @staticmethod

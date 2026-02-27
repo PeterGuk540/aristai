@@ -75,6 +75,7 @@ class PageSnapshot:
     file_items: list[dict]
     network_requests: list[dict]
     download_url_patterns: list[str] = None  # URL patterns found in page scripts
+    file_url_map: dict[str, str] | None = None  # data-id → actual file URL (from API intercept or preview click)
 
 
 class ChromeMCPClient:
@@ -221,6 +222,8 @@ class ChromeMCPClient:
         """
         page = await context.new_page()
         self.network_requests = []
+        # Capture XHR/fetch response bodies for file URL extraction
+        intercepted_responses: list[dict] = []
 
         # Intercept network requests for video/file detection
         def on_request(request):
@@ -233,7 +236,30 @@ class ChromeMCPClient:
                     'type': resource_type,
                 })
 
+        async def on_response(response):
+            """Capture XHR/fetch responses that may contain file URL data."""
+            try:
+                url_lower = response.url.lower()
+                rtype = response.request.resource_type
+                if rtype in ('fetch', 'xhr', 'document'):
+                    # Capture responses from file management APIs
+                    if any(kw in url_lower for kw in [
+                        'listfile', 'getfile', 'filemanager', 'drive',
+                        'material', 'archivo', 'preview',
+                    ]):
+                        try:
+                            body = await response.text()
+                            if body and len(body) < 50000:
+                                intercepted_responses.append({
+                                    'url': response.url, 'body': body,
+                                })
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
         page.on("request", on_request)
+        page.on("response", on_response)
 
         try:
             # Use shorter timeout for initial load (15 seconds)
@@ -400,6 +426,126 @@ class ChromeMCPClient:
             except Exception:
                 pass
 
+            # --- Build file_url_map from intercepted API responses ---
+            file_url_map: dict[str, str] = {}
+            if intercepted_responses:
+                logger.info(f"Chrome MCP: Processing {len(intercepted_responses)} intercepted API responses")
+                for resp_data in intercepted_responses:
+                    body = resp_data['body']
+                    try:
+                        json_data = json.loads(body)
+                        items = json_data if isinstance(json_data, list) else [json_data]
+                        for item in items:
+                            if not isinstance(item, dict):
+                                continue
+                            # Try common field names for file ID and URL
+                            fid = str(
+                                item.get('id', '') or item.get('fileId', '')
+                                or item.get('materialId', '') or item.get('material_id', '')
+                            )
+                            furl = (
+                                item.get('fileUrl', '') or item.get('file_url', '')
+                                or item.get('filePath', '') or item.get('path', '')
+                                or item.get('url', '') or item.get('src', '')
+                            )
+                            if fid and furl and (
+                                '/books/' in furl or '.pdf' in furl.lower()
+                                or '.mp4' in furl.lower() or '/download' in furl.lower()
+                            ):
+                                file_url_map[fid] = furl
+                    except (json.JSONDecodeError, TypeError):
+                        # Try regex to find /books/...pdf URLs in non-JSON responses
+                        pdf_urls = re.findall(r'/books/[^\s"\'<>]+\.(?:pdf|mp4|docx?)', body)
+                        for pdf_url in pdf_urls:
+                            key = f'__intercepted_{len(file_url_map)}'
+                            file_url_map[key] = pdf_url
+
+                if file_url_map:
+                    logger.info(f"Chrome MCP: File URL map from API: {file_url_map}")
+
+            # --- Click preview buttons to extract file URLs from modal iframes ---
+            # For file items with preview buttons that are NOT yet in file_url_map
+            file_items = page_data.get('fileItems', [])
+            items_needing_urls = []
+            for item in file_items:
+                data_id = item.get('dataId', '')
+                if not data_id or data_id in file_url_map:
+                    continue
+                item_text = (item.get('text', '') or '').strip()
+                if item_text == '0' or 'enlace' in item_text.lower():
+                    continue
+                buttons = item.get('buttons') or []
+                has_preview = any(
+                    b.get('action') in ('preview', 'download') and b.get('id')
+                    for b in buttons
+                )
+                if has_preview:
+                    items_needing_urls.append(data_id)
+
+            if items_needing_urls:
+                logger.info(f"Chrome MCP: Clicking preview buttons for {len(items_needing_urls)} items to extract file URLs")
+                for data_id in items_needing_urls[:8]:  # Cap at 8 clicks per page
+                    try:
+                        # Find the specific preview button for this data-id
+                        btn = await page.query_selector(
+                            f'button[data-action="preview"][data-id="{data_id}"]'
+                        )
+                        if not btn:
+                            # Try the file-material-name inside the parent file-item
+                            btn = await page.query_selector(
+                                f'[data-id="{data_id}"] .file-material-name[data-action="preview"]'
+                            )
+                        if not btn:
+                            continue
+
+                        await btn.click()
+
+                        # Wait for the preview modal iframe to appear
+                        try:
+                            await page.wait_for_selector(
+                                '#previewContent iframe[src], #filePreviewModal iframe[src]',
+                                timeout=3000,
+                            )
+                        except Exception:
+                            pass  # timeout — iframe may not have loaded
+
+                        # Use evaluate to get the resolved (absolute) iframe src
+                        iframe_src = await page.evaluate('''() => {
+                            const iframe = document.querySelector(
+                                '#previewContent iframe[src], #filePreviewModal iframe[src]'
+                            );
+                            return iframe ? iframe.src : null;
+                        }''')
+
+                        if iframe_src and (
+                            '/books/' in iframe_src or iframe_src.lower().endswith('.pdf')
+                            or iframe_src.lower().endswith('.mp4')
+                            or '/download' in iframe_src.lower()
+                        ):
+                            file_url_map[data_id] = iframe_src
+                            logger.info(
+                                f"Chrome MCP: Preview click → data-id={data_id} → {iframe_src[:100]}"
+                            )
+
+                        # Close the modal
+                        close_btn = await page.query_selector(
+                            '#filePreviewModal .btn-close, '
+                            '#filePreviewModal [data-bs-dismiss="modal"]'
+                        )
+                        if close_btn:
+                            await close_btn.click()
+                            await page.wait_for_timeout(300)
+                        else:
+                            # Press Escape as fallback
+                            await page.keyboard.press('Escape')
+                            await page.wait_for_timeout(300)
+
+                    except Exception as e:
+                        logger.debug(f"Chrome MCP: Preview click failed for data-id={data_id}: {e}")
+
+            if file_url_map:
+                logger.info(f"Chrome MCP: Final file_url_map has {len(file_url_map)} entries: {list(file_url_map.keys())}")
+
             snapshot = PageSnapshot(
                 url=page_url,
                 title=page_data.get('title', ''),
@@ -409,6 +555,7 @@ class ChromeMCPClient:
                 file_items=page_data.get('fileItems', []),
                 network_requests=list(self.network_requests),
                 download_url_patterns=download_patterns,
+                file_url_map=file_url_map if file_url_map else None,
             )
 
         finally:
@@ -538,36 +685,11 @@ class ChromeMCPClient:
                         f"{len(snapshot.file_items)} file_items, {len(snapshot.iframes)} iframes"
                     )
 
-                    # On first page with preview buttons, discover download URL pattern
-                    if self._discovered_download_pattern is None:
-                        for item in snapshot.file_items:
-                            buttons = item.get('buttons') or []
-                            for btn in buttons:
-                                if btn.get('action') in ('preview', 'download') and btn.get('id'):
-                                    test_id = btn['id']
-                                    logger.info(f"Chrome MCP: Discovering download URL by clicking preview button (id={test_id})...")
-                                    url = await self._discover_download_url_by_click(
-                                        context, page_url, test_id
-                                    )
-                                    if url and test_id in url:
-                                        self._discovered_download_pattern = url.replace(test_id, '{id}')
-                                        logger.info(f"Chrome MCP: Discovered download pattern: {self._discovered_download_pattern}")
-                                        # Also inject into snapshot for _analyze_with_rules
-                                        if not snapshot.download_url_patterns:
-                                            snapshot.download_url_patterns = []
-                                        snapshot.download_url_patterns.insert(0, self._discovered_download_pattern)
-                                    break
-                            if self._discovered_download_pattern is not None:
-                                break
-                        if self._discovered_download_pattern is None:
-                            # Mark as attempted so we don't retry on every page
-                            self._discovered_download_pattern = ''
-
-                    # Inject discovered pattern into snapshot for _analyze_with_rules
-                    if self._discovered_download_pattern and snapshot.download_url_patterns is None:
-                        snapshot.download_url_patterns = [self._discovered_download_pattern]
-                    elif self._discovered_download_pattern and self._discovered_download_pattern not in (snapshot.download_url_patterns or []):
-                        snapshot.download_url_patterns = [self._discovered_download_pattern] + (snapshot.download_url_patterns or [])
+                    # Log file_url_map if present (populated by _take_snapshot_with_context)
+                    if snapshot.file_url_map:
+                        logger.info(
+                            f"Chrome MCP: Page {i+1} has file_url_map with {len(snapshot.file_url_map)} entries"
+                        )
 
                     if self.use_llm:
                         try:
@@ -830,20 +952,33 @@ Return ONLY the JSON array, no other text."""
                     for b in buttons
                 )
                 if has_preview and item_text:
-                    # Use download URL pattern discovered from page scripts
-                    download_url = self._build_download_url(
-                        data_id, snapshot.download_url_patterns, snapshot.url
-                    )
-                    if download_url:
+                    # 1) Check file_url_map first (from API intercept or preview click)
+                    if snapshot.file_url_map and data_id in snapshot.file_url_map:
+                        file_url = snapshot.file_url_map[data_id]
+                        if not file_url.startswith('http'):
+                            file_url = urljoin(snapshot.url, file_url)
                         materials.append(ExtractedMaterial(
-                            url=download_url,
+                            url=file_url,
                             title=item_text[:100],
-                            file_type=self._detect_file_type(item_text),
-                            confidence=0.75,
-                            source='data-id',
+                            file_type=self._detect_file_type(file_url),
+                            confidence=0.95,
+                            source='preview-extract',
                         ))
                     else:
-                        logger.debug(f"Chrome MCP: Skipping data-id={data_id}, no download pattern found")
+                        # 2) Fallback: try download URL pattern from page scripts
+                        download_url = self._build_download_url(
+                            data_id, snapshot.download_url_patterns, snapshot.url
+                        )
+                        if download_url:
+                            materials.append(ExtractedMaterial(
+                                url=download_url,
+                                title=item_text[:100],
+                                file_type=self._detect_file_type(item_text),
+                                confidence=0.75,
+                                source='data-id',
+                            ))
+                        else:
+                            logger.debug(f"Chrome MCP: Skipping data-id={data_id}, no URL found in file_url_map or patterns")
 
         # Extract from links
         for link in snapshot.links:

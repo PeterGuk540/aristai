@@ -466,26 +466,27 @@ class ChromeMCPClient:
         """Expand accordions, tabs, and collapsed sections to reveal content."""
         import asyncio
         try:
-            # Quick expansion with timeout - max 3 seconds total
+            # Quick expansion with timeout - max 1 second total
             async def expand_with_timeout():
-                # Click on collapsed elements (limit to 5 to be fast)
+                # Click on collapsed elements (limit to 3 to be fast)
                 collapsed = await page.query_selector_all(
                     '[class*="collapse"]:not(.show), [class*="accordion"]:not(.active), '
                     '[aria-expanded="false"]'
                 )
                 clicked = 0
-                for el in collapsed[:5]:  # Reduced limit for speed
+                for el in collapsed[:3]:
                     try:
                         await el.click()
-                        await page.wait_for_timeout(100)  # Reduced wait
+                        await page.wait_for_timeout(50)
                         clicked += 1
                     except Exception:
                         pass
-                logger.info(f"Chrome MCP: Expanded {clicked} sections")
+                if clicked:
+                    logger.info(f"Chrome MCP: Expanded {clicked} sections")
 
-            await asyncio.wait_for(expand_with_timeout(), timeout=3.0)
+            await asyncio.wait_for(expand_with_timeout(), timeout=1.0)
         except asyncio.TimeoutError:
-            logger.info("Chrome MCP: Section expansion timed out (3s), continuing")
+            logger.info("Chrome MCP: Section expansion timed out (1s), continuing")
         except Exception as e:
             logger.debug(f"Section expansion failed: {e}")
 

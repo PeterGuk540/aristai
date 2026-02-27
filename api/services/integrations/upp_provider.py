@@ -1332,10 +1332,26 @@ class UppProvider(LmsProvider):
                                 link_session_id = self._extract_session_from_url(href, course_external_id)
                                 queue.append((href, link_session_id or current_session_id))
 
-                # Collect all visited sub-page URLs (excluding the main course page)
-                # These are the JS-rendered pages where files actually live
-                sub_page_urls = [u for u in visited if u != course_url]
-                logger.info(f"Static crawl visited {len(visited)} pages ({len(sub_page_urls)} sub-pages)")
+                # Collect visited sub-page URLs that are likely to contain files.
+                # Prioritize fileManager/syllabus/academicSupport pages (actual files).
+                # Skip low-value pages (webgrafia, evaluations, lookwork, onlineClasses)
+                # to stay within time budget (~10 pages × 5s = 50s).
+                _skip_patterns = (
+                    'webgrafia', 'evaluations', 'lookwork', 'vertrabajo',
+                    'onlineclasses', 'recordedclasses', 'curso_detalle',
+                    'curso_cargar',
+                )
+                sub_page_urls = [
+                    u for u in visited
+                    if u != course_url
+                    and not any(p in u.lower() for p in _skip_patterns)
+                ]
+                # Hard cap to avoid timeout (each page ~4-5s in browser)
+                _MAX_BROWSER_PAGES = 10
+                if len(sub_page_urls) > _MAX_BROWSER_PAGES:
+                    logger.info(f"Capping sub-pages from {len(sub_page_urls)} to {_MAX_BROWSER_PAGES}")
+                    sub_page_urls = sub_page_urls[:_MAX_BROWSER_PAGES]
+                logger.info(f"Static crawl visited {len(visited)} pages, {len(sub_page_urls)} sub-pages selected for browser")
 
             if scraped:
                 # dedupe by external_id while preserving order

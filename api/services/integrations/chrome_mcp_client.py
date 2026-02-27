@@ -251,10 +251,13 @@ class ChromeMCPClient:
             # Expand accordions and collapsed sections
             logger.info("Chrome MCP: Expanding collapsed sections...")
             await self._expand_all_sections(page)
-            logger.info("Chrome MCP: Extracting page data...")
+            logger.info("Chrome MCP: Extracting page data via JavaScript...")
 
-            # Extract page data via JavaScript
-            page_data = await page.evaluate('''() => {
+            # Extract page data via JavaScript (with timeout)
+            import asyncio
+            try:
+                page_data = await asyncio.wait_for(
+                    page.evaluate('''() => {
                 // Simplified DOM: keep structure but remove noise
                 function simplifyDOM(element, depth = 0) {
                     if (depth > 5) return '';
@@ -350,7 +353,13 @@ class ChromeMCPClient:
                     iframes: iframes,
                     fileItems: fileItems.slice(0, 50),
                 };
-            }''')
+            }'''),
+                    timeout=10.0  # 10 second timeout for JS extraction
+                )
+                logger.info(f"Chrome MCP: Page data extracted - {len(page_data.get('links', []))} links, {len(page_data.get('iframes', []))} iframes")
+            except asyncio.TimeoutError:
+                logger.warning("Chrome MCP: JavaScript extraction timed out (10s), using empty data")
+                page_data = {'title': '', 'links': [], 'iframes': [], 'fileItems': [], 'simplifiedDOM': ''}
 
             snapshot = PageSnapshot(
                 url=page_url,
@@ -370,30 +379,28 @@ class ChromeMCPClient:
 
     async def _expand_all_sections(self, page):
         """Expand accordions, tabs, and collapsed sections to reveal content."""
+        import asyncio
         try:
-            # Click on collapsed elements
-            collapsed = await page.query_selector_all(
-                '[class*="collapse"]:not(.show), [class*="accordion"]:not(.active), '
-                '[aria-expanded="false"], [class*="closed"], [class*="hidden-content"]'
-            )
-            for el in collapsed[:20]:  # Limit to prevent infinite loops
-                try:
-                    await el.click()
-                    await page.wait_for_timeout(200)
-                except Exception:
-                    pass
+            # Quick expansion with timeout - max 3 seconds total
+            async def expand_with_timeout():
+                # Click on collapsed elements (limit to 5 to be fast)
+                collapsed = await page.query_selector_all(
+                    '[class*="collapse"]:not(.show), [class*="accordion"]:not(.active), '
+                    '[aria-expanded="false"]'
+                )
+                clicked = 0
+                for el in collapsed[:5]:  # Reduced limit for speed
+                    try:
+                        await el.click()
+                        await page.wait_for_timeout(100)  # Reduced wait
+                        clicked += 1
+                    except Exception:
+                        pass
+                logger.info(f"Chrome MCP: Expanded {clicked} sections")
 
-            # Click "show more" buttons
-            show_more = await page.query_selector_all(
-                'button:has-text("more"), a:has-text("more"), [class*="show-more"]'
-            )
-            for btn in show_more[:10]:
-                try:
-                    await btn.click()
-                    await page.wait_for_timeout(200)
-                except Exception:
-                    pass
-
+            await asyncio.wait_for(expand_with_timeout(), timeout=3.0)
+        except asyncio.TimeoutError:
+            logger.info("Chrome MCP: Section expansion timed out (3s), continuing")
         except Exception as e:
             logger.debug(f"Section expansion failed: {e}")
 

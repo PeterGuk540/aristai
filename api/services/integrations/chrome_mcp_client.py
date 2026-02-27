@@ -148,22 +148,16 @@ class ChromeMCPClient:
         if self.use_llm:
             try:
                 logger.info("Chrome MCP: Analyzing with LLM...")
-                import asyncio
-                # Timeout LLM analysis to 20 seconds max
-                materials = await asyncio.wait_for(
-                    self._analyze_with_llm(snapshot),
-                    timeout=20.0
-                )
+                materials = await self._analyze_with_llm(snapshot)
                 llm_time = time.time() - start_time - snapshot_time
                 logger.info(f"Chrome MCP: LLM analysis complete in {llm_time:.1f}s - found {len(materials)} materials")
-            except asyncio.TimeoutError:
-                logger.warning("Chrome MCP: LLM analysis timed out, using rule-based fallback")
-                materials = self._analyze_with_rules(snapshot)
             except Exception as e:
                 logger.warning(f"Chrome MCP: LLM analysis failed ({e}), using rule-based fallback")
                 materials = self._analyze_with_rules(snapshot)
+                logger.info(f"Chrome MCP: Rule-based fallback found {len(materials)} materials")
         else:
             materials = self._analyze_with_rules(snapshot)
+            logger.info(f"Chrome MCP: Rule-based extraction found {len(materials)} materials")
 
         # Step 3: Add network-intercepted materials
         for req in self.network_requests:
@@ -467,15 +461,28 @@ IMPORTANT:
 Return ONLY the JSON array, no other text."""
 
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a web scraping expert that identifies downloadable educational materials from web pages. Return only valid JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1,
-                max_tokens=2000,
-            )
+            import asyncio
+            import concurrent.futures
+
+            # Run blocking OpenAI call in thread pool to allow timeout
+            def call_openai():
+                return client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are a web scraping expert that identifies downloadable educational materials from web pages. Return only valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.1,
+                    max_tokens=2000,
+                    timeout=15.0,  # OpenAI SDK timeout
+                )
+
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                response = await asyncio.wait_for(
+                    loop.run_in_executor(executor, call_openai),
+                    timeout=20.0  # Overall timeout
+                )
 
             result_text = response.choices[0].message.content.strip()
 

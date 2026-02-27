@@ -603,6 +603,12 @@ Return ONLY the JSON array, no other text."""
         """Check if URL looks like downloadable content."""
         if not url:
             return False
+
+        # Skip URLs containing unresolved JavaScript template strings
+        # e.g., "${escapeHtml(file.fileUrl)}" or "${variable}"
+        if '${' in url or '{%' in url or '{{' in url:
+            return False
+
         url_lower = url.lower()
 
         # Direct file extensions

@@ -26,6 +26,15 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass  # Ignore shutdown errors
 
+    # Close Chrome MCP browser
+    try:
+        from api.services.integrations.chrome_mcp_client import close_chrome_mcp
+        await close_chrome_mcp()
+    except ImportError:
+        pass  # Chrome MCP not installed
+    except Exception:
+        pass  # Ignore shutdown errors
+
 
 app = FastAPI(
     title=settings.app_name,

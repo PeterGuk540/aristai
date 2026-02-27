@@ -83,6 +83,10 @@ class UppProvider(LmsProvider):
         self.browser_timeout = float(os.getenv("UPP_BROWSER_TIMEOUT", "30"))
         self.extract_videos = os.getenv("UPP_EXTRACT_VIDEOS", "true").lower() == "true"
 
+        # Chrome MCP: Universal LLM-driven extraction (recommended)
+        # When enabled, uses LLM to analyze page structure instead of regex patterns
+        self.use_chrome_mcp = os.getenv("UPP_USE_CHROME_MCP", "true").lower() == "true"
+
     def is_configured(self) -> bool:
         # Token may be optional for some deployments if SSO/session auth is used.
         return bool(self.api_url)
@@ -583,6 +587,15 @@ class UppProvider(LmsProvider):
         href_l = href.lower()
         label_l = label.lower()
 
+        # ========== UPP-SPECIFIC: Direct file paths ==========
+        # PDFs served from /books/final/... are actual files
+        if '/books/' in href_l and '.pdf' in href_l:
+            return True
+
+        # download.asp with id parameter is a file download
+        if 'download.asp' in href_l and 'id=' in href_l:
+            return True
+
         # Skip navigation/portal ASP pages - these are pages to crawl, not download
         # They contain links to actual materials but aren't materials themselves
         if re.search(r"\.(asp|aspx|php|html?)(\?|$)", href_l):
@@ -604,12 +617,12 @@ class UppProvider(LmsProvider):
             return True
 
         # External video/streaming URLs
-        if re.search(r"youtube\.com|vimeo\.com|drive\.google\.com|dropbox\.com|onedrive\.com", href_l):
+        if re.search(r"youtube\.com|vimeo\.com|drive\.google\.com|dropbox\.com|onedrive\.com|teams\.microsoft\.com", href_l):
             return True
 
         # Label-based detection for links that might be materials
         if re.search(
-            r"archivo|material|recurso|adjunto|documento|descargar|download",
+            r"archivo|material|recurso|adjunto|documento|descargar|download|sílabo|silabo|syllabus",
             label_l,
         ):
             return True
@@ -663,7 +676,18 @@ class UppProvider(LmsProvider):
         for src in video_sources:
             links.append((src, "Video"))
 
-        # Extract iframe sources (embedded content)
+        # ========== UPP-SPECIFIC: Extract PDFs from iframes ==========
+        # UPP embeds PDFs like: <iframe src="/books/final/2026100/000/xxx.pdf">
+        iframe_pdfs = re.findall(
+            r'<iframe[^>]+src=["\']([^"\']+\.pdf)["\']',
+            html,
+            flags=re.IGNORECASE,
+        )
+        for src in iframe_pdfs:
+            links.append((src, "Syllabus PDF"))
+        logger.info(f"Found {len(iframe_pdfs)} PDF iframes in page")
+
+        # Extract all iframe sources (for other embedded content)
         iframe_sources = re.findall(
             r'<iframe[^>]+src=["\']([^"\']+)["\']',
             html,
@@ -672,6 +696,34 @@ class UppProvider(LmsProvider):
         for src in iframe_sources:
             if 'youtube' in src.lower() or 'vimeo' in src.lower() or 'video' in src.lower():
                 links.append((src, "Embedded Video"))
+
+        # ========== UPP-SPECIFIC: Extract file items with data-id ==========
+        # UPP uses: <div class="file-item" data-id="1147"> with file-name inside
+        # Pattern: find file-item divs and extract data-id + file-name
+        file_items = re.findall(
+            r'<div[^>]+class=["\'][^"\']*file-item[^"\']*["\'][^>]+data-id=["\'](\d+)["\'][^>]*>.*?'
+            r'<div[^>]+class=["\'][^"\']*file-name[^"\']*["\'][^>]*(?:title=["\']([^"\']*)["\'])?[^>]*>([^<]*)</div>',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        logger.info(f"Found {len(file_items)} file items with data-id in page")
+
+        for data_id, title_attr, text_content in file_items:
+            # Construct download URL from data-id
+            # UPP likely uses: /coordinador/fileManager/download.asp?id=XXX
+            filename = (title_attr or text_content).strip()
+            if filename and filename != "0":  # "0" is used for links without files
+                # Determine the file manager path based on page context
+                download_url = urljoin(base_url, f"/coordinador/fileManager/download.asp?id={data_id}")
+                links.append((download_url, filename))
+
+        # ========== UPP-SPECIFIC: Extract material names for context ==========
+        # <div class="file-material-name">SÍLABO - NEGOCIACIÓN...</div>
+        material_names = re.findall(
+            r'<div[^>]+class=["\'][^"\']*file-material-name[^"\']*["\'][^>]*>([^<]+)</div>',
+            html,
+            flags=re.IGNORECASE,
+        )
 
         # Extract embed/object sources
         embed_sources = re.findall(
@@ -1025,10 +1077,82 @@ class UppProvider(LmsProvider):
         course_external_id: str,
     ) -> list[ExternalMaterial]:
         """
-        Use Playwright to extract materials from JavaScript-rendered pages.
+        Extract materials using browser automation.
 
-        This is called as a fallback when static HTML scraping doesn't find
-        materials or detects JavaScript-heavy content.
+        When Chrome MCP is enabled (recommended), uses LLM-driven universal extraction.
+        Otherwise, falls back to pattern-based BrowserMaterialFetcher.
+        """
+        if self.use_chrome_mcp:
+            return self._fetch_materials_with_chrome_mcp(course_url, course_external_id)
+        else:
+            return self._fetch_materials_with_playwright(course_url, course_external_id)
+
+    def _fetch_materials_with_chrome_mcp(
+        self,
+        course_url: str,
+        course_external_id: str,
+    ) -> list[ExternalMaterial]:
+        """
+        Use Chrome MCP (LLM-driven) to extract materials universally.
+
+        This is the UNIVERSAL approach - it uses an LLM to analyze page structure
+        and identify downloadable materials without relying on site-specific patterns.
+        """
+        from api.services.integrations.chrome_mcp_client import extract_materials_universal
+
+        logger.info(f"Chrome MCP extracting materials from: {course_url}")
+
+        async def _fetch():
+            cookies = self._login_cookies()
+            extracted = await extract_materials_universal(
+                page_url=course_url,
+                cookies=cookies,
+                base_url=self.api_url,
+                timeout=self.browser_timeout,
+                use_llm=True,  # Use LLM for universal extraction
+            )
+
+            materials = []
+            for m in extracted:
+                external_id = self._encode_url_ref("maturl", m.url)
+                filename = m.url.rsplit('/', 1)[-1].split('?')[0] or 'material.bin'
+                content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+
+                # Map file_type to content_type
+                if m.file_type == 'pdf':
+                    content_type = 'application/pdf'
+                elif m.file_type == 'video':
+                    content_type = 'video/mp4'
+                elif m.file_type == 'document':
+                    content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+                materials.append(ExternalMaterial(
+                    provider=self.provider_name,
+                    external_id=external_id,
+                    course_external_id=course_external_id,
+                    title=m.title or filename,
+                    filename=filename,
+                    content_type=content_type,
+                    size_bytes=0,
+                    source_url=m.url,
+                ))
+
+            logger.info(f"Chrome MCP extracted {len(materials)} materials")
+            return materials
+
+        # Run async in sync context
+        return self._run_async(_fetch())
+
+    def _fetch_materials_with_playwright(
+        self,
+        course_url: str,
+        course_external_id: str,
+    ) -> list[ExternalMaterial]:
+        """
+        Use Playwright with pattern-based extraction (fallback).
+
+        This is the legacy approach that uses regex patterns.
+        Use Chrome MCP for better universal extraction.
         """
         from api.services.integrations.browser_helper import BrowserMaterialFetcher
 
@@ -1058,7 +1182,10 @@ class UppProvider(LmsProvider):
 
             return materials
 
-        # Run async in sync context
+        return self._run_async(_fetch())
+
+    def _run_async(self, coro):
+        """Run async coroutine in sync context."""
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -1068,10 +1195,10 @@ class UppProvider(LmsProvider):
             # If already in an async context, create a new thread
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, _fetch())
+                future = executor.submit(asyncio.run, coro)
                 return future.result()
         else:
-            return asyncio.run(_fetch())
+            return asyncio.run(coro)
 
     def _extract_video_url_with_browser(self, page_url: str) -> Optional[str]:
         """Extract video stream URL from a video page using browser."""
@@ -1081,18 +1208,7 @@ class UppProvider(LmsProvider):
             cookies = self._login_cookies()
             return await extract_video_stream_url(page_url, cookies, self.browser_timeout)
 
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop is not None:
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, _extract())
-                return future.result()
-        else:
-            return asyncio.run(_extract())
+        return self._run_async(_extract())
 
     def _download_with_browser(self, url: str) -> tuple[bytes, str]:
         """Download file using browser for protected downloads."""
@@ -1102,18 +1218,7 @@ class UppProvider(LmsProvider):
             cookies = self._login_cookies()
             return await download_with_browser(url, cookies, self.browser_timeout)
 
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop is not None:
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, _download())
-                return future.result()
-        else:
-            return asyncio.run(_download())
+        return self._run_async(_download())
 
     def _is_video_page(self, url: str) -> bool:
         """Check if URL is a video page (not a direct video file)."""

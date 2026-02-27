@@ -208,6 +208,7 @@ class ChromeMCPClient:
             {"name": k, "value": v, "domain": parsed_url.netloc, "path": "/"}
             for k, v in self.cookies.items()
         ]
+        logger.info(f"Chrome MCP: Setting {len(cookie_list)} cookies for {parsed_url.netloc}")
         await context.add_cookies(cookie_list)
 
         page = await context.new_page()
@@ -229,16 +230,28 @@ class ChromeMCPClient:
         try:
             # Use shorter timeout for initial load (15 seconds)
             load_timeout = min(self.timeout, 15000)
+            logger.info(f"Chrome MCP: Navigating to {page_url[:80]}...")
             await page.goto(page_url, timeout=load_timeout)
+            current_url = page.url
+            logger.info(f"Chrome MCP: Page loaded, current URL: {current_url[:80]}...")
 
-            # Wait for network idle with shorter timeout (10 seconds)
+            # Check if redirected to login page
+            if 'login' in current_url.lower() or 'usuariodued' in current_url.lower():
+                logger.warning(f"Chrome MCP: Redirected to login page! Cookies may not be working.")
+
+            logger.info("Chrome MCP: Waiting for network idle...")
+
+            # Wait for network idle with shorter timeout (5 seconds - reduced)
             try:
-                await page.wait_for_load_state("networkidle", timeout=10000)
+                await page.wait_for_load_state("networkidle", timeout=5000)
+                logger.info("Chrome MCP: Network idle reached")
             except Exception:
-                logger.debug("Network idle timeout, continuing with available content")
+                logger.info("Chrome MCP: Network idle timeout (5s), continuing with available content")
 
             # Expand accordions and collapsed sections
+            logger.info("Chrome MCP: Expanding collapsed sections...")
             await self._expand_all_sections(page)
+            logger.info("Chrome MCP: Extracting page data...")
 
             # Extract page data via JavaScript
             page_data = await page.evaluate('''() => {

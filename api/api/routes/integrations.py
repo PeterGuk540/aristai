@@ -8,6 +8,7 @@ import json
 import os
 import hmac
 import base64
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 from urllib.parse import quote_plus
@@ -572,6 +573,7 @@ def _import_materials_batch(
     session_mapping: Optional[dict[str, int]] = None,
     material_session_map: Optional[dict[str, str]] = None,
     overwrite_title_prefix: Optional[str] = None,
+    material_title_map: Optional[dict[str, str]] = None,
 ) -> dict:
     """Import materials in batch, updating the provided job record.
 
@@ -615,6 +617,25 @@ def _import_materials_batch(
                 IntegrationMaterialLink.source_connection_id == source_connection_id,
             ).first()
             if existing_link:
+                # Update title of existing material if a better title is now available
+                if material_title_map and existing_link.course_material_id:
+                    new_title_raw = material_title_map.get(external_id, "")
+                    if new_title_raw:
+                        new_title = f"{prefix}{new_title_raw}" if prefix else new_title_raw
+                        existing_mat = db.query(CourseMaterial).filter(
+                            CourseMaterial.id == existing_link.course_material_id
+                        ).first()
+                        if existing_mat and existing_mat.title:
+                            old_looks_like_filename = bool(re.search(
+                                r'\.\w{2,5}$', existing_mat.title.strip()
+                            ))
+                            new_looks_like_filename = bool(re.search(
+                                r'\.\w{2,5}$', new_title.strip()
+                            ))
+                            if old_looks_like_filename and not new_looks_like_filename:
+                                existing_mat.title = new_title
+                                db.commit()
+
                 skipped_count += 1
                 msg = f"Already imported as material id {existing_link.course_material_id}."
                 sync_item.status = "skipped"
@@ -722,6 +743,7 @@ def _import_with_tracking(
     material_external_ids: list[str],
     session_mapping: Optional[dict[str, int]] = None,
     material_session_map: Optional[dict[str, str]] = None,
+    material_title_map: Optional[dict[str, str]] = None,
 ) -> ImportResponse:
     """Synchronous import with tracking - creates job and imports materials."""
     s3_service = get_s3_service()
@@ -759,6 +781,7 @@ def _import_with_tracking(
         session_mapping=session_mapping,
         material_session_map=material_session_map,
         overwrite_title_prefix=request.overwrite_title_prefix,
+        material_title_map=material_title_map,
     )
 
     # Update job completion
@@ -1502,16 +1525,19 @@ def sync_materials(
     # Fetch materials and build a map of material_external_id -> session_external_id
     external_ids = request.material_external_ids
     material_session_map: dict[str, str] = {}
+    material_title_map: dict[str, str] = {}
     if not external_ids:
         try:
             materials = p.list_materials(request.source_course_external_id)
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         external_ids = [m.external_id for m in materials]
-        # Build the mapping from material to its session
+        # Build the mapping from material to its session and title
         for m in materials:
             if m.session_external_id:
                 material_session_map[m.external_id] = m.session_external_id
+            if m.title:
+                material_title_map[m.external_id] = m.title
 
     import_request = ImportRequest(
         target_course_id=request.target_course_id,
@@ -1526,6 +1552,7 @@ def sync_materials(
         db, provider, p, import_request, actor_id, external_ids,
         session_mapping=session_mapping,
         material_session_map=material_session_map,
+        material_title_map=material_title_map,
     )
     result.target_course_id = resolved_target_course_id
     result.target_course_title = resolved_target_title

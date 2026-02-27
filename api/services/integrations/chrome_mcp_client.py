@@ -76,6 +76,7 @@ class PageSnapshot:
     network_requests: list[dict]
     download_url_patterns: list[str] = None  # URL patterns found in page scripts
     file_url_map: dict[str, str] | None = None  # data-id → actual file URL (from API intercept or preview click)
+    file_title_map: dict[str, str] | None = None  # data-id → title (from API intercept)
 
 
 class ChromeMCPClient:
@@ -429,8 +430,9 @@ class ChromeMCPClient:
             except Exception:
                 pass
 
-            # --- Build file_url_map from intercepted API responses ---
+            # --- Build file_url_map and file_title_map from intercepted API responses ---
             file_url_map: dict[str, str] = {}
+            file_title_map: dict[str, str] = {}
             if intercepted_responses:
                 logger.info(f"Chrome MCP: Processing {len(intercepted_responses)} intercepted API responses")
                 for resp_data in intercepted_responses:
@@ -456,6 +458,15 @@ class ChromeMCPClient:
                                 or '.mp4' in furl.lower() or '/download' in furl.lower()
                             ):
                                 file_url_map[fid] = furl
+                            # Also capture title/name from the API response
+                            if fid:
+                                ftitle = str(
+                                    item.get('title', '') or item.get('name', '')
+                                    or item.get('label', '') or item.get('description', '')
+                                    or item.get('materialName', '') or item.get('material_name', '')
+                                ).strip()
+                                if ftitle:
+                                    file_title_map[fid] = ftitle[:150]
                     except (json.JSONDecodeError, TypeError):
                         # Try regex to find /books/...pdf URLs in non-JSON responses
                         pdf_urls = re.findall(r'/books/[^\s"\'<>]+\.(?:pdf|mp4|docx?)', body)
@@ -465,6 +476,8 @@ class ChromeMCPClient:
 
                 if file_url_map:
                     logger.info(f"Chrome MCP: File URL map from API: {file_url_map}")
+                if file_title_map:
+                    logger.info(f"Chrome MCP: File title map from API: {file_title_map}")
 
             # --- Click preview buttons to extract file URLs from modal iframes ---
             # For file items with preview buttons that are NOT yet in file_url_map
@@ -559,6 +572,7 @@ class ChromeMCPClient:
                 network_requests=list(self.network_requests),
                 download_url_patterns=download_patterns,
                 file_url_map=file_url_map if file_url_map else None,
+                file_title_map=file_title_map if file_title_map else None,
             )
 
         finally:
@@ -722,13 +736,23 @@ class ChromeMCPClient:
         finally:
             await context.close()
 
-        # Deduplicate by URL
-        seen_urls: set[str] = set()
-        unique_materials: list[ExtractedMaterial] = []
+        # Deduplicate by URL, preferring entries with better titles
+        seen: dict[str, ExtractedMaterial] = {}
         for m in all_materials:
-            if m.url not in seen_urls:
-                seen_urls.add(m.url)
-                unique_materials.append(m)
+            norm_url = m.url.rstrip('/')
+            existing = seen.get(norm_url)
+            if existing is None:
+                seen[norm_url] = m
+            else:
+                new_looks_like_filename = bool(re.search(r'^[\w_-]+\.\w{2,5}$', m.title.strip()))
+                old_looks_like_filename = bool(re.search(r'^[\w_-]+\.\w{2,5}$', existing.title.strip()))
+                new_is_better = (
+                    (not new_looks_like_filename and old_looks_like_filename)
+                    or (new_looks_like_filename == old_looks_like_filename and len(m.title) > len(existing.title))
+                )
+                if new_is_better:
+                    seen[norm_url] = m
+        unique_materials = list(seen.values())
 
         total_time = time.time() - start_time
         logger.info(f"Chrome MCP: Multi-page extraction complete in {total_time:.1f}s - {len(unique_materials)} unique materials from {len(page_urls)} pages")
@@ -927,7 +951,10 @@ Return ONLY the JSON array, no other text."""
                 continue
 
             item_text = (item.get('text', '') or '').strip()
-            item_title = (item.get('materialName', '') or '').strip() or item_text[:100]
+            # Title priority: API-intercepted title > DOM materialName > concatenated textContent
+            api_title = (snapshot.file_title_map or {}).get(data_id, '')
+            dom_title = (item.get('materialName', '') or '').strip()
+            item_title = api_title or dom_title or item_text[:100]
 
             # Skip non-file entries: "0" placeholder text or "Enlace" (link-type entries)
             if item_text == '0' or 'enlace' in item_text.lower():

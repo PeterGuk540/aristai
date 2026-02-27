@@ -90,9 +90,12 @@ def sync_integration_materials_task(
         # Fetch materials and build mapping
         materials = p.list_materials(source_course_external_id)
         material_session_map: dict[str, str] = {}
+        material_title_map: dict[str, str] = {}
         for m in materials:
             if m.session_external_id:
                 material_session_map[m.external_id] = m.session_external_id
+            if m.title:
+                material_title_map[m.external_id] = m.title
 
         external_ids = [m.external_id for m in materials]
         job.requested_count = len(external_ids)
@@ -113,6 +116,7 @@ def sync_integration_materials_task(
             session_mapping=session_mapping,
             material_session_map=material_session_map,
             overwrite_title_prefix=overwrite_title_prefix,
+            material_title_map=material_title_map,
         )
 
         # Update job completion

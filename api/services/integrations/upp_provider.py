@@ -1093,10 +1093,11 @@ class UppProvider(LmsProvider):
         course_external_id: str,
     ) -> list[ExternalMaterial]:
         """
-        Use Chrome MCP (LLM-driven) to extract materials universally.
+        Use Chrome MCP to extract materials universally via rule-based DOM analysis.
 
-        This is the UNIVERSAL approach - it uses an LLM to analyze page structure
-        and identify downloadable materials without relying on site-specific patterns.
+        This is the UNIVERSAL approach - it analyzes page structure using rules
+        and identifies downloadable materials without relying on site-specific patterns.
+        LLM can be enabled for more accurate extraction but adds ~10-15s latency.
         """
         from api.services.integrations.chrome_mcp_client import extract_materials_universal
 
@@ -1109,7 +1110,7 @@ class UppProvider(LmsProvider):
                 cookies=cookies,
                 base_url=self.api_url,
                 timeout=self.browser_timeout,
-                use_llm=True,  # Use LLM for universal extraction
+                use_llm=False,  # Use rule-based extraction (faster, no timeout issues)
             )
 
             materials = []

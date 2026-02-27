@@ -416,6 +416,83 @@ class ChromeMCPClient:
 
         return snapshot
 
+    async def _discover_download_url_by_click(
+        self, context, page_url: str, data_id: str
+    ) -> str | None:
+        """
+        Click a preview/download button on the page and capture the resulting URL.
+
+        This discovers the actual download URL pattern used by the site's JavaScript.
+        """
+        import asyncio
+        page = await context.new_page()
+        captured_urls: list[str] = []
+
+        def on_request(request):
+            url = request.url
+            # Capture requests that contain the file ID
+            if data_id in url and request.resource_type in ('document', 'fetch', 'xhr', 'other'):
+                captured_urls.append(url)
+
+        page.on("request", on_request)
+
+        try:
+            await page.goto(page_url, timeout=15000)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=5000)
+            except Exception:
+                pass
+
+            # Find the preview/download button for this data-id
+            selectors = [
+                f'button[data-action="preview"][data-id="{data_id}"]',
+                f'[data-action="preview"][data-id="{data_id}"]',
+                f'[data-action="download"][data-id="{data_id}"]',
+                f'button[data-id="{data_id}"]',
+            ]
+            btn = None
+            for sel in selectors:
+                btn = await page.query_selector(sel)
+                if btn:
+                    break
+
+            if not btn:
+                logger.info(f"Chrome MCP: No clickable button found for data-id={data_id}")
+                return None
+
+            # Click and capture: try popup first, then check network requests
+            try:
+                async with page.expect_popup(timeout=5000) as popup_info:
+                    await btn.click()
+                popup = await popup_info.value
+                popup_url = popup.url
+                logger.info(f"Chrome MCP: Preview button opened popup: {popup_url[:120]}")
+                await popup.close()
+                if data_id in popup_url:
+                    return popup_url
+            except Exception:
+                # Not a popup — maybe a same-page action or download
+                await btn.click()
+                await page.wait_for_timeout(2000)
+
+            # Check captured network requests
+            if captured_urls:
+                logger.info(f"Chrome MCP: Preview button triggered requests: {captured_urls[:3]}")
+                return captured_urls[0]
+
+            # Check if the page URL changed (navigation)
+            current = page.url
+            if data_id in current and current != page_url:
+                logger.info(f"Chrome MCP: Preview button navigated to: {current[:120]}")
+                return current
+
+        except Exception as e:
+            logger.warning(f"Chrome MCP: Download URL discovery failed: {e}")
+        finally:
+            await page.close()
+
+        return None
+
     async def extract_materials_multi(self, page_urls: list[str]) -> list[ExtractedMaterial]:
         """
         Extract materials from multiple pages using a single browser context.
@@ -448,6 +525,8 @@ class ChromeMCPClient:
         await context.add_cookies(cookie_list)
 
         all_materials: list[ExtractedMaterial] = []
+        # Download URL pattern discovered by clicking a preview button
+        self._discovered_download_pattern: str | None = None
 
         try:
             for i, page_url in enumerate(page_urls):
@@ -458,6 +537,37 @@ class ChromeMCPClient:
                         f"Chrome MCP: Page {i+1} snapshot: {len(snapshot.links)} links, "
                         f"{len(snapshot.file_items)} file_items, {len(snapshot.iframes)} iframes"
                     )
+
+                    # On first page with preview buttons, discover download URL pattern
+                    if self._discovered_download_pattern is None:
+                        for item in snapshot.file_items:
+                            buttons = item.get('buttons') or []
+                            for btn in buttons:
+                                if btn.get('action') in ('preview', 'download') and btn.get('id'):
+                                    test_id = btn['id']
+                                    logger.info(f"Chrome MCP: Discovering download URL by clicking preview button (id={test_id})...")
+                                    url = await self._discover_download_url_by_click(
+                                        context, page_url, test_id
+                                    )
+                                    if url and test_id in url:
+                                        self._discovered_download_pattern = url.replace(test_id, '{id}')
+                                        logger.info(f"Chrome MCP: Discovered download pattern: {self._discovered_download_pattern}")
+                                        # Also inject into snapshot for _analyze_with_rules
+                                        if not snapshot.download_url_patterns:
+                                            snapshot.download_url_patterns = []
+                                        snapshot.download_url_patterns.insert(0, self._discovered_download_pattern)
+                                    break
+                            if self._discovered_download_pattern is not None:
+                                break
+                        if self._discovered_download_pattern is None:
+                            # Mark as attempted so we don't retry on every page
+                            self._discovered_download_pattern = ''
+
+                    # Inject discovered pattern into snapshot for _analyze_with_rules
+                    if self._discovered_download_pattern and snapshot.download_url_patterns is None:
+                        snapshot.download_url_patterns = [self._discovered_download_pattern]
+                    elif self._discovered_download_pattern and self._discovered_download_pattern not in (snapshot.download_url_patterns or []):
+                        snapshot.download_url_patterns = [self._discovered_download_pattern] + (snapshot.download_url_patterns or [])
 
                     if self.use_llm:
                         try:
@@ -799,11 +909,7 @@ Return ONLY the JSON array, no other text."""
                         url = urljoin(self.base_url + '/', url)
                     return url
 
-        # Fallback: for ASP sites, try the fileManager download endpoint
-        page_lower = page_url.lower()
-        if '.asp' in page_lower or 'coordinador' in page_lower:
-            return f"{self.base_url}/coordinador/fileManager/download.asp?id={data_id}"
-
+        # No pattern found — don't guess, return None
         return None
 
     @staticmethod

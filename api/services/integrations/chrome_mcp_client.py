@@ -74,6 +74,7 @@ class PageSnapshot:
     iframes: list[dict]
     file_items: list[dict]
     network_requests: list[dict]
+    download_url_patterns: list[str] = None  # URL patterns found in page scripts
 
 
 class ChromeMCPClient:
@@ -368,6 +369,37 @@ class ChromeMCPClient:
                 logger.warning("Chrome MCP: JavaScript extraction timed out (10s), using empty data")
                 page_data = {'title': '', 'links': [], 'iframes': [], 'fileItems': [], 'simplifiedDOM': ''}
 
+            # Extract download URL patterns from page scripts
+            # (e.g., the JS handler for data-action="preview" buttons)
+            download_patterns = []
+            try:
+                download_patterns = await asyncio.wait_for(
+                    page.evaluate('''() => {
+                        const patterns = [];
+                        const scripts = document.querySelectorAll('script');
+                        for (const s of scripts) {
+                            const t = s.textContent || '';
+                            if (!t) continue;
+                            // Look for URL strings containing download/file/preview endpoints
+                            const matches = [...t.matchAll(
+                                /['"`]((?:\\/|https?:\\/\\/)[^'"`\\n]{3,120}?(?:download|getFile|getfile|descargar|preview|archivo|fileManager\\/)[^'"`\\n]{0,80}?)['"`]/gi
+                            )];
+                            for (const m of matches) {
+                                const url = m[1];
+                                // Skip template literals and JS expressions
+                                if (url.includes('${') || url.includes('function')) continue;
+                                patterns.push(url);
+                            }
+                        }
+                        return [...new Set(patterns)].slice(0, 20);
+                    }'''),
+                    timeout=3.0,
+                )
+                if download_patterns:
+                    logger.info(f"Chrome MCP: Download URL patterns from scripts: {download_patterns}")
+            except Exception:
+                pass
+
             snapshot = PageSnapshot(
                 url=page_url,
                 title=page_data.get('title', ''),
@@ -376,6 +408,7 @@ class ChromeMCPClient:
                 iframes=page_data.get('iframes', []),
                 file_items=page_data.get('fileItems', []),
                 network_requests=list(self.network_requests),
+                download_url_patterns=download_patterns,
             )
 
         finally:
@@ -680,13 +713,27 @@ Return ONLY the JSON array, no other text."""
                         source='data-id',
                     ))
             else:
-                # No real file links found in this item — log details for debugging
-                raw_links = item.get('links') or []
+                # No <a href> links — check for preview/download buttons
                 buttons = item.get('buttons') or []
-                logger.info(
-                    f"Chrome MCP: data-id={data_id} has no file links. "
-                    f"text={item_text[:80]!r}, raw_links={raw_links[:3]}, buttons={buttons[:3]}"
+                has_preview = any(
+                    b.get('action') in ('preview', 'download') and b.get('id')
+                    for b in buttons
                 )
+                if has_preview and item_text:
+                    # Use download URL pattern discovered from page scripts
+                    download_url = self._build_download_url(
+                        data_id, snapshot.download_url_patterns, snapshot.url
+                    )
+                    if download_url:
+                        materials.append(ExtractedMaterial(
+                            url=download_url,
+                            title=item_text[:100],
+                            file_type=self._detect_file_type(item_text),
+                            confidence=0.75,
+                            source='data-id',
+                        ))
+                    else:
+                        logger.debug(f"Chrome MCP: Skipping data-id={data_id}, no download pattern found")
 
         # Extract from links
         for link in snapshot.links:
@@ -708,6 +755,56 @@ Return ONLY the JSON array, no other text."""
         materials = [m for m in materials if self._is_downloadable_url(m.url)]
 
         return materials
+
+    def _build_download_url(
+        self, data_id: str, patterns: list[str] | None, page_url: str
+    ) -> str | None:
+        """
+        Build a download URL for a data-id item using patterns discovered from
+        the page's JavaScript.
+
+        Args:
+            data_id: The file ID from the data-id attribute
+            patterns: URL patterns found in page scripts
+            page_url: The page URL for context
+
+        Returns:
+            A download URL, or None if no suitable pattern found
+        """
+        if patterns:
+            for pattern in patterns:
+                pattern_lower = pattern.lower()
+                # Look for patterns that take an id parameter
+                if 'id=' in pattern_lower or '{id}' in pattern_lower:
+                    # Replace placeholder or append id
+                    if '{id}' in pattern:
+                        url = pattern.replace('{id}', data_id)
+                    elif pattern.endswith('id='):
+                        url = pattern + data_id
+                    elif 'id=' in pattern:
+                        # Pattern already has an id value — replace it
+                        url = re.sub(r'id=[^&]*', f'id={data_id}', pattern)
+                    else:
+                        continue
+
+                    # Resolve relative URLs
+                    if not url.startswith('http'):
+                        url = urljoin(self.base_url + '/', url)
+                    return url
+
+                # Patterns like /path/to/download/ followed by id
+                if pattern.endswith('/'):
+                    url = pattern + data_id
+                    if not url.startswith('http'):
+                        url = urljoin(self.base_url + '/', url)
+                    return url
+
+        # Fallback: for ASP sites, try the fileManager download endpoint
+        page_lower = page_url.lower()
+        if '.asp' in page_lower or 'coordinador' in page_lower:
+            return f"{self.base_url}/coordinador/fileManager/download.asp?id={data_id}"
+
+        return None
 
     @staticmethod
     def _is_valid_material_url(url: str) -> bool:

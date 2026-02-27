@@ -587,6 +587,12 @@ class UppProvider(LmsProvider):
         href_l = href.lower()
         label_l = label.lower()
 
+        # Reject unresolved JS template literals (e.g. "${escapeHtml(file.fileUrl)}")
+        from urllib.parse import unquote as _unquote
+        decoded_href = _unquote(href)
+        if any(pat in decoded_href for pat in ('${', '{%', '{{', 'escapeHtml', 'encodeURI')):
+            return False
+
         # ========== UPP-SPECIFIC: Direct file paths ==========
         # PDFs served from /books/final/... are actual files
         if '/books/' in href_l and '.pdf' in href_l:
@@ -1075,15 +1081,21 @@ class UppProvider(LmsProvider):
         self,
         course_url: str,
         course_external_id: str,
+        sub_page_urls: list[str] | None = None,
     ) -> list[ExternalMaterial]:
         """
         Extract materials using browser automation.
 
         When Chrome MCP is enabled (recommended), uses LLM-driven universal extraction.
         Otherwise, falls back to pattern-based BrowserMaterialFetcher.
+
+        Args:
+            course_url: Main course page URL
+            course_external_id: External ID of the course
+            sub_page_urls: Optional list of sub-page URLs discovered during crawl
         """
         if self.use_chrome_mcp:
-            return self._fetch_materials_with_chrome_mcp(course_url, course_external_id)
+            return self._fetch_materials_with_chrome_mcp(course_url, course_external_id, sub_page_urls)
         else:
             return self._fetch_materials_with_playwright(course_url, course_external_id)
 
@@ -1091,27 +1103,50 @@ class UppProvider(LmsProvider):
         self,
         course_url: str,
         course_external_id: str,
+        sub_page_urls: list[str] | None = None,
     ) -> list[ExternalMaterial]:
         """
         Use Chrome MCP to extract materials universally via rule-based DOM analysis.
 
-        This is the UNIVERSAL approach - it analyzes page structure using rules
-        and identifies downloadable materials without relying on site-specific patterns.
-        LLM can be enabled for more accurate extraction but adds ~10-15s latency.
+        When sub_page_urls are provided, visits all sub-pages (where JS-rendered
+        file lists live) using a single browser context instead of only the main page.
         """
-        from api.services.integrations.chrome_mcp_client import extract_materials_universal
+        from api.services.integrations.chrome_mcp_client import (
+            extract_materials_from_pages,
+            extract_materials_universal,
+        )
 
-        logger.info(f"Chrome MCP extracting materials from: {course_url}")
+        # Build the list of pages to visit
+        all_urls: list[str] = []
+        if sub_page_urls:
+            # Use sub-pages (where actual files are JS-rendered)
+            all_urls = list(sub_page_urls)
+            # Include the main course page if not already in sub-pages
+            if course_url not in all_urls:
+                all_urls.insert(0, course_url)
+        else:
+            all_urls = [course_url]
+
+        logger.info(f"Chrome MCP extracting materials from {len(all_urls)} pages")
 
         async def _fetch():
             cookies = self._login_cookies()
-            extracted = await extract_materials_universal(
-                page_url=course_url,
-                cookies=cookies,
-                base_url=self.api_url,
-                timeout=self.browser_timeout,
-                use_llm=False,  # Use rule-based extraction (faster, no timeout issues)
-            )
+            if len(all_urls) > 1:
+                extracted = await extract_materials_from_pages(
+                    page_urls=all_urls,
+                    cookies=cookies,
+                    base_url=self.api_url,
+                    timeout=self.browser_timeout,
+                    use_llm=False,
+                )
+            else:
+                extracted = await extract_materials_universal(
+                    page_url=all_urls[0],
+                    cookies=cookies,
+                    base_url=self.api_url,
+                    timeout=self.browser_timeout,
+                    use_llm=False,
+                )
 
             materials = []
             for m in extracted:
@@ -1297,6 +1332,11 @@ class UppProvider(LmsProvider):
                                 link_session_id = self._extract_session_from_url(href, course_external_id)
                                 queue.append((href, link_session_id or current_session_id))
 
+                # Collect all visited sub-page URLs (excluding the main course page)
+                # These are the JS-rendered pages where files actually live
+                sub_page_urls = [u for u in visited if u != course_url]
+                logger.info(f"Static crawl visited {len(visited)} pages ({len(sub_page_urls)} sub-pages)")
+
             if scraped:
                 # dedupe by external_id while preserving order
                 unique: dict[str, ExternalMaterial] = {}
@@ -1311,7 +1351,8 @@ class UppProvider(LmsProvider):
                     logger.info(f"Browser fallback triggered for course {course_external_id}")
                     try:
                         browser_materials = self._fetch_materials_with_browser(
-                            course_url, str(course_external_id)
+                            course_url, str(course_external_id),
+                            sub_page_urls=sub_page_urls,
                         )
                         # Merge browser results (avoid duplicates)
                         for bm in browser_materials:
@@ -1329,7 +1370,8 @@ class UppProvider(LmsProvider):
                 logger.info(f"No materials from static scraping, trying browser for {course_url}")
                 try:
                     browser_materials = self._fetch_materials_with_browser(
-                        course_url, str(course_external_id)
+                        course_url, str(course_external_id),
+                        sub_page_urls=sub_page_urls,
                     )
                     if browser_materials:
                         return browser_materials
@@ -1389,6 +1431,14 @@ class UppProvider(LmsProvider):
     def download_material(self, material_external_id: str) -> tuple[bytes, ExternalMaterial]:
         material_url = self._decode_url_ref(str(material_external_id), "maturl")
         if material_url is not None:
+            # Reject unresolved JS template literals before attempting download
+            from urllib.parse import unquote as _unquote
+            decoded_url = _unquote(material_url)
+            if any(pat in decoded_url for pat in ('${', '{%', '{{', 'escapeHtml', 'encodeURI')):
+                raise RuntimeError(
+                    f"UPP material URL contains unresolved template literal: {material_url[:120]}"
+                )
+
             # Check if this is a video page that needs browser extraction
             if self.extract_videos and self.use_browser_fallback and self._is_video_page(material_url):
                 logger.info(f"Detected video page, extracting stream URL: {material_url}")

@@ -187,12 +187,8 @@ class ChromeMCPClient:
         """
         Navigate to page and take a structured snapshot for LLM analysis.
 
-        Collects:
-        - Simplified DOM structure
-        - All links with context
-        - Iframes (often contain embedded PDFs)
-        - File item patterns (divs with data-id, download buttons)
-        - Network requests (video streams, file downloads)
+        Creates a new browser context, takes a snapshot, and closes the context.
+        For multi-page extraction, use _take_snapshot_with_context instead.
         """
         browser = await _get_browser()
         context = await browser.new_context()
@@ -206,6 +202,22 @@ class ChromeMCPClient:
         logger.info(f"Chrome MCP: Setting {len(cookie_list)} cookies for {parsed_url.netloc}")
         await context.add_cookies(cookie_list)
 
+        try:
+            return await self._take_snapshot_with_context(context, page_url)
+        finally:
+            await context.close()
+
+    async def _take_snapshot_with_context(self, context, page_url: str) -> PageSnapshot:
+        """
+        Navigate to page and take a structured snapshot, reusing an existing browser context.
+
+        Collects:
+        - Simplified DOM structure
+        - All links with context
+        - Iframes (often contain embedded PDFs)
+        - File item patterns (divs with data-id, download buttons)
+        - Network requests (video streams, file downloads)
+        """
         page = await context.new_page()
         self.network_requests = []
 
@@ -368,9 +380,87 @@ class ChromeMCPClient:
 
         finally:
             await page.close()
-            await context.close()
 
         return snapshot
+
+    async def extract_materials_multi(self, page_urls: list[str]) -> list[ExtractedMaterial]:
+        """
+        Extract materials from multiple pages using a single browser context.
+
+        This is more efficient than calling extract_materials() for each URL
+        because it reuses the same authenticated browser context.
+
+        Args:
+            page_urls: List of URLs to extract materials from
+
+        Returns:
+            Deduplicated list of ExtractedMaterial objects from all pages
+        """
+        import time
+        if not page_urls:
+            return []
+
+        start_time = time.time()
+        logger.info(f"Chrome MCP extracting materials from {len(page_urls)} pages")
+
+        browser = await _get_browser()
+        context = await browser.new_context()
+
+        # Set authentication cookies
+        parsed_url = urlparse(self.base_url)
+        cookie_list = [
+            {"name": k, "value": v, "domain": parsed_url.netloc, "path": "/"}
+            for k, v in self.cookies.items()
+        ]
+        await context.add_cookies(cookie_list)
+
+        all_materials: list[ExtractedMaterial] = []
+
+        try:
+            for i, page_url in enumerate(page_urls):
+                logger.info(f"Chrome MCP: Page {i+1}/{len(page_urls)}: {page_url[:80]}...")
+                try:
+                    snapshot = await self._take_snapshot_with_context(context, page_url)
+
+                    if self.use_llm:
+                        try:
+                            materials = await self._analyze_with_llm(snapshot)
+                        except Exception as e:
+                            logger.warning(f"Chrome MCP: LLM failed for {page_url} ({e}), using rules")
+                            materials = self._analyze_with_rules(snapshot)
+                    else:
+                        materials = self._analyze_with_rules(snapshot)
+
+                    # Add network-intercepted materials
+                    for req in self.network_requests:
+                        if self._is_downloadable_url(req['url']):
+                            materials.append(ExtractedMaterial(
+                                url=req['url'],
+                                title=self._title_from_url(req['url']),
+                                file_type=self._detect_file_type(req['url']),
+                                confidence=0.9,
+                                source='network',
+                            ))
+
+                    logger.info(f"Chrome MCP: Page {i+1} yielded {len(materials)} materials")
+                    all_materials.extend(materials)
+                except Exception as e:
+                    logger.warning(f"Chrome MCP: Failed to extract from {page_url}: {e}")
+                    continue
+        finally:
+            await context.close()
+
+        # Deduplicate by URL
+        seen_urls: set[str] = set()
+        unique_materials: list[ExtractedMaterial] = []
+        for m in all_materials:
+            if m.url not in seen_urls:
+                seen_urls.add(m.url)
+                unique_materials.append(m)
+
+        total_time = time.time() - start_time
+        logger.info(f"Chrome MCP: Multi-page extraction complete in {total_time:.1f}s - {len(unique_materials)} unique materials from {len(page_urls)} pages")
+        return unique_materials
 
     async def _expand_all_sections(self, page):
         """Expand accordions, tabs, and collapsed sections to reveal content."""
@@ -455,9 +545,11 @@ Return a JSON array of materials found:
 ```
 
 IMPORTANT:
-- For file items with data-id, construct download URL as: /api/materials/{{data-id}}/download
+- For file items with data-id, use the download links found within the item element (not a generic API path)
+- If no links are found in the item, look for download.asp or fileManager patterns in the page URL
 - For iframes with PDF src, use the iframe src directly
 - Include ONLY actual downloadable content, not portal pages
+- NEVER include URLs containing template literals like ${{...}}, escapeHtml, or encodeURI
 
 Return ONLY the JSON array, no other text."""
 
@@ -558,12 +650,37 @@ Return ONLY the JSON array, no other text."""
         # Extract from file items with data-id
         for item in snapshot.file_items:
             data_id = item.get('dataId', '')
-            if data_id:
-                # Construct download URL pattern
-                url = f"{self.base_url}/api/materials/{data_id}/download"
+            if not data_id:
+                continue
+
+            item_text = (item.get('text', '') or '').strip()
+
+            # Skip non-file entries: "0" placeholder text or "Enlace" (link-type entries)
+            if item_text == '0' or 'enlace' in item_text.lower():
+                continue
+
+            # Prefer actual links found within the file item element
+            item_links = [l for l in (item.get('links') or []) if self._is_downloadable_url(l)]
+            if item_links:
+                for link_url in item_links:
+                    materials.append(ExtractedMaterial(
+                        url=link_url,
+                        title=item_text[:100] or self._title_from_url(link_url),
+                        file_type=self._detect_file_type(link_url),
+                        confidence=0.85,
+                        source='data-id',
+                    ))
+            else:
+                # No real links found — construct URL based on page context
+                # UPP ASP sites use /coordinador/fileManager/download.asp?id=
+                page_url_lower = snapshot.url.lower()
+                if '.asp' in page_url_lower or 'coordinador' in page_url_lower:
+                    url = f"{self.base_url}/coordinador/fileManager/download.asp?id={data_id}"
+                else:
+                    url = f"{self.base_url}/api/materials/{data_id}/download"
                 materials.append(ExtractedMaterial(
                     url=url,
-                    title=item.get('text', '')[:100] or f"Material {data_id}",
+                    title=item_text[:100] or f"Material {data_id}",
                     file_type='unknown',
                     confidence=0.7,
                     source='data-id',
@@ -585,6 +702,9 @@ Return ONLY the JSON array, no other text."""
                     source='link',
                 ))
 
+        # Post-filter: remove any materials with invalid/template URLs
+        materials = [m for m in materials if self._is_downloadable_url(m.url)]
+
         return materials
 
     @staticmethod
@@ -592,6 +712,12 @@ Return ONLY the JSON array, no other text."""
         """Check if URL is a valid material URL."""
         if not url:
             return False
+
+        # Reject unresolved JS template literals and template engine patterns
+        decoded_url = unquote(url)
+        if any(pat in decoded_url for pat in ('${', '{%', '{{', 'escapeHtml', 'encodeURI')):
+            return False
+
         url_lower = url.lower()
 
         # Skip invalid URLs
@@ -712,6 +838,37 @@ async def extract_materials_universal(
         use_llm=use_llm,
     )
     return await client.extract_materials(page_url)
+
+
+async def extract_materials_from_pages(
+    page_urls: list[str],
+    cookies: dict[str, str],
+    base_url: str,
+    timeout: float = 30.0,
+    use_llm: bool = False,
+) -> list[ExtractedMaterial]:
+    """
+    Extract materials from multiple pages using a single browser context.
+
+    More efficient than calling extract_materials_universal for each URL.
+
+    Args:
+        page_urls: List of URLs to extract from
+        cookies: Authentication cookies
+        base_url: Base URL of the site
+        timeout: Page load timeout
+        use_llm: Whether to use LLM (True) or rule-based extraction (False)
+
+    Returns:
+        Deduplicated list of ExtractedMaterial objects from all pages
+    """
+    client = ChromeMCPClient(
+        cookies=cookies,
+        base_url=base_url,
+        timeout=timeout,
+        use_llm=use_llm,
+    )
+    return await client.extract_materials_multi(page_urls)
 
 
 async def close_chrome_mcp():

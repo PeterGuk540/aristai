@@ -20,7 +20,7 @@ import os
 import re
 from dataclasses import dataclass
 from typing import Any, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, unquote
 
 logger = logging.getLogger(__name__)
 
@@ -606,7 +606,12 @@ Return ONLY the JSON array, no other text."""
 
         # Skip URLs containing unresolved JavaScript template strings
         # e.g., "${escapeHtml(file.fileUrl)}" or "${variable}"
-        if '${' in url or '{%' in url or '{{' in url:
+        # Also check URL-decoded version in case special chars are encoded
+        decoded_url = unquote(url)
+        if '${' in decoded_url or '{%' in decoded_url or '{{' in decoded_url:
+            return False
+        # Also skip URLs containing literal JS function names (common template patterns)
+        if 'escapeHtml' in decoded_url or 'encodeURI' in decoded_url:
             return False
 
         url_lower = url.lower()

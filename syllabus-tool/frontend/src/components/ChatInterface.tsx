@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { DiffViewer } from './DiffViewer';
+import { fetchWithAuth } from '../lib/fetchWithAuth.ts';
 
 interface Message {
   id: number;
@@ -25,7 +26,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const apiUrl = import.meta.env.VITE_API_URL || '/api/v1';
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   const adjustHeight = () => {
     const textarea = textareaRef.current;
@@ -62,7 +63,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(({
 
     try {
       // apiUrl is expected to include the version prefix (e.g., /api/v1)
-      const response = await fetch(`${apiUrl}/chat`, {
+      const response = await fetchWithAuth(`${apiUrl}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

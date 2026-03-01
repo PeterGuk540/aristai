@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PDFViewer } from './PDFViewer';
 import mammoth from 'mammoth';
+import { fetchWithAuth } from '../lib/fetchWithAuth.ts';
 
 interface FileViewerProps {
   fileId: number;
@@ -28,7 +29,7 @@ export function FileViewer({ fileId, filename, apiUrl }: FileViewerProps) {
       setError(null);
       setContent(null);
       try {
-        const response = await fetch(`${apiUrl}/files/${fileId}/content`);
+        const response = await fetchWithAuth(`${apiUrl}/files/${fileId}/content`);
         if (!response.ok) throw new Error('Failed to load file');
         
         const blob = await response.blob();

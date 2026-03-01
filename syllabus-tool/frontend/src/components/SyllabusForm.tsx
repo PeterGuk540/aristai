@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FloatingMenu } from './FloatingMenu';
 import SyllabusPreview from './SyllabusPreview';
+import { fetchWithAuth } from '../lib/fetchWithAuth.ts';
 
 // Helper component for auto-resizing textarea
 const AutoResizeTextarea = ({ value, onChange, className, style, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => {
@@ -249,7 +250,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
     }
     
     const apiUrl = import.meta.env.VITE_API_URL || '/api/v1';
-    const response = await fetch(`${apiUrl}/regenerate`, {
+    const response = await fetchWithAuth(`${apiUrl}/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -569,7 +570,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || '/api/v1';
-      const response = await fetch(`${apiUrl}/upload/`, {
+      const response = await fetchWithAuth(`${apiUrl}/upload/`, {
         method: 'POST',
         body: formData,
       });

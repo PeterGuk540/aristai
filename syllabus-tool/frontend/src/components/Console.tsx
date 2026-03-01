@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { fetchWithAuth } from '../lib/fetchWithAuth.ts';
 
 interface LogEntry {
   timestamp: string;
@@ -32,7 +33,7 @@ export const Console: React.FC<ConsoleProps> = ({ apiUrl }) => {
 
   const fetchLogs = async () => {
     try {
-      const response = await fetch(`${apiUrl}/logs`);
+      const response = await fetchWithAuth(`${apiUrl}/logs`);
       if (response.ok) {
         const data = await response.json();
         setLogs(data);

@@ -11,6 +11,11 @@ import { UploadZone } from './components/UploadZone'
 import { CommandCenter } from './components/CommandCenter'
 import ExportModal from './components/ExportModal'
 import PreviewModal from './components/PreviewModal'
+import { checkAnyAuth, signOutAll } from './lib/auth.ts'
+import type { AuthUser } from './lib/auth.ts'
+import { fetchWithAuth } from './lib/fetchWithAuth.ts'
+import { LoginPage } from './components/LoginPage.tsx'
+import { OAuthCallback } from './components/OAuthCallback.tsx'
 
 // Mock initial data
 const initialSyllabusData: any = {
@@ -126,6 +131,13 @@ const HistoryItemCard = ({ item, expandedId, setExpandedId, onDelete, onLoad }: 
 );
 
 function App() {
+  // --- Auth state ---
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
+  const [isOAuthCallback, setIsOAuthCallback] = useState(() => window.location.search.includes('code='))
+
+  // --- App state (hooks must be unconditional) ---
   const [step, setStep] = useState<'upload' | 'edit' | 'export'>('upload')
   const [syllabusData, setSyllabusData] = useState(initialSyllabusData)
   const [syllabusContext, setSyllabusContext] = useState('')
@@ -151,8 +163,8 @@ function App() {
     
     try {
       // Execute deletes in parallel
-      await Promise.all(olderIds.map(id => 
-          fetch(`${apiUrl}/analysis_history/${id}`, { method: 'DELETE' })
+      await Promise.all(olderIds.map(id =>
+          fetchWithAuth(`${apiUrl}/analysis_history/${id}`, { method: 'DELETE' })
       ));
       fetchAnalysisHistory();
     } catch (error) {
@@ -172,10 +184,20 @@ function App() {
 
   const apiUrl = import.meta.env.VITE_API_URL || '/api/v1'
 
+  // Auth: check session on mount (skip if OAuth callback — OAuthCallback handles it)
   useEffect(() => {
+    if (isOAuthCallback) { setAuthLoading(false); return; }
+    checkAnyAuth().then((u) => { setUser(u); setAuthLoading(false); });
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSignOut = () => { signOutAll(); setUser(null); }
+
+  // Fetch data only when authenticated
+  useEffect(() => {
+    if (!user) return;
     fetchFiles()
     fetchAnalysisHistory()
-  }, [])
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync selectedFiles with files list to remove any IDs that no longer exist
   useEffect(() => {
@@ -194,7 +216,7 @@ function App() {
 
   const fetchFiles = async () => {
     try {
-      const response = await fetch(`${apiUrl}/files/`)
+      const response = await fetchWithAuth(`${apiUrl}/files/`)
       if (response.ok) {
         const data = await response.json()
         setFiles(data)
@@ -206,7 +228,7 @@ function App() {
 
   const fetchAnalysisHistory = async () => {
     try {
-      const response = await fetch(`${apiUrl}/analysis_history/`)
+      const response = await fetchWithAuth(`${apiUrl}/analysis_history/`)
       if (response.ok) {
         const data = await response.json()
         setAnalysisHistory(data)
@@ -242,7 +264,7 @@ function App() {
     if (!confirm(`Are you sure you want to delete ${filename}?`)) return;
 
     try {
-      const response = await fetch(`${apiUrl}/files/${id}`, {
+      const response = await fetchWithAuth(`${apiUrl}/files/${id}`, {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -262,7 +284,7 @@ function App() {
     if (!confirm('Are you sure you want to delete this history item?')) return;
 
     try {
-      const response = await fetch(`${apiUrl}/analysis_history/${id}`, {
+      const response = await fetchWithAuth(`${apiUrl}/analysis_history/${id}`, {
         method: 'DELETE',
       });
       if (response.ok) {
@@ -302,7 +324,7 @@ function App() {
       // If we have a guidance file but no validation data, force validation run
       const finalGuidanceId = (shouldRunValidation || effectiveGuidanceId) ? effectiveGuidanceId : null;
 
-      const response = await fetch(`${apiUrl}/analyze_batch/`, {
+      const response = await fetchWithAuth(`${apiUrl}/analyze_batch/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -378,7 +400,7 @@ function App() {
 
   const handleSave = async () => {
     try {
-      const response = await fetch(`${apiUrl}/analysis_history/`, {
+      const response = await fetchWithAuth(`${apiUrl}/analysis_history/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -414,17 +436,17 @@ function App() {
     formData.append('category', category); // Use passed category
 
     try {
-      const response = await fetch(`${apiUrl}/upload/`, {
+      const response = await fetchWithAuth(`${apiUrl}/upload/`, {
         method: 'POST',
         body: formData,
       })
-      
+
       if (!response.ok) {
         throw new Error('Upload failed')
       }
 
       const data = await response.json()
-      
+
       if (category === 'guidance') {
         if (data && data.length > 0) {
             setGuidanceFileId(data[0].id)
@@ -443,7 +465,7 @@ function App() {
   const handleGenerateDraft = async (draftInfo: { title: string; audience: string; duration: string; referenceFileId?: number }) => {
     setIsAnalyzing(true);
     try {
-        const response = await fetch(`${apiUrl}/generate/draft`, {
+        const response = await fetchWithAuth(`${apiUrl}/generate/draft`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -502,7 +524,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/export/${format}`, {
+      const response = await fetchWithAuth(`${apiUrl}/export/${format}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -518,7 +540,7 @@ function App() {
 
       // Save to history
       try {
-        await fetch(`${apiUrl}/analysis_history/`, {
+        await fetchWithAuth(`${apiUrl}/analysis_history/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -567,6 +589,40 @@ function App() {
     }
   }
 
+  // --- Auth gate rendering ---
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+      </div>
+    )
+  }
+
+  if (isOAuthCallback) {
+    return (
+      <OAuthCallback
+        onSuccess={(u) => { setUser(u); setIsOAuthCallback(false); window.history.replaceState({}, '', '/'); }}
+        onError={(err) => { setAuthError(err); setIsOAuthCallback(false); window.history.replaceState({}, '', '/'); }}
+      />
+    )
+  }
+
+  if (!user) {
+    return (
+      <>
+        {authError && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-50 border border-red-200 rounded px-4 py-2 text-sm text-red-700">
+            {authError}
+          </div>
+        )}
+        <LoginPage onLogin={(u) => { setUser(u); setAuthError(''); }} />
+      </>
+    )
+  }
+
   return (
     <div className="h-[100dvh] w-screen bg-gray-100 flex flex-col overflow-hidden">
       {/* Header */}
@@ -577,25 +633,33 @@ function App() {
             <h1 className="text-xs sm:text-2xl font-bold text-gray-900 truncate">Syllabus Tool</h1>
           </div>
           <div className="flex items-center space-x-1 sm:space-x-4 flex-shrink-0">
-            <button 
+            <button
               onClick={() => setStep('upload')}
               className={`px-1 sm:px-0 text-[9px] sm:text-sm font-medium hover:text-blue-800 transition-colors whitespace-nowrap ${step === 'upload' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
             >
               1. Upload
             </button>
-            <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">→</span>
-            <button 
+            <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">&rarr;</span>
+            <button
               onClick={() => setStep('edit')}
               className={`px-1 sm:px-0 text-[9px] sm:text-sm font-medium hover:text-blue-800 transition-colors whitespace-nowrap ${step === 'edit' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
             >
               2. Edit
             </button>
-            <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">→</span>
-            <button 
+            <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">&rarr;</span>
+            <button
               onClick={() => setStep('export')}
               className={`px-1 sm:px-0 text-[9px] sm:text-sm font-medium hover:text-blue-800 transition-colors whitespace-nowrap ${step === 'export' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
             >
               3. Export
+            </button>
+            <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">|</span>
+            <span className="text-[9px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-[150px]" title={user.email}>{user.email}</span>
+            <button
+              onClick={handleSignOut}
+              className="text-[9px] sm:text-xs text-gray-400 hover:text-red-600 transition-colors whitespace-nowrap"
+            >
+              Sign out
             </button>
           </div>
         </div>

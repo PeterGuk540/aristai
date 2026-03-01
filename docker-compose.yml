@@ -9,6 +9,7 @@ services:
       - "5433:5432"  # Use 5433 to avoid conflict with local Postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-syllabus-db.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aristai"]
       interval: 5s
@@ -47,6 +48,8 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME}
       - AWS_REGION=${AWS_REGION}
+      # Syllabus tool integration
+      - SYLLABUS_TOOL_URL=${SYLLABUS_TOOL_URL:-http://syllabus-tool:8002}
     depends_on:
       db:
         condition: service_healthy
@@ -91,6 +94,28 @@ services:
       - API_URL=http://api:8000
     depends_on:
       - api
+
+  syllabus-tool:
+    build:
+      context: .
+      dockerfile: Dockerfile.syllabus
+    ports:
+      - "8002:8002"
+    environment:
+      - SQLALCHEMY_DATABASE_URI=postgresql://aristai:aristai_dev@db:5432/syllabus_tool
+      - DEEPSEEK_API_KEY=${OPENAI_API_KEY}
+      - DEEPSEEK_BASE_URL=https://api.openai.com/v1
+      - DEEPSEEK_MODEL=gpt-4o-mini
+      - CORS_ORIGINS=https://syllabus.aristai.io,http://localhost:5173
+      - CORS_ALLOW_CREDENTIALS=true
+      - ENVIRONMENT=production
+      - LLM_TEMPERATURE=0.1
+      - LLM_TIMEOUT_SECONDS=120
+      - LLM_MAX_RETRIES=2
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:

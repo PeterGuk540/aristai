@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  /* Fluid typography: scales from 10px on mobile to 16px on desktop */
+  font-size: clamp(10px, 2vw + 6px, 16px);
+}
+
+/* Landscape mode on mobile devices */
+@media (max-height: 500px) and (orientation: landscape) {
+  html {
+    font-size: 10px;
+  }
+  .landscape-compact {
+    min-height: 0 !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+  }
+}
+
+body {
+  margin: 0;
+  height: 100dvh; /* Use dynamic viewport height for mobile */
+  width: 100vw;
+  overflow: hidden; /* Prevent global scrollbars */
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+

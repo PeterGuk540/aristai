@@ -10,10 +10,12 @@ Includes observability tracking (Milestone 6).
 """
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from typing import Any, Dict, List, TypedDict, Optional
 
+import httpx
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
 
@@ -36,6 +38,36 @@ from workflows.prompts.planning_prompts import (
 )
 
 logger = logging.getLogger(__name__)
+
+SYLLABUS_TOOL_URL = os.getenv("SYLLABUS_TOOL_URL", "http://syllabus-tool:8002")
+
+
+def generate_syllabus_via_tool(
+    course_title: str,
+    target_audience: str = "University students",
+    duration: str = "16 weeks",
+) -> Dict[str, Any] | None:
+    """Delegate syllabus generation to the syllabus-tool service.
+
+    Returns the structured syllabus data (course_info, learning_goals,
+    schedule, policies) or None if the call fails.
+    """
+    payload = {
+        "course_title": course_title,
+        "target_audience": target_audience,
+        "duration": duration,
+    }
+    try:
+        resp = httpx.post(
+            f"{SYLLABUS_TOOL_URL}/api/v1/generate/draft",
+            json=payload,
+            timeout=120,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        logger.warning("Syllabus-tool call failed: %s", exc)
+        return None
 
 
 # ============ State Definition ============

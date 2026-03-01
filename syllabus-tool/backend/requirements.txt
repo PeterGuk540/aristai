@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+minio
+python-multipart
+pydantic
+pydantic-settings
+python-docx
+pymupdf
+langchain
+langchain-openai
+langchain-anthropic
+openai
+reportlab

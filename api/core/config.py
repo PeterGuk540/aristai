@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     aws_region: str = "us-east-1"
     aws_s3_max_file_size_mb: int = 100
 
+    # Syllabus Tool
+    syllabus_tool_url: str = "http://syllabus-tool:8002"
+
     # Voice Assistant
     voice_asr_provider: str = "whisper"       # "stub" | "whisper"
     voice_tts_provider: str = "elevenlabs_realtime"       # "stub" | "elevenlabs" | "elevenlabs_realtime" | "elevenlabs_agent"

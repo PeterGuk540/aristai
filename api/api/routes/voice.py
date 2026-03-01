@@ -309,6 +309,88 @@ async def generate_content(request: Request, data: GenerateContentRequest):
     # Simple auth check
     require_auth(request)
 
+    # Delegate syllabus generation to the syllabus-tool API
+    if data.content_type == "syllabus":
+        from api.core.config import get_settings
+        from api.services.syllabus_formatter import syllabus_json_to_text
+
+        settings = get_settings()
+        payload = {
+            "course_title": data.context,
+            "target_audience": "University students",
+            "duration": "16 weeks",
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{settings.syllabus_tool_url}/api/v1/generate/draft",
+                    json=payload,
+                    timeout=120,
+                )
+                resp.raise_for_status()
+                tool_data = resp.json()
+        except Exception as exc:
+            logger.error(f"[{request_id}] Syllabus tool error: {exc}")
+            raise HTTPException(status_code=502, detail=f"Syllabus tool unavailable: {exc}")
+
+        # Map syllabus-tool SyllabusData → forum SyllabusSchema format
+        forum_json = {
+            "course_info": {
+                "title": tool_data.get("course_info", {}).get("title", data.context),
+                "code": tool_data.get("course_info", {}).get("code"),
+                "semester": tool_data.get("course_info", {}).get("semester"),
+                "instructor": tool_data.get("course_info", {}).get("instructor"),
+                "description": tool_data.get("course_info", {}).get("description", ""),
+                "prerequisites": tool_data.get("course_info", {}).get("prerequisites"),
+            },
+            "learning_goals": [
+                g["text"] if isinstance(g, dict) else g
+                for g in tool_data.get("learning_goals", [])
+            ],
+            "learning_resources": [],
+            "schedule": [
+                {
+                    "week": int(item["week"]) if str(item.get("week", "")).isdigit() else idx + 1,
+                    "module": item.get("topic", ""),
+                    "topic": item.get("topic", ""),
+                }
+                for idx, item in enumerate(tool_data.get("schedule", []))
+            ],
+            "policies": {
+                "grading": tool_data.get("policies", {}).get("grading", ""),
+                "attendance": tool_data.get("policies", {}).get("attendance", ""),
+                "academic_integrity": tool_data.get("policies", {}).get("academic_integrity", ""),
+                "accessibility": tool_data.get("policies", {}).get("accessibility"),
+                "office_hours": None,
+            },
+        }
+
+        # Extract learning_resources from course_info.materials
+        materials = tool_data.get("course_info", {}).get("materials", "")
+        if materials:
+            forum_json["learning_resources"] = [
+                line.strip() for line in materials.split("\n") if line.strip()
+            ] or [materials]
+
+        # Convert to display text using existing formatter
+        syllabus_text = syllabus_json_to_text(forum_json, data.language)
+
+        processing_time = time.time() - start_time
+        logger.info(f"[{request_id}] Syllabus generated via syllabus-tool - schedule_items={len(forum_json['schedule'])}, time={processing_time:.2f}s")
+
+        return {
+            "content": syllabus_text,
+            "content_type": "syllabus",
+            "syllabus_json": forum_json,
+            "source": "syllabus_tool",
+            "schema_valid": True,
+            "model": "syllabus-tool",
+            "tokens_used": 0,
+            "estimated_cost_usd": 0,
+            "processing_time_seconds": round(processing_time, 2),
+        }
+
     # Get LLM
     llm, model_name = get_llm_with_tracking()
     if not llm:

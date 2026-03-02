@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2, Sparkles, ExternalLink, Library } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, getAuthHeaders } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
 import { createVoiceTabHandler, setupVoiceTabListeners, mergeTabMappings } from '@/lib/voice-tab-handler';
@@ -31,6 +31,33 @@ import {
 // Enhanced AI Features
 import { ParticipationInsightsComponent } from '@/components/enhanced/ParticipationInsights';
 import { ObjectiveCoverageComponent } from '@/components/enhanced/ObjectiveCoverage';
+
+/** Iframe wrapper that passes the forum's auth token to the syllabus tool via hash fragment. */
+function SyllabusIframe({ baseUrl, instructorId, courseTitle }: { baseUrl: string; instructorId?: number; courseTitle?: string }) {
+  const [src, setSrc] = useState('');
+  useEffect(() => {
+    (async () => {
+      const headers = await getAuthHeaders();
+      const token = (headers as Record<string, string>).Authorization?.replace('Bearer ', '') || '';
+      const params = new URLSearchParams({
+        embed: 'true',
+        instructor_id: String(instructorId || ''),
+        course_title: courseTitle || '',
+      });
+      setSrc(`${baseUrl}?${params.toString()}#auth_token=${encodeURIComponent(token)}`);
+    })();
+  }, [baseUrl, instructorId, courseTitle]);
+
+  if (!src) return null;
+  return (
+    <iframe
+      src={src}
+      className="flex-1 w-full border-0"
+      allow="clipboard-read; clipboard-write"
+      title="Syllabus Tool"
+    />
+  );
+}
 
 export default function CoursesPage() {
   const { isInstructor, currentUser, refreshUser } = useUser();
@@ -1807,11 +1834,10 @@ export default function CoursesPage() {
               <X className="h-5 w-5 text-neutral-500" />
             </button>
           </div>
-          <iframe
-            src={`${SYLLABUS_TOOL_URL}?embed=true&instructor_id=${currentUser?.id || ''}&course_title=${encodeURIComponent(title || '')}`}
-            className="flex-1 w-full border-0"
-            allow="clipboard-read; clipboard-write"
-            title="Syllabus Tool"
+          <SyllabusIframe
+            baseUrl={SYLLABUS_TOOL_URL}
+            instructorId={currentUser?.id}
+            courseTitle={title}
           />
         </div>
       )}

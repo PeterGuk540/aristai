@@ -249,6 +249,9 @@ export const api = {
   getSyllabus: (id: number) =>
     fetchApi<any>(`/syllabi/${id}`),
 
+  pushSyllabusToForum: (syllabusId: number, instructorId?: number) =>
+    fetchApi<any>(`/syllabi/${syllabusId}/push-to-forum${instructorId ? `?instructor_id=${instructorId}` : ''}`, { method: 'POST' }),
+
   extractLearningObjectives: async (syllabusText: string): Promise<{
     objectives: string[];
     confidence: string;

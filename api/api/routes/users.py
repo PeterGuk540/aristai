@@ -84,7 +84,16 @@ def get_user_by_email(email: str, auth_provider: Optional[str] = None, db: Sessi
     return user
 
 
-# IMPORTANT: This route must be before /{user_id} to avoid path conflicts
+# IMPORTANT: These routes must be before /{user_id} to avoid path conflicts
+@router.get("/by-cognito-sub/{cognito_sub}", response_model=UserResponse)
+def get_user_by_cognito_sub(cognito_sub: str, db: Session = Depends(get_db)):
+    """Get a user by Cognito sub (UUID). Used by syllabus-tool for identity bridging."""
+    user = db.query(User).filter(User.cognito_sub == cognito_sub).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
 @router.get("/instructor-requests", response_model=List[UserResponse])
 def list_instructor_requests(admin_user_id: int, db: Session = Depends(get_db)):
     """List all pending instructor requests. (Admin only)"""

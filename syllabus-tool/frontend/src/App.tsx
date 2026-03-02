@@ -144,8 +144,16 @@ function App() {
   const embedCourseTitle = urlParams.get('course_title');
 
   // --- App state (hooks must be unconditional) ---
-  const [step, setStep] = useState<'upload' | 'edit' | 'export'>('upload')
+  const [step, setStep] = useState<'library' | 'upload' | 'edit' | 'export'>('upload')
   const [syllabusData, setSyllabusData] = useState(initialSyllabusData)
+  // My Syllabi state
+  const [mySyllabi, setMySyllabi] = useState<any[]>([])
+  const [loadingMySyllabi, setLoadingMySyllabi] = useState(false)
+  const [savingToMySyllabi, setSavingToMySyllabi] = useState(false)
+  const [savedSyllabusId, setSavedSyllabusId] = useState<number | null>(null)
+  // Push to forum state
+  const [pushingToForum, setPushingToForum] = useState(false)
+  const [pushResult, setPushResult] = useState<{ courseTitle: string; joinCode: string } | null>(null)
   const [syllabusContext, setSyllabusContext] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -210,6 +218,34 @@ function App() {
     fetchFiles()
     fetchAnalysisHistory()
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch My Syllabi when entering library view
+  const fetchMySyllabi = async () => {
+    setLoadingMySyllabi(true)
+    try {
+      const params = new URLSearchParams()
+      if (isEmbedMode && embedInstructorId) {
+        params.set('instructor_id', embedInstructorId)
+      } else if (user?.sub) {
+        params.set('cognito_sub', user.sub)
+      }
+      const response = await fetchWithAuth(`${apiUrl}/syllabi/?${params.toString()}`)
+      if (response.ok) {
+        const data = await response.json()
+        setMySyllabi(data)
+      }
+    } catch (error) {
+      console.error('Error fetching syllabi:', error)
+    } finally {
+      setLoadingMySyllabi(false)
+    }
+  }
+
+  useEffect(() => {
+    if (step === 'library' && user) {
+      fetchMySyllabi()
+    }
+  }, [step, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync selectedFiles with files list to remove any IDs that no longer exist
   useEffect(() => {
@@ -627,6 +663,122 @@ function App() {
     }
   };
 
+  // --- Save to My Syllabi (both modes) ---
+  const handleSaveToMySyllabi = async () => {
+    setSavingToMySyllabi(true)
+    try {
+      const body: any = {
+        title: syllabusData.course_info?.title || 'Untitled Syllabus',
+        content: syllabusData,
+        template_id: templateId,
+        source: isEmbedMode ? 'forum_embed' : 'standalone',
+      }
+      if (isEmbedMode && embedInstructorId) {
+        body.instructor_id = parseInt(embedInstructorId)
+      }
+      if (user?.sub && !user.sub.startsWith('forum-')) {
+        body.cognito_sub = user.sub
+      }
+      if (embedCourseTitle) {
+        body.forum_course_title = embedCourseTitle
+      }
+
+      const resp = await fetchWithAuth(`${apiUrl}/syllabi/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const saved = await resp.json()
+      setSavedSyllabusId(saved.id)
+      alert('Syllabus saved successfully!')
+    } catch (error) {
+      console.error('Error saving syllabus:', error)
+      alert('Failed to save syllabus.')
+    } finally {
+      setSavingToMySyllabi(false)
+    }
+  }
+
+  // --- Push to Forum: save syllabus then create course ---
+  const handlePushToForum = async (existingSyllabusId?: number) => {
+    setPushingToForum(true)
+    setPushResult(null)
+    try {
+      let syllabusId = existingSyllabusId || savedSyllabusId
+
+      // If no saved syllabus yet, save first
+      if (!syllabusId) {
+        const body: any = {
+          title: syllabusData.course_info?.title || 'Untitled Syllabus',
+          content: syllabusData,
+          template_id: templateId,
+          source: isEmbedMode ? 'forum_embed' : 'standalone',
+        }
+        if (isEmbedMode && embedInstructorId) {
+          body.instructor_id = parseInt(embedInstructorId)
+        }
+        if (user?.sub && !user.sub.startsWith('forum-')) {
+          body.cognito_sub = user.sub
+        }
+
+        const saveResp = await fetchWithAuth(`${apiUrl}/syllabi/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const saved = await saveResp.json()
+        syllabusId = saved.id
+        setSavedSyllabusId(saved.id)
+      }
+
+      // Push to forum
+      const params = new URLSearchParams()
+      if (isEmbedMode && embedInstructorId) {
+        params.set('instructor_id', embedInstructorId)
+      } else if (user?.sub && !user.sub.startsWith('forum-')) {
+        params.set('cognito_sub', user.sub)
+      }
+
+      const pushResp = await fetchWithAuth(`${apiUrl}/syllabi/${syllabusId}/push-to-forum?${params.toString()}`, {
+        method: 'POST',
+      })
+      if (!pushResp.ok) {
+        const err = await pushResp.json().catch(() => ({}))
+        throw new Error(err.detail || `Push failed: ${pushResp.status}`)
+      }
+      const result = await pushResp.json()
+      setPushResult({ courseTitle: result.forum_course_title, joinCode: result.join_code || '' })
+
+      // In embed mode, notify parent window
+      if (isEmbedMode) {
+        window.parent.postMessage({
+          type: 'SYLLABUS_SAVED',
+          payload: { syllabusId, forumCourseId: result.forum_course_id, title: result.forum_course_title, syllabusData }
+        }, '*')
+      } else {
+        alert(`Course "${result.forum_course_title}" created in forum!${result.join_code ? ` Join code: ${result.join_code}` : ''}`)
+      }
+    } catch (error: any) {
+      console.error('Error pushing to forum:', error)
+      alert(error.message || 'Failed to create course in forum.')
+    } finally {
+      setPushingToForum(false)
+    }
+  }
+
+  // --- Delete from My Syllabi ---
+  const handleDeleteMySyllabus = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this syllabus?')) return
+    try {
+      const resp = await fetchWithAuth(`${apiUrl}/syllabi/${id}`, { method: 'DELETE' })
+      if (resp.ok) {
+        setMySyllabi(prev => prev.filter(s => s.id !== id))
+      }
+    } catch (error) {
+      console.error('Error deleting syllabus:', error)
+    }
+  }
+
   // --- Auth gate rendering ---
   if (authLoading) {
     return (
@@ -674,6 +826,13 @@ function App() {
           </div>
           <div className="flex items-center space-x-1 sm:space-x-4 flex-shrink-0">
             <button
+              onClick={() => setStep('library')}
+              className={`px-1 sm:px-0 text-[9px] sm:text-sm font-medium hover:text-blue-800 transition-colors whitespace-nowrap ${step === 'library' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
+            >
+              My Syllabi
+            </button>
+            <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">|</span>
+            <button
               onClick={() => setStep('upload')}
               className={`px-1 sm:px-0 text-[9px] sm:text-sm font-medium hover:text-blue-800 transition-colors whitespace-nowrap ${step === 'upload' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
             >
@@ -693,14 +852,22 @@ function App() {
             >
               3. Export
             </button>
-            {isEmbedMode && step === 'edit' && (
+            {step === 'edit' && (
               <>
                 <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">|</span>
                 <button
-                  onClick={handleSaveToForum}
-                  className="px-3 py-1 text-[9px] sm:text-sm font-medium bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors whitespace-nowrap"
+                  onClick={handleSaveToMySyllabi}
+                  disabled={savingToMySyllabi}
+                  className="px-2 py-1 text-[9px] sm:text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
                 >
-                  Save &amp; Import to Course
+                  {savingToMySyllabi ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => handlePushToForum()}
+                  disabled={pushingToForum}
+                  className="px-2 py-1 text-[9px] sm:text-sm font-medium bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  {pushingToForum ? 'Creating...' : isEmbedMode ? 'Save & Import to Course' : 'Create Course in Forum'}
                 </button>
               </>
             )}
@@ -722,6 +889,99 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-1 sm:px-6 lg:px-8 py-1 sm:py-6 overflow-hidden flex flex-col relative">
+        {step === 'library' && (
+          <div className="flex-1 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className="text-lg sm:text-2xl font-bold text-gray-900">My Syllabi</h2>
+              <button
+                onClick={() => setStep('upload')}
+                className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                + Create New Syllabus
+              </button>
+            </div>
+
+            {loadingMySyllabi ? (
+              <div className="flex items-center justify-center py-16">
+                <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+            ) : mySyllabi.length === 0 ? (
+              <div className="text-center py-16 bg-white rounded-lg shadow">
+                <svg className="mx-auto h-12 w-12 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p className="text-gray-500 mb-4">No syllabi saved yet.</p>
+                <button
+                  onClick={() => setStep('upload')}
+                  className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Create Your First Syllabus
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {mySyllabi.map((record) => {
+                  const content = record.content || {}
+                  const goals = content.learning_goals || []
+                  const scheduleCount = (content.schedule || []).length
+                  const description = content.course_info?.description || ''
+                  return (
+                    <div key={record.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+                      <div className="p-4 flex-1">
+                        <div className="flex items-start justify-between mb-2">
+                          <h3 className="font-semibold text-gray-900 text-sm sm:text-base line-clamp-2">{record.title}</h3>
+                          {record.source === 'forum_embed' && (
+                            <span className="ml-2 flex-shrink-0 px-2 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-700 rounded-full">Forum</span>
+                          )}
+                        </div>
+                        {description && (
+                          <p className="text-xs text-gray-500 mb-3 line-clamp-2">{description}</p>
+                        )}
+                        <div className="flex items-center gap-3 text-xs text-gray-400">
+                          {goals.length > 0 && <span>{goals.length} goal{goals.length !== 1 ? 's' : ''}</span>}
+                          {scheduleCount > 0 && <span>{scheduleCount} week{scheduleCount !== 1 ? 's' : ''}</span>}
+                          {record.created_at && <span>{new Date(record.created_at).toLocaleDateString()}</span>}
+                        </div>
+                      </div>
+                      <div className="border-t px-4 py-3 bg-gray-50 flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setSyllabusData(content)
+                            setSavedSyllabusId(record.id)
+                            setStep('edit')
+                          }}
+                          className="flex-1 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        >
+                          Open
+                        </button>
+                        <button
+                          onClick={() => handlePushToForum(record.id)}
+                          disabled={pushingToForum}
+                          className="flex-1 px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                          {pushingToForum ? '...' : 'Create Course'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMySyllabus(record.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
+                          title="Delete"
+                        >
+                          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {step === 'upload' && (
           <div className="flex flex-row gap-4 h-full min-h-0">
             {/* Sidebar (Left 25%) - File List & History */}
@@ -1211,7 +1471,7 @@ function App() {
       />
       
       <div className="fixed bottom-2 right-2 text-xs text-gray-400 pointer-events-none">
-        v1.6 (Output Tab Added)
+        v1.7 (My Syllabi + Forum Push)
       </div>
     </div>
   )

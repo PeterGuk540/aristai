@@ -10,6 +10,7 @@ class Syllabus(Base):
     content = Column(JSON)
     template_id = Column(String, default="BGSU_Standard")
     instructor_id = Column(Integer, nullable=True, index=True)  # Forum user.id
+    cognito_sub = Column(String(255), nullable=True, index=True)  # Cognito UUID for standalone identity
     source = Column(String, default="standalone")                # "standalone" | "forum_embed"
     forum_course_title = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

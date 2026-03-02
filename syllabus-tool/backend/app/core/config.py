@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     LLM_MAX_CHARS: int = 30000
     LLM_ENABLE_REPAIR: bool = True
 
+    # Forum API integration
+    FORUM_API_URL: str = ""  # e.g. "http://api:8000" in Docker
+
     CORS_ORIGINS: str = ""  # comma-separated
     CORS_ALLOW_CREDENTIALS: bool = False
 

@@ -109,6 +109,7 @@ services:
       - CORS_ORIGINS=https://syllabus.aristai.io,http://localhost:5173,https://forum.aristai.io,http://localhost:3000
       - CORS_ALLOW_CREDENTIALS=true
       - ENVIRONMENT=production
+      - FORUM_API_URL=http://api:8000
       - LLM_TEMPERATURE=0.1
       - LLM_TIMEOUT_SECONDS=120
       - LLM_MAX_RETRIES=2

@@ -289,11 +289,15 @@ export default function CoursesPage() {
       if (event.data?.type === 'SYLLABUS_SAVED') {
         setShowSyllabusModal(false);
         fetchSyllabi();
+        // If a forum course was created, also refresh courses list
+        if (event.data.payload?.forumCourseId) {
+          fetchCourses();
+        }
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [fetchSyllabi]);
+  }, [fetchSyllabi]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleImportSyllabus = (record: any) => {
     const content = record.content || {};
@@ -375,6 +379,22 @@ export default function CoursesPage() {
       alert('Failed to delete syllabus');
     } finally {
       setDeletingSyllabusId(null);
+    }
+  };
+
+  // Push syllabus to forum as a new course directly
+  const [pushingSyllabusId, setPushingSyllabusId] = useState<number | null>(null);
+  const handlePushSyllabusToForum = async (syllabusId: number) => {
+    setPushingSyllabusId(syllabusId);
+    try {
+      const result = await api.pushSyllabusToForum(syllabusId, currentUser?.id);
+      alert(`Course "${result.forum_course_title}" created!${result.join_code ? ` Join code: ${result.join_code}` : ''}`);
+      fetchCourses();
+    } catch (error: any) {
+      console.error('Failed to push syllabus to forum:', error);
+      alert(error.message || 'Failed to create course from syllabus.');
+    } finally {
+      setPushingSyllabusId(null);
     }
   };
 
@@ -1062,6 +1082,10 @@ export default function CoursesPage() {
                       Open Syllabus Tool
                     </button>
                   </div>
+                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+                    <span><strong>Generate with AI</strong> — Quick one-shot generation from course title</span>
+                    <span><strong>Open Syllabus Tool</strong> — Full editor with file upload, AI chat, and detailed editing</span>
+                  </div>
                   {!title.trim() && (
                     <p className="text-xs text-neutral-500 dark:text-neutral-400">
                       Enter a course title above to enable AI syllabus generation
@@ -1606,7 +1630,7 @@ export default function CoursesPage() {
                             </div>
                           </div>
                         </CardContent>
-                        <CardFooter>
+                        <CardFooter className="flex gap-2">
                           <Button
                             size="sm"
                             onClick={() => handleImportSyllabus(record)}
@@ -1614,6 +1638,20 @@ export default function CoursesPage() {
                           >
                             <BookOpen className="h-4 w-4 mr-2" />
                             Use in Course
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="accent"
+                            onClick={() => handlePushSyllabusToForum(record.id)}
+                            disabled={pushingSyllabusId === record.id}
+                            data-voice-id={`push-syllabus-${record.id}`}
+                          >
+                            {pushingSyllabusId === record.id ? (
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Plus className="h-4 w-4 mr-2" />
+                            )}
+                            Create Course Directly
                           </Button>
                         </CardFooter>
                       </Card>

@@ -239,6 +239,16 @@ export const api = {
   joinCourseByCode: (joinCode: string, userId: number) =>
     fetchApi<any>(`/courses/join?user_id=${userId}`, { method: 'POST', body: JSON.stringify({ join_code: joinCode }) }),
 
+  // Syllabi (proxied to syllabus-tool)
+  getSyllabi: (instructorId: number) =>
+    fetchApi<any[]>(`/syllabi/?instructor_id=${instructorId}`),
+
+  deleteSyllabus: (id: number) =>
+    fetchApi<any>(`/syllabi/${id}`, { method: 'DELETE' }),
+
+  getSyllabus: (id: number) =>
+    fetchApi<any>(`/syllabi/${id}`),
+
   extractLearningObjectives: async (syllabusText: string): Promise<{
     objectives: string[];
     confidence: string;

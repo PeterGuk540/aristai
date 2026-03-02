@@ -137,6 +137,12 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [isOAuthCallback, setIsOAuthCallback] = useState(() => window.location.search.includes('code='))
 
+  // --- Embed mode detection ---
+  const urlParams = new URLSearchParams(window.location.search);
+  const isEmbedMode = urlParams.get('embed') === 'true';
+  const embedInstructorId = urlParams.get('instructor_id');
+  const embedCourseTitle = urlParams.get('course_title');
+
   // --- App state (hooks must be unconditional) ---
   const [step, setStep] = useState<'upload' | 'edit' | 'export'>('upload')
   const [syllabusData, setSyllabusData] = useState(initialSyllabusData)
@@ -185,7 +191,13 @@ function App() {
   const apiUrl = import.meta.env.VITE_API_URL || '/api/v1'
 
   // Auth: check session on mount (skip if OAuth callback — OAuthCallback handles it)
+  // In embed mode, bypass auth and set a minimal user object
   useEffect(() => {
+    if (isEmbedMode) {
+      setUser({ email: 'forum-embed', name: 'Instructor', sub: `forum-${embedInstructorId}` });
+      setAuthLoading(false);
+      return;
+    }
     if (isOAuthCallback) { setAuthLoading(false); return; }
     checkAnyAuth().then((u) => { setUser(u); setAuthLoading(false); });
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -589,6 +601,32 @@ function App() {
     }
   }
 
+  // --- Save & Import to Forum (embed mode) ---
+  const handleSaveToForum = async () => {
+    try {
+      const resp = await fetchWithAuth(`${apiUrl}/syllabi/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: syllabusData.course_info?.title || embedCourseTitle || 'Untitled',
+          content: syllabusData,
+          template_id: templateId,
+          instructor_id: embedInstructorId ? parseInt(embedInstructorId) : null,
+          source: 'forum_embed',
+          forum_course_title: embedCourseTitle || null,
+        })
+      });
+      const saved = await resp.json();
+      window.parent.postMessage({
+        type: 'SYLLABUS_SAVED',
+        payload: { syllabusId: saved.id, title: saved.title, syllabusData }
+      }, '*');
+    } catch (error) {
+      console.error('Error saving syllabus to forum:', error);
+      alert('Failed to save syllabus. Please try again.');
+    }
+  };
+
   // --- Auth gate rendering ---
   if (authLoading) {
     return (
@@ -630,7 +668,9 @@ function App() {
         <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 flex flex-row justify-between items-center h-full gap-1">
           <div className="flex items-center flex-shrink-0">
             <img src={logo} alt="AristAI Logo" className="h-5 sm:h-10 w-auto mr-1 sm:mr-2" />
-            <h1 className="text-xs sm:text-2xl font-bold text-gray-900 truncate">Syllabus Tool</h1>
+            <h1 className="text-xs sm:text-2xl font-bold text-gray-900 truncate">
+              {isEmbedMode ? (embedCourseTitle || 'Syllabus Tool') : 'Syllabus Tool'}
+            </h1>
           </div>
           <div className="flex items-center space-x-1 sm:space-x-4 flex-shrink-0">
             <button
@@ -653,14 +693,29 @@ function App() {
             >
               3. Export
             </button>
-            <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">|</span>
-            <span className="text-[9px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-[150px]" title={user.email}>{user.email}</span>
-            <button
-              onClick={handleSignOut}
-              className="text-[9px] sm:text-xs text-gray-400 hover:text-red-600 transition-colors whitespace-nowrap"
-            >
-              Sign out
-            </button>
+            {isEmbedMode && step === 'edit' && (
+              <>
+                <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">|</span>
+                <button
+                  onClick={handleSaveToForum}
+                  className="px-3 py-1 text-[9px] sm:text-sm font-medium bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors whitespace-nowrap"
+                >
+                  Save &amp; Import to Course
+                </button>
+              </>
+            )}
+            {!isEmbedMode && (
+              <>
+                <span className="text-gray-300 text-[9px] sm:text-sm px-0.5">|</span>
+                <span className="text-[9px] sm:text-xs text-gray-500 truncate max-w-[80px] sm:max-w-[150px]" title={user.email}>{user.email}</span>
+                <button
+                  onClick={handleSignOut}
+                  className="text-[9px] sm:text-xs text-gray-400 hover:text-red-600 transition-colors whitespace-nowrap"
+                >
+                  Sign out
+                </button>
+              </>
+            )}
           </div>
         </div>
       </header>

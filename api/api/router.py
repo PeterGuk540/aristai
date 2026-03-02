@@ -1,7 +1,7 @@
 # Import individual route modules
 from fastapi import APIRouter
 from api.core.config import get_settings
-from api.api.routes import users, courses, sessions, posts, polls, reports, enrollments, voice, debug, mcp, ui_actions, materials, instructor_features, integrations, enhanced_features
+from api.api.routes import users, courses, sessions, posts, polls, reports, enrollments, voice, debug, mcp, ui_actions, materials, instructor_features, integrations, enhanced_features, syllabus_proxy
 
 from .voice_converse_router import router as voice_converse_router
 from .voice_v2_router import router as voice_v2_router
@@ -27,6 +27,7 @@ api_router.include_router(materials.router, tags=["materials"])
 api_router.include_router(instructor_features.router, tags=["instructor-features"])
 api_router.include_router(integrations.router, tags=["integrations"])
 api_router.include_router(enhanced_features.router, tags=["enhanced-features"])
+api_router.include_router(syllabus_proxy.router, prefix="/syllabi", tags=["syllabi"])
 
 # Debug routes only available when DEBUG=true
 settings = get_settings()

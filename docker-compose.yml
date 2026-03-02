@@ -106,7 +106,7 @@ services:
       - DEEPSEEK_API_KEY=${OPENAI_API_KEY}
       - DEEPSEEK_BASE_URL=https://api.openai.com/v1
       - DEEPSEEK_MODEL=gpt-4o-mini
-      - CORS_ORIGINS=https://syllabus.aristai.io,http://localhost:5173
+      - CORS_ORIGINS=https://syllabus.aristai.io,http://localhost:5173,https://forum.aristai.io,http://localhost:3000
       - CORS_ALLOW_CREDENTIALS=true
       - ENVIRONMENT=production
       - LLM_TEMPERATURE=0.1

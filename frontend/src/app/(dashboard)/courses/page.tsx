@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2, Sparkles } from 'lucide-react';
+import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2, Sparkles, ExternalLink, Library } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
@@ -68,6 +68,14 @@ export default function CoursesPage() {
   // AI syllabus generation state
   const [generatingSyllabus, setGeneratingSyllabus] = useState(false);
 
+  // My Syllabi state
+  const [syllabi, setSyllabi] = useState<any[]>([]);
+  const [loadingSyllabi, setLoadingSyllabi] = useState(false);
+  const [deletingSyllabusId, setDeletingSyllabusId] = useState<number | null>(null);
+  const [showSyllabusModal, setShowSyllabusModal] = useState(false);
+
+  const SYLLABUS_TOOL_URL = process.env.NEXT_PUBLIC_SYLLABUS_TOOL_URL || 'https://syllabus.aristai.io';
+
   // Courses page tab mappings
   const coursesTabMap = mergeTabMappings({
     // Courses tab
@@ -100,6 +108,10 @@ export default function CoursesPage() {
     'aiinsight': 'ai-insights',
     'objectivecoverage': 'ai-insights',
     'courseinsights': 'ai-insights',
+    // Syllabi tab
+    'syllabi': 'syllabi',
+    'mysyllabi': 'syllabi',
+    'syllabus': 'syllabi',
   });
 
   // Voice tab handler
@@ -250,6 +262,121 @@ export default function CoursesPage() {
       setExtractingObjectives(false);
     }
   }, []);
+
+  // --- My Syllabi: fetch, import, delete ---
+  const fetchSyllabi = useCallback(async () => {
+    if (!currentUser?.id) return;
+    setLoadingSyllabi(true);
+    try {
+      const data = await api.getSyllabi(currentUser.id);
+      setSyllabi(data);
+    } catch (error) {
+      console.error('Failed to fetch syllabi:', error);
+    } finally {
+      setLoadingSyllabi(false);
+    }
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'syllabi' && currentUser?.id) {
+      fetchSyllabi();
+    }
+  }, [activeTab, currentUser?.id, fetchSyllabi]);
+
+  // Listen for postMessage from syllabus-tool iframe
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'SYLLABUS_SAVED') {
+        setShowSyllabusModal(false);
+        fetchSyllabi();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [fetchSyllabi]);
+
+  const handleImportSyllabus = (record: any) => {
+    const content = record.content || {};
+
+    // Map title
+    setTitle(content.course_info?.title || record.title || '');
+
+    // Map learning_goals: [{id, text}] → string[]
+    const goals = (content.learning_goals || []).map((g: any) =>
+      typeof g === 'string' ? g : g.text || ''
+    ).filter(Boolean);
+    setObjectives(goals.join('\n'));
+    setObjectivesExtracted(true);
+
+    // Map schedule[].week: str → int, build forum schema
+    const forumJson: Record<string, unknown> = {
+      course_info: {
+        title: content.course_info?.title || record.title,
+        code: content.course_info?.code,
+        semester: content.course_info?.semester,
+        instructor: content.course_info?.instructor,
+        description: content.course_info?.description || '',
+        prerequisites: content.course_info?.prerequisites,
+      },
+      learning_goals: goals,
+      learning_resources: [] as string[],
+      schedule: (content.schedule || []).map((item: any, idx: number) => ({
+        week: String(item.week).match(/^\d+$/) ? parseInt(item.week) : idx + 1,
+        module: item.topic || '',
+        topic: item.topic || '',
+      })),
+      policies: {
+        grading: content.policies?.grading || '',
+        attendance: content.policies?.attendance || '',
+        academic_integrity: content.policies?.academic_integrity || '',
+        accessibility: content.policies?.accessibility || '',
+        office_hours: null,
+      },
+    };
+
+    // Extract learning_resources from course_info.materials
+    const materials = content.course_info?.materials || '';
+    if (materials) {
+      (forumJson as any).learning_resources = materials.split('\n').map((l: string) => l.trim()).filter(Boolean);
+      if ((forumJson as any).learning_resources.length === 0) {
+        (forumJson as any).learning_resources = [materials];
+      }
+    }
+
+    // Build syllabus text summary
+    const syllabusLines: string[] = [];
+    if (content.course_info?.title) syllabusLines.push(`Course: ${content.course_info.title}`);
+    if (content.course_info?.description) syllabusLines.push(`\n${content.course_info.description}`);
+    if (goals.length > 0) {
+      syllabusLines.push('\nLearning Goals:');
+      goals.forEach((g: string) => syllabusLines.push(`- ${g}`));
+    }
+    if (content.schedule?.length > 0) {
+      syllabusLines.push('\nSchedule:');
+      content.schedule.forEach((item: any) => {
+        syllabusLines.push(`Week ${item.week}: ${item.topic || ''}${item.assignment ? ' - ' + item.assignment : ''}`);
+      });
+    }
+    setSyllabus(syllabusLines.join('\n'));
+    setSyllabusJson(forumJson);
+
+    // Switch to the Create tab
+    setActiveTab('create');
+  };
+
+  const handleDeleteSyllabus = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this syllabus?')) return;
+    setDeletingSyllabusId(id);
+    try {
+      await api.deleteSyllabus(id);
+      setSyllabi(syllabi.filter(s => s.id !== id));
+    } catch (error) {
+      console.error('Failed to delete syllabus:', error);
+      alert('Failed to delete syllabus');
+    } finally {
+      setDeletingSyllabusId(null);
+    }
+  };
 
   const generateSyllabusWithAI = useCallback(async () => {
     if (!title.trim()) {
@@ -672,6 +799,7 @@ export default function CoursesPage() {
           {isInstructor && <TabsTrigger value="create" data-voice-id="tab-create">{t('courses.createCourse')}</TabsTrigger>}
           {!isInstructor && <TabsTrigger value="join" data-voice-id="tab-join">{t('courses.joinCourse')}</TabsTrigger>}
           <TabsTrigger value="advanced" data-voice-id="tab-advanced">Advanced</TabsTrigger>
+          {isInstructor && <TabsTrigger value="syllabi" data-voice-id="tab-syllabi">My Syllabi</TabsTrigger>}
           {isInstructor && <TabsTrigger value="ai-insights" data-voice-id="tab-ai-insights">AI Insights</TabsTrigger>}
         </TabsList>
 
@@ -923,6 +1051,15 @@ export default function CoursesPage() {
                         <Sparkles className="h-4 w-4" />
                       )}
                       Generate with AI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowSyllabusModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 shadow-sm"
+                      data-voice-id="open-syllabus-tool"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open Syllabus Tool
                     </button>
                   </div>
                   {!title.trim() && (
@@ -1327,6 +1464,168 @@ export default function CoursesPage() {
         )}
 
         {isInstructor && (
+          <TabsContent value="syllabi">
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                  <Library className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                  My Syllabi
+                </h2>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={fetchSyllabi} disabled={loadingSyllabi}>
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loadingSyllabi ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                  <Button
+                    onClick={() => setShowSyllabusModal(true)}
+                    variant="accent"
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create New Syllabus
+                  </Button>
+                </div>
+              </div>
+
+              {loadingSyllabi ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full border-4 border-primary-100 dark:border-primary-900"></div>
+                      <div className="absolute top-0 left-0 w-10 h-10 rounded-full border-4 border-primary-600 border-t-transparent animate-spin"></div>
+                    </div>
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading syllabi...</p>
+                  </div>
+                </div>
+              ) : syllabi.length === 0 ? (
+                <Card variant="default" padding="lg">
+                  <div className="text-center py-8">
+                    <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                      <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+                    </div>
+                    <p className="text-neutral-700 dark:text-neutral-300 font-medium mb-1">No syllabi saved yet</p>
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+                      Use the Syllabus Tool to create and save syllabi for your courses.
+                    </p>
+                    <Button onClick={() => setShowSyllabusModal(true)} variant="accent">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create New Syllabus
+                    </Button>
+                  </div>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {syllabi.map((record) => {
+                    const content = record.content || {};
+                    const goals = (content.learning_goals || []);
+                    const scheduleCount = (content.schedule || []).length;
+                    const description = content.course_info?.description || '';
+
+                    return (
+                      <Card key={record.id} variant="default" hover className="overflow-hidden">
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
+                                <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                              </div>
+                              <div>
+                                <CardTitle>{record.title}</CardTitle>
+                                <CardDescription>
+                                  {record.created_at ? `Created ${formatTimestamp(record.created_at)}` : ''}
+                                  {record.source === 'forum_embed' && ' via Syllabus Tool'}
+                                </CardDescription>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  const params = new URLSearchParams({
+                                    embed: 'true',
+                                    instructor_id: String(currentUser?.id || ''),
+                                    course_title: record.title || '',
+                                  });
+                                  setShowSyllabusModal(true);
+                                }}
+                                title="Edit in Syllabus Tool"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteSyllabus(record.id)}
+                                disabled={deletingSyllabusId === record.id}
+                                title="Delete syllabus"
+                                className="text-danger-600 hover:text-danger-700 hover:bg-danger-50 dark:text-danger-400 dark:hover:bg-danger-900/20"
+                              >
+                                {deletingSyllabusId === record.id ? (
+                                  <RefreshCw className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                              {description && (
+                                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
+                                  {description.length > 200 ? description.substring(0, 200) + '...' : description}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-4 text-xs text-neutral-500 dark:text-neutral-400">
+                                {goals.length > 0 && (
+                                  <span>{goals.length} learning goal{goals.length !== 1 ? 's' : ''}</span>
+                                )}
+                                {scheduleCount > 0 && (
+                                  <span>{scheduleCount} week{scheduleCount !== 1 ? 's' : ''}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div>
+                              {goals.length > 0 && (
+                                <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1">
+                                  {goals.slice(0, 3).map((g: any, i: number) => (
+                                    <li key={i} className="flex items-start gap-2">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
+                                      <span>{typeof g === 'string' ? g : g.text}</span>
+                                    </li>
+                                  ))}
+                                  {goals.length > 3 && (
+                                    <li className="text-neutral-400 dark:text-neutral-500 text-xs">
+                                      ...and {goals.length - 3} more
+                                    </li>
+                                  )}
+                                </ul>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                        <CardFooter>
+                          <Button
+                            size="sm"
+                            onClick={() => handleImportSyllabus(record)}
+                            data-voice-id={`import-syllabus-${record.id}`}
+                          >
+                            <BookOpen className="h-4 w-4 mr-2" />
+                            Use in Course
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        )}
+
+        {isInstructor && (
           <TabsContent value="ai-insights">
             <div className="space-y-6">
               {/* Course Selector for AI Insights */}
@@ -1450,6 +1749,32 @@ export default function CoursesPage() {
               </Button>
             </CardFooter>
           </Card>
+        </div>
+      )}
+
+      {/* Syllabus Tool Iframe Modal */}
+      {showSyllabusModal && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-neutral-900/70 backdrop-blur-sm">
+          <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
+                <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">Syllabus Tool</h2>
+            </div>
+            <button
+              onClick={() => setShowSyllabusModal(false)}
+              className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+            >
+              <X className="h-5 w-5 text-neutral-500" />
+            </button>
+          </div>
+          <iframe
+            src={`${SYLLABUS_TOOL_URL}?embed=true&instructor_id=${currentUser?.id || ''}&course_title=${encodeURIComponent(title || '')}`}
+            className="flex-1 w-full border-0"
+            allow="clipboard-read; clipboard-write"
+            title="Syllabus Tool"
+          />
         </div>
       )}
     </div>

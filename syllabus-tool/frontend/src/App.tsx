@@ -153,7 +153,6 @@ function App() {
   const [savedSyllabusId, setSavedSyllabusId] = useState<number | null>(null)
   // Push to forum state
   const [pushingToForum, setPushingToForum] = useState(false)
-  const [pushResult, setPushResult] = useState<{ courseTitle: string; joinCode: string } | null>(null)
   const [syllabusContext, setSyllabusContext] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -637,31 +636,7 @@ function App() {
     }
   }
 
-  // --- Save & Import to Forum (embed mode) ---
-  const handleSaveToForum = async () => {
-    try {
-      const resp = await fetchWithAuth(`${apiUrl}/syllabi/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: syllabusData.course_info?.title || embedCourseTitle || 'Untitled',
-          content: syllabusData,
-          template_id: templateId,
-          instructor_id: embedInstructorId ? parseInt(embedInstructorId) : null,
-          source: 'forum_embed',
-          forum_course_title: embedCourseTitle || null,
-        })
-      });
-      const saved = await resp.json();
-      window.parent.postMessage({
-        type: 'SYLLABUS_SAVED',
-        payload: { syllabusId: saved.id, title: saved.title, syllabusData }
-      }, '*');
-    } catch (error) {
-      console.error('Error saving syllabus to forum:', error);
-      alert('Failed to save syllabus. Please try again.');
-    }
-  };
+
 
   // --- Save to My Syllabi (both modes) ---
   const handleSaveToMySyllabi = async () => {
@@ -702,7 +677,6 @@ function App() {
   // --- Push to Forum: save syllabus then create course ---
   const handlePushToForum = async (existingSyllabusId?: number) => {
     setPushingToForum(true)
-    setPushResult(null)
     try {
       let syllabusId = existingSyllabusId || savedSyllabusId
 
@@ -747,8 +721,6 @@ function App() {
         throw new Error(err.detail || `Push failed: ${pushResp.status}`)
       }
       const result = await pushResp.json()
-      setPushResult({ courseTitle: result.forum_course_title, joinCode: result.join_code || '' })
-
       // In embed mode, notify parent window
       if (isEmbedMode) {
         window.parent.postMessage({

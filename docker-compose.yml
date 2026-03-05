@@ -101,6 +101,8 @@ services:
       dockerfile: Dockerfile.syllabus
     ports:
       - "8002:8002"
+    volumes:
+      - syllabus_uploads:/app/uploads
     environment:
       - SQLALCHEMY_DATABASE_URI=postgresql://aristai:aristai_dev@db:5432/syllabus_tool
       - DEEPSEEK_API_KEY=${OPENAI_API_KEY}
@@ -120,3 +122,4 @@ services:
 
 volumes:
   postgres_data:
+  syllabus_uploads:

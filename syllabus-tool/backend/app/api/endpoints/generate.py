@@ -297,11 +297,13 @@ def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id
                             course_title: str, target_audience: str, duration: str,
                             language: str = "en"):
     """Background worker for fill-template LLM call — chunked body + parallel tables."""
+    print(f"[FILL-TEMPLATE] Job {job_id} started, language={language}", flush=True)
     try:
         _fill_jobs[job_id]["status"] = "running"
 
         storage = StorageService()
         content = storage.get_file(file_object_name)
+        print(f"[FILL-TEMPLATE] Storage returned {len(content) if content else 0} bytes", flush=True)
         if not content:
             _fill_jobs[job_id] = {"status": "failed", "error": "File content not found in storage"}
             return
@@ -385,13 +387,20 @@ async def fill_template(request: FillTemplateRequest, db: Session = Depends(get_
     job_id = str(uuid.uuid4())
     _fill_jobs[job_id] = {"status": "pending"}
 
-    thread = threading.Thread(
-        target=_run_fill_template_job,
-        args=(job_id, file_record.object_name, request.reference_file_id,
-              request.course_title, request.target_audience, request.duration,
-              request.language),
-        daemon=True,
-    )
+    def _safe_run():
+        try:
+            _run_fill_template_job(
+                job_id, file_record.object_name, request.reference_file_id,
+                request.course_title, request.target_audience, request.duration,
+                request.language,
+            )
+        except Exception as e:
+            print(f"[FILL-TEMPLATE] THREAD CRASH: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            _fill_jobs[job_id] = {"status": "failed", "error": f"Thread crash: {e}"}
+
+    thread = threading.Thread(target=_safe_run, daemon=True)
     thread.start()
 
     return FillTemplateJobResponse(job_id=job_id)

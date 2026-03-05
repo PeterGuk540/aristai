@@ -203,7 +203,6 @@ function App() {
   const [templateFillMode, setTemplateFillMode] = useState(false)
   const [templateSections, setTemplateSections] = useState<TemplateSection[]>([])
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
-  const [templateParagraphMap, setTemplateParagraphMap] = useState<Record<string, string>>({})
   const [templateFileId, setTemplateFileId] = useState<number | null>(null)
   
   const chatRef = useRef<ChatInterfaceRef>(null);
@@ -568,7 +567,6 @@ function App() {
               filledText: s.filled_text,
             })));
             setExpandedSections(new Set(result.sections.map((s: any) => s.id)));
-            setTemplateParagraphMap(result.paragraph_map);
             setTemplateFileId(result.original_file_id);
             setStep('edit');
         } else {
@@ -742,7 +740,6 @@ function App() {
     setTemplateFillMode(false);
     setTemplateSections([]);
     setExpandedSections(new Set());
-    setTemplateParagraphMap({});
     setTemplateFileId(null);
     setStep('upload');
   };

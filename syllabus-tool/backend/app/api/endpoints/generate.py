@@ -4,7 +4,10 @@ from app.db.session import get_db
 from app.models.uploaded_file import UploadedFile
 from app.services.storage import StorageService
 from app.services.parser import parse_file
-from app.schemas.generator import GenerateRequest, FillTemplateRequest, FillTemplateResponse
+from app.schemas.generator import (
+    GenerateRequest, FillTemplateRequest, FillTemplateResponse,
+    FillTemplateJobResponse, FillTemplateStatusResponse,
+)
 from app.services.template_filler import extract_numbered_paragraphs, build_llm_template_text, parse_llm_response
 from app.schemas.syllabus import SyllabusData, CourseInfo, LearningGoal, ScheduleItem, Policies
 from app.services.llm_factory import invoke_llm
@@ -12,10 +15,15 @@ from langchain_core.messages import SystemMessage, HumanMessage
 import json
 import re
 import logging
+import uuid
+import threading
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# In-memory job store for async fill-template jobs
+_fill_jobs: dict[str, dict] = {}
 
 @router.post("/draft", response_model=SyllabusData)
 async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)):
@@ -136,30 +144,29 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/fill-template", response_model=FillTemplateResponse)
-async def fill_template(request: FillTemplateRequest, db: Session = Depends(get_db)):
+def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id: int,
+                            course_title: str, target_audience: str, duration: str):
+    """Background worker for fill-template LLM call."""
     try:
-        # 1. Load file from DB + storage
-        file_record = db.query(UploadedFile).filter(UploadedFile.id == request.reference_file_id).first()
-        if not file_record:
-            raise HTTPException(status_code=404, detail="Reference file not found")
+        _fill_jobs[job_id]["status"] = "running"
 
         storage = StorageService()
-        content = storage.get_file(file_record.object_name)
+        content = storage.get_file(file_object_name)
         if not content:
-            raise HTTPException(status_code=404, detail="File content not found in storage")
+            _fill_jobs[job_id] = {"status": "failed", "error": "File content not found in storage"}
+            return
 
-        # 2. Extract numbered paragraphs from DOCX
+        # Extract numbered paragraphs from DOCX
         numbered_paragraphs = extract_numbered_paragraphs(content)
         print(f"[FILL-TEMPLATE] Extracted {len(numbered_paragraphs)} paragraphs", flush=True)
 
         if not numbered_paragraphs:
-            raise HTTPException(status_code=400, detail="No content found in the template document.")
+            _fill_jobs[job_id] = {"status": "failed", "error": "No content found in the template document."}
+            return
 
-        # 3. Build LLM prompt text
+        # Build LLM prompt text
         template_text = build_llm_template_text(numbered_paragraphs)
 
-        # 4. Build LLM prompt
         system_prompt = """You are an expert curriculum designer. You will receive a university syllabus TEMPLATE
 with numbered paragraphs. Your task is to generate a COMPLETE, READY-TO-USE syllabus
 for the given course by rewriting every paragraph.
@@ -181,13 +188,12 @@ RULES:
 {template_text}
 
 COURSE INFORMATION:
-- Course Title: {request.course_title}
-- Target Audience: {request.target_audience}
-- Duration: {request.duration}
+- Course Title: {course_title}
+- Target Audience: {target_audience}
+- Duration: {duration}
 
 Generate a complete syllabus by rewriting each paragraph. Output every paragraph with its [P#] number."""
 
-        # 5. Call LLM
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_prompt)
@@ -196,14 +202,12 @@ Generate a complete syllabus by rewriting each paragraph. Output every paragraph
         llm_content = response.content
         print(f"[FILL-TEMPLATE] LLM response length: {len(llm_content)} chars", flush=True)
 
-        # 6. Parse LLM response into paragraph map
+        # Parse LLM response into paragraph map
         int_map = parse_llm_response(llm_content, len(numbered_paragraphs))
         print(f"[FILL-TEMPLATE] Parsed {len(int_map)} paragraph replacements", flush=True)
 
-        # 7. Build string-keyed paragraph_map and filled_text
         paragraph_map = {str(k): v for k, v in int_map.items()}
 
-        # Build filled_text by joining all paragraphs (use LLM output where available, original otherwise)
         filled_lines = []
         for p in numbered_paragraphs:
             idx = p["index"]
@@ -213,14 +217,50 @@ Generate a complete syllabus by rewriting each paragraph. Output every paragraph
                 filled_lines.append(p["text"])
         filled_text = "\n".join(filled_lines)
 
-        return FillTemplateResponse(
-            filled_text=filled_text,
-            paragraph_map=paragraph_map,
-            original_file_id=request.reference_file_id,
-        )
-
-    except HTTPException:
-        raise
+        _fill_jobs[job_id] = {
+            "status": "completed",
+            "result": {
+                "filled_text": filled_text,
+                "paragraph_map": paragraph_map,
+                "original_file_id": reference_file_id,
+            },
+        }
     except Exception as e:
         print(f"[FILL-TEMPLATE] ERROR: {e}", flush=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        _fill_jobs[job_id] = {"status": "failed", "error": str(e)}
+
+
+@router.post("/fill-template", response_model=FillTemplateJobResponse)
+async def fill_template(request: FillTemplateRequest, db: Session = Depends(get_db)):
+    """Kick off async fill-template job. Returns job_id immediately."""
+    # Validate file exists before starting background work
+    file_record = db.query(UploadedFile).filter(UploadedFile.id == request.reference_file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=404, detail="Reference file not found")
+
+    job_id = str(uuid.uuid4())
+    _fill_jobs[job_id] = {"status": "pending"}
+
+    thread = threading.Thread(
+        target=_run_fill_template_job,
+        args=(job_id, file_record.object_name, request.reference_file_id,
+              request.course_title, request.target_audience, request.duration),
+        daemon=True,
+    )
+    thread.start()
+
+    return FillTemplateJobResponse(job_id=job_id)
+
+
+@router.get("/fill-template/status/{job_id}", response_model=FillTemplateStatusResponse)
+async def fill_template_status(job_id: str):
+    """Poll for fill-template job status."""
+    job = _fill_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return FillTemplateStatusResponse(
+        status=job["status"],
+        result=job.get("result"),
+        error=job.get("error"),
+    )

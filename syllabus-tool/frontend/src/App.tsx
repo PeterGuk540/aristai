@@ -519,8 +519,8 @@ function App() {
     setIsAnalyzing(true);
     try {
         if (draftInfo.referenceFileId) {
-            // TEMPLATE FILL MODE
-            const response = await fetchWithAuth(`${apiUrl}/generate/fill-template`, {
+            // TEMPLATE FILL MODE — async: kick off job, then poll for result
+            const startRes = await fetchWithAuth(`${apiUrl}/generate/fill-template`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -530,13 +530,33 @@ function App() {
                     duration: draftInfo.duration,
                 }),
             });
-            if (!response.ok) throw new Error('Failed to fill template');
-            const data = await response.json();
+            if (!startRes.ok) throw new Error('Failed to start template fill');
+            const { job_id } = await startRes.json();
+
+            // Poll for completion
+            const pollInterval = 3000; // 3 seconds
+            const maxWait = 180000;    // 3 minutes
+            const startTime = Date.now();
+            let result = null;
+            while (Date.now() - startTime < maxWait) {
+                await new Promise(r => setTimeout(r, pollInterval));
+                const statusRes = await fetchWithAuth(`${apiUrl}/generate/fill-template/status/${job_id}`);
+                if (!statusRes.ok) throw new Error('Failed to check job status');
+                const statusData = await statusRes.json();
+                if (statusData.status === 'completed') {
+                    result = statusData.result;
+                    break;
+                }
+                if (statusData.status === 'failed') {
+                    throw new Error(statusData.error || 'Template fill failed');
+                }
+            }
+            if (!result) throw new Error('Template fill timed out');
 
             setTemplateFillMode(true);
-            setFilledTemplateText(data.filled_text);
-            setTemplateParagraphMap(data.paragraph_map);
-            setTemplateFileId(data.original_file_id);
+            setFilledTemplateText(result.filled_text);
+            setTemplateParagraphMap(result.paragraph_map);
+            setTemplateFileId(result.original_file_id);
             setStep('edit');
         } else {
             // STANDARD MODE (existing flow)

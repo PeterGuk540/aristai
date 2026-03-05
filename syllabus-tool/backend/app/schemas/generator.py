@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 
 class GenerateRequest(BaseModel):
     course_title: str
@@ -13,6 +13,16 @@ class FillTemplateRequest(BaseModel):
     course_title: str
     target_audience: str = ""
     duration: str = ""
+
+
+class FillTemplateJobResponse(BaseModel):
+    job_id: str
+
+
+class FillTemplateStatusResponse(BaseModel):
+    status: Literal["pending", "running", "completed", "failed"]
+    result: Optional[dict] = None          # {filled_text, paragraph_map, original_file_id} when completed
+    error: Optional[str] = None
 
 
 class FillTemplateResponse(BaseModel):

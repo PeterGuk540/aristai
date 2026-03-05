@@ -32,6 +32,25 @@ async def resolve_cognito_sub(cognito_sub: str) -> Optional[dict]:
         return None
 
 
+async def resolve_by_email(email: str) -> Optional[dict]:
+    """Look up a forum user by email. Fallback when cognito_sub lookup fails."""
+    if not settings.FORUM_API_URL:
+        return None
+
+    url = f"{settings.FORUM_API_URL}/api/users/by-email/{email}"
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, timeout=TIMEOUT)
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            data = resp.json()
+            return {"id": data["id"], "name": data.get("name", ""), "email": data.get("email", "")}
+    except Exception as exc:
+        logger.warning(f"Failed to resolve email {email}: {exc}")
+        return None
+
+
 async def create_course(data: dict) -> dict:
     """Create a course in the forum. Returns the created course dict.
 

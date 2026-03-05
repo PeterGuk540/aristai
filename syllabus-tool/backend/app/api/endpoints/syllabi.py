@@ -146,6 +146,7 @@ async def push_to_forum(
     syllabus_id: int,
     instructor_id: Optional[int] = Query(None),
     cognito_sub: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Push a saved syllabus to the forum as a new course."""
@@ -163,10 +164,16 @@ async def push_to_forum(
             if forum_user:
                 forum_user_id = forum_user["id"]
 
+    if not forum_user_id and email:
+        # Fallback: resolve by email
+        forum_user = await forum_client.resolve_by_email(email)
+        if forum_user:
+            forum_user_id = forum_user["id"]
+
     if not forum_user_id:
         raise HTTPException(
             status_code=400,
-            detail="Cannot determine forum user. Provide instructor_id or cognito_sub.",
+            detail="Cannot determine forum user. Please ensure you have an account on the forum with the same email.",
         )
 
     # Map syllabus content to forum course schema

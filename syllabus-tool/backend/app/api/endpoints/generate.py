@@ -25,7 +25,7 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
                     content = storage.get_file(file_record.object_name)
                     if content:
                         parsed_text = parse_file(file_record.filename, content)
-                        reference_context = f"\n\nReference Document ({file_record.filename}):\n{parsed_text[:20000]}" # Limit context
+                        reference_context = f"\n\n--- REFERENCE DOCUMENT ({file_record.filename}) ---\n{parsed_text[:20000]}\n--- END REFERENCE DOCUMENT ---" # Limit context
                 except Exception as e:
                     print(f"Error reading reference file: {e}")
                     # Continue without reference if reading fails
@@ -64,15 +64,25 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
         1. **Learning Outcomes**: Generate 5-7 specific, measurable goals using Bloom's Taxonomy verbs.
         2. **Schedule**: Create a week-by-week schedule matching the user's specified duration. Ensure a logical progression from foundational to advanced topics.
         3. **Materials**: Recommend high-quality, relevant textbooks and resources in the 'course_info.materials' field.
+        4. **CRITICAL — Reference Document**: If a reference document is provided, you MUST use it as the primary basis for the syllabus. Extract and preserve its topics, structure, schedule, learning goals, and policies as closely as possible. Adapt the content to fit the JSON schema, but do NOT invent new topics or ignore the reference material. The reference document is the instructor's existing syllabus or template — your job is to digitize and structure it, not replace it.
         """
 
-        user_prompt = f"""
+        if reference_context:
+            user_prompt = f"""
         Course Title: {request.course_title}
         Target Audience: {request.target_audience}
         Duration: {request.duration}
         {reference_context}
 
-        Please generate a full syllabus structure for this course.
+        IMPORTANT: A reference document has been provided above. Use it as the primary source — extract its topics, schedule, learning goals, and policies. Structure the content into the required JSON format while preserving the original material as faithfully as possible.
+        """
+        else:
+            user_prompt = f"""
+        Course Title: {request.course_title}
+        Target Audience: {request.target_audience}
+        Duration: {request.duration}
+
+        Please generate a full syllabus structure for this course from scratch.
         """
 
         messages = [

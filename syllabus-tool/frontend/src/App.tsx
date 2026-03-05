@@ -712,6 +712,9 @@ function App() {
       } else if (user?.sub && !user.sub.startsWith('forum-')) {
         params.set('cognito_sub', user.sub)
       }
+      if (user?.email) {
+        params.set('email', user.email)
+      }
 
       const pushResp = await fetchWithAuth(`${apiUrl}/syllabi/${syllabusId}/push-to-forum?${params.toString()}`, {
         method: 'POST',

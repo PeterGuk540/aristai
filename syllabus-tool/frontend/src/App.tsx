@@ -194,8 +194,15 @@ function App() {
   const [viewingFileId, setViewingFileId] = useState<number | null>(null)
 
   // Template Fill Mode state
+  interface TemplateSection {
+    id: string;
+    label: string;
+    paragraphIndices: number[];
+    filledText: string;
+  }
   const [templateFillMode, setTemplateFillMode] = useState(false)
-  const [filledTemplateText, setFilledTemplateText] = useState('')
+  const [templateSections, setTemplateSections] = useState<TemplateSection[]>([])
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const [templateParagraphMap, setTemplateParagraphMap] = useState<Record<string, string>>({})
   const [templateFileId, setTemplateFileId] = useState<number | null>(null)
   
@@ -554,7 +561,13 @@ function App() {
             if (!result) throw new Error('Template fill timed out');
 
             setTemplateFillMode(true);
-            setFilledTemplateText(result.filled_text);
+            setTemplateSections(result.sections.map((s: any) => ({
+              id: s.id,
+              label: s.label,
+              paragraphIndices: s.paragraph_indices,
+              filledText: s.filled_text,
+            })));
+            setExpandedSections(new Set(result.sections.map((s: any) => s.id)));
             setTemplateParagraphMap(result.paragraph_map);
             setTemplateFileId(result.original_file_id);
             setStep('edit');
@@ -689,13 +702,14 @@ function App() {
   const handleTemplateExport = async () => {
     setIsExporting(true);
     try {
-      // Sync edited text back into paragraph_map by splitting on newlines
-      const lines = filledTemplateText.split('\n');
-      const keys = Object.keys(templateParagraphMap).sort((a, b) => Number(a) - Number(b));
+      // Sync edited sections back into flat paragraph_map
       const syncedMap: Record<string, string> = {};
-      keys.forEach((key, i) => {
-        syncedMap[key] = i < lines.length ? lines[i] : '';
-      });
+      for (const section of templateSections) {
+        const lines = section.filledText.split('\n');
+        section.paragraphIndices.forEach((pIdx, lineIdx) => {
+          syncedMap[String(pIdx)] = lineIdx < lines.length ? lines[lineIdx] : '';
+        });
+      }
 
       const response = await fetchWithAuth(`${apiUrl}/export/filled-template`, {
         method: 'POST',
@@ -726,7 +740,8 @@ function App() {
   // --- Template Fill: Reset ---
   const handleTemplateFillReset = () => {
     setTemplateFillMode(false);
-    setFilledTemplateText('');
+    setTemplateSections([]);
+    setExpandedSections(new Set());
     setTemplateParagraphMap({});
     setTemplateFileId(null);
     setStep('upload');
@@ -1285,18 +1300,55 @@ function App() {
               </div>
             </div>
 
-            {/* Single editable textarea */}
-            <div className="flex-1 min-h-0 bg-white rounded-lg shadow overflow-hidden flex flex-col">
-              <div className="px-4 py-3 bg-gray-50 border-b">
-                <h3 className="text-sm font-semibold text-gray-700">Generated Syllabus</h3>
-              </div>
-              <div className="flex-1 p-4 min-h-0">
-                <textarea
-                  value={filledTemplateText}
-                  onChange={(e) => setFilledTemplateText(e.target.value)}
-                  className="w-full h-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-sans leading-relaxed"
-                />
-              </div>
+            {/* Collapsible section-based editing */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
+              {templateSections.map((section) => {
+                const isExpanded = expandedSections.has(section.id);
+                return (
+                  <div key={section.id} className="bg-white rounded-lg shadow overflow-hidden">
+                    <button
+                      onClick={() => {
+                        setExpandedSections(prev => {
+                          const next = new Set(prev);
+                          if (next.has(section.id)) {
+                            next.delete(section.id);
+                          } else {
+                            next.add(section.id);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="w-full px-4 py-3 bg-gray-50 border-b flex items-center justify-between hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg
+                          className={`w-4 h-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                        <h3 className="text-sm font-semibold text-gray-700">{section.label}</h3>
+                      </div>
+                      <span className="text-xs text-gray-400">{section.paragraphIndices.length} paragraphs</span>
+                    </button>
+                    {isExpanded && (
+                      <div className="p-4">
+                        <textarea
+                          value={section.filledText}
+                          onChange={(e) => {
+                            const newText = e.target.value;
+                            setTemplateSections(prev =>
+                              prev.map(s => s.id === section.id ? { ...s, filledText: newText } : s)
+                            );
+                          }}
+                          rows={Math.min(Math.max(section.filledText.split('\n').length + 2, 6), 30)}
+                          className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical font-sans leading-relaxed"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

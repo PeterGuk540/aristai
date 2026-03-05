@@ -36,12 +36,14 @@ def get_llm():
     )
 
 
-def invoke_llm(messages: Sequence[BaseMessage], *, max_retries: int | None = None) -> Any:
+def invoke_llm(messages: Sequence[BaseMessage], *, max_retries: int | None = None, max_tokens: int | None = None) -> Any:
     """Invoke the configured LLM with basic retry/backoff.
 
     Keeps dependencies minimal (no tenacity). Retries transient provider/network errors.
     """
     llm = get_llm()
+    if max_tokens:
+        llm = llm.bind(max_tokens=max_tokens)
     attempts = max(0, int(max_retries if max_retries is not None else settings.LLM_MAX_RETRIES)) + 1
     last_exc: Exception | None = None
 

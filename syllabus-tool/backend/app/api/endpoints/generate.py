@@ -7,11 +7,16 @@ from app.services.parser import parse_file
 from app.schemas.generator import (
     GenerateRequest, FillTemplateRequest, FillTemplateResponse,
     FillTemplateJobResponse, FillTemplateStatusResponse,
+    FillTemplateSection, FillTemplateResult,
 )
-from app.services.template_filler import extract_numbered_paragraphs, build_llm_template_text, parse_llm_response
+from app.services.template_filler import (
+    extract_numbered_paragraphs, build_llm_template_text,
+    parse_llm_response, group_paragraphs_by_section, build_table_llm_prompt,
+)
 from app.schemas.syllabus import SyllabusData, CourseInfo, LearningGoal, ScheduleItem, Policies
 from app.services.llm_factory import invoke_llm
 from langchain_core.messages import SystemMessage, HumanMessage
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import re
 import logging
@@ -144,30 +149,11 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id: int,
-                            course_title: str, target_audience: str, duration: str):
-    """Background worker for fill-template LLM call."""
-    try:
-        _fill_jobs[job_id]["status"] = "running"
+# ---------------------------------------------------------------------------
+# Fill-template: chunked body + parallel table processing
+# ---------------------------------------------------------------------------
 
-        storage = StorageService()
-        content = storage.get_file(file_object_name)
-        if not content:
-            _fill_jobs[job_id] = {"status": "failed", "error": "File content not found in storage"}
-            return
-
-        # Extract numbered paragraphs from DOCX
-        numbered_paragraphs = extract_numbered_paragraphs(content)
-        print(f"[FILL-TEMPLATE] Extracted {len(numbered_paragraphs)} paragraphs", flush=True)
-
-        if not numbered_paragraphs:
-            _fill_jobs[job_id] = {"status": "failed", "error": "No content found in the template document."}
-            return
-
-        # Build LLM prompt text
-        template_text = build_llm_template_text(numbered_paragraphs)
-
-        system_prompt = """You are an expert curriculum designer. You will receive a university syllabus TEMPLATE
+_BODY_SYSTEM_PROMPT = """You are an expert curriculum designer. You will receive a university syllabus TEMPLATE
 with numbered paragraphs. Your task is to generate a COMPLETE, READY-TO-USE syllabus
 for the given course by rewriting every paragraph.
 
@@ -179,51 +165,191 @@ RULES:
    entirely with real, substantive course content appropriate for the section.
 4. EXAMPLE/SAMPLE TEXT: Adapt to be specific to the given course.
 5. REQUIRED UNIVERSITY POLICY STATEMENTS: Keep verbatim — do not modify.
-6. TABLES (grade scales, schedules): Fill with realistic values for the course.
-7. EMPTY paragraphs: Output as empty: [P5]
-8. The final document must read as a polished, natural-language syllabus with NO
+6. EMPTY paragraphs: Output as empty: [P5]
+7. The final document must read as a polished, natural-language syllabus with NO
    leftover brackets, instructions, or placeholder tokens."""
 
-        user_prompt = f"""TEMPLATE PARAGRAPHS:
+
+def _estimate_table_tokens(table_group: dict) -> int:
+    """Estimate max_tokens needed for a table based on cell count."""
+    n_cells = len(table_group["paragraphs"])
+    if n_cells <= 32:
+        return 2048
+    elif n_cells <= 60:
+        return 4096
+    else:
+        return 6144
+
+
+def _fill_body_chunk(body_paragraphs: list[dict], course_info: dict) -> dict[int, str]:
+    """Fill body paragraphs using the existing [P#] approach."""
+    if not body_paragraphs:
+        return {}
+
+    template_text = build_llm_template_text(body_paragraphs)
+
+    user_prompt = f"""TEMPLATE PARAGRAPHS:
 {template_text}
 
 COURSE INFORMATION:
-- Course Title: {course_title}
-- Target Audience: {target_audience}
-- Duration: {duration}
+- Course Title: {course_info['course_title']}
+- Target Audience: {course_info['target_audience']}
+- Duration: {course_info['duration']}
 
 Generate a complete syllabus by rewriting each paragraph. Output every paragraph with its [P#] number."""
 
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
-        ]
-        response = invoke_llm(messages)
-        llm_content = response.content
-        print(f"[FILL-TEMPLATE] LLM response length: {len(llm_content)} chars", flush=True)
+    messages = [
+        SystemMessage(content=_BODY_SYSTEM_PROMPT),
+        HumanMessage(content=user_prompt),
+    ]
+    response = invoke_llm(messages, max_tokens=8192)
+    return parse_llm_response(response.content, max(p["index"] for p in body_paragraphs) + 1)
 
-        # Parse LLM response into paragraph map
-        int_map = parse_llm_response(llm_content, len(numbered_paragraphs))
-        print(f"[FILL-TEMPLATE] Parsed {len(int_map)} paragraph replacements", flush=True)
 
-        paragraph_map = {str(k): v for k, v in int_map.items()}
+def _fill_table_chunk(table_group: dict, course_info: dict) -> dict[int, str]:
+    """Fill a single table using a grid-structured prompt."""
+    if not table_group["paragraphs"]:
+        return {}
 
-        filled_lines = []
-        for p in numbered_paragraphs:
-            idx = p["index"]
-            if idx in int_map:
-                filled_lines.append(int_map[idx])
-            else:
-                filled_lines.append(p["text"])
-        filled_text = "\n".join(filled_lines)
+    grid_prompt = build_table_llm_prompt(table_group, course_info)
+    max_idx = max(p["index"] for p in table_group["paragraphs"]) + 1
+
+    headers = table_group.get("headers", [])
+    header_hint = ", ".join(headers) if headers else "table data"
+
+    system_prompt = f"""You are an expert curriculum designer filling in a syllabus table.
+You will receive a table from a university syllabus template with numbered cells using [P#] markers.
+
+RULES:
+1. Output every cell with its original [P#] number.
+2. Replace placeholder tokens (e.g., [[[[[##]]]]], [[[[[XX.XX]]]]]) with realistic values for the course.
+3. Keep header cells that already have correct text — output them unchanged with their [P#] marker.
+4. Use specific, realistic content appropriate for a university course on "{course_info['course_title']}".
+5. Format: [P111] value
+   One cell per line. Every [P#] from the input must appear in your output."""
+
+    user_prompt = f"""{grid_prompt}
+
+COURSE INFORMATION:
+- Course Title: {course_info['course_title']}
+- Target Audience: {course_info['target_audience']}
+- Duration: {course_info['duration']}
+
+Fill every cell in this table. Output each cell as [P#] followed by its value, one per line."""
+
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_prompt),
+    ]
+    max_tokens = _estimate_table_tokens(table_group)
+    response = invoke_llm(messages, max_tokens=max_tokens)
+    return parse_llm_response(response.content, max_idx)
+
+
+def _build_section(section_id: str, label: str, paragraphs: list[dict], paragraph_map: dict[int, str]) -> FillTemplateSection:
+    """Build a FillTemplateSection from a group of paragraphs and the filled map."""
+    indices = [p["index"] for p in paragraphs]
+    lines = []
+    for p in paragraphs:
+        idx = p["index"]
+        if idx in paragraph_map:
+            lines.append(paragraph_map[idx])
+        else:
+            lines.append(p["text"])
+    return FillTemplateSection(
+        id=section_id,
+        label=label,
+        paragraph_indices=indices,
+        filled_text="\n".join(lines),
+    )
+
+
+def _infer_table_label(table_group: dict) -> str:
+    """Infer a human-readable label for a table from its headers."""
+    headers = table_group.get("headers", [])
+    if not headers:
+        return f"Table {table_group['table_index']}"
+
+    # Use first header as a hint, or join a few
+    first = headers[0].strip()
+    if len(headers) <= 4:
+        return " / ".join(h.strip() for h in headers if h.strip()) or f"Table {table_group['table_index']}"
+    return first or f"Table {table_group['table_index']}"
+
+
+def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id: int,
+                            course_title: str, target_audience: str, duration: str):
+    """Background worker for fill-template LLM call — chunked body + parallel tables."""
+    try:
+        _fill_jobs[job_id]["status"] = "running"
+
+        storage = StorageService()
+        content = storage.get_file(file_object_name)
+        if not content:
+            _fill_jobs[job_id] = {"status": "failed", "error": "File content not found in storage"}
+            return
+
+        # 1. Extract paragraphs with table metadata
+        numbered_paragraphs = extract_numbered_paragraphs(content)
+        print(f"[FILL-TEMPLATE] Extracted {len(numbered_paragraphs)} paragraphs", flush=True)
+
+        if not numbered_paragraphs:
+            _fill_jobs[job_id] = {"status": "failed", "error": "No content found in the template document."}
+            return
+
+        # 2. Group into body + tables
+        groups = group_paragraphs_by_section(numbered_paragraphs)
+        print(f"[FILL-TEMPLATE] Body: {len(groups['body'])} paragraphs, Tables: {len(groups['tables'])}", flush=True)
+
+        course_info = {
+            "course_title": course_title,
+            "target_audience": target_audience,
+            "duration": duration,
+        }
+
+        # 3. Fill body (existing approach — works great)
+        print(f"[FILL-TEMPLATE] Filling body chunk ({len(groups['body'])} paragraphs)...", flush=True)
+        merged_map: dict[int, str] = _fill_body_chunk(groups["body"], course_info)
+        print(f"[FILL-TEMPLATE] Body filled: {len(merged_map)} replacements", flush=True)
+
+        # 4. Fill tables in parallel
+        if groups["tables"]:
+            print(f"[FILL-TEMPLATE] Filling {len(groups['tables'])} table(s) in parallel...", flush=True)
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                futures = {
+                    executor.submit(_fill_table_chunk, tg, course_info): tg
+                    for tg in groups["tables"]
+                }
+                for future in as_completed(futures):
+                    tg = futures[future]
+                    try:
+                        table_map = future.result()
+                        print(f"[FILL-TEMPLATE] Table {tg['table_index']} filled: {len(table_map)} replacements", flush=True)
+                        merged_map.update(table_map)
+                    except Exception as e:
+                        print(f"[FILL-TEMPLATE] Table {tg['table_index']} ERROR: {e}", flush=True)
+                        # Continue — partial fill is better than total failure
+
+        print(f"[FILL-TEMPLATE] Total replacements: {len(merged_map)}", flush=True)
+
+        # 5. Build sections for frontend
+        sections = []
+        if groups["body"]:
+            sections.append(_build_section("body", "Course Content", groups["body"], merged_map))
+        for tg in groups["tables"]:
+            label = _infer_table_label(tg)
+            sections.append(_build_section(f"table_{tg['table_index']}", label, tg["paragraphs"], merged_map))
+
+        # 6. Build flat paragraph_map (string keys for JSON)
+        paragraph_map = {str(k): v for k, v in merged_map.items()}
 
         _fill_jobs[job_id] = {
             "status": "completed",
-            "result": {
-                "filled_text": filled_text,
-                "paragraph_map": paragraph_map,
-                "original_file_id": reference_file_id,
-            },
+            "result": FillTemplateResult(
+                sections=sections,
+                paragraph_map=paragraph_map,
+                original_file_id=reference_file_id,
+            ).model_dump(),
         }
     except Exception as e:
         print(f"[FILL-TEMPLATE] ERROR: {e}", flush=True)

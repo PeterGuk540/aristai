@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, Literal
 
+
 class GenerateRequest(BaseModel):
     course_title: str
     target_audience: str
@@ -19,9 +20,22 @@ class FillTemplateJobResponse(BaseModel):
     job_id: str
 
 
+class FillTemplateSection(BaseModel):
+    id: str                        # "body", "table_0", "table_1", ...
+    label: str                     # "Course Content", "Points Breakdown", ...
+    paragraph_indices: list[int]   # flat indices belonging to this section
+    filled_text: str               # newline-joined text for this section only
+
+
+class FillTemplateResult(BaseModel):
+    sections: list[FillTemplateSection]
+    paragraph_map: dict[str, str]  # flat map of ALL indices (for DOCX export)
+    original_file_id: int
+
+
 class FillTemplateStatusResponse(BaseModel):
     status: Literal["pending", "running", "completed", "failed"]
-    result: Optional[dict] = None          # {filled_text, paragraph_map, original_file_id} when completed
+    result: Optional[FillTemplateResult] = None
     error: Optional[str] = None
 
 

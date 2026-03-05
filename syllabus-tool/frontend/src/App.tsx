@@ -192,6 +192,13 @@ function App() {
   // New state for Split View
   const [viewMode, setViewMode] = useState<'history' | 'pdf'>('history')
   const [viewingFileId, setViewingFileId] = useState<number | null>(null)
+
+  // Template Fill Mode state
+  const [templateFillMode, setTemplateFillMode] = useState(false)
+  const [filledTemplateText, setFilledTemplateText] = useState('')
+  const [templateReplacements, setTemplateReplacements] = useState<Record<string, string>>({})
+  const [templateFileId, setTemplateFileId] = useState<number | null>(null)
+  const [templatePlaceholders, setTemplatePlaceholders] = useState<string[]>([])
   
   const chatRef = useRef<ChatInterfaceRef>(null);
 
@@ -512,26 +519,48 @@ function App() {
   const handleGenerateDraft = async (draftInfo: { title: string; audience: string; duration: string; referenceFileId?: number }) => {
     setIsAnalyzing(true);
     try {
-        const response = await fetchWithAuth(`${apiUrl}/generate/draft`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                course_title: draftInfo.title,
-                target_audience: draftInfo.audience,
-                duration: draftInfo.duration,
-                reference_file_id: draftInfo.referenceFileId
-            }),
-        });
+        if (draftInfo.referenceFileId) {
+            // TEMPLATE FILL MODE
+            const response = await fetchWithAuth(`${apiUrl}/generate/fill-template`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reference_file_id: draftInfo.referenceFileId,
+                    course_title: draftInfo.title,
+                    target_audience: draftInfo.audience,
+                    duration: draftInfo.duration,
+                }),
+            });
+            if (!response.ok) throw new Error('Failed to fill template');
+            const data = await response.json();
 
-        if (!response.ok) {
-            throw new Error('Failed to generate draft');
+            setTemplateFillMode(true);
+            setFilledTemplateText(data.filled_text);
+            setTemplateReplacements(data.replacements);
+            setTemplateFileId(data.original_file_id);
+            setTemplatePlaceholders(data.placeholders_found);
+            setStep('edit');
+        } else {
+            // STANDARD MODE (existing flow)
+            const response = await fetchWithAuth(`${apiUrl}/generate/draft`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    course_title: draftInfo.title,
+                    target_audience: draftInfo.audience,
+                    duration: draftInfo.duration,
+                    reference_file_id: draftInfo.referenceFileId
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate draft');
+            }
+
+            const data = await response.json();
+            setSyllabusData(data);
+            setStep('edit');
         }
-
-        const data = await response.json();
-        setSyllabusData(data);
-        setStep('edit');
     } catch (error) {
         console.error('Error generating draft:', error);
         alert('Failed to generate draft. Please try again.');
@@ -637,6 +666,58 @@ function App() {
   }
 
 
+
+  // --- Template Fill Export ---
+  const handleTemplateExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await fetchWithAuth(`${apiUrl}/export/filled-template`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_id: templateFileId,
+          replacements: templateReplacements,
+        }),
+      });
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'syllabus_filled.docx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error exporting filled template:', error);
+      alert('Failed to export filled template. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // --- Template Fill: Reset ---
+  const handleTemplateFillReset = () => {
+    setTemplateFillMode(false);
+    setFilledTemplateText('');
+    setTemplateReplacements({});
+    setTemplateFileId(null);
+    setTemplatePlaceholders([]);
+    setStep('upload');
+  };
+
+  // --- Template Fill: Update a single replacement and regenerate preview ---
+  const handleUpdateReplacement = (placeholder: string, newValue: string) => {
+    setTemplateReplacements(prev => {
+      const updated = { ...prev, [placeholder]: newValue };
+      // Re-apply all replacements from original template text to regenerate preview
+      // We need the original (unfilled) text, so we reverse-apply current replacements first
+      // Simpler approach: just update the specific replacement in the preview text
+      setFilledTemplateText(prevText => prevText.replace(prev[placeholder], newValue));
+      return updated;
+    });
+  };
 
   // --- Save to My Syllabi (both modes) ---
   const handleSaveToMySyllabi = async () => {
@@ -1151,7 +1232,82 @@ function App() {
           </div>
         )}
 
-        {step === 'edit' && (
+        {step === 'edit' && templateFillMode && (
+          <div className="flex flex-col gap-4 h-full p-2 sm:p-4">
+            {/* Template Fill Mode Header */}
+            <div className="flex items-center justify-between bg-white rounded-lg shadow px-4 py-3">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Template Review</h2>
+                <p className="text-sm text-gray-500">{templatePlaceholders.length} placeholder(s) detected and filled</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleTemplateFillReset}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Start Over
+                </button>
+                <button
+                  onClick={handleTemplateExport}
+                  disabled={isExporting}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-75 flex items-center"
+                >
+                  {isExporting ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Export as DOCX
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Two-panel layout */}
+            <div className="flex flex-row gap-4 flex-1 min-h-0">
+              {/* Left: Replacements Table */}
+              <div className="w-[45%] bg-white rounded-lg shadow overflow-hidden flex flex-col">
+                <div className="px-4 py-3 bg-gray-50 border-b">
+                  <h3 className="text-sm font-semibold text-gray-700">Placeholder Replacements</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {templatePlaceholders.map((placeholder) => (
+                    <div key={placeholder} className="border rounded-lg p-3">
+                      <label className="block text-xs font-medium text-gray-500 mb-1 font-mono">{placeholder}</label>
+                      <textarea
+                        value={templateReplacements[placeholder] || ''}
+                        onChange={(e) => handleUpdateReplacement(placeholder, e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y min-h-[60px]"
+                        rows={Math.min(5, Math.max(2, (templateReplacements[placeholder] || '').split('\n').length))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right: Filled Text Preview */}
+              <div className="w-[55%] bg-white rounded-lg shadow overflow-hidden flex flex-col">
+                <div className="px-4 py-3 bg-gray-50 border-b">
+                  <h3 className="text-sm font-semibold text-gray-700">Filled Template Preview</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans leading-relaxed">{filledTemplateText}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 'edit' && !templateFillMode && (
           <div className="flex flex-col gap-0.5 sm:gap-6 h-full">
             {/* Top Section: History/PDF (35%) and Form (65%) */}
             <div className="flex flex-row gap-0.5 sm:gap-6 h-[70%] sm:h-[60%] min-h-0">

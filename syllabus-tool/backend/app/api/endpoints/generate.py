@@ -4,7 +4,8 @@ from app.db.session import get_db
 from app.models.uploaded_file import UploadedFile
 from app.services.storage import StorageService
 from app.services.parser import parse_file
-from app.schemas.generator import GenerateRequest
+from app.schemas.generator import GenerateRequest, FillTemplateRequest, FillTemplateResponse
+from app.services.template_filler import detect_placeholders, apply_replacements_text
 from app.schemas.syllabus import SyllabusData, CourseInfo, LearningGoal, ScheduleItem, Policies
 from app.services.llm_factory import invoke_llm
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -132,4 +133,94 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
         raise HTTPException(status_code=500, detail="Failed to generate valid JSON content from AI.")
     except Exception as e:
         print(f"[GENERATE] ERROR: {e}", flush=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/fill-template", response_model=FillTemplateResponse)
+async def fill_template(request: FillTemplateRequest, db: Session = Depends(get_db)):
+    try:
+        # 1. Load file from DB + storage
+        file_record = db.query(UploadedFile).filter(UploadedFile.id == request.reference_file_id).first()
+        if not file_record:
+            raise HTTPException(status_code=404, detail="Reference file not found")
+
+        storage = StorageService()
+        content = storage.get_file(file_record.object_name)
+        if not content:
+            raise HTTPException(status_code=404, detail="File content not found in storage")
+
+        # 2. Parse text
+        parsed_text = parse_file(file_record.filename, content)
+        print(f"[FILL-TEMPLATE] Parsed text length: {len(parsed_text)} chars", flush=True)
+
+        # 3. Detect placeholders
+        placeholders = detect_placeholders(parsed_text)
+        print(f"[FILL-TEMPLATE] Found {len(placeholders)} placeholders: {placeholders}", flush=True)
+
+        if not placeholders:
+            raise HTTPException(
+                status_code=400,
+                detail="No placeholders found in the template. Placeholders should be in [Bracket] format, e.g. [Course Title]."
+            )
+
+        # 4. Build LLM prompt
+        system_prompt = """You are filling in a university syllabus template. You will be given:
+1. The full template text with placeholders in [brackets]
+2. A list of detected placeholders
+3. Course information
+
+Return ONLY a JSON object where keys are the exact placeholder strings (including brackets)
+and values are the replacement text. Be specific and detailed. For placeholders like
+[Course Description], generate substantive content appropriate for the course. For placeholders
+like [Instructor Name], use reasonable defaults like "TBD" unless info is provided.
+
+Example: {"[Course Title]": "Introduction to Data Science", "[Instructor Name]": "TBD"}"""
+
+        user_prompt = f"""Template text:
+{parsed_text[:20000]}
+
+Detected placeholders:
+{json.dumps(placeholders)}
+
+Course information:
+- Title: {request.course_title}
+- Target Audience: {request.target_audience}
+- Duration: {request.duration}
+
+Return ONLY a JSON object mapping each placeholder to its replacement value."""
+
+        # 5. Call LLM
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ]
+        response = invoke_llm(messages)
+        llm_content = response.content
+
+        # Cleanup code blocks if present
+        if "```json" in llm_content:
+            llm_content = llm_content.split("```json")[1].split("```")[0]
+        elif "```" in llm_content:
+            llm_content = llm_content.split("```")[1].split("```")[0]
+
+        # 6. Parse LLM response
+        replacements = json.loads(llm_content.strip())
+        print(f"[FILL-TEMPLATE] LLM returned {len(replacements)} replacements", flush=True)
+
+        # 7. Apply replacements to text
+        filled_text = apply_replacements_text(parsed_text, replacements)
+
+        return FillTemplateResponse(
+            filled_text=filled_text,
+            replacements=replacements,
+            original_file_id=request.reference_file_id,
+            placeholders_found=placeholders,
+        )
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to parse LLM response as JSON.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[FILL-TEMPLATE] ERROR: {e}", flush=True)
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,6 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.models.uploaded_file import UploadedFile
+from app.services.storage import StorageService
+from app.services.template_filler import fill_docx
 from app.schemas.syllabus import SyllabusData
+from app.schemas.generator import FilledTemplateExportRequest
 from docx import Document
 from io import BytesIO
 import json
@@ -447,5 +453,37 @@ async def export_md(data: SyllabusData):
         }
         
         return StreamingResponse(buffer, media_type="text/markdown", headers=headers)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/export/filled-template")
+async def export_filled_template(request: FilledTemplateExportRequest, db: Session = Depends(get_db)):
+    try:
+        # Load original DOCX from storage
+        file_record = db.query(UploadedFile).filter(UploadedFile.id == request.file_id).first()
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        storage = StorageService()
+        file_content = storage.get_file(file_record.object_name)
+        if not file_content:
+            raise HTTPException(status_code=404, detail="File content not found in storage")
+
+        # Fill DOCX with replacements (preserves original formatting)
+        filled_bytes = fill_docx(file_content, request.replacements)
+
+        buffer = BytesIO(filled_bytes)
+        headers = {
+            'Content-Disposition': f'attachment; filename="syllabus_filled.docx"'
+        }
+
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers=headers,
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

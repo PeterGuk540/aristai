@@ -7,6 +7,7 @@ class GenerateRequest(BaseModel):
     target_audience: str
     duration: str  # e.g. "16 weeks", "one semester"
     reference_file_id: Optional[int] = None
+    language: str = "en"
 
 
 class FillTemplateRequest(BaseModel):
@@ -14,6 +15,7 @@ class FillTemplateRequest(BaseModel):
     course_title: str
     target_audience: str = ""
     duration: str = ""
+    language: str = "en"
 
 
 class FillTemplateJobResponse(BaseModel):

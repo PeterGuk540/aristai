@@ -6,7 +6,7 @@ interface FileInfo {
 }
 
 interface CommandCenterProps {
-    onGenerate: (data: { title: string; audience: string; duration: string; referenceFileId?: number }) => void;
+    onGenerate: (data: { title: string; audience: string; duration: string; referenceFileId?: number; language: string }) => void;
     isGenerating: boolean;
     children?: React.ReactNode;
     files?: FileInfo[];
@@ -17,15 +17,17 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [] }
   const [audience, setAudience] = useState('');
   const [duration, setDuration] = useState('16 weeks');
   const [selectedFileId, setSelectedFileId] = useState<string>('');
+  const [language, setLanguage] = useState('en');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (title && audience && duration) {
-        onGenerate({ 
-            title, 
-            audience, 
+        onGenerate({
+            title,
+            audience,
             duration,
-            referenceFileId: selectedFileId ? parseInt(selectedFileId) : undefined
+            referenceFileId: selectedFileId ? parseInt(selectedFileId) : undefined,
+            language,
         });
     }
   };
@@ -104,8 +106,36 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [] }
                 </div>
             </div>
 
-            <button 
-                type="submit" 
+            <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1 uppercase tracking-wide">Language</label>
+                <div className="flex space-x-2">
+                    <button
+                        type="button"
+                        onClick={() => setLanguage('en')}
+                        className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                            language === 'en'
+                                ? 'bg-black text-white shadow-sm'
+                                : 'bg-white text-gray-600 border border-gray-300 hover:border-gray-400'
+                        }`}
+                    >
+                        English
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setLanguage('es')}
+                        className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                            language === 'es'
+                                ? 'bg-black text-white shadow-sm'
+                                : 'bg-white text-gray-600 border border-gray-300 hover:border-gray-400'
+                        }`}
+                    >
+                        Español
+                    </button>
+                </div>
+            </div>
+
+            <button
+                type="submit"
                 disabled={isGenerating}
                 className="w-full py-3 px-4 bg-black hover:bg-gray-800 text-white font-medium rounded-lg shadow-sm hover:shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >

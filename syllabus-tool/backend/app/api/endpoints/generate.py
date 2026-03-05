@@ -27,6 +27,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_LANGUAGE_NAMES = {"en": "English", "es": "Spanish (Español)"}
+
+def _language_directive(lang: str) -> str:
+    name = _LANGUAGE_NAMES.get(lang, lang)
+    if lang == "en":
+        return ""
+    return (
+        f"\n\nCRITICAL LANGUAGE REQUIREMENT: You MUST write ALL output content in {name}. "
+        f"Every paragraph, heading, table cell, and description must be in {name}. "
+        f"Only [P#] markers and JSON structure keys remain in English."
+    )
+
 # In-memory job store for async fill-template jobs
 _fill_jobs: dict[str, dict] = {}
 
@@ -98,7 +110,7 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
            - Preserve the original wording, details, and specificity from the reference
            - Do NOT invent new topics or generic content when the reference provides specific content
            - If the reference has placeholder text (e.g., "[Course Title]"), keep the placeholders
-        """
+        """ + _language_directive(request.language)
 
         if reference_context:
             user_prompt = f"""
@@ -153,7 +165,7 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
 # Fill-template: chunked body + parallel table processing
 # ---------------------------------------------------------------------------
 
-_BODY_SYSTEM_PROMPT = """You are an expert curriculum designer. You will receive a university syllabus TEMPLATE
+_BODY_SYSTEM_PROMPT_BASE = """You are an expert curriculum designer. You will receive a university syllabus TEMPLATE
 with numbered paragraphs. Your task is to generate a COMPLETE, READY-TO-USE syllabus
 for the given course by rewriting every paragraph.
 
@@ -168,6 +180,9 @@ RULES:
 6. EMPTY paragraphs: Output as empty: [P5]
 7. The final document must read as a polished, natural-language syllabus with NO
    leftover brackets, instructions, or placeholder tokens."""
+
+def _body_system_prompt(lang: str = "en") -> str:
+    return _BODY_SYSTEM_PROMPT_BASE + _language_directive(lang)
 
 
 def _estimate_table_tokens(table_group: dict) -> int:
@@ -199,7 +214,7 @@ COURSE INFORMATION:
 Generate a complete syllabus by rewriting each paragraph. Output every paragraph with its [P#] number."""
 
     messages = [
-        SystemMessage(content=_BODY_SYSTEM_PROMPT),
+        SystemMessage(content=_body_system_prompt(course_info.get("language", "en"))),
         HumanMessage(content=user_prompt),
     ]
     response = invoke_llm(messages, max_tokens=8192)
@@ -217,6 +232,7 @@ def _fill_table_chunk(table_group: dict, course_info: dict) -> dict[int, str]:
     headers = table_group.get("headers", [])
     header_hint = ", ".join(headers) if headers else "table data"
 
+    lang = course_info.get("language", "en")
     system_prompt = f"""You are an expert curriculum designer filling in a syllabus table.
 You will receive a table from a university syllabus template with numbered cells using [P#] markers.
 
@@ -226,7 +242,7 @@ RULES:
 3. Keep header cells that already have correct text — output them unchanged with their [P#] marker.
 4. Use specific, realistic content appropriate for a university course on "{course_info['course_title']}".
 5. Format: [P111] value
-   One cell per line. Every [P#] from the input must appear in your output."""
+   One cell per line. Every [P#] from the input must appear in your output.""" + _language_directive(lang)
 
     user_prompt = f"""{grid_prompt}
 
@@ -278,7 +294,8 @@ def _infer_table_label(table_group: dict) -> str:
 
 
 def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id: int,
-                            course_title: str, target_audience: str, duration: str):
+                            course_title: str, target_audience: str, duration: str,
+                            language: str = "en"):
     """Background worker for fill-template LLM call — chunked body + parallel tables."""
     try:
         _fill_jobs[job_id]["status"] = "running"
@@ -305,6 +322,7 @@ def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id
             "course_title": course_title,
             "target_audience": target_audience,
             "duration": duration,
+            "language": language,
         }
 
         # 3. Fill body (existing approach — works great)
@@ -370,7 +388,8 @@ async def fill_template(request: FillTemplateRequest, db: Session = Depends(get_
     thread = threading.Thread(
         target=_run_fill_template_job,
         args=(job_id, file_record.object_name, request.reference_file_id,
-              request.course_title, request.target_audience, request.duration),
+              request.course_title, request.target_audience, request.duration,
+              request.language),
         daemon=True,
     )
     thread.start()

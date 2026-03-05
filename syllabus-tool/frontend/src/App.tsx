@@ -521,7 +521,7 @@ function App() {
     }
   }
 
-  const handleGenerateDraft = async (draftInfo: { title: string; audience: string; duration: string; referenceFileId?: number }) => {
+  const handleGenerateDraft = async (draftInfo: { title: string; audience: string; duration: string; referenceFileId?: number; language: string }) => {
     setIsAnalyzing(true);
     try {
         if (draftInfo.referenceFileId) {
@@ -534,6 +534,7 @@ function App() {
                     course_title: draftInfo.title,
                     target_audience: draftInfo.audience,
                     duration: draftInfo.duration,
+                    language: draftInfo.language,
                 }),
             });
             if (!startRes.ok) throw new Error('Failed to start template fill');
@@ -578,7 +579,8 @@ function App() {
                     course_title: draftInfo.title,
                     target_audience: draftInfo.audience,
                     duration: draftInfo.duration,
-                    reference_file_id: draftInfo.referenceFileId
+                    reference_file_id: draftInfo.referenceFileId,
+                    language: draftInfo.language,
                 }),
             });
 

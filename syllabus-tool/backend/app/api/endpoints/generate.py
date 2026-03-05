@@ -53,20 +53,23 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
                 "semester": "[Semester]",
                 "description": "...",
                 "format": "...",
-                "materials": "..."  // Recommend 2-3 classic textbooks and 1-2 online resources here
+                "materials": "..."
             },
             "learning_goals": [
-                { "id": 1, "text": "..." } // Use Bloom's Taxonomy (e.g., Analyze, Evaluate, Create)
+                { "id": 1, "text": "..." }
             ],
             "schedule": [
-                { "week": "1", "topic": "...", "assignment": "..." } // Distribute difficult topics reasonably over the duration
+                { "week": "1", "topic": "...", "assignment": "..." }
             ],
             "policies": {
-                "academic_integrity": "Standard academic integrity policy...",
-                "attendance": "Standard attendance policy...",
-                "accessibility": "Standard accessibility accommodation policy...",
-                "late_work": "Standard late work policy...",
-                "grading": "Standard grading scale..."
+                "academic_integrity": "...",
+                "attendance": "...",
+                "accessibility": "...",
+                "late_work": "...",
+                "grading": "..."
+            },
+            "custom_sections": {
+                "Section Name": "Full section content as a string..."
             }
         }
 
@@ -74,7 +77,13 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
         1. **Learning Outcomes**: Generate 5-7 specific, measurable goals using Bloom's Taxonomy verbs.
         2. **Schedule**: Create a week-by-week schedule matching the user's specified duration. Ensure a logical progression from foundational to advanced topics.
         3. **Materials**: Recommend high-quality, relevant textbooks and resources in the 'course_info.materials' field.
-        4. **CRITICAL — Reference Document**: If a reference document is provided, you MUST use it as the primary basis for the syllabus. Extract and preserve its topics, structure, schedule, learning goals, and policies as closely as possible. Adapt the content to fit the JSON schema, but do NOT invent new topics or ignore the reference material. The reference document is the instructor's existing syllabus or template — your job is to digitize and structure it, not replace it.
+        4. **custom_sections**: Use this field to capture ANY content from the reference document that does not fit the standard fields above. Examples: office hours, grading breakdown, course materials lists, university-specific policies, diversity statements, mental health resources, technology requirements, communication guidelines, prerequisites, instructor bio, TA info, etc. Preserve the original section names as keys and their full content as values. Do NOT discard any reference content.
+        5. **CRITICAL — Reference Document**: If a reference document is provided, it is the PRIMARY SOURCE. Your job is to DIGITIZE and STRUCTURE it, not replace it:
+           - Map standard sections (title, schedule, goals, policies) to the standard fields
+           - Map ALL other sections to custom_sections — do NOT discard any content
+           - Preserve the original wording, details, and specificity from the reference
+           - Do NOT invent new topics or generic content when the reference provides specific content
+           - If the reference has placeholder text (e.g., "[Course Title]"), keep the placeholders
         """
 
         if reference_context:

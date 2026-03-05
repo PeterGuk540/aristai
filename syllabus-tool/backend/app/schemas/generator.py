@@ -16,12 +16,11 @@ class FillTemplateRequest(BaseModel):
 
 
 class FillTemplateResponse(BaseModel):
-    filled_text: str                    # full text with placeholders replaced
-    replacements: dict[str, str]        # {placeholder: value} map
-    original_file_id: int               # for export
-    placeholders_found: list[str]       # for UI display
+    filled_text: str                       # complete generated text for preview/editing
+    paragraph_map: dict[str, str]          # {"0": "text", "1": "text", ...} for DOCX export
+    original_file_id: int
 
 
 class FilledTemplateExportRequest(BaseModel):
     file_id: int
-    replacements: dict[str, str]
+    paragraph_map: dict[str, str]          # edited paragraph map from frontend

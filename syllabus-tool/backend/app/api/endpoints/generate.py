@@ -5,7 +5,7 @@ from app.models.uploaded_file import UploadedFile
 from app.services.storage import StorageService
 from app.services.parser import parse_file
 from app.schemas.generator import GenerateRequest, FillTemplateRequest, FillTemplateResponse
-from app.services.template_filler import detect_placeholders, apply_replacements_text
+from app.services.template_filler import extract_numbered_paragraphs, build_llm_template_text, parse_llm_response
 from app.schemas.syllabus import SyllabusData, CourseInfo, LearningGoal, ScheduleItem, Policies
 from app.services.llm_factory import invoke_llm
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -149,68 +149,43 @@ async def fill_template(request: FillTemplateRequest, db: Session = Depends(get_
         if not content:
             raise HTTPException(status_code=404, detail="File content not found in storage")
 
-        # 2. Parse text
-        parsed_text = parse_file(file_record.filename, content)
-        print(f"[FILL-TEMPLATE] Parsed text length: {len(parsed_text)} chars", flush=True)
+        # 2. Extract numbered paragraphs from DOCX
+        numbered_paragraphs = extract_numbered_paragraphs(content)
+        print(f"[FILL-TEMPLATE] Extracted {len(numbered_paragraphs)} paragraphs", flush=True)
 
-        # 3. Detect placeholders
-        placeholders = detect_placeholders(parsed_text)
-        print(f"[FILL-TEMPLATE] Found {len(placeholders)} placeholders: {placeholders}", flush=True)
+        if not numbered_paragraphs:
+            raise HTTPException(status_code=400, detail="No content found in the template document.")
 
-        if not placeholders:
-            raise HTTPException(
-                status_code=400,
-                detail="No placeholders found in the template. Placeholders should be in [Bracket] format, e.g. [Course Title]."
-            )
+        # 3. Build LLM prompt text
+        template_text = build_llm_template_text(numbered_paragraphs)
 
         # 4. Build LLM prompt
-        system_prompt = """You are an expert curriculum designer filling in a university syllabus template.
-You will receive a template with [bracket] placeholders, the list of detected placeholders, and course information.
+        system_prompt = """You are an expert curriculum designer. You will receive a university syllabus TEMPLATE
+with numbered paragraphs. Your task is to generate a COMPLETE, READY-TO-USE syllabus
+for the given course by rewriting every paragraph.
 
-Your job is to GENERATE a complete, high-quality syllabus by producing rich content for every placeholder.
-Return ONLY a JSON object where keys are the exact placeholder strings (including brackets) and values are the generated content.
+RULES:
+1. Output every paragraph with its original number: [P0], [P1], [P2], etc.
+2. HEADINGS: Keep heading text that describes a real section (e.g., "Course Description",
+   "Attendance Policy"). Remove meta-headings about template usage.
+3. INSTRUCTION TEXT (text in brackets telling the instructor what to write): Replace
+   entirely with real, substantive course content appropriate for the section.
+4. EXAMPLE/SAMPLE TEXT: Adapt to be specific to the given course.
+5. REQUIRED UNIVERSITY POLICY STATEMENTS: Keep verbatim — do not modify.
+6. TABLES (grade scales, schedules): Fill with realistic values for the course.
+7. EMPTY paragraphs: Output as empty: [P5]
+8. The final document must read as a polished, natural-language syllabus with NO
+   leftover brackets, instructions, or placeholder tokens."""
 
-CONTENT GENERATION RULES — match the depth to the placeholder type:
-
-1. **Short fields** (e.g. [Course Title], [Instructor Name], [Semester], [Course Code], [Office Hours], [Email]):
-   - Use the provided course info when available, otherwise use "TBD".
-
-2. **Course Description** (e.g. [Course Description], [Description]):
-   - Write 3-5 detailed sentences describing the course scope, approach, and what students will gain.
-   - Tailor to the course title, target audience, and duration.
-
-3. **Learning Outcomes / Objectives** (e.g. [Learning Outcomes], [Course Objectives], [Student Learning Outcomes]):
-   - Generate 5-7 specific, measurable outcomes using Bloom's Taxonomy action verbs (analyze, design, evaluate, etc.).
-   - Format as a numbered or bulleted list (use newlines: "1. Analyze...\\n2. Design...\\n3. Evaluate...").
-
-4. **Schedule / Weekly Topics** (e.g. [Weekly Schedule], [Course Schedule], [Schedule]):
-   - Generate a COMPLETE week-by-week schedule matching the specified duration.
-   - Each week: topic + reading/assignment. Progress logically from foundational to advanced.
-   - Format as a structured list: "Week 1: Introduction to... — Read Ch. 1\\nWeek 2: Fundamentals of... — Problem Set 1\\n..."
-
-5. **Policies** (e.g. [Attendance Policy], [Academic Integrity], [Late Work Policy], [Grading Policy]):
-   - Write detailed, realistic university-level policy paragraphs (3-5 sentences each).
-   - For grading: include a breakdown (e.g. "Assignments: 30%, Midterm: 25%, Final: 30%, Participation: 15%").
-
-6. **Materials / Textbooks** (e.g. [Required Materials], [Textbooks]):
-   - Recommend 1-3 real, relevant textbooks or resources with author and edition where appropriate.
-
-7. **Any other placeholder**: Generate appropriate, substantive content based on the section context in the template.
-
-IMPORTANT: Every value you produce must be READY TO USE in a final syllabus — no meta-commentary, no "insert here" notes, no leftover brackets."""
-
-        user_prompt = f"""TEMPLATE TEXT:
-{parsed_text[:20000]}
-
-DETECTED PLACEHOLDERS:
-{json.dumps(placeholders)}
+        user_prompt = f"""TEMPLATE PARAGRAPHS:
+{template_text}
 
 COURSE INFORMATION:
 - Course Title: {request.course_title}
 - Target Audience: {request.target_audience}
 - Duration: {request.duration}
 
-Generate comprehensive syllabus content for each placeholder. Return ONLY a JSON object mapping each placeholder to its generated content."""
+Generate a complete syllabus by rewriting each paragraph. Output every paragraph with its [P#] number."""
 
         # 5. Call LLM
         messages = [
@@ -219,29 +194,31 @@ Generate comprehensive syllabus content for each placeholder. Return ONLY a JSON
         ]
         response = invoke_llm(messages)
         llm_content = response.content
+        print(f"[FILL-TEMPLATE] LLM response length: {len(llm_content)} chars", flush=True)
 
-        # Cleanup code blocks if present
-        if "```json" in llm_content:
-            llm_content = llm_content.split("```json")[1].split("```")[0]
-        elif "```" in llm_content:
-            llm_content = llm_content.split("```")[1].split("```")[0]
+        # 6. Parse LLM response into paragraph map
+        int_map = parse_llm_response(llm_content, len(numbered_paragraphs))
+        print(f"[FILL-TEMPLATE] Parsed {len(int_map)} paragraph replacements", flush=True)
 
-        # 6. Parse LLM response
-        replacements = json.loads(llm_content.strip())
-        print(f"[FILL-TEMPLATE] LLM returned {len(replacements)} replacements", flush=True)
+        # 7. Build string-keyed paragraph_map and filled_text
+        paragraph_map = {str(k): v for k, v in int_map.items()}
 
-        # 7. Apply replacements to text
-        filled_text = apply_replacements_text(parsed_text, replacements)
+        # Build filled_text by joining all paragraphs (use LLM output where available, original otherwise)
+        filled_lines = []
+        for p in numbered_paragraphs:
+            idx = p["index"]
+            if idx in int_map:
+                filled_lines.append(int_map[idx])
+            else:
+                filled_lines.append(p["text"])
+        filled_text = "\n".join(filled_lines)
 
         return FillTemplateResponse(
             filled_text=filled_text,
-            replacements=replacements,
+            paragraph_map=paragraph_map,
             original_file_id=request.reference_file_id,
-            placeholders_found=placeholders,
         )
 
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Failed to parse LLM response as JSON.")
     except HTTPException:
         raise
     except Exception as e:

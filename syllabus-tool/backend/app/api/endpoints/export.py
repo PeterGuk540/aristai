@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.uploaded_file import UploadedFile
 from app.services.storage import StorageService
-from app.services.template_filler import fill_docx
+from app.services.template_filler import fill_docx_by_index
 from app.schemas.syllabus import SyllabusData
 from app.schemas.generator import FilledTemplateExportRequest
 from docx import Document
@@ -470,8 +470,9 @@ async def export_filled_template(request: FilledTemplateExportRequest, db: Sessi
         if not file_content:
             raise HTTPException(status_code=404, detail="File content not found in storage")
 
-        # Fill DOCX with replacements (preserves original formatting)
-        filled_bytes = fill_docx(file_content, request.replacements)
+        # Convert string keys to int keys and fill DOCX by paragraph index
+        int_map = {int(k): v for k, v in request.paragraph_map.items()}
+        filled_bytes = fill_docx_by_index(file_content, int_map)
 
         buffer = BytesIO(filled_bytes)
         headers = {

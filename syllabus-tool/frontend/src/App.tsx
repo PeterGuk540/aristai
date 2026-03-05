@@ -196,9 +196,8 @@ function App() {
   // Template Fill Mode state
   const [templateFillMode, setTemplateFillMode] = useState(false)
   const [filledTemplateText, setFilledTemplateText] = useState('')
-  const [templateReplacements, setTemplateReplacements] = useState<Record<string, string>>({})
+  const [templateParagraphMap, setTemplateParagraphMap] = useState<Record<string, string>>({})
   const [templateFileId, setTemplateFileId] = useState<number | null>(null)
-  const [templatePlaceholders, setTemplatePlaceholders] = useState<string[]>([])
   
   const chatRef = useRef<ChatInterfaceRef>(null);
 
@@ -536,9 +535,8 @@ function App() {
 
             setTemplateFillMode(true);
             setFilledTemplateText(data.filled_text);
-            setTemplateReplacements(data.replacements);
+            setTemplateParagraphMap(data.paragraph_map);
             setTemplateFileId(data.original_file_id);
-            setTemplatePlaceholders(data.placeholders_found);
             setStep('edit');
         } else {
             // STANDARD MODE (existing flow)
@@ -671,12 +669,20 @@ function App() {
   const handleTemplateExport = async () => {
     setIsExporting(true);
     try {
+      // Sync edited text back into paragraph_map by splitting on newlines
+      const lines = filledTemplateText.split('\n');
+      const keys = Object.keys(templateParagraphMap).sort((a, b) => Number(a) - Number(b));
+      const syncedMap: Record<string, string> = {};
+      keys.forEach((key, i) => {
+        syncedMap[key] = i < lines.length ? lines[i] : '';
+      });
+
       const response = await fetchWithAuth(`${apiUrl}/export/filled-template`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           file_id: templateFileId,
-          replacements: templateReplacements,
+          paragraph_map: syncedMap,
         }),
       });
       if (!response.ok) throw new Error('Export failed');
@@ -701,22 +707,9 @@ function App() {
   const handleTemplateFillReset = () => {
     setTemplateFillMode(false);
     setFilledTemplateText('');
-    setTemplateReplacements({});
+    setTemplateParagraphMap({});
     setTemplateFileId(null);
-    setTemplatePlaceholders([]);
     setStep('upload');
-  };
-
-  // --- Template Fill: Update a single replacement and regenerate preview ---
-  const handleUpdateReplacement = (placeholder: string, newValue: string) => {
-    setTemplateReplacements(prev => {
-      const updated = { ...prev, [placeholder]: newValue };
-      // Re-apply all replacements from original template text to regenerate preview
-      // We need the original (unfilled) text, so we reverse-apply current replacements first
-      // Simpler approach: just update the specific replacement in the preview text
-      setFilledTemplateText(prevText => prevText.replace(prev[placeholder], newValue));
-      return updated;
-    });
   };
 
   // --- Save to My Syllabi (both modes) ---
@@ -1237,8 +1230,8 @@ function App() {
             {/* Template Fill Mode Header */}
             <div className="flex items-center justify-between bg-white rounded-lg shadow px-4 py-3">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Template Review</h2>
-                <p className="text-sm text-gray-500">{templatePlaceholders.length} placeholder(s) detected and filled</p>
+                <h2 className="text-lg font-bold text-gray-900">Template-Based Syllabus</h2>
+                <p className="text-sm text-gray-500">Review and edit the generated syllabus, then export as DOCX</p>
               </div>
               <div className="flex gap-3">
                 <button
@@ -1272,36 +1265,17 @@ function App() {
               </div>
             </div>
 
-            {/* Two-panel layout */}
-            <div className="flex flex-row gap-4 flex-1 min-h-0">
-              {/* Left: Replacements Table */}
-              <div className="w-[45%] bg-white rounded-lg shadow overflow-hidden flex flex-col">
-                <div className="px-4 py-3 bg-gray-50 border-b">
-                  <h3 className="text-sm font-semibold text-gray-700">Placeholder Replacements</h3>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {templatePlaceholders.map((placeholder) => (
-                    <div key={placeholder} className="border rounded-lg p-3">
-                      <label className="block text-xs font-medium text-gray-500 mb-1 font-mono">{placeholder}</label>
-                      <textarea
-                        value={templateReplacements[placeholder] || ''}
-                        onChange={(e) => handleUpdateReplacement(placeholder, e.target.value)}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y min-h-[60px]"
-                        rows={Math.min(5, Math.max(2, (templateReplacements[placeholder] || '').split('\n').length))}
-                      />
-                    </div>
-                  ))}
-                </div>
+            {/* Single editable textarea */}
+            <div className="flex-1 min-h-0 bg-white rounded-lg shadow overflow-hidden flex flex-col">
+              <div className="px-4 py-3 bg-gray-50 border-b">
+                <h3 className="text-sm font-semibold text-gray-700">Generated Syllabus</h3>
               </div>
-
-              {/* Right: Filled Text Preview */}
-              <div className="w-[55%] bg-white rounded-lg shadow overflow-hidden flex flex-col">
-                <div className="px-4 py-3 bg-gray-50 border-b">
-                  <h3 className="text-sm font-semibold text-gray-700">Filled Template Preview</h3>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans leading-relaxed">{filledTemplateText}</pre>
-                </div>
+              <div className="flex-1 p-4 min-h-0">
+                <textarea
+                  value={filledTemplateText}
+                  onChange={(e) => setFilledTemplateText(e.target.value)}
+                  className="w-full h-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none font-sans leading-relaxed"
+                />
               </div>
             </div>
           </div>

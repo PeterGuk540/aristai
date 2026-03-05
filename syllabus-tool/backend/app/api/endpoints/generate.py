@@ -196,8 +196,11 @@ def _estimate_table_tokens(table_group: dict) -> int:
         return 6144
 
 
+_BODY_CHUNK_SIZE = 80  # paragraphs per LLM call
+
+
 def _fill_body_chunk(body_paragraphs: list[dict], course_info: dict) -> dict[int, str]:
-    """Fill body paragraphs using the existing [P#] approach."""
+    """Fill a single chunk of body paragraphs using the [P#] approach."""
     if not body_paragraphs:
         return {}
 
@@ -219,6 +222,39 @@ Generate a complete syllabus by rewriting each paragraph. Output every paragraph
     ]
     response = invoke_llm(messages, max_tokens=8192)
     return parse_llm_response(response.content, max(p["index"] for p in body_paragraphs) + 1)
+
+
+def _fill_body_parallel(all_body_paragraphs: list[dict], course_info: dict) -> dict[int, str]:
+    """Split body paragraphs into chunks and fill them in parallel."""
+    if not all_body_paragraphs:
+        return {}
+
+    # Small enough for a single call — no chunking needed
+    if len(all_body_paragraphs) <= _BODY_CHUNK_SIZE:
+        return _fill_body_chunk(all_body_paragraphs, course_info)
+
+    # Split into chunks
+    chunks = [
+        all_body_paragraphs[i:i + _BODY_CHUNK_SIZE]
+        for i in range(0, len(all_body_paragraphs), _BODY_CHUNK_SIZE)
+    ]
+    print(f"[FILL-TEMPLATE] Splitting {len(all_body_paragraphs)} body paragraphs into {len(chunks)} chunks", flush=True)
+
+    merged: dict[int, str] = {}
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {
+            executor.submit(_fill_body_chunk, chunk, course_info): idx
+            for idx, chunk in enumerate(chunks)
+        }
+        for future in as_completed(futures):
+            chunk_idx = futures[future]
+            try:
+                chunk_map = future.result()
+                print(f"[FILL-TEMPLATE] Body chunk {chunk_idx + 1}/{len(chunks)} filled: {len(chunk_map)} replacements", flush=True)
+                merged.update(chunk_map)
+            except Exception as e:
+                print(f"[FILL-TEMPLATE] Body chunk {chunk_idx + 1}/{len(chunks)} ERROR: {e}", flush=True)
+    return merged
 
 
 def _fill_table_chunk(table_group: dict, course_info: dict) -> dict[int, str]:
@@ -327,9 +363,9 @@ def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id
             "language": language,
         }
 
-        # 3. Fill body (existing approach — works great)
-        print(f"[FILL-TEMPLATE] Filling body chunk ({len(groups['body'])} paragraphs)...", flush=True)
-        merged_map: dict[int, str] = _fill_body_chunk(groups["body"], course_info)
+        # 3. Fill body — chunked in parallel for large templates
+        print(f"[FILL-TEMPLATE] Filling body ({len(groups['body'])} paragraphs)...", flush=True)
+        merged_map: dict[int, str] = _fill_body_parallel(groups["body"], course_info)
         print(f"[FILL-TEMPLATE] Body filled: {len(merged_map)} replacements", flush=True)
 
         # 4. Fill tables in parallel

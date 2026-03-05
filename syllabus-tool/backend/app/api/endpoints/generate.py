@@ -164,30 +164,53 @@ async def fill_template(request: FillTemplateRequest, db: Session = Depends(get_
             )
 
         # 4. Build LLM prompt
-        system_prompt = """You are filling in a university syllabus template. You will be given:
-1. The full template text with placeholders in [brackets]
-2. A list of detected placeholders
-3. Course information
+        system_prompt = """You are an expert curriculum designer filling in a university syllabus template.
+You will receive a template with [bracket] placeholders, the list of detected placeholders, and course information.
 
-Return ONLY a JSON object where keys are the exact placeholder strings (including brackets)
-and values are the replacement text. Be specific and detailed. For placeholders like
-[Course Description], generate substantive content appropriate for the course. For placeholders
-like [Instructor Name], use reasonable defaults like "TBD" unless info is provided.
+Your job is to GENERATE a complete, high-quality syllabus by producing rich content for every placeholder.
+Return ONLY a JSON object where keys are the exact placeholder strings (including brackets) and values are the generated content.
 
-Example: {"[Course Title]": "Introduction to Data Science", "[Instructor Name]": "TBD"}"""
+CONTENT GENERATION RULES — match the depth to the placeholder type:
 
-        user_prompt = f"""Template text:
+1. **Short fields** (e.g. [Course Title], [Instructor Name], [Semester], [Course Code], [Office Hours], [Email]):
+   - Use the provided course info when available, otherwise use "TBD".
+
+2. **Course Description** (e.g. [Course Description], [Description]):
+   - Write 3-5 detailed sentences describing the course scope, approach, and what students will gain.
+   - Tailor to the course title, target audience, and duration.
+
+3. **Learning Outcomes / Objectives** (e.g. [Learning Outcomes], [Course Objectives], [Student Learning Outcomes]):
+   - Generate 5-7 specific, measurable outcomes using Bloom's Taxonomy action verbs (analyze, design, evaluate, etc.).
+   - Format as a numbered or bulleted list (use newlines: "1. Analyze...\\n2. Design...\\n3. Evaluate...").
+
+4. **Schedule / Weekly Topics** (e.g. [Weekly Schedule], [Course Schedule], [Schedule]):
+   - Generate a COMPLETE week-by-week schedule matching the specified duration.
+   - Each week: topic + reading/assignment. Progress logically from foundational to advanced.
+   - Format as a structured list: "Week 1: Introduction to... — Read Ch. 1\\nWeek 2: Fundamentals of... — Problem Set 1\\n..."
+
+5. **Policies** (e.g. [Attendance Policy], [Academic Integrity], [Late Work Policy], [Grading Policy]):
+   - Write detailed, realistic university-level policy paragraphs (3-5 sentences each).
+   - For grading: include a breakdown (e.g. "Assignments: 30%, Midterm: 25%, Final: 30%, Participation: 15%").
+
+6. **Materials / Textbooks** (e.g. [Required Materials], [Textbooks]):
+   - Recommend 1-3 real, relevant textbooks or resources with author and edition where appropriate.
+
+7. **Any other placeholder**: Generate appropriate, substantive content based on the section context in the template.
+
+IMPORTANT: Every value you produce must be READY TO USE in a final syllabus — no meta-commentary, no "insert here" notes, no leftover brackets."""
+
+        user_prompt = f"""TEMPLATE TEXT:
 {parsed_text[:20000]}
 
-Detected placeholders:
+DETECTED PLACEHOLDERS:
 {json.dumps(placeholders)}
 
-Course information:
-- Title: {request.course_title}
+COURSE INFORMATION:
+- Course Title: {request.course_title}
 - Target Audience: {request.target_audience}
 - Duration: {request.duration}
 
-Return ONLY a JSON object mapping each placeholder to its replacement value."""
+Generate comprehensive syllabus content for each placeholder. Return ONLY a JSON object mapping each placeholder to its generated content."""
 
         # 5. Call LLM
         messages = [

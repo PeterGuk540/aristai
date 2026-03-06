@@ -8,6 +8,7 @@ from app.schemas.generator import (
     GenerateRequest, FillTemplateRequest, FillTemplateResponse,
     FillTemplateJobResponse, FillTemplateStatusResponse,
     FillTemplateSection, FillTemplateResult,
+    RegenerateSectionRequest, RegenerateSectionResponse,
 )
 from app.services.template_filler import (
     extract_numbered_paragraphs, build_llm_template_text,
@@ -218,9 +219,8 @@ _POLICY_KEYWORDS = [
 
 
 def _is_heading(paragraph: dict) -> bool:
-    """Check if a paragraph is a heading (style starts with 'Heading')."""
-    style = paragraph.get("style", "") or ""
-    return style.lower().startswith("heading")
+    """Check if a paragraph is a heading (type == 'heading')."""
+    return paragraph.get("type", "") == "heading"
 
 
 def _split_policy_paragraphs(body_paragraphs: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -521,3 +521,93 @@ async def fill_template_status(job_id: str):
         result=job.get("result"),
         error=job.get("error"),
     )
+
+
+@router.post("/fill-template/regenerate-section", response_model=RegenerateSectionResponse)
+async def regenerate_section(request: RegenerateSectionRequest, db: Session = Depends(get_db)):
+    """Regenerate a single section of a filled template."""
+    file_record = db.query(UploadedFile).filter(UploadedFile.id == request.reference_file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=404, detail="Reference file not found")
+
+    try:
+        storage = StorageService()
+        content = storage.get_file(file_record.object_name)
+        if not content:
+            raise HTTPException(status_code=404, detail="File content not found in storage")
+
+        # Re-extract paragraphs to get the originals for this section
+        numbered_paragraphs = extract_numbered_paragraphs(content)
+        index_set = set(request.paragraph_indices)
+        section_paragraphs = [p for p in numbered_paragraphs if p["index"] in index_set]
+
+        if not section_paragraphs:
+            raise HTTPException(status_code=400, detail="No matching paragraphs found for the given indices")
+
+        course_info = {
+            "course_title": request.course_title,
+            "target_audience": request.target_audience,
+            "duration": request.duration,
+            "language": request.language,
+        }
+
+        # Determine if this is a table section or body section
+        is_table = request.section_id.startswith("table_")
+
+        if is_table:
+            # Rebuild the table group structure for table regeneration
+            groups = group_paragraphs_by_section(numbered_paragraphs)
+            table_index_str = request.section_id.replace("table_", "")
+            table_group = None
+            for tg in groups["tables"]:
+                if str(tg["table_index"]) == table_index_str:
+                    table_group = tg
+                    break
+            if not table_group:
+                raise HTTPException(status_code=400, detail="Table section not found in document")
+            result_map = _fill_table_chunk(table_group, course_info)
+        else:
+            # Body section — use _fill_body_chunk with optional instruction
+            if request.instruction:
+                # Include the user instruction in the prompt
+                template_text = build_llm_template_text(section_paragraphs)
+                user_prompt = f"""TEMPLATE PARAGRAPHS:
+{template_text}
+
+COURSE INFORMATION:
+- Course Title: {course_info['course_title']}
+- Target Audience: {course_info['target_audience']}
+- Duration: {course_info['duration']}
+
+ADDITIONAL INSTRUCTION: {request.instruction}
+
+Generate a complete syllabus by rewriting each paragraph. Output every paragraph with its [P#] number."""
+                messages = [
+                    SystemMessage(content=_body_system_prompt(course_info.get("language", "en"))),
+                    HumanMessage(content=user_prompt),
+                ]
+                response = invoke_llm(messages, max_tokens=8192)
+                result_map = parse_llm_response(response.content, max(p["index"] for p in section_paragraphs) + 1)
+            else:
+                result_map = _fill_body_chunk(section_paragraphs, course_info)
+
+        # Build filled text from result
+        lines = []
+        for p in section_paragraphs:
+            idx = p["index"]
+            lines.append(result_map.get(idx, p["text"]))
+
+        paragraph_map = {str(k): v for k, v in result_map.items() if k in index_set}
+
+        print(f"[FILL-TEMPLATE] Section '{request.section_id}' regenerated: {len(result_map)} replacements", flush=True)
+
+        return RegenerateSectionResponse(
+            filled_text="\n".join(lines),
+            paragraph_map=paragraph_map,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[FILL-TEMPLATE] Regenerate section ERROR: {e}", flush=True)
+        raise HTTPException(status_code=500, detail=str(e))

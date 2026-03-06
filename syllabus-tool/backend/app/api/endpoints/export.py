@@ -147,7 +147,14 @@ async def export_docx(data: SyllabusData):
         if data.policies.learning_resources:
             doc.add_heading('Learning Resources', level=2)
             doc.add_paragraph(data.policies.learning_resources)
-        
+
+        # Custom Sections
+        if data.custom_sections:
+            doc.add_heading('Additional Sections', level=1)
+            for section_name, section_content in data.custom_sections.items():
+                doc.add_heading(section_name, level=2)
+                doc.add_paragraph(str(section_content))
+
         # Save to buffer
         buffer = BytesIO()
         doc.save(buffer)
@@ -316,6 +323,14 @@ async def export_pdf(data: SyllabusData):
             story.append(Paragraph(data.policies.learning_resources, styles['Normal']))
             story.append(Spacer(1, 6))
 
+        # Custom Sections
+        if data.custom_sections:
+            story.append(Paragraph('Additional Sections', styles['Heading1']))
+            for section_name, section_content in data.custom_sections.items():
+                story.append(Paragraph(section_name, styles['Heading2']))
+                story.append(Paragraph(str(section_content), styles['Normal']))
+                story.append(Spacer(1, 6))
+
         doc.build(story)
         buffer.seek(0)
         
@@ -444,7 +459,16 @@ async def export_md(data: SyllabusData):
             md_lines.append("### Learning Resources")
             md_lines.append(data.policies.learning_resources)
             md_lines.append("")
-        
+
+        # Custom Sections
+        if data.custom_sections:
+            md_lines.append("## Additional Sections")
+            md_lines.append("")
+            for section_name, section_content in data.custom_sections.items():
+                md_lines.append(f"### {section_name}")
+                md_lines.append(str(section_content))
+                md_lines.append("")
+
         content = "\n".join(md_lines)
         buffer = BytesIO(content.encode('utf-8'))
         

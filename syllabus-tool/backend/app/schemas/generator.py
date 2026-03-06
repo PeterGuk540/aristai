@@ -52,3 +52,19 @@ class FillTemplateResponse(BaseModel):
 class FilledTemplateExportRequest(BaseModel):
     file_id: int
     paragraph_map: dict[str, str]          # edited paragraph map from frontend
+
+
+class RegenerateSectionRequest(BaseModel):
+    reference_file_id: int
+    section_id: str                        # "body", "table_0", etc.
+    paragraph_indices: list[int]           # paragraph indices belonging to this section
+    course_title: str
+    target_audience: str = ""
+    duration: str = ""
+    language: str = "en"
+    instruction: str = ""                  # optional user instruction, e.g. "Make more detailed"
+
+
+class RegenerateSectionResponse(BaseModel):
+    filled_text: str                       # regenerated text for the section
+    paragraph_map: dict[str, str]          # index->text map for this section only

@@ -59,6 +59,14 @@ function isTokenExpired(idToken: string): boolean {
   return Date.now() > payload.exp * 1000;
 }
 
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000; // 5 minutes
+
+function isTokenNearExpiry(idToken: string): boolean {
+  const payload = parseJwt(idToken);
+  if (!payload?.exp) return true;
+  return Date.now() > (payload.exp * 1000) - TOKEN_REFRESH_MARGIN_MS;
+}
+
 // --- Error parser ---
 
 export function parseCognitoError(error: unknown): string {
@@ -261,6 +269,68 @@ function getOAuthIdToken(marker: string): string | null {
   return idToken;
 }
 
+// --- OAuth token refresh ---
+
+/** Refresh OAuth tokens using the stored refresh_token. Returns new id_token or null. */
+async function refreshOAuthToken(marker: string): Promise<string | null> {
+  const username = localStorage.getItem(marker);
+  if (!username) return null;
+
+  const lastAuth = localStorage.getItem(`${STORAGE_PREFIX}.LastAuthUser`);
+  if (lastAuth !== username) return null;
+
+  const userPrefix = `${STORAGE_PREFIX}.${username}`;
+  const refreshToken = localStorage.getItem(`${userPrefix}.refreshToken`);
+  if (!refreshToken) return null;
+
+  try {
+    const tokenUrl = `https://${COGNITO_CONFIG.DOMAIN}/oauth2/token`;
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: COGNITO_CONFIG.CLIENT_ID,
+      refresh_token: refreshToken,
+    });
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+
+    if (!response.ok) return null;
+
+    const tokens = await response.json();
+    // Store refreshed tokens (refresh_token is NOT returned on refresh grants)
+    localStorage.setItem(`${userPrefix}.idToken`, tokens.id_token);
+    localStorage.setItem(`${userPrefix}.accessToken`, tokens.access_token);
+    if (tokens.expires_in) {
+      localStorage.setItem(`${userPrefix}.tokenExpiry`, (Date.now() + tokens.expires_in * 1000).toString());
+    }
+    return tokens.id_token;
+  } catch {
+    return null;
+  }
+}
+
+/** Get a valid OAuth id_token, refreshing if near expiry. */
+async function getValidOAuthIdToken(marker: string): Promise<string | null> {
+  const username = localStorage.getItem(marker);
+  if (!username) return null;
+
+  const lastAuth = localStorage.getItem(`${STORAGE_PREFIX}.LastAuthUser`);
+  if (lastAuth !== username) return null;
+
+  const userPrefix = `${STORAGE_PREFIX}.${username}`;
+  const idToken = localStorage.getItem(`${userPrefix}.idToken`);
+  if (!idToken) return null;
+
+  // Token is still fresh — return it
+  if (!isTokenNearExpiry(idToken)) return idToken;
+
+  // Token is expired or near-expiry — try to refresh
+  return refreshOAuthToken(marker);
+}
+
 // --- Unified auth API ---
 
 /** Check all auth providers (Google → Microsoft → Cognito SDK). Returns user if any session is valid. */
@@ -273,7 +343,7 @@ export async function checkAnyAuth(): Promise<AuthUser | null> {
   const msUser = getOAuthUser(MS_AUTH_MARKER);
   if (msUser) return msUser;
 
-  // 3. Cognito SDK (email/password)
+  // 3. Cognito SDK (email/password) — getSession() auto-refreshes
   const session = await getCognitoSession();
   if (session) {
     const idToken = session.getIdToken().decodePayload();
@@ -287,14 +357,19 @@ export async function checkAnyAuth(): Promise<AuthUser | null> {
   return null;
 }
 
-/** Get JWT id_token from any active session (same priority: Google → Microsoft → Cognito SDK). */
+/** Get JWT id_token from any active session, auto-refreshing if near expiry.
+ *  Cognito SDK sessions are refreshed by getSession() internally.
+ *  OAuth sessions (Google/Microsoft) are refreshed via the Cognito token endpoint. */
 export async function getAuthIdToken(): Promise<string | null> {
-  const googleToken = getOAuthIdToken(GOOGLE_AUTH_MARKER);
+  // 1. Google OAuth — with auto-refresh
+  const googleToken = await getValidOAuthIdToken(GOOGLE_AUTH_MARKER);
   if (googleToken) return googleToken;
 
-  const msToken = getOAuthIdToken(MS_AUTH_MARKER);
+  // 2. Microsoft OAuth — with auto-refresh
+  const msToken = await getValidOAuthIdToken(MS_AUTH_MARKER);
   if (msToken) return msToken;
 
+  // 3. Cognito SDK — getSession() auto-refreshes via refresh token
   const session = await getCognitoSession();
   if (session) return session.getIdToken().getJwtToken();
 

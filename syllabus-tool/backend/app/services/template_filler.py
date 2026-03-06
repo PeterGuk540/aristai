@@ -131,9 +131,10 @@ def build_table_llm_prompt(table_group: dict, course_info: dict) -> str:
     for row_idx in sorted(row_map.keys()):
         row_paras = sorted(row_map[row_idx], key=lambda p: p["col_index"])
         row_label = "header" if row_idx == 0 else str(row_idx)
+        cells = []
         for p in row_paras:
-            col_name = headers[p["col_index"]] if p["col_index"] < len(headers) else f"Col {p['col_index']}"
-            lines.append(f"[P{p['index']}] {p['text']}    (Row {row_label}, Col: {col_name})")
+            cells.append(f"[P{p['index']}] {p['text']}")
+        lines.append(f"Row {row_label}: {' | '.join(cells)}")
 
     return "\n".join(lines)
 
@@ -164,6 +165,9 @@ def parse_llm_response(response: str, total: int) -> dict[int, str]:
     for match in pattern.finditer(response):
         idx = int(match.group(1))
         text = match.group(2).strip().rstrip('|').strip()
+        # Strip LLM-echoed metadata annotations from build_llm_template_text
+        text = re.sub(r'^\(heading\)\s*', '', text)
+        text = re.sub(r'^\(table\)\s*', '', text)
         if idx < total:
             result[idx] = text
     return result

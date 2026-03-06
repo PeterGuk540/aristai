@@ -525,6 +525,15 @@ def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id
                         print(f"[FILL-TEMPLATE] Table {tg['table_index']} ERROR: {e}", flush=True)
                         # Continue — partial fill is better than total failure
 
+        # 6b. Post-process: remove any remaining template instruction markers [[[[[...]]]]]
+        for p in numbered_paragraphs:
+            idx = p["index"]
+            original = p["text"]
+            if "[[[[[" in original:
+                current = merged_map.get(idx, original)
+                if "[[[[[" in current:
+                    merged_map[idx] = ""
+
         print(f"[FILL-TEMPLATE] Total replacements: {len(merged_map)}", flush=True)
 
         # 7. Build sections for frontend

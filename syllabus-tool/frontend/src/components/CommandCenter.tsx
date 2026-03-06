@@ -5,29 +5,53 @@ interface FileInfo {
     filename: string;
 }
 
+interface SyllabusInfo {
+    id: number;
+    title: string;
+    content: any;
+}
+
 interface CommandCenterProps {
-    onGenerate: (data: { title: string; audience: string; duration: string; referenceFileId?: number; language: string }) => void;
+    onGenerate: (data: { title: string; audience: string; duration: string; referenceFileId?: number; language: string; syllabusContent?: any }) => void;
     isGenerating: boolean;
     children?: React.ReactNode;
     files?: FileInfo[];
+    syllabi?: SyllabusInfo[];
 }
 
-export function CommandCenter({ onGenerate, isGenerating, children, files = [] }: CommandCenterProps) {
+export function CommandCenter({ onGenerate, isGenerating, children, files = [], syllabi = [] }: CommandCenterProps) {
   const [title, setTitle] = useState('');
   const [audience, setAudience] = useState('');
   const [duration, setDuration] = useState('16 weeks');
   const [selectedFileId, setSelectedFileId] = useState<string>('');
+  const [selectedSyllabusId, setSelectedSyllabusId] = useState<string>('');
   const [language, setLanguage] = useState('en');
+
+  const handleSyllabusChange = (syllabusId: string) => {
+    setSelectedSyllabusId(syllabusId);
+    if (syllabusId) {
+      const syllabus = syllabi.find(s => String(s.id) === syllabusId);
+      if (syllabus?.content) {
+        const ci = syllabus.content.course_info;
+        if (ci?.title && !title) setTitle(ci.title);
+        if (ci?.description && !audience) setAudience(ci.description);
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (title && audience && duration) {
+        const selectedSyllabus = selectedSyllabusId
+          ? syllabi.find(s => String(s.id) === selectedSyllabusId)
+          : undefined;
         onGenerate({
             title,
             audience,
             duration,
             referenceFileId: selectedFileId ? parseInt(selectedFileId) : undefined,
             language,
+            syllabusContent: selectedSyllabus?.content,
         });
     }
   };
@@ -76,6 +100,25 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [] }
                        ))}
                    </select>
                    <p className="text-[10px] text-gray-400 mt-1">The AI will use this file to better understand your course content.</p>
+                </div>
+            )}
+
+            {syllabi && syllabi.length > 0 && (
+                <div>
+                   <label className="block text-xs font-semibold text-gray-700 mb-1 uppercase tracking-wide">
+                        Use Saved Syllabus (Optional)
+                   </label>
+                   <select
+                        value={selectedSyllabusId}
+                        onChange={(e) => handleSyllabusChange(e.target.value)}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-black outline-none transition-all bg-white"
+                   >
+                       <option value="">Generate from scratch...</option>
+                       {syllabi.map(s => (
+                           <option key={s.id} value={s.id}>{s.title}</option>
+                       ))}
+                   </select>
+                   <p className="text-[10px] text-gray-400 mt-1">The AI will fill the template using content from this syllabus.</p>
                 </div>
             )}
 

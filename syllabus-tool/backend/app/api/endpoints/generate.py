@@ -166,6 +166,64 @@ async def generate_draft(request: GenerateRequest, db: Session = Depends(get_db)
 # Fill-template: chunked body + parallel table processing
 # ---------------------------------------------------------------------------
 
+def _format_syllabus_context(syllabus_content: dict) -> str:
+    """Serialize saved syllabus content into a human-readable text block for LLM prompts."""
+    lines = ["EXISTING SYLLABUS CONTENT (use as primary source):"]
+
+    ci = syllabus_content.get("course_info", {})
+    if ci:
+        title = ci.get("title", "")
+        code = ci.get("code", "")
+        lines.append(f"Course: {title}" + (f" ({code})" if code else ""))
+        if ci.get("instructor"):
+            lines.append(f"Instructor: {ci['instructor']}")
+        if ci.get("description"):
+            lines.append(f"Description: {ci['description']}")
+        if ci.get("semester"):
+            lines.append(f"Semester: {ci['semester']}")
+        if ci.get("format"):
+            lines.append(f"Format: {ci['format']}")
+        if ci.get("materials"):
+            lines.append(f"Materials: {ci['materials']}")
+
+    goals = syllabus_content.get("learning_goals", [])
+    if goals:
+        lines.append("\nLearning Goals:")
+        for g in goals:
+            text = g.get("text", "") if isinstance(g, dict) else str(g)
+            gid = g.get("id", "") if isinstance(g, dict) else ""
+            lines.append(f"  {gid}. {text}" if gid else f"  - {text}")
+
+    schedule = syllabus_content.get("schedule", [])
+    if schedule:
+        lines.append("\nSchedule:")
+        for s in schedule:
+            if isinstance(s, dict):
+                week = s.get("week", "")
+                topic = s.get("topic", "")
+                assignment = s.get("assignment", "")
+                line = f"  Week {week}: {topic}"
+                if assignment:
+                    line += f" — {assignment}"
+                lines.append(line)
+
+    policies = syllabus_content.get("policies", {})
+    if policies:
+        lines.append("\nPolicies:")
+        for key, val in policies.items():
+            if val:
+                label = key.replace("_", " ").title()
+                lines.append(f"  {label}: {val}")
+
+    custom = syllabus_content.get("custom_sections", {})
+    if custom:
+        lines.append("\nAdditional Sections:")
+        for name, content in custom.items():
+            lines.append(f"  {name}: {content}")
+
+    return "\n".join(lines)
+
+
 _BODY_SYSTEM_PROMPT_BASE = """You are an expert curriculum designer. You will receive a university syllabus TEMPLATE
 with numbered paragraphs. Your task is to generate a COMPLETE, READY-TO-USE syllabus
 for the given course by rewriting every paragraph.
@@ -180,7 +238,10 @@ RULES:
 5. REQUIRED UNIVERSITY POLICY STATEMENTS: Keep verbatim — do not modify.
 6. EMPTY paragraphs: Output as empty: [P5]
 7. The final document must read as a polished, natural-language syllabus with NO
-   leftover brackets, instructions, or placeholder tokens."""
+   leftover brackets, instructions, or placeholder tokens.
+8. When EXISTING SYLLABUS CONTENT is provided, use it as the PRIMARY source for all content.
+   Preserve the original learning goals, schedule topics, policies, and descriptions.
+   Adapt formatting to match the template structure but keep the substance from the existing syllabus."""
 
 def _body_system_prompt(lang: str = "en") -> str:
     return _BODY_SYSTEM_PROMPT_BASE + _language_directive(lang)
@@ -259,15 +320,21 @@ def _fill_body_chunk(body_paragraphs: list[dict], course_info: dict) -> dict[int
 
     template_text = build_llm_template_text(body_paragraphs)
 
+    syllabus_block = ""
+    instruction = "Generate a complete syllabus by rewriting each paragraph."
+    if course_info.get("syllabus_content"):
+        syllabus_block = "\n\n" + _format_syllabus_context(course_info["syllabus_content"])
+        instruction = "Use the EXISTING SYLLABUS CONTENT as the primary source for rewriting each paragraph. Adapt the content to fit the template structure."
+
     user_prompt = f"""TEMPLATE PARAGRAPHS:
 {template_text}
 
 COURSE INFORMATION:
 - Course Title: {course_info['course_title']}
 - Target Audience: {course_info['target_audience']}
-- Duration: {course_info['duration']}
+- Duration: {course_info['duration']}{syllabus_block}
 
-Generate a complete syllabus by rewriting each paragraph. Output every paragraph with its [P#] number."""
+{instruction} Output every paragraph with its [P#] number."""
 
     messages = [
         SystemMessage(content=_body_system_prompt(course_info.get("language", "en"))),
@@ -333,14 +400,20 @@ RULES:
 5. Format: [P111] value
    One cell per line. Every [P#] from the input must appear in your output.""" + _language_directive(lang)
 
+    syllabus_block = ""
+    table_instruction = "Fill every cell in this table."
+    if course_info.get("syllabus_content"):
+        syllabus_block = "\n\n" + _format_syllabus_context(course_info["syllabus_content"])
+        table_instruction = "Fill every cell in this table using values from the EXISTING SYLLABUS CONTENT (schedule entries, grading weights, etc.)."
+
     user_prompt = f"""{grid_prompt}
 
 COURSE INFORMATION:
 - Course Title: {course_info['course_title']}
 - Target Audience: {course_info['target_audience']}
-- Duration: {course_info['duration']}
+- Duration: {course_info['duration']}{syllabus_block}
 
-Fill every cell in this table. Output each cell as [P#] followed by its value, one per line."""
+{table_instruction} Output each cell as [P#] followed by its value, one per line."""
 
     messages = [
         SystemMessage(content=system_prompt),
@@ -388,9 +461,9 @@ def _infer_table_label(table_group: dict) -> str:
 
 def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id: int,
                             course_title: str, target_audience: str, duration: str,
-                            language: str = "en"):
+                            language: str = "en", syllabus_content: dict | None = None):
     """Background worker for fill-template LLM call — chunked body + parallel tables."""
-    print(f"[FILL-TEMPLATE] Job {job_id} started, language={language}", flush=True)
+    print(f"[FILL-TEMPLATE] Job {job_id} started, language={language}, has_syllabus={syllabus_content is not None}", flush=True)
     try:
         _fill_jobs[job_id]["status"] = "running"
 
@@ -418,6 +491,7 @@ def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id
             "target_audience": target_audience,
             "duration": duration,
             "language": language,
+            "syllabus_content": syllabus_content,
         }
 
         # 3. Split body into content vs policy paragraphs
@@ -495,7 +569,7 @@ async def fill_template(request: FillTemplateRequest, db: Session = Depends(get_
             _run_fill_template_job(
                 job_id, file_record.object_name, request.reference_file_id,
                 request.course_title, request.target_audience, request.duration,
-                request.language,
+                request.language, request.syllabus_content,
             )
         except Exception as e:
             print(f"[FILL-TEMPLATE] THREAD CRASH: {e}", flush=True)

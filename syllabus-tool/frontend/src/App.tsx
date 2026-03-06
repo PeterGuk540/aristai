@@ -243,6 +243,7 @@ function App() {
     if (!user) return;
     fetchFiles()
     fetchAnalysisHistory()
+    fetchMySyllabi()
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch My Syllabi when entering library view
@@ -536,7 +537,7 @@ function App() {
     }
   }
 
-  const handleGenerateDraft = async (draftInfo: { title: string; audience: string; duration: string; referenceFileId?: number; language: string }) => {
+  const handleGenerateDraft = async (draftInfo: { title: string; audience: string; duration: string; referenceFileId?: number; language: string; syllabusContent?: any }) => {
     setIsAnalyzing(true);
     try {
         if (draftInfo.referenceFileId) {
@@ -550,6 +551,7 @@ function App() {
                     target_audience: draftInfo.audience,
                     duration: draftInfo.duration,
                     language: draftInfo.language,
+                    syllabus_content: draftInfo.syllabusContent,
                 }),
             });
             if (!startRes.ok) throw new Error('Failed to start template fill');
@@ -1206,10 +1208,11 @@ function App() {
                 {isAnalyzing ? (
                    <AnalysisProgress isAnalyzing={isAnalyzing} />
                 ) : (
-                   <CommandCenter 
-                        onGenerate={handleGenerateDraft} 
+                   <CommandCenter
+                        onGenerate={handleGenerateDraft}
                         isGenerating={isAnalyzing}
                         files={files}
+                        syllabi={mySyllabi.map(s => ({ id: s.id, title: s.title, content: s.content }))}
                    >
                     
                     {/* Drop Zones Grid */}

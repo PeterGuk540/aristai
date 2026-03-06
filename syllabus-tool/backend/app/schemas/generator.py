@@ -16,6 +16,7 @@ class FillTemplateRequest(BaseModel):
     target_audience: str = ""
     duration: str = ""
     language: str = "en"
+    syllabus_content: Optional[dict] = None  # saved syllabus content to guide the fill
 
 
 class FillTemplateJobResponse(BaseModel):

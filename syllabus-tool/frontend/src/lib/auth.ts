@@ -256,19 +256,6 @@ function getOAuthUser(marker: string): AuthUser | null {
   };
 }
 
-function getOAuthIdToken(marker: string): string | null {
-  const username = localStorage.getItem(marker);
-  if (!username) return null;
-
-  const lastAuth = localStorage.getItem(`${STORAGE_PREFIX}.LastAuthUser`);
-  if (lastAuth !== username) return null;
-
-  const userPrefix = `${STORAGE_PREFIX}.${username}`;
-  const idToken = localStorage.getItem(`${userPrefix}.idToken`);
-  if (!idToken || isTokenExpired(idToken)) return null;
-  return idToken;
-}
-
 // --- OAuth token refresh ---
 
 /** Refresh OAuth tokens using the stored refresh_token. Returns new id_token or null. */

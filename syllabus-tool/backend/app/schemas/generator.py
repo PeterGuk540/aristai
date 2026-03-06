@@ -27,6 +27,8 @@ class FillTemplateSection(BaseModel):
     label: str                     # "Course Content", "Points Breakdown", ...
     paragraph_indices: list[int]   # flat indices belonging to this section
     filled_text: str               # newline-joined text for this section only
+    original_text: str             # original template text for comparison
+    is_policy: bool = False        # true if this section was preserved verbatim
 
 
 class FillTemplateResult(BaseModel):

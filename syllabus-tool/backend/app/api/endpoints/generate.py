@@ -198,6 +198,59 @@ def _estimate_table_tokens(table_group: dict) -> int:
 
 _BODY_CHUNK_SIZE = 80  # paragraphs per LLM call
 
+# ---------------------------------------------------------------------------
+# Policy-section preservation — keywords that mark university-policy headings
+# ---------------------------------------------------------------------------
+_POLICY_KEYWORDS = [
+    "policy", "policies", "política", "políticas",
+    "academic integrity", "integridad académica",
+    "accessibility", "accesibilidad",
+    "disability", "discapacidad",
+    "accommodation", "acomodación",
+    "ada ", "title ix",
+    "ferpa", "hipaa",
+    "non-discrimination", "no discriminación",
+    "sexual harassment", "acoso sexual",
+    "mental health", "salud mental",
+    "emergency", "emergencia",
+    "compliance", "cumplimiento",
+]
+
+
+def _is_heading(paragraph: dict) -> bool:
+    """Check if a paragraph is a heading (style starts with 'Heading')."""
+    style = paragraph.get("style", "") or ""
+    return style.lower().startswith("heading")
+
+
+def _split_policy_paragraphs(body_paragraphs: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Split body paragraphs into content vs policy.
+
+    Walks paragraphs in order.  When a heading paragraph's text (lowercased)
+    contains any policy keyword, that heading and all following paragraphs are
+    marked as "policy" until the next heading is encountered.
+
+    Returns (content_paragraphs, policy_paragraphs).
+    """
+    content: list[dict] = []
+    policy: list[dict] = []
+    in_policy = False
+
+    for p in body_paragraphs:
+        if _is_heading(p):
+            text_lower = p["text"].lower()
+            if any(kw in text_lower for kw in _POLICY_KEYWORDS):
+                in_policy = True
+            else:
+                in_policy = False
+
+        if in_policy:
+            policy.append(p)
+        else:
+            content.append(p)
+
+    return content, policy
+
 
 def _fill_body_chunk(body_paragraphs: list[dict], course_info: dict) -> dict[int, str]:
     """Fill a single chunk of body paragraphs using the [P#] approach."""
@@ -298,9 +351,11 @@ Fill every cell in this table. Output each cell as [P#] followed by its value, o
     return parse_llm_response(response.content, max_idx)
 
 
-def _build_section(section_id: str, label: str, paragraphs: list[dict], paragraph_map: dict[int, str]) -> FillTemplateSection:
+def _build_section(section_id: str, label: str, paragraphs: list[dict],
+                   paragraph_map: dict[int, str], is_policy: bool = False) -> FillTemplateSection:
     """Build a FillTemplateSection from a group of paragraphs and the filled map."""
     indices = [p["index"] for p in paragraphs]
+    original_text = "\n".join(p["text"] for p in paragraphs)
     lines = []
     for p in paragraphs:
         idx = p["index"]
@@ -313,6 +368,8 @@ def _build_section(section_id: str, label: str, paragraphs: list[dict], paragrap
         label=label,
         paragraph_indices=indices,
         filled_text="\n".join(lines),
+        original_text=original_text,
+        is_policy=is_policy,
     )
 
 
@@ -363,12 +420,20 @@ def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id
             "language": language,
         }
 
-        # 3. Fill body — chunked in parallel for large templates
-        print(f"[FILL-TEMPLATE] Filling body ({len(groups['body'])} paragraphs)...", flush=True)
-        merged_map: dict[int, str] = _fill_body_parallel(groups["body"], course_info)
+        # 3. Split body into content vs policy paragraphs
+        content_paragraphs, policy_paragraphs = _split_policy_paragraphs(groups["body"])
+        print(f"[FILL-TEMPLATE] Policy: {len(policy_paragraphs)} paragraphs preserved verbatim", flush=True)
+
+        # 4. Fill content body — chunked in parallel for large templates
+        print(f"[FILL-TEMPLATE] Filling body ({len(content_paragraphs)} content paragraphs)...", flush=True)
+        merged_map: dict[int, str] = _fill_body_parallel(content_paragraphs, course_info)
         print(f"[FILL-TEMPLATE] Body filled: {len(merged_map)} replacements", flush=True)
 
-        # 4. Fill tables in parallel
+        # 5. Copy policy paragraphs verbatim into merged_map
+        for p in policy_paragraphs:
+            merged_map[p["index"]] = p["text"]
+
+        # 6. Fill tables in parallel
         if groups["tables"]:
             print(f"[FILL-TEMPLATE] Filling {len(groups['tables'])} table(s) in parallel...", flush=True)
             with ThreadPoolExecutor(max_workers=3) as executor:
@@ -388,15 +453,17 @@ def _run_fill_template_job(job_id: str, file_object_name: str, reference_file_id
 
         print(f"[FILL-TEMPLATE] Total replacements: {len(merged_map)}", flush=True)
 
-        # 5. Build sections for frontend
+        # 7. Build sections for frontend
         sections = []
-        if groups["body"]:
-            sections.append(_build_section("body", "Course Content", groups["body"], merged_map))
+        if content_paragraphs:
+            sections.append(_build_section("body", "Course Content", content_paragraphs, merged_map))
+        if policy_paragraphs:
+            sections.append(_build_section("policy", "Policies (preserved)", policy_paragraphs, merged_map, is_policy=True))
         for tg in groups["tables"]:
             label = _infer_table_label(tg)
             sections.append(_build_section(f"table_{tg['table_index']}", label, tg["paragraphs"], merged_map))
 
-        # 6. Build flat paragraph_map (string keys for JSON)
+        # 8. Build flat paragraph_map (string keys for JSON)
         paragraph_map = {str(k): v for k, v in merged_map.items()}
 
         _fill_jobs[job_id] = {

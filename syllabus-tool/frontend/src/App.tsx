@@ -199,6 +199,8 @@ function App() {
     label: string;
     paragraphIndices: number[];
     filledText: string;
+    originalText: string;
+    isPolicy: boolean;
   }
   const [templateFillMode, setTemplateFillMode] = useState(false)
   const [templateSections, setTemplateSections] = useState<TemplateSection[]>([])
@@ -566,6 +568,8 @@ function App() {
               label: s.label,
               paragraphIndices: s.paragraph_indices,
               filledText: s.filled_text,
+              originalText: s.original_text,
+              isPolicy: s.is_policy ?? false,
             })));
             setExpandedSections(new Set(result.sections.map((s: any) => s.id)));
             setTemplateFileId(result.original_file_id);
@@ -1327,22 +1331,64 @@ function App() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
                         <h3 className="text-sm font-semibold text-gray-700">{section.label}</h3>
+                        {section.isPolicy && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            Preserved from template
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs text-gray-400">{section.paragraphIndices.length} paragraphs</span>
                     </button>
                     {isExpanded && (
                       <div className="p-4">
-                        <textarea
-                          value={section.filledText}
-                          onChange={(e) => {
-                            const newText = e.target.value;
-                            setTemplateSections(prev =>
-                              prev.map(s => s.id === section.id ? { ...s, filledText: newText } : s)
-                            );
-                          }}
-                          rows={Math.min(Math.max(section.filledText.split('\n').length + 2, 6), 30)}
-                          className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical font-sans leading-relaxed"
-                        />
+                        {section.isPolicy ? (
+                          /* Policy section: single editable panel with preserved styling */
+                          <div>
+                            <textarea
+                              value={section.filledText}
+                              onChange={(e) => {
+                                const newText = e.target.value;
+                                setTemplateSections(prev =>
+                                  prev.map(s => s.id === section.id ? { ...s, filledText: newText } : s)
+                                );
+                              }}
+                              rows={Math.min(Math.max(section.filledText.split('\n').length + 2, 6), 30)}
+                              className="w-full border border-amber-300 rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-vertical font-sans leading-relaxed bg-amber-50"
+                            />
+                          </div>
+                        ) : (
+                          /* Content section: side-by-side comparison */
+                          <div className="flex gap-4">
+                            {/* Left panel: Original template (read-only) */}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Original Template</div>
+                              <div
+                                className="w-full border border-gray-200 rounded-md px-4 py-3 text-sm bg-gray-50 text-gray-600 overflow-y-auto resize-vertical font-sans leading-relaxed whitespace-pre-wrap"
+                                style={{ minHeight: '150px', maxHeight: '500px', height: `${Math.min(Math.max(section.originalText.split('\n').length + 2, 6), 30) * 1.5}em` }}
+                              >
+                                {section.originalText}
+                              </div>
+                            </div>
+                            {/* Right panel: Generated syllabus (editable) */}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Generated Syllabus</div>
+                              <textarea
+                                value={section.filledText}
+                                onChange={(e) => {
+                                  const newText = e.target.value;
+                                  setTemplateSections(prev =>
+                                    prev.map(s => s.id === section.id ? { ...s, filledText: newText } : s)
+                                  );
+                                }}
+                                rows={Math.min(Math.max(section.filledText.split('\n').length + 2, 6), 30)}
+                                className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical font-sans leading-relaxed"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

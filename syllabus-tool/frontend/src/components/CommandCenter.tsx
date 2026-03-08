@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface FileInfo {
     id: number;
@@ -26,6 +26,31 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [], 
   const [selectedFileId, setSelectedFileId] = useState<string>('');
   const [selectedSyllabusId, setSelectedSyllabusId] = useState<string>('');
   const [language, setLanguage] = useState('en');
+
+  // Voice control: listen for voice:fill and voice:select events
+  useEffect(() => {
+    const fillHandler = (e: Event) => {
+      const { voiceId, value } = (e as CustomEvent).detail || {};
+      switch (voiceId) {
+        case 'syllabus-draft-title': setTitle(value); break;
+        case 'syllabus-draft-audience': setAudience(value); break;
+      }
+    };
+    const selectHandler = (e: Event) => {
+      const { voiceId, value } = (e as CustomEvent).detail || {};
+      switch (voiceId) {
+        case 'syllabus-draft-duration': setDuration(value); break;
+        case 'syllabus-draft-reference': setSelectedFileId(value); break;
+        case 'syllabus-draft-syllabus': handleSyllabusChange(value); break;
+      }
+    };
+    window.addEventListener('voice:fill', fillHandler);
+    window.addEventListener('voice:select', selectHandler);
+    return () => {
+      window.removeEventListener('voice:fill', fillHandler);
+      window.removeEventListener('voice:select', selectHandler);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSyllabusChange = (syllabusId: string) => {
     setSelectedSyllabusId(syllabusId);
@@ -74,13 +99,14 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [], 
         <form onSubmit={handleSubmit} className="space-y-4 bg-gray-50 p-6 rounded-xl border border-gray-200">
             <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1 uppercase tracking-wide">Course Title</label>
-                <input 
-                    type="text" 
+                <input
+                    type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Python for Data Analysis" 
+                    placeholder="e.g. Python for Data Analysis"
                     className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-black outline-none transition-all"
                     required
+                    data-voice-id="syllabus-draft-title"
                 />
             </div>
             
@@ -93,6 +119,7 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [], 
                         value={selectedFileId}
                         onChange={(e) => setSelectedFileId(e.target.value)}
                         className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-black outline-none transition-all bg-white"
+                        data-voice-id="syllabus-draft-reference"
                    >
                        <option value="">Select a file to guide the draft...</option>
                        {files.map(f => (
@@ -112,6 +139,7 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [], 
                         value={selectedSyllabusId}
                         onChange={(e) => handleSyllabusChange(e.target.value)}
                         className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-black outline-none transition-all bg-white"
+                        data-voice-id="syllabus-draft-syllabus"
                    >
                        <option value="">Generate from scratch...</option>
                        {syllabi.map(s => (
@@ -125,13 +153,14 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [], 
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1 uppercase tracking-wide">Target Audience</label>
-                    <input 
-                        type="text" 
+                    <input
+                        type="text"
                         value={audience}
                         onChange={(e) => setAudience(e.target.value)}
-                        placeholder="e.g. Sophomore Business" 
+                        placeholder="e.g. Sophomore Business"
                         className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-black outline-none transition-all"
                         required
+                        data-voice-id="syllabus-draft-audience"
                     />
                 </div>
                 <div>
@@ -140,6 +169,7 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [], 
                         value={duration}
                         onChange={(e) => setDuration(e.target.value)}
                         className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-black focus:border-black outline-none transition-all bg-white"
+                        data-voice-id="syllabus-draft-duration"
                      >
                         <option value="16 weeks">16 Weeks (Semester)</option>
                         <option value="12 weeks">12 Weeks</option>
@@ -160,6 +190,7 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [], 
                                 ? 'bg-black text-white shadow-sm'
                                 : 'bg-white text-gray-600 border border-gray-300 hover:border-gray-400'
                         }`}
+                        data-voice-id="syllabus-draft-lang-en"
                     >
                         English
                     </button>
@@ -171,6 +202,7 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [], 
                                 ? 'bg-black text-white shadow-sm'
                                 : 'bg-white text-gray-600 border border-gray-300 hover:border-gray-400'
                         }`}
+                        data-voice-id="syllabus-draft-lang-es"
                     >
                         Español
                     </button>
@@ -181,6 +213,7 @@ export function CommandCenter({ onGenerate, isGenerating, children, files = [], 
                 type="submit"
                 disabled={isGenerating}
                 className="w-full py-3 px-4 bg-black hover:bg-gray-800 text-white font-medium rounded-lg shadow-sm hover:shadow-md transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                data-voice-id="syllabus-draft-generate"
             >
                 {isGenerating ? (
                      <>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 import logo from './assets/AristAI.jpg'
 import { SyllabusForm } from './components/SyllabusForm'
@@ -130,6 +130,98 @@ const HistoryItemCard = ({ item, expandedId, setExpandedId, onDelete, onLoad }: 
     </div>
 );
 
+/** Hook: listen for VOICE_COMMAND messages from the parent frame and execute actions. */
+function useVoiceCommandHandler(step: string) {
+  useEffect(() => {
+    // Notify parent that the iframe is ready
+    try {
+      window.parent.postMessage({ type: 'SYLLABUS_VOICE_READY' }, '*');
+    } catch (_) { /* not embedded */ }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'VOICE_COMMAND') return;
+      const { id, action, detail } = event.data.payload ?? {};
+      let ok = false;
+      let did = '';
+      let error: string | undefined;
+
+      try {
+        switch (action) {
+          case 'clickButton': {
+            const el = document.querySelector<HTMLElement>(`[data-voice-id="${detail?.voiceId}"]`);
+            if (el) { el.click(); ok = true; did = `Clicked ${detail?.voiceId}`; }
+            else { error = `Element not found: ${detail?.voiceId}`; }
+            break;
+          }
+          case 'fillInput': {
+            // Dispatch custom event — React components listen and call their own setState.
+            // This avoids the native setter + _valueTracker hack which breaks in React 19.
+            const el = document.querySelector(`[data-voice-id="${detail?.voiceId}"]`);
+            if (el) {
+              window.dispatchEvent(new CustomEvent('voice:fill', {
+                detail: { voiceId: detail?.voiceId, value: detail?.value ?? '' },
+              }));
+              ok = true; did = `Filled ${detail?.voiceId}`;
+            } else { error = `Element not found: ${detail?.voiceId}`; }
+            break;
+          }
+          case 'clearInput': {
+            const el = document.querySelector(`[data-voice-id="${detail?.voiceId}"]`);
+            if (el) {
+              window.dispatchEvent(new CustomEvent('voice:fill', {
+                detail: { voiceId: detail?.voiceId, value: '' },
+              }));
+              ok = true; did = `Cleared ${detail?.voiceId}`;
+            } else { error = `Element not found: ${detail?.voiceId}`; }
+            break;
+          }
+          case 'switchTab': {
+            const tabName = detail?.tabName || detail?.voiceId;
+            const el = document.querySelector<HTMLElement>(`[data-voice-id="syllabus-form-tab-${tabName}"]`)
+                    || document.querySelector<HTMLElement>(`[data-voice-id="syllabus-step-${tabName}"]`);
+            if (el) { el.click(); ok = true; did = `Switched to ${tabName}`; }
+            else { error = `Tab not found: ${tabName}`; }
+            break;
+          }
+          case 'selectDropdown': {
+            const el = document.querySelector(`[data-voice-id="${detail?.voiceId}"]`);
+            if (el) {
+              window.dispatchEvent(new CustomEvent('voice:select', {
+                detail: { voiceId: detail?.voiceId, value: detail?.value ?? '' },
+              }));
+              ok = true; did = `Selected ${detail?.value} on ${detail?.voiceId}`;
+            } else { error = `Element not found: ${detail?.voiceId}`; }
+            break;
+          }
+          case 'getUiState': {
+            const voiceEls = document.querySelectorAll('[data-voice-id]');
+            const visibleIds = Array.from(voiceEls)
+              .filter(el => (el as HTMLElement).offsetParent !== null)
+              .map(el => el.getAttribute('data-voice-id'));
+            const activeTab = document.querySelector('[data-voice-id^="syllabus-form-tab-"].border-b-2')
+              ?.getAttribute('data-voice-id')?.replace('syllabus-form-tab-', '') || null;
+            ok = true;
+            did = JSON.stringify({ step, activeTab, visibleIds });
+            break;
+          }
+          default:
+            error = `Unknown action: ${action}`;
+        }
+      } catch (e: any) {
+        error = e.message;
+      }
+
+      // Send result back to parent
+      try {
+        window.parent.postMessage({ type: 'VOICE_RESULT', payload: { id, ok, did, error } }, '*');
+      } catch (_) { /* not embedded */ }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [step]);
+}
+
 function App() {
   // --- Auth state ---
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -210,6 +302,36 @@ function App() {
   const [templateCourseInfo, setTemplateCourseInfo] = useState<{ title: string; audience: string; duration: string; language: string } | null>(null)
   
   const chatRef = useRef<ChatInterfaceRef>(null);
+
+  // Voice control: listen for postMessage commands from parent frame
+  useVoiceCommandHandler(step);
+
+  // Voice: handle voice:fill and voice:select events for App-owned state
+  useEffect(() => {
+    const fillHandler = (e: Event) => {
+      const { voiceId, value } = (e as CustomEvent).detail || {};
+      if (!voiceId) return;
+      // Template section textareas: syllabus-section-text-{id}
+      const match = voiceId.match(/^syllabus-section-text-(.+)$/);
+      if (match) {
+        setTemplateSections(prev =>
+          prev.map(s => s.id === match[1] ? { ...s, filledText: value } : s)
+        );
+      }
+    };
+    const selectHandler = (e: Event) => {
+      const { voiceId, value } = (e as CustomEvent).detail || {};
+      if (voiceId === 'syllabus-template-select') {
+        setTemplateId(value);
+      }
+    };
+    window.addEventListener('voice:fill', fillHandler);
+    window.addEventListener('voice:select', selectHandler);
+    return () => {
+      window.removeEventListener('voice:fill', fillHandler);
+      window.removeEventListener('voice:select', selectHandler);
+    };
+  }, []);
 
   const apiUrl = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -970,6 +1092,7 @@ function App() {
             <button
               onClick={() => setStep('library')}
               className={`px-1 sm:px-0 text-[9px] sm:text-sm font-medium hover:text-blue-800 transition-colors whitespace-nowrap ${step === 'library' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
+              data-voice-id="syllabus-step-library"
             >
               My Syllabi
             </button>
@@ -977,6 +1100,7 @@ function App() {
             <button
               onClick={() => setStep('upload')}
               className={`px-1 sm:px-0 text-[9px] sm:text-sm font-medium hover:text-blue-800 transition-colors whitespace-nowrap ${step === 'upload' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
+              data-voice-id="syllabus-step-upload"
             >
               1. Upload
             </button>
@@ -984,6 +1108,7 @@ function App() {
             <button
               onClick={() => setStep('edit')}
               className={`px-1 sm:px-0 text-[9px] sm:text-sm font-medium hover:text-blue-800 transition-colors whitespace-nowrap ${step === 'edit' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
+              data-voice-id="syllabus-step-edit"
             >
               2. Edit
             </button>
@@ -991,6 +1116,7 @@ function App() {
             <button
               onClick={() => setStep('export')}
               className={`px-1 sm:px-0 text-[9px] sm:text-sm font-medium hover:text-blue-800 transition-colors whitespace-nowrap ${step === 'export' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
+              data-voice-id="syllabus-step-export"
             >
               3. Export
             </button>
@@ -1001,6 +1127,7 @@ function App() {
                   onClick={handleSaveToMySyllabi}
                   disabled={savingToMySyllabi}
                   className="px-2 py-1 text-[9px] sm:text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
+                  data-voice-id="syllabus-save"
                 >
                   {savingToMySyllabi ? 'Saving...' : 'Save'}
                 </button>
@@ -1008,6 +1135,7 @@ function App() {
                   onClick={() => handlePushToForum()}
                   disabled={pushingToForum}
                   className="px-2 py-1 text-[9px] sm:text-sm font-medium bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors whitespace-nowrap disabled:opacity-50"
+                  data-voice-id="syllabus-push-to-forum"
                 >
                   {pushingToForum ? 'Creating...' : isEmbedMode ? 'Save & Import to Course' : 'Create Course in Forum'}
                 </button>
@@ -1038,6 +1166,7 @@ function App() {
               <button
                 onClick={() => setStep('upload')}
                 className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                data-voice-id="syllabus-create-new"
               >
                 + Create New Syllabus
               </button>
@@ -1096,6 +1225,7 @@ function App() {
                             setStep('edit')
                           }}
                           className="flex-1 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          data-voice-id={`syllabus-open-${record.id}`}
                         >
                           Open
                         </button>
@@ -1103,6 +1233,7 @@ function App() {
                           onClick={() => handlePushToForum(record.id)}
                           disabled={pushingToForum}
                           className="flex-1 px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
+                          data-voice-id={`syllabus-create-course-${record.id}`}
                         >
                           {pushingToForum ? '...' : 'Create Course'}
                         </button>
@@ -1110,6 +1241,7 @@ function App() {
                           onClick={() => handleDeleteMySyllabus(record.id)}
                           className="p-1.5 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
                           title="Delete"
+                          data-voice-id={`syllabus-delete-${record.id}`}
                         >
                           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -1273,10 +1405,11 @@ function App() {
                     {/* Template Selection */}
                     <div className="flex justify-center mb-6">
                         <label className="mr-3 text-sm font-medium text-gray-700 self-center">Analysis Template:</label>
-                        <select 
-                            value={templateId} 
+                        <select
+                            value={templateId}
                             onChange={(e) => setTemplateId(e.target.value)}
                             className="block w-64 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-black focus:border-black sm:text-sm rounded-md bg-white border"
+                            data-voice-id="syllabus-template-select"
                         >
                             <option value="BGSU_Standard">Bowling Green State</option>
                             <option value="Exponential">Exponential Methodology (LATAM)</option>
@@ -1289,9 +1422,10 @@ function App() {
                             onClick={handleAnalyzeSelected}
                             disabled={selectedFiles.length === 0 || isUploading}
                             className={`
-                                group relative w-full sm:w-auto px-10 py-3.5 rounded-lg shadow-sm border transform transition-all duration-200 
+                                group relative w-full sm:w-auto px-10 py-3.5 rounded-lg shadow-sm border transform transition-all duration-200
                                 ${selectedFiles.length > 0 ? 'bg-black text-white border-transparent hover:bg-gray-800 hover:shadow-md' : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'}
                             `}
+                            data-voice-id="syllabus-generate-draft"
                         >
                             <span className="flex flex-col items-center">
                                 <span className="text-sm font-semibold tracking-wide">Generate Syllabus Draft</span>
@@ -1331,6 +1465,7 @@ function App() {
                 <button
                   onClick={handleTemplateFillReset}
                   className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  data-voice-id="syllabus-start-over"
                 >
                   Start Over
                 </button>
@@ -1338,6 +1473,7 @@ function App() {
                   onClick={handleTemplateExport}
                   disabled={isExporting}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-75 flex items-center"
+                  data-voice-id="syllabus-export-docx"
                 >
                   {isExporting ? (
                     <>
@@ -1378,6 +1514,7 @@ function App() {
                         });
                       }}
                       className="w-full px-4 py-3 bg-gray-50 border-b flex items-center justify-between hover:bg-gray-100 transition-colors"
+                      data-voice-id={`syllabus-section-${section.id}`}
                     >
                       <div className="flex items-center gap-2">
                         <svg
@@ -1403,6 +1540,7 @@ function App() {
                             tabIndex={0}
                             onClick={(e) => { e.stopPropagation(); handleRegenerateSection(section.id); }}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); handleRegenerateSection(section.id); } }}
+                            data-voice-id={`syllabus-regenerate-${section.id}`}
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                               regeneratingSection === section.id
                                 ? 'bg-blue-100 text-blue-400 cursor-wait'
@@ -1440,6 +1578,7 @@ function App() {
                               }}
                               rows={Math.min(Math.max(section.filledText.split('\n').length + 2, 6), 30)}
                               className="w-full border border-amber-300 rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-vertical font-sans leading-relaxed bg-amber-50"
+                              data-voice-id={`syllabus-section-text-${section.id}`}
                             />
                           </div>
                         ) : (
@@ -1468,6 +1607,7 @@ function App() {
                                 }}
                                 rows={Math.min(Math.max(section.filledText.split('\n').length + 2, 6), 30)}
                                 className="w-full border border-gray-300 rounded-md px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical font-sans leading-relaxed"
+                                data-voice-id={`syllabus-section-text-${section.id}`}
                               />
                             </div>
                           </div>
@@ -1670,14 +1810,15 @@ function App() {
                     { id: 'json', label: 'JSON Data', ext: '.json', desc: 'Structured data format' },
                     { id: 'md', label: 'Markdown', ext: '.md', desc: 'Plain text with formatting' },
                   ].map((format) => (
-                    <div 
+                    <div
                       key={format.id}
                       onClick={() => setSelectedExportFormat(format.id)}
                       className={`relative rounded-lg border-2 p-6 cursor-pointer transition-all hover:shadow-md ${
-                        selectedExportFormat === format.id 
-                          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' 
+                        selectedExportFormat === format.id
+                          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
                           : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
                       }`}
+                      data-voice-id={`syllabus-format-${format.id}`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-lg font-medium text-gray-900">{format.label}</h3>
@@ -1705,6 +1846,7 @@ function App() {
                       setIsPreviewOpen(true);
                     }}
                     className="px-8 py-3 border border-blue-600 text-blue-600 font-medium rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors text-lg"
+                    data-voice-id="syllabus-preview"
                   >
                     Preview
                   </button>
@@ -1712,6 +1854,7 @@ function App() {
                     onClick={() => handleExport(selectedExportFormat)}
                     disabled={isExporting}
                     className={`px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shadow-lg transition-colors text-lg flex items-center ${isExporting ? 'opacity-75 cursor-not-allowed' : ''}`}
+                    data-voice-id="syllabus-download"
                   >
                     {isExporting ? (
                         <>

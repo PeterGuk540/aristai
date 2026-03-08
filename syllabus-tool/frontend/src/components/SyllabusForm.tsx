@@ -205,6 +205,48 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
     setIsDirty(true);
   };
 
+  // Voice control: listen for voice:fill events targeting form fields
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const parentOnUpdateRef = useRef(parentOnUpdate);
+  parentOnUpdateRef.current = parentOnUpdate;
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { voiceId, value } = (e as CustomEvent).detail || {};
+      if (!voiceId) return;
+      const d = dataRef.current;
+      const update = (newData: SyllabusData) => { parentOnUpdateRef.current(newData); setIsDirty(true); };
+
+      // Info fields: syllabus-field-{fieldName}
+      const fieldMatch = voiceId.match(/^syllabus-field-(.+)$/);
+      if (fieldMatch) {
+        update({ ...d, course_info: { ...d.course_info, [fieldMatch[1]]: value } });
+        return;
+      }
+      // Goals: syllabus-goal-{index}
+      const goalMatch = voiceId.match(/^syllabus-goal-(\d+)$/);
+      if (goalMatch) {
+        const idx = parseInt(goalMatch[1]);
+        const newGoals = [...d.learning_goals];
+        if (newGoals[idx]) { newGoals[idx] = { ...newGoals[idx], text: value }; }
+        update({ ...d, learning_goals: newGoals });
+        return;
+      }
+      // Policies: syllabus-policy-{name}
+      const policyMatch = voiceId.match(/^syllabus-policy-(.+)$/);
+      if (policyMatch) {
+        update({ ...d, policies: { ...d.policies, [policyMatch[1]]: value } });
+        return;
+      }
+      // Start date
+      if (voiceId === 'syllabus-start-date') {
+        update({ ...d, startDate: value });
+      }
+    };
+    window.addEventListener('voice:fill', handler);
+    return () => window.removeEventListener('voice:fill', handler);
+  }, []);
+
   const handleTabChange = async (tab: string) => {
     if (tab === activeTab) return;
 
@@ -636,6 +678,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
           {visibleTabs.map((tab) => (
             <button
               key={tab}
+              data-voice-id={`syllabus-form-tab-${tab}`}
               onClick={() => handleTabChange(tab)}
               className={`pb-1 sm:pb-2 px-1 sm:px-4 capitalize whitespace-nowrap text-[10px] sm:text-base ${
                 activeTab === tab
@@ -694,6 +737,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
                     <input
                       type="text"
                       name={field}
+                      data-voice-id={`syllabus-field-${field}`}
                       // @ts-ignore
                       value={data.course_info[field] || ''}
                       // @ts-ignore
@@ -722,6 +766,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
                   <div className="flex gap-1 sm:gap-2 items-start">
                     <AutoResizeTextarea
                       name={field}
+                      data-voice-id={`syllabus-field-${field}`}
                       // @ts-ignore
                       value={data.course_info[field] || ''}
                       onChange={handleInfoChange}
@@ -744,7 +789,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
           <div className="space-y-2 sm:space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-xs sm:text-lg font-medium hidden sm:block">Learning Goals</h3>
-              <button onClick={addGoal} className="text-[10px] sm:text-sm text-blue-600 hover:text-blue-800">+ Add Goal</button>
+              <button onClick={addGoal} data-voice-id="syllabus-add-goal" className="text-[10px] sm:text-sm text-blue-600 hover:text-blue-800">+ Add Goal</button>
             </div>
             {data.learning_goals.map((goal, index) => {
               const isRegenerating = regeneratingFields.has(`learning_goals.${index}`);
@@ -755,6 +800,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
                   value={goal.text}
                   onChange={(e) => updateGoal(index, e.target.value)}
                   disabled={isRegenerating}
+                  data-voice-id={`syllabus-goal-${index}`}
                   className={`flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-[10px] sm:text-sm border p-1 sm:p-2 min-h-[30px] ${isRegenerating ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
                   rows={2}
                 />
@@ -784,6 +830,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
                   <input
                     type={dateInputType}
                     placeholder="mm/dd/yyyy"
+                    data-voice-id="syllabus-start-date"
                     onFocus={() => setDateInputType('date')}
                     onBlur={(e) => {
                       if (!e.target.value) setDateInputType('text');
@@ -795,8 +842,9 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
                   />
                 </div>
                 <div className="h-3 sm:h-4 w-px bg-gray-300 mx-1"></div>
-                <button 
-                  onClick={addScheduleItem} 
+                <button
+                  onClick={addScheduleItem}
+                  data-voice-id="syllabus-add-week"
                   className="inline-flex items-center px-2 sm:px-3 py-0.5 sm:py-1 border border-transparent text-[10px] sm:text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 whitespace-nowrap"
                 >
                   + Week
@@ -905,6 +953,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
               </div>
               <textarea
                 name="academic_integrity"
+                data-voice-id="syllabus-policy-academic_integrity"
                 value={data.policies.academic_integrity}
                 onChange={handlePolicyChange}
                 disabled={regeneratingFields.has('policies.academic_integrity')}
@@ -945,6 +994,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
               </div>
               <textarea
                 name="accessibility"
+                data-voice-id="syllabus-policy-accessibility"
                 value={data.policies.accessibility}
                 onChange={handlePolicyChange}
                 disabled={regeneratingFields.has('policies.accessibility')}
@@ -966,6 +1016,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
               </div>
               <textarea
                 name="attendance"
+                data-voice-id="syllabus-policy-attendance"
                 value={data.policies.attendance}
                 onChange={handlePolicyChange}
                 disabled={regeneratingFields.has('policies.attendance')}
@@ -986,6 +1037,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
               </div>
               <textarea
                 name="grading"
+                data-voice-id="syllabus-policy-grading"
                 value={data.policies.grading || ''}
                 onChange={handlePolicyChange}
                 disabled={regeneratingFields.has('policies.grading')}
@@ -1008,6 +1060,7 @@ export const SyllabusForm: React.FC<SyllabusFormProps> = ({ data, onUpdate: pare
                   </div>
                   <textarea
                     name={field}
+                    data-voice-id={`syllabus-policy-${field}`}
                     // @ts-ignore
                     value={data.policies[field] || ''}
                     onChange={handlePolicyChange}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, forwardRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2, Sparkles, ExternalLink, Library } from 'lucide-react';
 import { api, getAuthHeaders } from '@/lib/api';
@@ -33,30 +33,106 @@ import { ParticipationInsightsComponent } from '@/components/enhanced/Participat
 import { ObjectiveCoverageComponent } from '@/components/enhanced/ObjectiveCoverage';
 
 /** Iframe wrapper that passes the forum's auth token to the syllabus tool via hash fragment. */
-function SyllabusIframe({ baseUrl, instructorId, courseTitle }: { baseUrl: string; instructorId?: number; courseTitle?: string }) {
-  const [src, setSrc] = useState('');
-  useEffect(() => {
-    (async () => {
-      const headers = await getAuthHeaders();
-      const token = (headers as Record<string, string>).Authorization?.replace('Bearer ', '') || '';
-      const params = new URLSearchParams({
-        embed: 'true',
-        instructor_id: String(instructorId || ''),
-        course_title: courseTitle || '',
-      });
-      setSrc(`${baseUrl}?${params.toString()}#auth_token=${encodeURIComponent(token)}`);
-    })();
-  }, [baseUrl, instructorId, courseTitle]);
+const SyllabusIframe = forwardRef<HTMLIFrameElement, { baseUrl: string; instructorId?: number; courseTitle?: string }>(
+  function SyllabusIframe({ baseUrl, instructorId, courseTitle }, ref) {
+    const [src, setSrc] = useState('');
+    useEffect(() => {
+      (async () => {
+        const headers = await getAuthHeaders();
+        const token = (headers as Record<string, string>).Authorization?.replace('Bearer ', '') || '';
+        const params = new URLSearchParams({
+          embed: 'true',
+          instructor_id: String(instructorId || ''),
+          course_title: courseTitle || '',
+        });
+        setSrc(`${baseUrl}?${params.toString()}#auth_token=${encodeURIComponent(token)}`);
+      })();
+    }, [baseUrl, instructorId, courseTitle]);
 
-  if (!src) return null;
-  return (
-    <iframe
-      src={src}
-      className="flex-1 w-full border-0"
-      allow="clipboard-read; clipboard-write"
-      title="Syllabus Tool"
-    />
-  );
+    if (!src) return null;
+    return (
+      <iframe
+        ref={ref}
+        src={src}
+        className="flex-1 w-full border-0"
+        allow="clipboard-read; clipboard-write"
+        title="Syllabus Tool"
+      />
+    );
+  }
+);
+
+/** Voice bridge: forward ui.* events to the syllabus iframe when the modal is open. */
+function useSyllabusVoiceBridge(isOpen: boolean, iframeRef: React.RefObject<HTMLIFrameElement | null>) {
+  const iframeReadyRef = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      iframeReadyRef.current = false;
+      return;
+    }
+
+    const UI_EVENTS = [
+      'ui.clickButton', 'ui.fillInput', 'ui.clearInput',
+      'ui.switchTab', 'ui.selectDropdown', 'ui.getUiState',
+    ] as const;
+
+    const actionMap: Record<string, string> = {
+      'ui.clickButton': 'clickButton',
+      'ui.fillInput': 'fillInput',
+      'ui.clearInput': 'clearInput',
+      'ui.switchTab': 'switchTab',
+      'ui.selectDropdown': 'selectDropdown',
+      'ui.getUiState': 'getUiState',
+    };
+
+    // Listen for SYLLABUS_VOICE_READY from iframe
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'SYLLABUS_VOICE_READY') {
+        iframeReadyRef.current = true;
+      }
+    };
+    window.addEventListener('message', handleMessage);
+
+    // Capture-phase listeners on window for each ui.* event
+    const handlers: Array<[string, EventListener]> = [];
+
+    for (const eventName of UI_EVENTS) {
+      const handler = ((e: Event) => {
+        const ce = e as CustomEvent;
+        const voiceId = ce.detail?.voiceId;
+
+        // If the element exists in the main frame, let VoiceUIController handle it
+        if (voiceId && document.querySelector(`[data-voice-id="${voiceId}"]`)) {
+          return;
+        }
+
+        // Not found in main frame — forward to iframe
+        if (!iframeReadyRef.current || !iframeRef.current?.contentWindow) return;
+
+        e.stopImmediatePropagation();
+
+        // Use the _bridgeId from dispatchSyllabusEvent (ConversationalVoiceV2)
+        // so VOICE_RESULT correlates back to the original caller.
+        const id = ce.detail?._bridgeId || crypto.randomUUID();
+        iframeRef.current.contentWindow.postMessage({
+          type: 'VOICE_COMMAND',
+          payload: { id, action: actionMap[eventName], detail: ce.detail },
+        }, '*');
+      }) as EventListener;
+
+      window.addEventListener(eventName, handler, true); // capture phase
+      handlers.push([eventName, handler]);
+    }
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      for (const [eventName, handler] of handlers) {
+        window.removeEventListener(eventName, handler, true);
+      }
+      iframeReadyRef.current = false;
+    };
+  }, [isOpen, iframeRef]);
 }
 
 export default function CoursesPage() {
@@ -102,6 +178,10 @@ export default function CoursesPage() {
   const [showSyllabusModal, setShowSyllabusModal] = useState(false);
 
   const SYLLABUS_TOOL_URL = process.env.NEXT_PUBLIC_SYLLABUS_TOOL_URL || 'https://syllabus.aristai.io';
+
+  // Syllabus iframe ref & voice bridge
+  const syllabusIframeRef = useRef<HTMLIFrameElement>(null);
+  useSyllabusVoiceBridge(showSyllabusModal, syllabusIframeRef);
 
   // Courses page tab mappings
   const coursesTabMap = mergeTabMappings({
@@ -1835,6 +1915,7 @@ export default function CoursesPage() {
             </button>
           </div>
           <SyllabusIframe
+            ref={syllabusIframeRef}
             baseUrl={SYLLABUS_TOOL_URL}
             instructorId={currentUser?.id}
             courseTitle={title}

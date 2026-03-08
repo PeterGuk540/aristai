@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import logo from './assets/AristAI.jpg'
 import { SyllabusForm } from './components/SyllabusForm'

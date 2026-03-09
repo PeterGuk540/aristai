@@ -12,7 +12,7 @@ import { CommandCenter } from './components/CommandCenter'
 import ExportModal from './components/ExportModal'
 import PreviewModal from './components/PreviewModal'
 import { SyllabusVoiceController } from './components/SyllabusVoiceController'
-import { checkAnyAuth, signOutAll } from './lib/auth.ts'
+import { checkAnyAuth, signOutAll, storeOAuthTokens } from './lib/auth.ts'
 import type { AuthUser } from './lib/auth.ts'
 import { fetchWithAuth } from './lib/fetchWithAuth.ts'
 import { LoginPage } from './components/LoginPage.tsx'
@@ -246,6 +246,7 @@ function App() {
 
   // Auth: check session on mount (skip if OAuth callback — OAuthCallback handles it)
   // In embed mode, bypass auth and set a minimal user object
+  // If #auth_token is present (from forum redirect), seed session before checking
   useEffect(() => {
     if (isEmbedMode) {
       setUser({ email: 'forum-embed', name: 'Instructor', sub: `forum-${embedInstructorId}` });
@@ -253,6 +254,21 @@ function App() {
       return;
     }
     if (isOAuthCallback) { setAuthLoading(false); return; }
+
+    // Seed auth from hash fragment token (passed by forum redirect)
+    try {
+      const hash = window.location.hash;
+      if (hash) {
+        const hashParams = new URLSearchParams(hash.slice(1));
+        const hashToken = hashParams.get('auth_token');
+        if (hashToken) {
+          storeOAuthTokens({ id_token: hashToken, access_token: hashToken });
+          // Clear hash from URL to avoid re-seeding on refresh
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+      }
+    } catch { /* ignore */ }
+
     checkAnyAuth().then((u) => { setUser(u); setAuthLoading(false); });
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

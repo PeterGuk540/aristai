@@ -203,7 +203,7 @@ export async function exchangeCodeForToken(code: string): Promise<{ success: boo
   }
 }
 
-function storeOAuthTokens(tokens: {
+export function storeOAuthTokens(tokens: {
   id_token: string;
   access_token: string;
   refresh_token?: string;

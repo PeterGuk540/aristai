@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { BookOpen, Plus, Users, RefreshCw, Copy, Key, Check, CheckCircle, Search, UserPlus, GraduationCap, Clock, Upload, FileText, X, Edit2, Trash2, Sparkles, ExternalLink, Library } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, getAuthHeaders } from '@/lib/api';
 import { useUser } from '@/lib/context';
 import { useSharedCourseSessionSelection } from '@/lib/shared-selection';
 import { createVoiceTabHandler, setupVoiceTabListeners, mergeTabMappings } from '@/lib/voice-tab-handler';
@@ -74,6 +74,18 @@ export default function CoursesPage() {
   const [deletingSyllabusId, setDeletingSyllabusId] = useState<number | null>(null);
 
   const SYLLABUS_TOOL_URL = process.env.NEXT_PUBLIC_SYLLABUS_TOOL_URL || 'https://syllabus.aristai.io';
+
+  /** Open the syllabus tool in the same tab with auth token passed via hash fragment. */
+  const openSyllabusTool = useCallback(async (extraParams?: Record<string, string>) => {
+    const params = new URLSearchParams({
+      instructor_id: String(currentUser?.id || ''),
+      voice: 'true',
+      ...extraParams,
+    });
+    const headers = await getAuthHeaders();
+    const token = (headers as Record<string, string>).Authorization?.replace('Bearer ', '') || '';
+    window.location.href = `${SYLLABUS_TOOL_URL}?${params.toString()}#auth_token=${encodeURIComponent(token)}`;
+  }, [currentUser?.id, SYLLABUS_TOOL_URL]);
 
   // Courses page tab mappings
   const coursesTabMap = mergeTabMappings({
@@ -1064,14 +1076,7 @@ export default function CoursesPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        const params = new URLSearchParams({
-                          instructor_id: String(currentUser?.id || ''),
-                          course_title: title || '',
-                          voice: 'true',
-                        });
-                        window.open(`${SYLLABUS_TOOL_URL}?${params.toString()}`, '_blank');
-                      }}
+                      onClick={() => openSyllabusTool({ course_title: title || '' })}
                       className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 shadow-sm"
                       data-voice-id="open-syllabus-tool"
                     >
@@ -1498,13 +1503,7 @@ export default function CoursesPage() {
                     Refresh
                   </Button>
                   <Button
-                    onClick={() => {
-                      const params = new URLSearchParams({
-                        instructor_id: String(currentUser?.id || ''),
-                        voice: 'true',
-                      });
-                      window.open(`${SYLLABUS_TOOL_URL}?${params.toString()}`, '_blank');
-                    }}
+                    onClick={() => openSyllabusTool()}
                     variant="accent"
                     size="sm"
                   >
@@ -1534,13 +1533,7 @@ export default function CoursesPage() {
                     <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
                       Use the Syllabus Tool to create and save syllabi for your courses.
                     </p>
-                    <Button onClick={() => {
-                      const params = new URLSearchParams({
-                        instructor_id: String(currentUser?.id || ''),
-                        voice: 'true',
-                      });
-                      window.open(`${SYLLABUS_TOOL_URL}?${params.toString()}`, '_blank');
-                    }} variant="accent">
+                    <Button onClick={() => openSyllabusTool()} variant="accent">
                       <Plus className="h-4 w-4 mr-2" />
                       Create New Syllabus
                     </Button>
@@ -1574,14 +1567,7 @@ export default function CoursesPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => {
-                                  const params = new URLSearchParams({
-                                    instructor_id: String(currentUser?.id || ''),
-                                    course_title: record.title || '',
-                                    voice: 'true',
-                                  });
-                                  window.open(`${SYLLABUS_TOOL_URL}?${params.toString()}`, '_blank');
-                                }}
+                                onClick={() => openSyllabusTool({ course_title: record.title || '' })}
                                 title="Edit in Syllabus Tool"
                               >
                                 <Edit2 className="h-4 w-4" />

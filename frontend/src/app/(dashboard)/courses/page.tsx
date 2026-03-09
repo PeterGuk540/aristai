@@ -282,21 +282,12 @@ export default function CoursesPage() {
     }
   }, [activeTab, currentUser?.id, fetchSyllabi]);
 
-  // Listen for postMessage from syllabus-tool iframe
+  // Refresh syllabi when window regains focus (user may have saved in syllabus tool tab)
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'SYLLABUS_SAVED') {
-        setShowSyllabusModal(false);
-        fetchSyllabi();
-        // If a forum course was created, also refresh courses list
-        if (event.data.payload?.forumCourseId) {
-          fetchCourses();
-        }
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [fetchSyllabi]); // eslint-disable-line react-hooks/exhaustive-deps
+    const handleFocus = () => { fetchSyllabi(); };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchSyllabi]);
 
   const handleImportSyllabus = (record: any) => {
     const content = record.content || {};
@@ -1507,7 +1498,13 @@ export default function CoursesPage() {
                     Refresh
                   </Button>
                   <Button
-                    onClick={() => setShowSyllabusModal(true)}
+                    onClick={() => {
+                      const params = new URLSearchParams({
+                        instructor_id: String(currentUser?.id || ''),
+                        voice: 'true',
+                      });
+                      window.open(`${SYLLABUS_TOOL_URL}?${params.toString()}`, '_blank');
+                    }}
                     variant="accent"
                     size="sm"
                   >
@@ -1537,7 +1534,13 @@ export default function CoursesPage() {
                     <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
                       Use the Syllabus Tool to create and save syllabi for your courses.
                     </p>
-                    <Button onClick={() => setShowSyllabusModal(true)} variant="accent">
+                    <Button onClick={() => {
+                      const params = new URLSearchParams({
+                        instructor_id: String(currentUser?.id || ''),
+                        voice: 'true',
+                      });
+                      window.open(`${SYLLABUS_TOOL_URL}?${params.toString()}`, '_blank');
+                    }} variant="accent">
                       <Plus className="h-4 w-4 mr-2" />
                       Create New Syllabus
                     </Button>
@@ -1573,11 +1576,11 @@ export default function CoursesPage() {
                                 variant="ghost"
                                 onClick={() => {
                                   const params = new URLSearchParams({
-                                    embed: 'true',
                                     instructor_id: String(currentUser?.id || ''),
                                     course_title: record.title || '',
+                                    voice: 'true',
                                   });
-                                  setShowSyllabusModal(true);
+                                  window.open(`${SYLLABUS_TOOL_URL}?${params.toString()}`, '_blank');
                                 }}
                                 title="Edit in Syllabus Tool"
                               >

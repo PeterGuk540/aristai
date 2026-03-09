@@ -12,6 +12,100 @@ import { Conversation } from '@elevenlabs/client';
 import { fetchWithAuth } from '../lib/fetchWithAuth';
 
 // =============================================================================
+// ALIAS MAPS — Common terms the agent might use → actual data-voice-id
+// =============================================================================
+
+const INPUT_ALIASES: Record<string, string> = {
+  'title': 'syllabus-draft-title',
+  'course title': 'syllabus-draft-title',
+  'name': 'syllabus-draft-title',
+  'audience': 'syllabus-draft-audience',
+  'target audience': 'syllabus-draft-audience',
+  'students': 'syllabus-draft-audience',
+  'duration': 'syllabus-draft-duration',
+  'length': 'syllabus-draft-duration',
+  'weeks': 'syllabus-draft-duration',
+  'syllabus': 'syllabus-draft-syllabus',
+  'content': 'syllabus-draft-syllabus',
+  'syllabus content': 'syllabus-draft-syllabus',
+};
+
+const DROPDOWN_ALIASES: Record<string, string> = {
+  'reference': 'syllabus-draft-reference',
+  'reference file': 'syllabus-draft-reference',
+  'reference document': 'syllabus-draft-reference',
+  'file': 'syllabus-draft-reference',
+  'document': 'syllabus-draft-reference',
+  'duration': 'syllabus-draft-duration',
+};
+
+const BUTTON_ALIASES: Record<string, string> = {
+  'generate': 'syllabus-generate-btn',
+  'generate syllabus': 'syllabus-generate-btn',
+  'create': 'syllabus-generate-btn',
+  'download': 'syllabus-download-btn',
+  'save': 'syllabus-save-btn',
+  'export': 'syllabus-export-btn',
+  'reset': 'syllabus-reset-btn',
+  'clear': 'syllabus-reset-btn',
+};
+
+const TAB_ALIASES: Record<string, string> = {
+  'upload': 'syllabus-step-upload',
+  'draft': 'syllabus-step-draft',
+  'review': 'syllabus-step-review',
+  'edit': 'syllabus-form-tab-edit',
+  'preview': 'syllabus-form-tab-preview',
+  'compare': 'syllabus-form-tab-compare',
+  'diff': 'syllabus-form-tab-compare',
+};
+
+/**
+ * Fuzzy resolve a voice target to a DOM element.
+ * Mirrors the forum's resolveTarget() with 5 strategies.
+ */
+function resolveVoiceTarget(
+  target: string,
+  aliasMap: Record<string, string>
+): HTMLElement | null {
+  const normalized = target.toLowerCase().trim();
+  const hyphenated = normalized.replace(/\s+/g, '-');
+
+  // Strategy 1: Check alias map
+  const aliasId = aliasMap[normalized];
+  if (aliasId) {
+    const el = document.querySelector<HTMLElement>(`[data-voice-id="${aliasId}"]`);
+    if (el) return el;
+  }
+
+  // Strategy 2: Direct data-voice-id match
+  let el = document.querySelector<HTMLElement>(`[data-voice-id="${target}"]`);
+  if (el) return el;
+
+  // Strategy 3: Hyphenated match
+  el = document.querySelector<HTMLElement>(`[data-voice-id="${hyphenated}"]`);
+  if (el) return el;
+
+  // Strategy 4: Partial match (data-voice-id contains the target)
+  el = document.querySelector<HTMLElement>(`[data-voice-id*="${hyphenated}"]`);
+  if (el) return el;
+
+  // Strategy 5: Fuzzy word match — all words in target appear in some voice-id
+  const targetWords = normalized.split(/\s+/);
+  if (targetWords.length > 0) {
+    const allVoiceElements = document.querySelectorAll('[data-voice-id]');
+    for (const elem of allVoiceElements) {
+      const voiceId = elem.getAttribute('data-voice-id')?.toLowerCase() || '';
+      if (targetWords.every(word => voiceId.includes(word))) {
+        return elem as HTMLElement;
+      }
+    }
+  }
+
+  return null;
+}
+
+// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -140,9 +234,10 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
 
   const handleClickButton = useCallback(async (params: { voiceId: string }): Promise<string> => {
     console.log('[SyllabusVoice] Tool: click_button', params);
-    const el = document.querySelector<HTMLElement>(`[data-voice-id="${params.voiceId}"]`);
+    const el = resolveVoiceTarget(params.voiceId, BUTTON_ALIASES);
     if (el) {
       el.click();
+      console.log('[SyllabusVoice] click_button: Clicked', el.getAttribute('data-voice-id'));
       return JSON.stringify({ ok: true, did: `Clicked ${params.voiceId}` });
     }
     console.warn('[SyllabusVoice] Button not found:', params.voiceId);
@@ -152,31 +247,35 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
   const handleFillInput = useCallback(async (params: { voiceId: string; value: string }): Promise<string> => {
     console.log('[SyllabusVoice] Tool: fill_input', { voiceId: params.voiceId, value: params.value?.substring(0, 50) });
 
+    // Use fuzzy resolver to find the element (like forum's resolveTarget)
+    const el = resolveVoiceTarget(params.voiceId, INPUT_ALIASES);
+    const resolvedId = el?.getAttribute('data-voice-id') || params.voiceId;
+
     // Strategy 1: Direct DOM manipulation (like forum's action-registry)
-    const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-      `[data-voice-id="${params.voiceId}"]`
-    );
     if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-      setReactInputValue(el, params.value);
+      setReactInputValue(el as HTMLInputElement | HTMLTextAreaElement, params.value);
       el.focus();
-      console.log('[SyllabusVoice] fill_input: Set via native setter', params.voiceId);
-      return JSON.stringify({ ok: true, did: `Filled ${params.voiceId}` });
+      console.log('[SyllabusVoice] fill_input: Set via native setter', resolvedId);
     }
 
-    // Strategy 2: Fallback to custom event (for components that listen for voice:fill)
-    console.log('[SyllabusVoice] fill_input: Falling back to voice:fill event', params.voiceId);
+    // Strategy 2: ALWAYS also dispatch custom event (for components that listen for voice:fill)
+    // Use the resolved voice-id so CommandCenter.tsx event listener matches correctly
+    console.log('[SyllabusVoice] fill_input: Dispatching voice:fill event', resolvedId);
     window.dispatchEvent(new CustomEvent('voice:fill', {
-      detail: { voiceId: params.voiceId, value: params.value },
+      detail: { voiceId: resolvedId, value: params.value },
     }));
-    return JSON.stringify({ ok: true, did: `Filled ${params.voiceId}` });
+    return JSON.stringify({ ok: true, did: `Filled ${resolvedId}` });
   }, []);
 
   const handleSwitchTab = useCallback(async (params: { tabName: string }): Promise<string> => {
     console.log('[SyllabusVoice] Tool: switch_tab', params);
-    const el = document.querySelector<HTMLElement>(`[data-voice-id="syllabus-form-tab-${params.tabName}"]`)
+    // Try fuzzy resolution first, then fall back to prefixed lookups
+    const el = resolveVoiceTarget(params.tabName, TAB_ALIASES)
+            || document.querySelector<HTMLElement>(`[data-voice-id="syllabus-form-tab-${params.tabName}"]`)
             || document.querySelector<HTMLElement>(`[data-voice-id="syllabus-step-${params.tabName}"]`);
     if (el) {
       el.click();
+      console.log('[SyllabusVoice] switch_tab: Clicked', el.getAttribute('data-voice-id'));
       return JSON.stringify({ ok: true, did: `Switched to ${params.tabName}` });
     }
     console.warn('[SyllabusVoice] Tab not found:', params.tabName);
@@ -186,22 +285,23 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
   const handleSelectDropdown = useCallback(async (params: { voiceId: string; value: string }): Promise<string> => {
     console.log('[SyllabusVoice] Tool: select_dropdown', params);
 
+    // Use fuzzy resolver to find the element
+    const el = resolveVoiceTarget(params.voiceId, DROPDOWN_ALIASES);
+    const resolvedId = el?.getAttribute('data-voice-id') || params.voiceId;
+
     // Strategy 1: Direct DOM manipulation (like forum's approach)
-    const el = document.querySelector<HTMLSelectElement>(
-      `select[data-voice-id="${params.voiceId}"]`
-    );
-    if (el) {
-      setReactSelectValue(el, params.value);
-      console.log('[SyllabusVoice] select_dropdown: Set via native setter', params.voiceId, '→', params.value);
-      return JSON.stringify({ ok: true, did: `Selected ${params.value} on ${params.voiceId}` });
+    if (el && el.tagName === 'SELECT') {
+      setReactSelectValue(el as HTMLSelectElement, params.value);
+      console.log('[SyllabusVoice] select_dropdown: Set via native setter', resolvedId, '→', params.value);
     }
 
-    // Strategy 2: Fallback to custom event
-    console.log('[SyllabusVoice] select_dropdown: Falling back to voice:select event', params.voiceId);
+    // Strategy 2: ALWAYS also dispatch custom event
+    // Use resolved voice-id so CommandCenter.tsx event listener matches
+    console.log('[SyllabusVoice] select_dropdown: Dispatching voice:select event', resolvedId);
     window.dispatchEvent(new CustomEvent('voice:select', {
-      detail: { voiceId: params.voiceId, value: params.value },
+      detail: { voiceId: resolvedId, value: params.value },
     }));
-    return JSON.stringify({ ok: true, did: `Selected ${params.value} on ${params.voiceId}` });
+    return JSON.stringify({ ok: true, did: `Selected ${params.value} on ${resolvedId}` });
   }, []);
 
   const handleGetUiState = useCallback(async (): Promise<string> => {
@@ -248,12 +348,23 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
     setState('connecting');
     setError('');
 
+    // Warm up AudioContext immediately (synchronous, within user gesture context)
+    // This prevents the browser from suspending AudioContext created later by the SDK
+    let warmupCtx: AudioContext | null = null;
+    try {
+      warmupCtx = new AudioContext();
+      console.log('[SyllabusVoice] AudioContext warmed up, state:', warmupCtx.state);
+    } catch (e) {
+      console.warn('[SyllabusVoice] AudioContext warmup failed:', e);
+    }
+
     try {
       // Request microphone permission
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
       } catch {
+        warmupCtx?.close();
         setState('error');
         setError(langToUse === 'es'
           ? 'Se necesita acceso al micrófono. Por favor permite el acceso e intenta de nuevo.'
@@ -266,6 +377,12 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
       const resp = await fetchWithAuth(`${apiUrl}/voice/signed-url?language=${langToUse}`);
       if (!resp.ok) throw new Error(`Failed to get signed URL: ${resp.status}`);
       const { signed_url } = await resp.json();
+
+      // Resume warmup AudioContext to ensure browser allows audio
+      if (warmupCtx && warmupCtx.state === 'suspended') {
+        await warmupCtx.resume();
+        console.log('[SyllabusVoice] AudioContext resumed before startSession');
+      }
 
       // Start ElevenLabs conversation
       conversationRef.current = await Conversation.startSession({
@@ -286,6 +403,9 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
           console.log('[SyllabusVoice] Connected:', conversationId);
           setState('connected');
           isInitializingRef.current = false;
+          // Close the warmup AudioContext now that the SDK has its own
+          warmupCtx?.close();
+          warmupCtx = null;
 
           const greetingMsg = langToUse === 'es'
             ? '¡Hola! Soy tu asistente de sílabo. ¿Qué te gustaría hacer?'
@@ -323,6 +443,8 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
       });
     } catch (err: any) {
       console.error('[SyllabusVoice] Failed to initialize:', err);
+      warmupCtx?.close();
+      warmupCtx = null;
       setError(err.message || 'Failed to initialize voice assistant');
       setState('error');
       isInitializingRef.current = false;

@@ -202,32 +202,28 @@ function useVoiceCommandHandler(step: string) {
             const activeTab = document.querySelector('[data-voice-id^="syllabus-form-tab-"].border-b-2')
               ?.getAttribute('data-voice-id')?.replace('syllabus-form-tab-', '') || null;
 
-            // Collect rich context: dropdown options, input values, button labels
-            const elements: Record<string, any> = {};
+            // Collect concise context: only dropdowns (with options) and non-empty inputs
+            // Keep response small to avoid overloading the agent's context window
+            const dropdowns: Record<string, { value: string; options: { value: string; label: string }[] }> = {};
+            const fields: Record<string, string> = {};
             for (const el of visibleEls) {
               const vid = el.getAttribute('data-voice-id');
               if (!vid) continue;
               const tag = el.tagName.toLowerCase();
               if (tag === 'select') {
                 const sel = el as HTMLSelectElement;
-                elements[vid] = {
-                  type: 'select',
+                dropdowns[vid] = {
                   value: sel.value,
                   options: Array.from(sel.options).map(o => ({ value: o.value, label: o.text })),
                 };
               } else if (tag === 'input' || tag === 'textarea') {
-                elements[vid] = {
-                  type: tag,
-                  value: (el as HTMLInputElement).value,
-                  placeholder: (el as HTMLInputElement).placeholder || undefined,
-                };
-              } else if (tag === 'button' || tag === 'a') {
-                elements[vid] = { type: 'button', label: el.textContent?.trim() };
+                const val = (el as HTMLInputElement).value;
+                if (val) fields[vid] = val;
               }
             }
 
             ok = true;
-            did = JSON.stringify({ step, activeTab, visibleIds, elements });
+            did = JSON.stringify({ step, activeTab, visibleIds, dropdowns, fields });
             break;
           }
           default:

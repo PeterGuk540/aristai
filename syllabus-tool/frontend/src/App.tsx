@@ -197,13 +197,37 @@ function useVoiceCommandHandler(step: string) {
           }
           case 'getUiState': {
             const voiceEls = document.querySelectorAll('[data-voice-id]');
-            const visibleIds = Array.from(voiceEls)
-              .filter(el => (el as HTMLElement).offsetParent !== null)
-              .map(el => el.getAttribute('data-voice-id'));
+            const visibleEls = Array.from(voiceEls).filter(el => (el as HTMLElement).offsetParent !== null);
+            const visibleIds = visibleEls.map(el => el.getAttribute('data-voice-id'));
             const activeTab = document.querySelector('[data-voice-id^="syllabus-form-tab-"].border-b-2')
               ?.getAttribute('data-voice-id')?.replace('syllabus-form-tab-', '') || null;
+
+            // Collect rich context: dropdown options, input values, button labels
+            const elements: Record<string, any> = {};
+            for (const el of visibleEls) {
+              const vid = el.getAttribute('data-voice-id');
+              if (!vid) continue;
+              const tag = el.tagName.toLowerCase();
+              if (tag === 'select') {
+                const sel = el as HTMLSelectElement;
+                elements[vid] = {
+                  type: 'select',
+                  value: sel.value,
+                  options: Array.from(sel.options).map(o => ({ value: o.value, label: o.text })),
+                };
+              } else if (tag === 'input' || tag === 'textarea') {
+                elements[vid] = {
+                  type: tag,
+                  value: (el as HTMLInputElement).value,
+                  placeholder: (el as HTMLInputElement).placeholder || undefined,
+                };
+              } else if (tag === 'button' || tag === 'a') {
+                elements[vid] = { type: 'button', label: el.textContent?.trim() };
+              }
+            }
+
             ok = true;
-            did = JSON.stringify({ step, activeTab, visibleIds });
+            did = JSON.stringify({ step, activeTab, visibleIds, elements });
             break;
           }
           default:

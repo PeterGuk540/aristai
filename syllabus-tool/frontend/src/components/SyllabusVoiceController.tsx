@@ -487,35 +487,50 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
   const isActive = state !== 'disconnected' && state !== 'error';
 
   // =============================================================================
-  // RENDER
+  // RENDER — Identical to forum's ConversationalVoiceV2
   // =============================================================================
 
-  // Status indicator color
-  const statusDot = () => {
-    switch (state) {
-      case 'connecting': return 'bg-yellow-500 animate-pulse';
-      case 'connected': return 'bg-green-500';
-      case 'listening': return 'bg-red-500 animate-pulse';
-      case 'processing': return 'bg-blue-500 animate-pulse';
-      case 'speaking': return 'bg-purple-500 animate-pulse';
-      case 'error': return 'bg-red-600';
-      default: return 'bg-gray-300';
-    }
-  };
+  // Mic SVG icons (inline since syllabus tool doesn't have lucide-react)
+  const MicIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
 
-  const statusText = () => {
-    const labels: Record<ConversationState, [string, string]> = {
-      connecting: ['Connecting...', 'Conectando...'],
-      connected: ['Ready', 'Listo'],
-      listening: ['Listening...', 'Escuchando...'],
-      processing: ['Thinking...', 'Pensando...'],
-      speaking: ['Speaking...', 'Hablando...'],
-      disconnected: ['Disconnected', 'Desconectado'],
-      error: ['Error', 'Error'],
-    };
-    const [en, es] = labels[state] || ['', ''];
-    return lang === 'es' ? es : en;
-  };
+  const MicOffIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="1" y1="1" x2="23" y2="23" />
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.12 1.5-.34 2.18" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+
+  const GlobeIcon = () => (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+
+  const MinimizeIcon = () => (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+      <line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
+  );
+
+  const MaximizeIcon = () => (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+      <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
+  );
 
   return (
     <div
@@ -528,46 +543,35 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
           {/* Header */}
           <div className="flex items-center justify-between p-3 border-b border-gray-200">
             <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
+              <img
+                src="/AristAI_icon.png"
+                alt="Carol"
+                className="w-4 h-4 object-contain"
+              />
               <span className="text-sm font-medium text-gray-900">
-                {lang === 'es' ? 'Asistente de Voz' : 'Voice Assistant'}
+                Carol
               </span>
               {isActive && (
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               )}
             </div>
+
             <div className="flex items-center gap-1">
               {/* Language toggle */}
               <button
                 onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
                 className="p-1 rounded hover:bg-gray-100 transition-colors flex items-center gap-1"
-                title={lang === 'en' ? 'English' : 'Spanish'}
+                title={`Language: ${lang === 'en' ? 'English' : 'Spanish'}`}
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="2" y1="12" x2="22" y2="12" />
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                </svg>
+                <GlobeIcon />
                 <span className="text-xs font-medium uppercase">{lang}</span>
               </button>
-              {/* Expand/collapse */}
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="p-1 rounded hover:bg-gray-100 transition-colors"
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  {isExpanded
-                    ? <><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" y1="10" x2="21" y2="3" /><line x1="3" y1="21" x2="10" y2="14" /></>
-                    : <><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></>
-                  }
-                </svg>
+                {isExpanded ? <MinimizeIcon /> : <MaximizeIcon />}
               </button>
-              {/* Minimize */}
               <button
                 onClick={() => setIsMinimized(true)}
                 className="p-1 rounded hover:bg-gray-100 transition-colors"
@@ -577,11 +581,26 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
             </div>
           </div>
 
-          {/* Status bar */}
+          {/* Status */}
           <div className="px-3 py-2 text-xs text-center border-b border-gray-200">
             <div className="flex items-center justify-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${statusDot()}`} />
-              <span className="text-gray-600 capitalize">{statusText()}</span>
+              {state === 'connecting' && <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />}
+              {state === 'connected' && <div className="w-2 h-2 bg-green-500 rounded-full" />}
+              {state === 'listening' && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+              {state === 'processing' && <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />}
+              {state === 'speaking' && <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />}
+              {state === 'disconnected' && <div className="w-2 h-2 bg-gray-300 rounded-full" />}
+              {state === 'error' && <div className="w-2 h-2 bg-red-600 rounded-full" />}
+
+              <span className="text-gray-600 capitalize">
+                {state === 'connecting' && (lang === 'es' ? 'Conectando...' : 'Connecting...')}
+                {state === 'connected' && (lang === 'es' ? 'Listo' : 'Ready')}
+                {state === 'listening' && (lang === 'es' ? 'Escuchando...' : 'Listening...')}
+                {state === 'processing' && (lang === 'es' ? 'Pensando...' : 'Thinking...')}
+                {state === 'speaking' && (lang === 'es' ? 'Hablando...' : 'Speaking...')}
+                {state === 'disconnected' && (lang === 'es' ? 'Desconectado' : 'Disconnected')}
+                {state === 'error' && 'Error'}
+              </span>
             </div>
           </div>
 
@@ -597,24 +616,26 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
               messages.filter(m => m.role !== 'system').map((msg) => (
                 <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'assistant' && (
-                    <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                      </svg>
+                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      <img
+                        src="/AristAI_icon.png"
+                        alt="Carol"
+                        className="w-5 h-5 object-contain"
+                      />
                     </div>
                   )}
                   <div className={`max-w-[75%] px-3 py-2 rounded-lg text-sm ${
                     msg.role === 'user'
-                      ? 'bg-emerald-600 text-white'
+                      ? 'text-white'
                       : 'bg-gray-100 text-gray-900'
-                  }`}>
+                  }`}
+                    style={msg.role === 'user' ? { backgroundColor: '#2d5a94' } : undefined}
+                  >
                     {msg.content}
                   </div>
                   {msg.role === 'user' && (
-                    <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                      </svg>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#2d5a94' }}>
+                      <MicIcon className="w-3 h-3 text-white" />
                     </div>
                   )}
                 </div>
@@ -638,25 +659,19 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
                 disabled={isConnecting}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   state === 'disconnected' || state === 'error'
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    ? 'text-white hover:opacity-90'
                     : 'bg-red-600 hover:bg-red-700 text-white'
                 } ${isConnecting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                style={state === 'disconnected' || state === 'error' ? { backgroundColor: '#2d5a94' } : undefined}
               >
                 {state === 'disconnected' || state === 'error' ? (
                   <>
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                    </svg>
+                    <MicIcon />
                     {lang === 'es' ? 'Iniciar' : 'Start'}
                   </>
                 ) : (
                   <>
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.12 1.5-.34 2.18" />
-                    </svg>
+                    <MicOffIcon />
                     {lang === 'es' ? 'Detener' : 'Stop'}
                   </>
                 )}
@@ -674,18 +689,20 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
           </div>
         </div>
       ) : (
-        /* Minimized - circular button */
+        /* Minimized */
         <div className="flex items-center justify-center h-full">
           <button
             onClick={() => setIsMinimized(false)}
             className="flex items-center justify-center w-full h-full hover:bg-gray-100 transition-colors rounded-lg relative"
           >
-            <svg className="w-6 h-6 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
+            <img
+              src="/AristAI_icon.png"
+              alt="AristAI"
+              className="w-10 h-10 object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
             {isActive && (
               <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             )}

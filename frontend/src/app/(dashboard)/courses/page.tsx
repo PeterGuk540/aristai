@@ -68,9 +68,12 @@ function useSyllabusVoiceBridge(isOpen: boolean, iframeRef: React.RefObject<HTML
 
   useEffect(() => {
     if (!isOpen) {
+      console.log('[VoiceBridge] Modal closed — bridge inactive');
       iframeReadyRef.current = false;
       return;
     }
+
+    console.log('[VoiceBridge] 🟢 Modal opened — registering bridge listeners');
 
     const UI_EVENTS = [
       'ui.clickButton', 'ui.fillInput', 'ui.clearInput',
@@ -89,7 +92,11 @@ function useSyllabusVoiceBridge(isOpen: boolean, iframeRef: React.RefObject<HTML
     // Listen for SYLLABUS_VOICE_READY from iframe
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'SYLLABUS_VOICE_READY') {
+        console.log('[VoiceBridge] ✅ SYLLABUS_VOICE_READY received — iframe is ready');
         iframeReadyRef.current = true;
+      }
+      if (event.data?.type === 'VOICE_RESULT') {
+        console.log('[VoiceBridge] ↩️ VOICE_RESULT passed through:', event.data.payload);
       }
     };
     window.addEventListener('message', handleMessage);
@@ -101,20 +108,30 @@ function useSyllabusVoiceBridge(isOpen: boolean, iframeRef: React.RefObject<HTML
       const handler = ((e: Event) => {
         const ce = e as CustomEvent;
         const voiceId = ce.detail?.voiceId;
+        console.log(`[VoiceBridge] 🎯 Intercepted ${eventName}`, { voiceId, detail: ce.detail });
 
         // If the element exists in the main frame, let VoiceUIController handle it
         if (voiceId && document.querySelector(`[data-voice-id="${voiceId}"]`)) {
+          console.log(`[VoiceBridge] ⏩ Element found in main frame, passing through`);
           return;
         }
 
         // Not found in main frame — forward to iframe
-        if (!iframeReadyRef.current || !iframeRef.current?.contentWindow) return;
+        if (!iframeReadyRef.current) {
+          console.log(`[VoiceBridge] ❌ iframe NOT ready — dropping event`);
+          return;
+        }
+        if (!iframeRef.current?.contentWindow) {
+          console.log(`[VoiceBridge] ❌ iframe ref or contentWindow is null — dropping event`);
+          return;
+        }
 
         e.stopImmediatePropagation();
 
         // Use the _bridgeId from dispatchSyllabusEvent (ConversationalVoiceV2)
         // so VOICE_RESULT correlates back to the original caller.
         const id = ce.detail?._bridgeId || crypto.randomUUID();
+        console.log(`[VoiceBridge] 📤 Forwarding to iframe:`, { id, action: actionMap[eventName] });
         iframeRef.current.contentWindow.postMessage({
           type: 'VOICE_COMMAND',
           payload: { id, action: actionMap[eventName], detail: ce.detail },

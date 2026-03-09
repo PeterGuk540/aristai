@@ -176,10 +176,12 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
   const dispatchSyllabusEvent = useCallback((eventName: string, detail: Record<string, any>): Promise<string> => {
     return new Promise((resolve) => {
       const id = crypto.randomUUID();
+      console.log(`[Voice] 📡 dispatchSyllabusEvent: ${eventName}`, { id: id.slice(0, 8), detail });
 
       // Listen for the result from the iframe (via useSyllabusVoiceBridge)
       const timeout = setTimeout(() => {
         window.removeEventListener('message', handler);
+        console.log(`[Voice] ⏰ dispatchSyllabusEvent TIMEOUT (5s) for ${eventName}`, { id: id.slice(0, 8) });
         resolve(JSON.stringify({ ok: false, did: 'timeout', error: 'Syllabus iframe did not respond' }));
       }, 5000);
 
@@ -187,6 +189,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
         if (event.data?.type === 'VOICE_RESULT' && event.data?.payload?.id === id) {
           clearTimeout(timeout);
           window.removeEventListener('message', handler);
+          console.log(`[Voice] ✅ dispatchSyllabusEvent GOT RESULT for ${eventName}`, event.data.payload);
           resolve(JSON.stringify(event.data.payload));
         }
       };

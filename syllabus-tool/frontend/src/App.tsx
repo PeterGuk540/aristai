@@ -135,11 +135,13 @@ function useVoiceCommandHandler(step: string) {
   useEffect(() => {
     // Notify parent that the iframe is ready
     try {
+      console.log('[SyllabusVoice] 📢 Sending SYLLABUS_VOICE_READY to parent');
       window.parent.postMessage({ type: 'SYLLABUS_VOICE_READY' }, '*');
     } catch (_) { /* not embedded */ }
 
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type !== 'VOICE_COMMAND') return;
+      console.log('[SyllabusVoice] 📥 Received VOICE_COMMAND:', event.data.payload);
       const { id, action, detail } = event.data.payload ?? {};
       let ok = false;
       let did = '';
@@ -213,6 +215,7 @@ function useVoiceCommandHandler(step: string) {
 
       // Send result back to parent
       try {
+        console.log('[SyllabusVoice] 📤 Sending VOICE_RESULT:', { id, ok, did, error });
         window.parent.postMessage({ type: 'VOICE_RESULT', payload: { id, ok, did, error } }, '*');
       } catch (_) { /* not embedded */ }
     };

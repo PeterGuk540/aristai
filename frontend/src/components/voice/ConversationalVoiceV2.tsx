@@ -165,45 +165,6 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
   }), [router, locale, currentUser?.id, pathname]);
 
   // =============================================================================
-  // SYLLABUS IFRAME BRIDGE
-  // =============================================================================
-
-  /**
-   * Dispatch a ui.* CustomEvent for syllabus-* targets so that
-   * useSyllabusVoiceBridge can intercept and forward to the iframe.
-   * Returns a promise that resolves with the VOICE_RESULT from the iframe.
-   */
-  const dispatchSyllabusEvent = useCallback((eventName: string, detail: Record<string, any>): Promise<string> => {
-    return new Promise((resolve) => {
-      const id = crypto.randomUUID();
-      console.log(`[Voice] 📡 dispatchSyllabusEvent: ${eventName}`, { id: id.slice(0, 8), detail });
-
-      // Listen for the result from the iframe (via useSyllabusVoiceBridge)
-      const timeout = setTimeout(() => {
-        window.removeEventListener('message', handler);
-        console.log(`[Voice] ⏰ dispatchSyllabusEvent TIMEOUT (5s) for ${eventName}`, { id: id.slice(0, 8) });
-        resolve(JSON.stringify({ ok: false, did: 'timeout', error: 'Syllabus iframe did not respond' }));
-      }, 5000);
-
-      const handler = (event: MessageEvent) => {
-        if (event.data?.type === 'VOICE_RESULT' && event.data?.payload?.id === id) {
-          clearTimeout(timeout);
-          window.removeEventListener('message', handler);
-          console.log(`[Voice] ✅ dispatchSyllabusEvent GOT RESULT for ${eventName}`, event.data.payload);
-          resolve(JSON.stringify(event.data.payload));
-        }
-      };
-      window.addEventListener('message', handler);
-
-      // Dispatch the event — useSyllabusVoiceBridge will intercept it
-      window.dispatchEvent(new CustomEvent(eventName, { detail: { ...detail, _bridgeId: id } }));
-    });
-  }, []);
-
-  /** Check if a target refers to a syllabus iframe element */
-  const isSyllabusTarget = (target: string | undefined) => target?.startsWith('syllabus-');
-
-  // =============================================================================
   // CLIENT TOOL HANDLERS
   // =============================================================================
 
@@ -218,35 +179,20 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
 
   /**
    * Handle switch_tab tool call
-   * Supports both forum params {target} and syllabus params {tabName}
    */
-  const handleSwitchTab = useCallback(async (params: { target?: string; tabName?: string }): Promise<string> => {
-    const target = params.target || params.tabName || '';
+  const handleSwitchTab = useCallback(async (params: { target?: string }): Promise<string> => {
+    const target = params.target || '';
     console.log('[Voice] Tool: switch_tab', { target });
-
-    if (isSyllabusTarget(`syllabus-${target}`) || ['library', 'upload', 'edit', 'export', 'info', 'goals', 'schedule', 'policies', 'custom', 'preview', 'review'].includes(target)) {
-      // Check if this is a syllabus tool tab by seeing if the modal is open
-      const syllabusModal = document.querySelector('iframe[title="Syllabus Tool"]');
-      if (syllabusModal) {
-        return dispatchSyllabusEvent('ui.switchTab', { tabName: target });
-      }
-    }
-
     const result = await switchTab(target, getActionContext());
     return JSON.stringify(result);
-  }, [getActionContext, dispatchSyllabusEvent]);
+  }, [getActionContext]);
 
   /**
    * Handle click_button tool call
-   * Supports both forum params {target} and syllabus params {voiceId}
    */
-  const handleClickButton = useCallback(async (params: { target?: string; voiceId?: string }): Promise<string> => {
-    const target = params.target || params.voiceId || '';
+  const handleClickButton = useCallback(async (params: { target?: string }): Promise<string> => {
+    const target = params.target || '';
     console.log('[Voice] Tool: click_button', { target });
-
-    if (isSyllabusTarget(target)) {
-      return dispatchSyllabusEvent('ui.clickButton', { voiceId: target });
-    }
 
     // Check if high-risk action
     if (isHighRiskAction(target)) {
@@ -262,61 +208,42 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
 
     const result = await clickButton(target, getActionContext());
     return JSON.stringify(result);
-  }, [getActionContext, locale, dispatchSyllabusEvent]);
+  }, [getActionContext, locale]);
 
   /**
    * Handle fill_input tool call
-   * Supports both forum params {target, content} and syllabus params {voiceId, value}
    */
-  const handleFillInput = useCallback(async (params: { target?: string; content?: string; voiceId?: string; value?: string }): Promise<string> => {
-    const target = params.target || params.voiceId || '';
-    const content = params.content || params.value || '';
+  const handleFillInput = useCallback(async (params: { target?: string; content?: string }): Promise<string> => {
+    const target = params.target || '';
+    const content = params.content || '';
     console.log('[Voice] Tool: fill_input', { target, content: content.substring(0, 50) });
-
-    if (isSyllabusTarget(target)) {
-      return dispatchSyllabusEvent('ui.fillInput', { voiceId: target, value: content });
-    }
-
     const result = await fillInput(target, content, getActionContext());
     return JSON.stringify(result);
-  }, [getActionContext, dispatchSyllabusEvent]);
+  }, [getActionContext]);
 
   /**
-   * Handle select_item / select_dropdown tool call
-   * Supports both forum params {target, selection} and syllabus params {voiceId, value}
+   * Handle select_item tool call
    */
-  const handleSelectItem = useCallback(async (params: { target?: string; selection?: string; voiceId?: string; value?: string }): Promise<string> => {
-    const target = params.target || params.voiceId || '';
-    const selection = params.selection || params.value || '';
+  const handleSelectItem = useCallback(async (params: { target?: string; selection?: string }): Promise<string> => {
+    const target = params.target || '';
+    const selection = params.selection || '';
     console.log('[Voice] Tool: select_item', { target, selection });
-
-    if (isSyllabusTarget(target)) {
-      return dispatchSyllabusEvent('ui.selectDropdown', { voiceId: target, value: selection });
-    }
-
     const result = await selectItem(target, selection, getActionContext());
     return JSON.stringify(result);
-  }, [getActionContext, dispatchSyllabusEvent]);
+  }, [getActionContext]);
 
   /**
-   * Handle get_page_info / get_ui_state tool call
+   * Handle get_page_info tool call
    */
   const handleGetPageInfo = useCallback(async (): Promise<string> => {
     console.log('[Voice] Tool: get_page_info');
-
-    // If syllabus modal is open, get UI state from the iframe
-    const syllabusModal = document.querySelector('iframe[title="Syllabus Tool"]');
-    if (syllabusModal) {
-      return dispatchSyllabusEvent('ui.getUiState', {});
-    }
-
     const info = getPageInfo();
     return JSON.stringify({
       ok: true,
       did: 'retrieved page info',
       data: info,
     });
-  }, [dispatchSyllabusEvent]);
+  }, []);
 
   /**
    * Handle generate_content tool call
@@ -414,7 +341,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           language: langToUse,
         },
 
-        // Client Tools - forum (8) + syllabus aliases (2)
+        // Client Tools (8 forum tools)
         clientTools: {
           navigate: handleNavigate,
           switch_tab: handleSwitchTab,
@@ -424,9 +351,6 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           get_page_info: handleGetPageInfo,
           generate_content: handleGenerateContent,
           get_smart_context: handleGetSmartContext,
-          // Syllabus agent tool aliases (map to existing handlers)
-          select_dropdown: handleSelectItem,
-          get_ui_state: handleGetPageInfo,
         },
 
         onConnect: ({ conversationId }: { conversationId: string }) => {

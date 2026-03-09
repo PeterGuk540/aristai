@@ -16,7 +16,7 @@ from app.models.standard_policy import StandardPolicy
 from app.services.storage import storage_service
 from app.services.parser import parse_file, extract_metadata, extract_syllabus_data, merge_structured_data
 from app.services.converter import convert_to_pdf
-from app.api.endpoints import chat, export, policies, regenerate, generate, syllabi
+from app.api.endpoints import chat, export, policies, regenerate, generate, syllabi, voice
 from app.core.logger import log, log_step, log_buffer, setup_logging
 from pydantic import BaseModel
 
@@ -35,6 +35,7 @@ app.include_router(regenerate.router, prefix="/api/v1", tags=["regenerate"])
 app.include_router(policies.router, prefix="/api/v1/policies", tags=["policies"])
 app.include_router(generate.router, prefix="/api/v1/generate", tags=["generate"])
 app.include_router(syllabi.router, prefix="/api/v1/syllabi", tags=["syllabi"])
+app.include_router(voice.router, prefix="/api/v1", tags=["voice"])
 
 # CORS
 app.add_middleware(

@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     LLM_MAX_CHARS: int = 30000
     LLM_ENABLE_REPAIR: bool = True
 
+    # ElevenLabs voice
+    ELEVENLABS_API_KEY: str = ""
+    ELEVENLABS_SYLLABUS_AGENT_ID: str = ""
+
     # Forum API integration
     FORUM_API_URL: str = ""  # e.g. "http://api:8000" in Docker
 

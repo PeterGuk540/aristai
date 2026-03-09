@@ -11,6 +11,7 @@ import { UploadZone } from './components/UploadZone'
 import { CommandCenter } from './components/CommandCenter'
 import ExportModal from './components/ExportModal'
 import PreviewModal from './components/PreviewModal'
+import { SyllabusVoiceController } from './components/SyllabusVoiceController'
 import { checkAnyAuth, signOutAll } from './lib/auth.ts'
 import type { AuthUser } from './lib/auth.ts'
 import { fetchWithAuth } from './lib/fetchWithAuth.ts'
@@ -130,121 +131,6 @@ const HistoryItemCard = ({ item, expandedId, setExpandedId, onDelete, onLoad }: 
     </div>
 );
 
-/** Hook: listen for VOICE_COMMAND messages from the parent frame and execute actions. */
-function useVoiceCommandHandler(step: string) {
-  useEffect(() => {
-    // Notify parent that the iframe is ready
-    try {
-      console.log('[SyllabusVoice] 📢 Sending SYLLABUS_VOICE_READY to parent');
-      window.parent.postMessage({ type: 'SYLLABUS_VOICE_READY' }, '*');
-    } catch (_) { /* not embedded */ }
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type !== 'VOICE_COMMAND') return;
-      console.log('[SyllabusVoice] 📥 Received VOICE_COMMAND:', event.data.payload);
-      const { id, action, detail } = event.data.payload ?? {};
-      let ok = false;
-      let did = '';
-      let error: string | undefined;
-
-      try {
-        switch (action) {
-          case 'clickButton': {
-            const el = document.querySelector<HTMLElement>(`[data-voice-id="${detail?.voiceId}"]`);
-            if (el) { el.click(); ok = true; did = `Clicked ${detail?.voiceId}`; }
-            else { error = `Element not found: ${detail?.voiceId}`; }
-            break;
-          }
-          case 'fillInput': {
-            // Dispatch custom event — React components listen and call their own setState.
-            // This avoids the native setter + _valueTracker hack which breaks in React 19.
-            const el = document.querySelector(`[data-voice-id="${detail?.voiceId}"]`);
-            if (el) {
-              window.dispatchEvent(new CustomEvent('voice:fill', {
-                detail: { voiceId: detail?.voiceId, value: detail?.value ?? '' },
-              }));
-              ok = true; did = `Filled ${detail?.voiceId}`;
-            } else { error = `Element not found: ${detail?.voiceId}`; }
-            break;
-          }
-          case 'clearInput': {
-            const el = document.querySelector(`[data-voice-id="${detail?.voiceId}"]`);
-            if (el) {
-              window.dispatchEvent(new CustomEvent('voice:fill', {
-                detail: { voiceId: detail?.voiceId, value: '' },
-              }));
-              ok = true; did = `Cleared ${detail?.voiceId}`;
-            } else { error = `Element not found: ${detail?.voiceId}`; }
-            break;
-          }
-          case 'switchTab': {
-            const tabName = detail?.tabName || detail?.voiceId;
-            const el = document.querySelector<HTMLElement>(`[data-voice-id="syllabus-form-tab-${tabName}"]`)
-                    || document.querySelector<HTMLElement>(`[data-voice-id="syllabus-step-${tabName}"]`);
-            if (el) { el.click(); ok = true; did = `Switched to ${tabName}`; }
-            else { error = `Tab not found: ${tabName}`; }
-            break;
-          }
-          case 'selectDropdown': {
-            const el = document.querySelector(`[data-voice-id="${detail?.voiceId}"]`);
-            if (el) {
-              window.dispatchEvent(new CustomEvent('voice:select', {
-                detail: { voiceId: detail?.voiceId, value: detail?.value ?? '' },
-              }));
-              ok = true; did = `Selected ${detail?.value} on ${detail?.voiceId}`;
-            } else { error = `Element not found: ${detail?.voiceId}`; }
-            break;
-          }
-          case 'getUiState': {
-            const voiceEls = document.querySelectorAll('[data-voice-id]');
-            const visibleEls = Array.from(voiceEls).filter(el => (el as HTMLElement).offsetParent !== null);
-            const visibleIds = visibleEls.map(el => el.getAttribute('data-voice-id'));
-            const activeTab = document.querySelector('[data-voice-id^="syllabus-form-tab-"].border-b-2')
-              ?.getAttribute('data-voice-id')?.replace('syllabus-form-tab-', '') || null;
-
-            // Collect concise context: only dropdowns (with options) and non-empty inputs
-            // Keep response small to avoid overloading the agent's context window
-            const dropdowns: Record<string, { value: string; options: { value: string; label: string }[] }> = {};
-            const fields: Record<string, string> = {};
-            for (const el of visibleEls) {
-              const vid = el.getAttribute('data-voice-id');
-              if (!vid) continue;
-              const tag = el.tagName.toLowerCase();
-              if (tag === 'select') {
-                const sel = el as HTMLSelectElement;
-                dropdowns[vid] = {
-                  value: sel.value,
-                  options: Array.from(sel.options).map(o => ({ value: o.value, label: o.text })),
-                };
-              } else if (tag === 'input' || tag === 'textarea') {
-                const val = (el as HTMLInputElement).value;
-                if (val) fields[vid] = val;
-              }
-            }
-
-            ok = true;
-            did = JSON.stringify({ step, activeTab, visibleIds, dropdowns, fields });
-            break;
-          }
-          default:
-            error = `Unknown action: ${action}`;
-        }
-      } catch (e: any) {
-        error = e.message;
-      }
-
-      // Send result back to parent
-      try {
-        console.log('[SyllabusVoice] 📤 Sending VOICE_RESULT:', { id, ok, did, error });
-        window.parent.postMessage({ type: 'VOICE_RESULT', payload: { id, ok, did, error } }, '*');
-      } catch (_) { /* not embedded */ }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [step]);
-}
-
 function App() {
   // --- Auth state ---
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -326,8 +212,8 @@ function App() {
   
   const chatRef = useRef<ChatInterfaceRef>(null);
 
-  // Voice control: listen for postMessage commands from parent frame
-  useVoiceCommandHandler(step);
+  // Voice controller: show when ?voice=true is in URL
+  const showVoice = new URLSearchParams(window.location.search).has('voice');
 
   // Voice: handle voice:fill and voice:select events for App-owned state
   useEffect(() => {
@@ -1942,8 +1828,10 @@ function App() {
       />
       
       <div className="fixed bottom-2 right-2 text-xs text-gray-400 pointer-events-none">
-        v1.7 (My Syllabi + Forum Push)
+        v1.8 (Standalone Voice)
       </div>
+
+      {showVoice && <SyllabusVoiceController language={(urlParams.get('lang') as 'en' | 'es') || 'en'} />}
     </div>
   )
 }

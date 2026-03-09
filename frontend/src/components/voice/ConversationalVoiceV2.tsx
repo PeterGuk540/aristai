@@ -35,6 +35,7 @@ import {
   ActionResult,
   ContentType,
 } from '@/lib/action-registry';
+import { getAuthHeaders } from '@/lib/api';
 
 // =============================================================================
 // TYPES
@@ -194,6 +195,26 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
     const target = params.target || '';
     console.log('[Voice] Tool: click_button', { target });
 
+    // Special case: "open-syllabus-tool" — redirect to syllabus tool from ANY page/tab.
+    // The button only exists in the "create" tab DOM, so we handle this directly.
+    const normalizedTarget = target.toLowerCase().replace(/\s+/g, '-');
+    if (normalizedTarget === 'open-syllabus-tool' || normalizedTarget === 'syllabus-tool' || normalizedTarget === 'open-syllabus') {
+      try {
+        const SYLLABUS_TOOL_URL = process.env.NEXT_PUBLIC_SYLLABUS_TOOL_URL || 'https://syllabus.aristai.io';
+        const headers = await getAuthHeaders();
+        const token = (headers as Record<string, string>).Authorization?.replace('Bearer ', '') || '';
+        const urlParams = new URLSearchParams({
+          instructor_id: String(currentUser?.id || ''),
+          voice: 'true',
+        });
+        window.location.href = `${SYLLABUS_TOOL_URL}?${urlParams.toString()}#auth_token=${encodeURIComponent(token)}`;
+        return JSON.stringify({ ok: true, did: 'Opening syllabus tool in this tab.' });
+      } catch (err) {
+        console.error('[Voice] Failed to open syllabus tool:', err);
+        return JSON.stringify({ ok: false, error: 'Failed to open syllabus tool.' });
+      }
+    }
+
     // Check if high-risk action
     if (isHighRiskAction(target)) {
       return JSON.stringify({
@@ -208,7 +229,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
 
     const result = await clickButton(target, getActionContext());
     return JSON.stringify(result);
-  }, [getActionContext, locale]);
+  }, [getActionContext, locale, currentUser?.id]);
 
   /**
    * Handle fill_input tool call

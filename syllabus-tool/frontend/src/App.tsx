@@ -626,6 +626,15 @@ function App() {
 
             setTemplateFillMode(true);
             setTemplateCourseInfo({ title: draftInfo.title, audience: draftInfo.audience, duration: draftInfo.duration, language: draftInfo.language });
+            // Sync course_info so save/push reads the correct title
+            setSyllabusData((prev: any) => ({
+              ...prev,
+              course_info: {
+                ...prev.course_info,
+                title: draftInfo.title,
+                description: draftInfo.audience,
+              },
+            }));
             setTemplateSections(result.sections.map((s: any) => ({
               id: s.id,
               label: s.label,
@@ -857,7 +866,7 @@ function App() {
     setSavingToMySyllabi(true)
     try {
       const body: any = {
-        title: syllabusData.course_info?.title || 'Untitled Syllabus',
+        title: syllabusData.course_info?.title || templateCourseInfo?.title || 'Untitled Syllabus',
         content: syllabusData,
         template_id: templateId,
         source: isEmbedMode ? 'forum_embed' : 'standalone',
@@ -897,7 +906,7 @@ function App() {
       // If no saved syllabus yet, save first
       if (!syllabusId) {
         const body: any = {
-          title: syllabusData.course_info?.title || 'Untitled Syllabus',
+          title: syllabusData.course_info?.title || templateCourseInfo?.title || 'Untitled Syllabus',
           content: syllabusData,
           template_id: templateId,
           source: isEmbedMode ? 'forum_embed' : 'standalone',

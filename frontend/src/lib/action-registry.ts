@@ -501,8 +501,7 @@ export async function fillInput(
   const field = resolveTarget(target, 'input') as HTMLInputElement | HTMLTextAreaElement | null;
 
   if (field) {
-    // Use native setter to trigger React's internal tracking
-    // This is necessary because React uses synthetic events and tracks value changes internally
+    // Use native setter to bypass React's value interception
     const isTextArea = field.tagName === 'TEXTAREA';
     const nativeSetter = Object.getOwnPropertyDescriptor(
       isTextArea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
@@ -512,22 +511,21 @@ export async function fillInput(
     if (nativeSetter) {
       nativeSetter.call(field, content);
     } else {
-      // Fallback for older browsers
       field.value = content;
     }
 
-    // Dispatch input event with bubbles to trigger React's onChange
-    field.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-    field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    // Reset React's internal _valueTracker so React detects the change.
+    // Without this, React may think the value hasn't changed and skip onChange.
+    const tracker = (field as any)._valueTracker;
+    if (tracker) {
+      tracker.setValue('');
+    }
 
-    // Also try to trigger React 17+ fiber events
-    const inputEvent = new InputEvent('input', {
-      bubbles: true,
-      cancelable: true,
-      inputType: 'insertText',
-      data: content,
-    });
-    field.dispatchEvent(inputEvent);
+    // Dispatch input event to trigger React's onChange
+    field.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+    // Focus the field briefly to ensure React processes the event
+    field.focus();
 
     return {
       ok: true,

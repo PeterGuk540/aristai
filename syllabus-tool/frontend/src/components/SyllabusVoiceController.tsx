@@ -89,19 +89,82 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
   };
 
   // =============================================================================
-  // CLIENT TOOLS
+  // CLIENT TOOLS — Direct DOM manipulation (same approach as the forum)
   // =============================================================================
 
+  /**
+   * Set a value on a React controlled input/textarea using native setter
+   * + _valueTracker reset to ensure React detects the change.
+   */
+  const setReactInputValue = (el: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+    const isTextArea = el.tagName === 'TEXTAREA';
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      isTextArea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
+      'value'
+    )?.set;
+
+    if (nativeSetter) {
+      nativeSetter.call(el, value);
+    } else {
+      el.value = value;
+    }
+
+    // Reset React's internal _valueTracker so React detects the change
+    const tracker = (el as any)._valueTracker;
+    if (tracker) tracker.setValue('');
+
+    el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+  };
+
+  /**
+   * Set a value on a React controlled <select> using native setter
+   * + _valueTracker reset.
+   */
+  const setReactSelectValue = (el: HTMLSelectElement, value: string) => {
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLSelectElement.prototype, 'value'
+    )?.set;
+
+    if (nativeSetter) {
+      nativeSetter.call(el, value);
+    } else {
+      el.value = value;
+    }
+
+    const tracker = (el as any)._valueTracker;
+    if (tracker) tracker.setValue('');
+
+    el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+  };
+
   const handleClickButton = useCallback(async (params: { voiceId: string }): Promise<string> => {
+    console.log('[SyllabusVoice] Tool: click_button', params);
     const el = document.querySelector<HTMLElement>(`[data-voice-id="${params.voiceId}"]`);
     if (el) {
       el.click();
       return JSON.stringify({ ok: true, did: `Clicked ${params.voiceId}` });
     }
+    console.warn('[SyllabusVoice] Button not found:', params.voiceId);
     return JSON.stringify({ ok: false, error: `Not found: ${params.voiceId}` });
   }, []);
 
   const handleFillInput = useCallback(async (params: { voiceId: string; value: string }): Promise<string> => {
+    console.log('[SyllabusVoice] Tool: fill_input', { voiceId: params.voiceId, value: params.value?.substring(0, 50) });
+
+    // Strategy 1: Direct DOM manipulation (like forum's action-registry)
+    const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `[data-voice-id="${params.voiceId}"]`
+    );
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+      setReactInputValue(el, params.value);
+      el.focus();
+      console.log('[SyllabusVoice] fill_input: Set via native setter', params.voiceId);
+      return JSON.stringify({ ok: true, did: `Filled ${params.voiceId}` });
+    }
+
+    // Strategy 2: Fallback to custom event (for components that listen for voice:fill)
+    console.log('[SyllabusVoice] fill_input: Falling back to voice:fill event', params.voiceId);
     window.dispatchEvent(new CustomEvent('voice:fill', {
       detail: { voiceId: params.voiceId, value: params.value },
     }));
@@ -109,16 +172,32 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
   }, []);
 
   const handleSwitchTab = useCallback(async (params: { tabName: string }): Promise<string> => {
+    console.log('[SyllabusVoice] Tool: switch_tab', params);
     const el = document.querySelector<HTMLElement>(`[data-voice-id="syllabus-form-tab-${params.tabName}"]`)
             || document.querySelector<HTMLElement>(`[data-voice-id="syllabus-step-${params.tabName}"]`);
     if (el) {
       el.click();
       return JSON.stringify({ ok: true, did: `Switched to ${params.tabName}` });
     }
+    console.warn('[SyllabusVoice] Tab not found:', params.tabName);
     return JSON.stringify({ ok: false, error: `Tab not found: ${params.tabName}` });
   }, []);
 
   const handleSelectDropdown = useCallback(async (params: { voiceId: string; value: string }): Promise<string> => {
+    console.log('[SyllabusVoice] Tool: select_dropdown', params);
+
+    // Strategy 1: Direct DOM manipulation (like forum's approach)
+    const el = document.querySelector<HTMLSelectElement>(
+      `select[data-voice-id="${params.voiceId}"]`
+    );
+    if (el) {
+      setReactSelectValue(el, params.value);
+      console.log('[SyllabusVoice] select_dropdown: Set via native setter', params.voiceId, '→', params.value);
+      return JSON.stringify({ ok: true, did: `Selected ${params.value} on ${params.voiceId}` });
+    }
+
+    // Strategy 2: Fallback to custom event
+    console.log('[SyllabusVoice] select_dropdown: Falling back to voice:select event', params.voiceId);
     window.dispatchEvent(new CustomEvent('voice:select', {
       detail: { voiceId: params.voiceId, value: params.value },
     }));
@@ -126,6 +205,7 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
   }, []);
 
   const handleGetUiState = useCallback(async (): Promise<string> => {
+    console.log('[SyllabusVoice] Tool: get_ui_state');
     const voiceEls = document.querySelectorAll('[data-voice-id]');
     const visible = Array.from(voiceEls).filter(el => (el as HTMLElement).offsetParent !== null);
     const visibleIds = visible.map(el => el.getAttribute('data-voice-id'));
@@ -151,7 +231,9 @@ export function SyllabusVoiceController({ language = 'en' }: Props) {
     const activeTab = document.querySelector('[data-voice-id^="syllabus-form-tab-"].border-b-2')
       ?.getAttribute('data-voice-id')?.replace('syllabus-form-tab-', '') || null;
 
-    return JSON.stringify({ ok: true, did: JSON.stringify({ step, activeTab, visibleIds, dropdowns, fields }) });
+    const state = { step, activeTab, visibleIds, dropdowns, fields };
+    console.log('[SyllabusVoice] get_ui_state result:', state);
+    return JSON.stringify({ ok: true, did: JSON.stringify(state) });
   }, []);
 
   // =============================================================================

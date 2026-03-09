@@ -180,9 +180,10 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
 
   /**
    * Handle switch_tab tool call
+   * Accepts both forum param {target} and ElevenLabs-configured param {tabName}
    */
-  const handleSwitchTab = useCallback(async (params: { target?: string }): Promise<string> => {
-    const target = params.target || '';
+  const handleSwitchTab = useCallback(async (params: { target?: string; tabName?: string }): Promise<string> => {
+    const target = params.target || params.tabName || '';
     console.log('[Voice] Tool: switch_tab', { target });
     const result = await switchTab(target, getActionContext());
     return JSON.stringify(result);
@@ -191,8 +192,8 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
   /**
    * Handle click_button tool call
    */
-  const handleClickButton = useCallback(async (params: { target?: string }): Promise<string> => {
-    const target = params.target || '';
+  const handleClickButton = useCallback(async (params: { target?: string; voiceId?: string }): Promise<string> => {
+    const target = params.target || params.voiceId || '';
     console.log('[Voice] Tool: click_button', { target });
 
     // Special case: "open-syllabus-tool" — redirect to syllabus tool from ANY page/tab.
@@ -233,10 +234,11 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
 
   /**
    * Handle fill_input tool call
+   * Accepts both forum params {target, content} and ElevenLabs-configured params {voiceId, value}
    */
-  const handleFillInput = useCallback(async (params: { target?: string; content?: string }): Promise<string> => {
-    const target = params.target || '';
-    const content = params.content || '';
+  const handleFillInput = useCallback(async (params: { target?: string; content?: string; voiceId?: string; value?: string }): Promise<string> => {
+    const target = params.target || params.voiceId || '';
+    const content = params.content || params.value || '';
     console.log('[Voice] Tool: fill_input', { target, content: content.substring(0, 50) });
     const result = await fillInput(target, content, getActionContext());
     return JSON.stringify(result);
@@ -244,10 +246,11 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
 
   /**
    * Handle select_item tool call
+   * Accepts both forum params {target, selection} and ElevenLabs-configured params {voiceId, value}
    */
-  const handleSelectItem = useCallback(async (params: { target?: string; selection?: string }): Promise<string> => {
-    const target = params.target || '';
-    const selection = params.selection || '';
+  const handleSelectItem = useCallback(async (params: { target?: string; selection?: string; voiceId?: string; value?: string }): Promise<string> => {
+    const target = params.target || params.voiceId || '';
+    const selection = params.selection || params.value || '';
     console.log('[Voice] Tool: select_item', { target, selection });
     const result = await selectItem(target, selection, getActionContext());
     return JSON.stringify(result);
@@ -362,7 +365,7 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           language: langToUse,
         },
 
-        // Client Tools (8 forum tools)
+        // Client Tools (8 forum tools + 2 ElevenLabs-configured aliases)
         clientTools: {
           navigate: handleNavigate,
           switch_tab: handleSwitchTab,
@@ -372,6 +375,9 @@ export function ConversationalVoiceV2(props: ConversationalVoiceProps) {
           get_page_info: handleGetPageInfo,
           generate_content: handleGenerateContent,
           get_smart_context: handleGetSmartContext,
+          // ElevenLabs tool name aliases (configured on dashboard)
+          select_dropdown: handleSelectItem,
+          get_ui_state: handleGetPageInfo,
         },
 
         onConnect: ({ conversationId }: { conversationId: string }) => {

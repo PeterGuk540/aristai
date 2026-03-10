@@ -128,8 +128,8 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
   return (
     <div
       className={cn(
-        'pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-xl',
-        'shadow-soft-md border',
+        'pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg',
+        'shadow-md border',
         'animate-slide-up',
         'min-w-[320px] max-w-[420px]',
         config.bg,

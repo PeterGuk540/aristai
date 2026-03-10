@@ -636,7 +636,7 @@ export default function IntegrationsPage() {
 
   if (!isInstructor && !isAdmin) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-900">
         <p className="font-semibold">Instructor access required</p>
         <p className="mt-1 text-sm">Only instructors/admins can use LMS integrations.</p>
       </div>
@@ -672,7 +672,7 @@ export default function IntegrationsPage() {
         </button>
       </div>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
+      <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-800">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Plug className="h-4 w-4 text-primary-600" />
@@ -722,7 +722,7 @@ export default function IntegrationsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
+      <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-800">
         <div className="mb-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800/30 dark:text-neutral-200">
           {isAdmin
             ? `Admin scope: showing all saved ${provider.toUpperCase()} connections.`
@@ -858,7 +858,7 @@ export default function IntegrationsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
+      <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-800">
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
@@ -980,7 +980,7 @@ export default function IntegrationsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
+      <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-800">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold text-neutral-900 dark:text-neutral-100">External Materials</h2>
           <div className="flex gap-2">
@@ -1048,7 +1048,7 @@ export default function IntegrationsPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
+      <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-800">
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleImport}

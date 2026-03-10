@@ -224,7 +224,7 @@ export function Onboarding({ role, userName, onComplete }: OnboardingProps) {
       )}
     >
       <div className="max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col max-h-[90vh]">
           {/* Header */}
           <div className="text-center py-6 px-8 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">

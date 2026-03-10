@@ -14,39 +14,30 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(
-          // Base styles
-          'inline-flex items-center justify-center font-medium rounded-2xl',
-          'transition-colors duration-200 ease-out',
+          'inline-flex items-center justify-center font-medium rounded-lg',
+          'transition-colors duration-200',
           'focus:outline-none focus:ring-2 focus:ring-offset-2',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           'cursor-pointer select-none',
-          // Variant styles
           {
-            // Primary - dark action
-            'bg-neutral-900 text-white hover:bg-neutral-800 active:bg-black focus:ring-neutral-500 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100':
+            'bg-neutral-900 text-white hover:bg-neutral-800 active:bg-black focus:ring-neutral-500 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200':
               variant === 'primary',
-            // Secondary - subtle neutral surface
-            'bg-neutral-100 text-neutral-800 hover:bg-neutral-200 active:bg-neutral-300 focus:ring-neutral-400 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700':
+            'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 focus:ring-neutral-400 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700':
               variant === 'secondary',
-            // Outline - border tone
-            'border border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:text-neutral-900 hover:bg-neutral-50 focus:ring-neutral-400 dark:border-neutral-700 dark:bg-transparent dark:text-neutral-200 dark:hover:border-neutral-500 dark:hover:text-neutral-100':
+            'border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 focus:ring-neutral-400 dark:border-neutral-600 dark:bg-transparent dark:text-neutral-200 dark:hover:bg-neutral-800':
               variant === 'outline',
-            // Ghost - Minimal
             'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 focus:ring-neutral-400 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-neutral-800':
               variant === 'ghost',
-            // Danger - Red
-            'bg-danger-600 text-white hover:bg-danger-700 active:bg-danger-800 focus:ring-danger-500 shadow-sm':
+            'bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500 shadow-sm':
               variant === 'danger',
-            // Accent - Gold CTA
-            'bg-[#f5c842] text-neutral-900 hover:bg-[#e6ba3a] active:bg-[#d4ab35] focus:ring-[#f5c842]':
+            'bg-[#f5c842] text-neutral-900 hover:bg-[#e6ba3a] focus:ring-[#f5c842]':
               variant === 'accent',
           },
-          // Size styles
           {
             'px-3 py-1.5 text-xs gap-1.5': size === 'sm',
-            'px-5 py-2.5 text-sm gap-2': size === 'md',
-            'px-5 py-3 text-base gap-2.5': size === 'lg',
-            'px-6 py-3.5 text-base gap-3': size === 'xl',
+            'px-4 py-2 text-sm gap-2': size === 'md',
+            'px-5 py-2.5 text-base gap-2.5': size === 'lg',
+            'px-6 py-3 text-base gap-3': size === 'xl',
           },
           className
         )}

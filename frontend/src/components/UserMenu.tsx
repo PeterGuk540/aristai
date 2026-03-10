@@ -63,7 +63,7 @@ export function UserMenu() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          'flex items-center gap-3 px-3 py-2 rounded-xl',
+          'flex items-center gap-3 px-3 py-2 rounded-lg',
           'bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800',
           'text-neutral-700 dark:text-neutral-200',
           'hover:bg-neutral-100 dark:hover:bg-neutral-800/60',
@@ -92,10 +92,10 @@ export function UserMenu() {
       {isOpen && (
         <div
           className={cn(
-            'absolute right-0 mt-2 w-72 rounded-xl',
-            'bg-white dark:bg-[#1c1c1e]',
-            'border border-neutral-200 dark:border-neutral-800',
-            'shadow-soft-md',
+            'absolute right-0 mt-2 w-72 rounded-lg',
+            'bg-white dark:bg-neutral-800',
+            'border border-neutral-200 dark:border-neutral-700',
+            'shadow-md',
             'overflow-hidden',
             'z-50',
             'animate-fade-in'

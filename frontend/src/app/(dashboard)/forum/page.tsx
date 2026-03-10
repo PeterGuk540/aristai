@@ -321,11 +321,11 @@ export default function ForumPage() {
         className={`${depth > 0 ? 'ml-8 border-l border-neutral-200 dark:border-neutral-700 pl-4' : ''}`}
       >
         <div
-          className={`p-5 rounded-2xl ${
+          className={`p-4 rounded-lg border ${
             post.pinned
-              ? 'bg-[#f5c842]/5 ring-1 ring-[#f5c842]/20'
-              : 'bg-white dark:bg-[#1c1c1e]'
-          } ${depth === 0 ? 'mb-4' : 'mt-3'}`}
+              ? 'bg-[#f5c842]/5 border-[#f5c842]/20'
+              : 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm'
+          } ${depth === 0 ? 'mb-3' : 'mt-2'}`}
         >
           {/* Post Header */}
           <div className="flex items-center justify-between mb-3">
@@ -404,7 +404,7 @@ export default function ForumPage() {
                     <Tag className="h-4 w-4 mr-1" />
                     Label
                   </Button>
-                  <div className="absolute left-0 top-full mt-1 bg-white dark:bg-[#1c1c1e] border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-soft-md p-2 hidden group-hover:block z-10 min-w-[150px]">
+                  <div className="absolute left-0 top-full mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-md p-1.5 hidden group-hover:block z-10 min-w-[150px]">
                     {LABEL_OPTIONS.map((label) => (
                       <button
                         key={label}
@@ -471,13 +471,12 @@ export default function ForumPage() {
   const regularPosts = posts.filter((p) => !p.pinned);
 
   return (
-    <div className="space-y-10 max-w-5xl pb-8">
-      {/* Page Header – Borderless, more padding */}
-      <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl px-8 py-6">
+    <div className="space-y-4 sm:space-y-6 max-w-6xl">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm px-5 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('forum.title')}</h1>
-            <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('forum.subtitle')}</p>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">{t('forum.title')}</h1>
+            <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">{t('forum.subtitle')}</p>
           </div>
           <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId} data-voice-id="refresh">
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -523,7 +522,7 @@ export default function ForumPage() {
       {!selectedSessionId ? (
         <Card variant="default" padding="lg">
           <div className="text-center py-8">
-            <div className="p-4 rounded-2xl bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
+            <div className="p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
               <MessageSquare className="h-10 w-10 text-neutral-500 dark:text-neutral-400" />
             </div>
             <p className="text-neutral-600 dark:text-neutral-400">Select a live session to open the discussion space.</p>
@@ -546,7 +545,7 @@ export default function ForumPage() {
             {cases.length === 0 ? (
               <Card variant="default" padding="lg">
                 <div className="text-center py-8">
-                  <div className="p-4 rounded-2xl bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
+                  <div className="p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
                     <FileText className="h-10 w-10 text-neutral-500 dark:text-neutral-400" />
                   </div>
                   <p className="text-neutral-600 dark:text-neutral-400">No case prompts have been posted for this session.</p>
@@ -632,7 +631,7 @@ export default function ForumPage() {
                 ) : pinnedPosts.length === 0 ? (
                   <Card variant="default" padding="lg">
                     <div className="text-center py-8">
-                      <div className="p-4 rounded-2xl bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
+                      <div className="p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
                         <MessageSquare className="h-10 w-10 text-neutral-500 dark:text-neutral-400" />
                       </div>
                       <p className="text-neutral-600 dark:text-neutral-400">No posts yet. Start the conversation.</p>

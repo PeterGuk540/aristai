@@ -108,7 +108,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
 
   if (loading) {
     return (
-      <div className="animate-pulse p-4 bg-neutral-100 dark:bg-neutral-800/40 rounded-xl border border-neutral-200 dark:border-neutral-700">
+      <div className="animate-pulse p-4 bg-neutral-100 dark:bg-neutral-800/40 rounded-lg border border-neutral-200 dark:border-neutral-700">
         <div className="h-6 bg-neutral-200 dark:bg-neutral-700 rounded w-24"></div>
       </div>
     );
@@ -188,7 +188,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
 
   return (
     <div className={cn(
-      'bg-white dark:bg-[#1c1c1e] rounded-xl border border-neutral-200 dark:border-neutral-800 shadow-sm p-4',
+      'bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-800 shadow-sm p-4',
       isExpired && 'ring-2 ring-danger-500',
       isLow && !isExpired && 'ring-2 ring-warning-500'
     )}>

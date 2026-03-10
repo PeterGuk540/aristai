@@ -101,7 +101,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-white px-6 py-6 dark:bg-[#1c1c1e]">
+      <div className="rounded-lg bg-white px-6 py-6 dark:bg-neutral-800">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-3">
             <Badge variant="warning">Overview</Badge>

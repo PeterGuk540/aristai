@@ -238,7 +238,7 @@ export default function MaterialsManager({
       </CardHeader>
       <CardContent>
         {error && (
-          <div className="mb-4 p-3 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-900/50 rounded-xl flex items-center gap-2 text-danger-700 dark:text-danger-300">
+          <div className="mb-4 p-3 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-900/50 rounded-lg flex items-center gap-2 text-danger-700 dark:text-danger-300">
             <AlertCircle className="w-4 h-4" />
             {error}
             <button onClick={() => setError(null)} className="ml-auto p-1 rounded-md hover:bg-danger-100 dark:hover:bg-danger-900/30">
@@ -278,7 +278,7 @@ export default function MaterialsManager({
               return (
                 <div
                   key={material.id}
-                  className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-800/30 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 transition-colors"
+                  className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-800/30 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 transition-colors"
                 >
                   <FileIcon className="w-8 h-8 text-primary-500 flex-shrink-0" />
 

@@ -12,33 +12,21 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
     <span
       ref={ref}
       className={cn(
-        // Base styles
         'inline-flex items-center font-medium rounded-full transition-colors',
-        // Variant styles
         {
-          // Default - neutral
-          'bg-neutral-100 text-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-300':
-            variant === 'default',
-          // Primary - monochromatic neutral (no blue tint)
-          'bg-neutral-100 text-neutral-700 dark:bg-neutral-800/40 dark:text-neutral-300':
-            variant === 'primary',
-          // Success - green (muted to 50 level)
-          'bg-success-50 text-success-700 dark:bg-success-900/40 dark:text-success-300':
+          'bg-neutral-100 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300':
+            variant === 'default' || variant === 'primary',
+          'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300':
             variant === 'success',
-          // Warning - orange/amber (muted to 50 level)
-          'bg-warning-50 text-warning-700 dark:bg-warning-900/40 dark:text-warning-300':
+          'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300':
             variant === 'warning',
-          // Danger - red (muted to 50 level)
-          'bg-danger-50 text-danger-700 dark:bg-danger-900/40 dark:text-danger-300':
+          'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300':
             variant === 'danger',
-          // Info - blue (muted to 50 level)
-          'bg-info-50 text-info-700 dark:bg-info-900/40 dark:text-info-300':
+          'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300':
             variant === 'info',
-          // Accent - gold token
           'bg-[#f5c842]/10 text-[#a16207] dark:bg-[#f5c842]/20 dark:text-[#f5c842]':
             variant === 'accent',
         },
-        // Size styles
         {
           'px-2 py-0.5 text-xs': size === 'sm',
           'px-2.5 py-0.5 text-xs': size === 'md',
@@ -59,10 +47,10 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
             },
             {
               'bg-neutral-500': variant === 'default' || variant === 'primary',
-              'bg-success-500': variant === 'success',
-              'bg-warning-500': variant === 'warning',
-              'bg-danger-500': variant === 'danger',
-              'bg-info-500': variant === 'info',
+              'bg-green-500': variant === 'success',
+              'bg-amber-500': variant === 'warning',
+              'bg-red-500': variant === 'danger',
+              'bg-blue-500': variant === 'info',
               'bg-accent-500': variant === 'accent',
             }
           )}

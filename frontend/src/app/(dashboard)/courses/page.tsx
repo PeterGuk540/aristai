@@ -773,9 +773,9 @@ export default function CoursesPage() {
   }, [loading, isInstructor, courses.length, selectedCourseId, enrolledStudents.length, currentUser?.instructor_request_status]);
 
   return (
-    <div className="space-y-8 max-w-6xl pb-4">
+    <div className="space-y-6 max-w-6xl pb-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between rounded-2xl border border-amber-200/80 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] px-6 py-5 shadow-sm">
+      <div className="flex items-center justify-between rounded-lg border border-amber-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-800 px-6 py-5 shadow-sm">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('courses.title')}</h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('courses.subtitle')}</p>
@@ -816,7 +816,7 @@ export default function CoursesPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] rounded-xl">
+        <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800 rounded-xl">
           <TabsTrigger value="courses" data-voice-id="tab-courses">Overview</TabsTrigger>
           {isInstructor && <TabsTrigger value="create" data-voice-id="tab-create">{t('courses.createCourse')}</TabsTrigger>}
           {!isInstructor && <TabsTrigger value="join" data-voice-id="tab-join">{t('courses.joinCourse')}</TabsTrigger>}
@@ -839,7 +839,7 @@ export default function CoursesPage() {
           ) : courses.length === 0 ? (
             <Card variant="default" padding="lg">
               <div className="text-center py-8">
-                <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
                   <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
                 </div>
                 {isInstructor ? (
@@ -1526,7 +1526,7 @@ export default function CoursesPage() {
               ) : syllabi.length === 0 ? (
                 <Card variant="default" padding="lg">
                   <div className="text-center py-8">
-                    <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                    <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
                       <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
                     </div>
                     <p className="text-neutral-700 dark:text-neutral-300 font-medium mb-1">No syllabi saved yet</p>
@@ -1708,7 +1708,7 @@ export default function CoursesPage() {
               ) : (
                 <Card variant="default" padding="lg">
                   <div className="text-center py-8">
-                    <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                    <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
                       <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
                     </div>
                     <p className="text-neutral-600 dark:text-neutral-400">Select a course to view AI insights</p>

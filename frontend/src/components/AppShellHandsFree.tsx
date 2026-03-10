@@ -297,7 +297,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
   // Show loading state while checking auth or onboarding
   if (isLoading || !isReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f7] dark:bg-black">
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-900 dark:border-white"></div>
       </div>
     );
@@ -310,7 +310,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
   return (
     <ToastProvider>
-    <div className="min-h-screen bg-[#f5f5f7] dark:bg-black">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -319,10 +319,9 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         />
       )}
 
-      {/* Sidebar – No border-r, bg contrast sufficient */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-[#1c1c1e]',
+          'fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800',
           'transform transition-transform duration-300 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
@@ -443,7 +442,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
         {/* Sidebar identity block */}
         <div className="px-4 pb-3">
-          <div className="flex items-center gap-3 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-800/50">
+          <div className="flex items-center gap-3 rounded-lg bg-neutral-50 p-3 dark:bg-neutral-800/50">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white dark:bg-white dark:text-neutral-900">
               {currentUser?.name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'U'}
             </div>
@@ -474,8 +473,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
       {/* Main content */}
       <div className="lg:pl-72">
-        {/* Top navigation – Enhanced frosted glass */}
-        <header className="relative sticky top-0 z-30 flex h-[72px] items-center border-b border-neutral-200/60 bg-white/80 px-4 backdrop-blur-xl backdrop-saturate-150 dark:border-neutral-800 dark:bg-black/80 sm:px-6">
+        <header className="relative sticky top-0 z-30 flex h-16 items-center border-b border-neutral-200 bg-white/95 px-4 backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-950/95 sm:px-6">
           <div className="flex flex-1 items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
@@ -523,11 +521,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                   }}
                   placeholder="Search pages..."
                   data-voice-id="workspace-search"
-                  className="w-64 rounded-xl border border-neutral-200 bg-neutral-50 py-2 pl-9 pr-3 text-sm text-neutral-700 outline-none transition-colors focus:border-neutral-400 focus:bg-white dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300"
+                  className="w-56 rounded-lg border border-neutral-300 bg-white py-1.5 pl-9 pr-3 text-sm text-neutral-700 outline-none transition-colors focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
                 />
               </div>
               {searchFocused && searchQuery.trim() && (
-                <div className="absolute right-0 top-12 z-50 w-72 rounded-2xl border border-neutral-200 bg-white p-2 shadow-soft-md dark:border-neutral-800 dark:bg-[#1c1c1e]">
+                <div className="absolute right-0 top-12 z-50 w-72 rounded-lg border border-neutral-200 bg-white p-2 shadow-md dark:border-neutral-700 dark:bg-neutral-800">
                   <div className="max-h-56 overflow-auto">
                     {filteredNavigation.map((item) => (
                       <Link
@@ -576,7 +574,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                 )}
               </button>
               {notificationsOpen && (
-                <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-neutral-200 bg-white p-3 shadow-soft-md dark:border-neutral-800 dark:bg-[#1c1c1e]">
+                <div className="absolute right-0 top-12 z-50 w-80 rounded-lg border border-neutral-200 bg-white p-3 shadow-md dark:border-neutral-700 dark:bg-neutral-800">
                   <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                     Notifications
                   </p>
@@ -651,7 +649,6 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             {/* User menu */}
             <UserMenu />
           </div>
-          {/* Gradient line removed */}
         </header>
 
         {/* Page content */}

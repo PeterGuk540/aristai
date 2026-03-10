@@ -13,31 +13,25 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, label, error, hint, variant = 'default', resize = 'vertical', ...props }, ref) => (
     <div className="w-full">
       {label && (
-        <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-600 dark:text-neutral-400 mb-2">
+        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
           {label}
         </label>
       )}
       <textarea
         ref={ref}
         className={cn(
-          // Base styles
-          'w-full rounded-2xl px-4 py-3 transition-colors duration-200',
+          'w-full rounded-lg px-3 py-2 transition-colors duration-200',
           'text-neutral-900 dark:text-neutral-100 text-sm',
           'placeholder:text-neutral-400 dark:placeholder:text-neutral-500',
           'focus:outline-none focus:ring-2 focus:ring-offset-0',
           'disabled:opacity-50 disabled:cursor-not-allowed',
-          // Variant styles
           {
-            // Default - bordered, neutral focus
-            'bg-white dark:bg-[#1c1c1e] border border-neutral-200 dark:border-neutral-700 focus:border-neutral-400 focus:ring-neutral-400/20':
+            'bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 focus:border-primary-500 focus:ring-primary-500/20':
               variant === 'default' && !error,
-            // Filled - subtle background
-            'bg-neutral-100/60 dark:bg-neutral-800/40 border border-transparent focus:border-neutral-400 focus:ring-neutral-400/20 focus:bg-white dark:focus:bg-[#1c1c1e]':
+            'bg-neutral-50 dark:bg-neutral-800/50 border border-transparent focus:border-primary-500 focus:ring-primary-500/20 focus:bg-white dark:focus:bg-neutral-800':
               variant === 'filled' && !error,
           },
-          // Error state
           error && 'border-danger-500 focus:border-danger-500 focus:ring-danger-500/20 bg-danger-50/50 dark:bg-danger-900/10',
-          // Resize styles
           {
             'resize-none': resize === 'none',
             'resize-y': resize === 'vertical',

@@ -19,10 +19,8 @@ interface TabsProps {
 }
 
 export function Tabs({ defaultValue, value, onValueChange, children, className }: TabsProps) {
-  // Support both controlled and uncontrolled modes
   const [internalTab, setInternalTab] = useState(value || defaultValue || '');
 
-  // Sync internal state with controlled value
   useEffect(() => {
     if (value !== undefined) {
       setInternalTab(value);
@@ -57,15 +55,10 @@ export function TabsList({ children, className, variant = 'default' }: TabsListP
       className={cn(
         'inline-flex items-center',
         {
-          // Default – Apple segmented control (no border, bg container)
-          'gap-1 rounded-2xl bg-neutral-100 dark:bg-neutral-800 p-1':
-            variant === 'default',
-          // Pills - separate buttons
+          'gap-4 border-b border-neutral-200 dark:border-neutral-700':
+            variant === 'default' || variant === 'underline',
           'gap-2':
             variant === 'pills',
-          // Underline - bottom border style
-          'gap-6 border-b border-neutral-200 dark:border-neutral-700 pb-1':
-            variant === 'underline',
         },
         className
       )}
@@ -97,14 +90,11 @@ export function TabsTrigger({ value, children, className, disabled, 'data-voice-
       data-voice-id={voiceId || `tab-${value}`}
       data-state={isActive ? 'active' : 'inactive'}
       className={cn(
-        // Base styles
-        'px-4 py-2 text-sm font-medium rounded-xl transition-colors duration-200',
-        'focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2',
-        // Active state – White pill, no gold
+        'px-1 pb-2 text-sm font-medium transition-colors duration-200 border-b-2 -mb-px',
+        'focus:outline-none',
         isActive
-          ? 'bg-white text-neutral-900 dark:bg-neutral-700 dark:text-white shadow-sm'
-          : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-50/50 dark:hover:bg-neutral-700/40',
-        // Disabled state
+          ? 'border-primary-600 text-neutral-900 dark:text-white dark:border-primary-400'
+          : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200',
         disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
         className
       )}
@@ -129,12 +119,7 @@ export function TabsContent({ value, children, className }: TabsContentProps) {
   if (activeTab !== value) return null;
 
   return (
-    <div
-      className={cn(
-        'mt-4 animate-fade-in',
-        className
-      )}
-    >
+    <div className={cn('mt-4', className)}>
       {children}
     </div>
   );

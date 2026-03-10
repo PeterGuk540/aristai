@@ -70,7 +70,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
         <div className="h-6 bg-neutral-200 dark:bg-neutral-700 rounded w-1/3 mb-4"></div>
         <div className="grid grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-24 bg-neutral-200 dark:bg-neutral-700 rounded-xl"></div>
+            <div key={i} className="h-24 bg-neutral-200 dark:bg-neutral-700 rounded-lg"></div>
           ))}
         </div>
       </div>
@@ -79,7 +79,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
 
   if (error) {
     return (
-      <div className="p-4 text-danger-700 bg-danger-50 dark:bg-danger-900/20 rounded-xl border border-danger-200 dark:border-danger-900/50">
+      <div className="p-4 text-danger-700 bg-danger-50 dark:bg-danger-900/20 rounded-lg border border-danger-200 dark:border-danger-900/50">
         {error}
         <button onClick={fetchGroups} className="ml-2 underline">
           Retry
@@ -180,7 +180,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
         {groups.map((group) => (
           <div
             key={group.id}
-            className="border border-neutral-200 dark:border-neutral-700 rounded-xl p-3 bg-neutral-50 dark:bg-neutral-800/30"
+            className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/30"
           >
             <div className="flex items-center justify-between mb-2">
               <span className="font-semibold text-neutral-900 dark:text-neutral-100">{group.name}</span>

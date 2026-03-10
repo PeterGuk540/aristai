@@ -563,9 +563,9 @@ export default function SessionsPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-6xl pb-4">
+    <div className="space-y-6 max-w-6xl pb-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between rounded-2xl border border-emerald-200/80 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] px-6 py-5 shadow-sm">
+      <div className="flex items-center justify-between rounded-lg border border-emerald-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-800 px-6 py-5 shadow-sm">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('sessions.title')}</h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('sessions.subtitle')}</p>
@@ -573,7 +573,7 @@ export default function SessionsPage() {
       </div>
 
       {/* Course Selector */}
-      <Card variant="default" padding="md" className="border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e]">
+      <Card variant="default" padding="md" className="border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800">
         <Select
           label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
@@ -591,7 +591,7 @@ export default function SessionsPage() {
 
       {selectedCourseId && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] rounded-xl">
+          <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800 rounded-xl">
             <TabsTrigger value="sessions" data-voice-id="tab-sessions">{t('sessions.viewSessions')}</TabsTrigger>
             <TabsTrigger value="materials" data-voice-id="tab-materials">
               <FileText className="w-4 h-4 mr-1.5" />
@@ -624,7 +624,7 @@ export default function SessionsPage() {
             ) : sessions.length === 0 ? (
               <Card variant="default" padding="lg">
                 <div className="text-center py-8">
-                  <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                  <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
                     <Calendar className="h-10 w-10 text-primary-600 dark:text-primary-400" />
                   </div>
                   <p className="text-neutral-600 dark:text-neutral-400">{t('sessions.noSessions')}</p>
@@ -1117,7 +1117,7 @@ export default function SessionsPage() {
                 ) : (
                   <Card variant="default" padding="lg">
                     <div className="text-center py-8">
-                      <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                      <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
                         <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
                       </div>
                       <p className="text-neutral-600 dark:text-neutral-400">Select a session to view insights</p>
@@ -1177,7 +1177,7 @@ export default function SessionsPage() {
                 ) : (
                   <Card variant="default" padding="lg">
                     <div className="text-center py-8">
-                      <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
+                      <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
                         <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
                       </div>
                       <p className="text-neutral-600 dark:text-neutral-400">Select a session to access AI features</p>

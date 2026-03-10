@@ -58,8 +58,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
               'w-2.5 h-2.5': size === 'lg',
             },
             {
-              'bg-neutral-500': variant === 'default',
-              'bg-neutral-500': variant === 'primary',
+              'bg-neutral-500': variant === 'default' || variant === 'primary',
               'bg-success-500': variant === 'success',
               'bg-warning-500': variant === 'warning',
               'bg-danger-500': variant === 'danger',

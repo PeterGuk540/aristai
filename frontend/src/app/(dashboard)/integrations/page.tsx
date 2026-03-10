@@ -654,73 +654,65 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">LMS Integrations</h1>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Connect each partner LMS tenant separately, then map and sync materials into AristAI.
-          </p>
-        </div>
-        <button
-          onClick={() => void refreshAll()}
-          disabled={refreshing}
-          data-voice-id="refresh-integrations"
-          className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
-        >
-          {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {refreshing ? 'Refreshing...' : 'Refresh'}
-        </button>
-      </div>
-
-      <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-800">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Plug className="h-4 w-4 text-primary-600" />
-            <h2 className="font-semibold text-neutral-900 dark:text-neutral-100">Provider Status</h2>
+      {/* Header with refresh */}
+      <div className="pb-4 border-b border-neutral-200 dark:border-neutral-700">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">LMS Integrations</h1>
+            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+              Connect each partner LMS tenant separately, then map and sync materials into AristAI.
+            </p>
           </div>
           <button
-            onClick={() => void handleConnectionCheck()}
-            disabled={checkingConnection || !canReadExternal}
-            data-voice-id="check-integration-connection"
-            className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
+            onClick={() => void refreshAll()}
+            disabled={refreshing}
+            data-voice-id="refresh-integrations"
+            className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
           >
-            {checkingConnection ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
-            Check connection
+            {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
+      </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
-          {providers.map((p) => (
-            <div
-              key={p.name}
-              className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-700"
-              data-voice-id={`provider-${p.name}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{p.name.toUpperCase()}</span>
-                {p.enabled ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                ) : (
-                  <AlertCircle className="h-4 w-4 text-amber-600" />
-                )}
-              </div>
-              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                {p.enabled ? (p.configured ? 'Global credentials available' : 'Use saved connection') : 'Planned'}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs dark:border-neutral-700 dark:bg-neutral-800/30">
-          {connectionCheck ? (
-            <span className="text-emerald-700 dark:text-emerald-300">
-              Connected as {connectionCheck.provider_user_name || `user ${connectionCheck.user_id}`}.
+      {/* Provider status - horizontal inline list */}
+      <div className="flex flex-wrap items-center gap-4 text-sm">
+        <span className="text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
+          <Plug className="h-4 w-4" />
+          Providers:
+        </span>
+        {providers.map((p) => (
+          <span
+            key={p.name}
+            className="inline-flex items-center gap-1.5"
+            data-voice-id={`provider-${p.name}`}
+          >
+            {p.enabled ? (
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+            ) : (
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+            )}
+            <span className="font-medium text-neutral-700 dark:text-neutral-300">{p.name.toUpperCase()}</span>
+            <span className="text-neutral-400 dark:text-neutral-500 text-xs">
+              {p.enabled ? (p.configured ? 'configured' : 'saved') : 'planned'}
             </span>
-          ) : (
-            <span className="text-neutral-600 dark:text-neutral-300">No verified connection yet.</span>
-          )}
-        </div>
-      </section>
+          </span>
+        ))}
+        <button
+          onClick={() => void handleConnectionCheck()}
+          disabled={checkingConnection || !canReadExternal}
+          data-voice-id="check-integration-connection"
+          className="inline-flex items-center gap-1.5 text-xs text-primary-600 dark:text-primary-400 hover:underline disabled:opacity-60"
+        >
+          {checkingConnection ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
+          Check connection
+        </button>
+        {connectionCheck && (
+          <span className="text-xs text-emerald-700 dark:text-emerald-300">
+            Connected as {connectionCheck.provider_user_name || `user ${connectionCheck.user_id}`}
+          </span>
+        )}
+      </div>
 
       <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-800">
         <div className="mb-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800/30 dark:text-neutral-200">
@@ -1071,26 +1063,33 @@ export default function IntegrationsPage() {
           {!jobs.length ? (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">No sync jobs recorded yet.</p>
           ) : (
-            <div className="space-y-2">
-              {jobs.map((j) => (
-                <div
-                  key={j.id}
-                  className="rounded-lg border border-neutral-200 px-3 py-2 text-xs dark:border-neutral-700"
-                  data-voice-id={`sync-job-${j.id}`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium">
-                      Job #{j.id} ({j.status})
-                    </span>
-                    <span className="text-neutral-500 dark:text-neutral-400">
-                      {j.created_at ? new Date(j.created_at).toLocaleString() : ''}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-neutral-600 dark:text-neutral-300">
-                    Requested {j.requested_count}, imported {j.imported_count}, skipped {j.skipped_count}, failed {j.failed_count}
-                  </p>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-neutral-200 dark:border-neutral-700">
+                    <th className="text-left py-1.5 font-medium text-neutral-500 dark:text-neutral-400">Job</th>
+                    <th className="text-left py-1.5 font-medium text-neutral-500 dark:text-neutral-400">Status</th>
+                    <th className="text-right py-1.5 font-medium text-neutral-500 dark:text-neutral-400">Req</th>
+                    <th className="text-right py-1.5 font-medium text-neutral-500 dark:text-neutral-400">Imp</th>
+                    <th className="text-right py-1.5 font-medium text-neutral-500 dark:text-neutral-400">Skip</th>
+                    <th className="text-right py-1.5 font-medium text-neutral-500 dark:text-neutral-400">Fail</th>
+                    <th className="text-right py-1.5 font-medium text-neutral-500 dark:text-neutral-400">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((j) => (
+                    <tr key={j.id} className="border-b border-neutral-100 dark:border-neutral-800" data-voice-id={`sync-job-${j.id}`}>
+                      <td className="py-1.5 font-medium text-neutral-700 dark:text-neutral-300">#{j.id}</td>
+                      <td className="py-1.5 text-neutral-600 dark:text-neutral-400">{j.status}</td>
+                      <td className="py-1.5 text-right text-neutral-600 dark:text-neutral-400">{j.requested_count}</td>
+                      <td className="py-1.5 text-right text-neutral-600 dark:text-neutral-400">{j.imported_count}</td>
+                      <td className="py-1.5 text-right text-neutral-600 dark:text-neutral-400">{j.skipped_count}</td>
+                      <td className="py-1.5 text-right text-neutral-600 dark:text-neutral-400">{j.failed_count}</td>
+                      <td className="py-1.5 text-right text-neutral-400">{j.created_at ? new Date(j.created_at).toLocaleDateString() : ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

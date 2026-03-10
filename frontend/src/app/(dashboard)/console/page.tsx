@@ -42,6 +42,7 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
+  EmptyState,
 } from '@/components/ui';
 
 // Instructor enhancement components
@@ -574,64 +575,55 @@ export default function ConsolePage() {
   if (!isInstructor && !isAdmin) {
     return (
       <div className="space-y-6">
-        <Card variant="default" padding="lg">
-          <div className="text-center py-8">
-            <div className="p-4 rounded-lg bg-danger-50 dark:bg-danger-900/30 w-fit mx-auto mb-4">
-              <Bot className="h-10 w-10 text-danger-600 dark:text-danger-400" />
-            </div>
-            <p className="text-neutral-600 dark:text-neutral-400">{t('errors.forbidden')}</p>
-          </div>
-        </Card>
+        <EmptyState icon={Bot} message={t('errors.forbidden')} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6 pb-4">
-      {/* Page Header */}
-      <div className="flex items-center justify-between rounded-lg border border-sky-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-800 px-6 py-5 shadow-sm">
-        <div>
-          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('console.title')}</h1>
-          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('console.subtitle')}</p>
+      {/* Header + selectors merged into one row */}
+      <div className="pb-4 border-b border-neutral-200 dark:border-neutral-700">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1">
+            <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('console.title')}</h1>
+            <p className="text-neutral-600 dark:text-neutral-400 mt-1 text-sm">{t('console.subtitle')}</p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+            <Select
+              label={t('courses.selectCourse')}
+              value={selectedCourseId?.toString() || ''}
+              onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
+              data-voice-id="select-course"
+            >
+              <option value="">Select a course...</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.title}
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              label="Select Live Session"
+              value={selectedSessionId?.toString() || ''}
+              onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
+              disabled={!selectedCourseId}
+              data-voice-id="select-session"
+            >
+              <option value="">Select a session...</option>
+              {sessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.title} (ID: {session.id})
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
       </div>
 
-      {/* Course & Session Selector */}
-      <Card variant="default" padding="md" className="border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800">
-        <div className="grid md:grid-cols-2 gap-4">
-        <Select
-          label={t('courses.selectCourse')}
-          value={selectedCourseId?.toString() || ''}
-          onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
-          data-voice-id="select-course"
-        >
-          <option value="">Select a course...</option>
-          {courses.map((course) => (
-            <option key={course.id} value={course.id}>
-              {course.title}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          label="Select Live Session"
-          value={selectedSessionId?.toString() || ''}
-          onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
-          disabled={!selectedCourseId}
-          data-voice-id="select-session"
-        >
-          <option value="">Select a session...</option>
-          {sessions.map((session) => (
-            <option key={session.id} value={session.id}>
-              {session.title} (ID: {session.id})
-            </option>
-          ))}
-        </Select>
-        </div>
-      </Card>
-
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800 rounded-xl">
+        <TabsList>
           <TabsTrigger value="copilot" disabled={!selectedSessionId} data-voice-id="tab-copilot">
             {t('console.copilot')}
           </TabsTrigger>

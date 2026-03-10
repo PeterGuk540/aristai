@@ -25,6 +25,7 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
+  EmptyState,
 } from '@/components/ui';
 import MaterialsManager from '@/components/materials/MaterialsManager';
 
@@ -486,52 +487,64 @@ export default function SessionsPage() {
     }
 
     return (
-      <div className="space-y-5">
+      <div className="space-y-2">
         {plan.topics && plan.topics.length > 0 && (
-          <div>
-            <h4 className="font-semibold text-neutral-900 dark:text-white mb-2">{t('sessions.topics')}</h4>
-            <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1.5">
+          <details className="group" open>
+            <summary className="flex items-center gap-2 cursor-pointer py-2 text-sm font-semibold text-neutral-900 dark:text-white select-none">
+              <ChevronRight className="h-4 w-4 text-neutral-400 transition-transform group-open:rotate-90" />
+              {t('sessions.topics')} ({plan.topics.length})
+            </summary>
+            <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1.5 ml-6 pb-2">
               {plan.topics.map((topic, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <ChevronRight className="h-4 w-4 text-primary-500 mt-0.5 flex-shrink-0" />
+                  <span className="w-1 h-1 rounded-full bg-neutral-400 mt-2 flex-shrink-0" />
                   {topic}
                 </li>
               ))}
             </ul>
-          </div>
+          </details>
         )}
 
         {plan.goals && (
-          <div>
-            <h4 className="font-semibold text-neutral-900 dark:text-white mb-2">{t('sessions.goals')}</h4>
-            <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1.5">
+          <details className="group">
+            <summary className="flex items-center gap-2 cursor-pointer py-2 text-sm font-semibold text-neutral-900 dark:text-white select-none">
+              <ChevronRight className="h-4 w-4 text-neutral-400 transition-transform group-open:rotate-90" />
+              {t('sessions.goals')}
+            </summary>
+            <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1.5 ml-6 pb-2">
               {(Array.isArray(plan.goals) ? plan.goals : [plan.goals]).map((goal, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <ChevronRight className="h-4 w-4 text-primary-500 mt-0.5 flex-shrink-0" />
+                  <span className="w-1 h-1 rounded-full bg-neutral-400 mt-2 flex-shrink-0" />
                   {goal}
                 </li>
               ))}
             </ul>
-          </div>
+          </details>
         )}
 
         {plan.key_concepts && plan.key_concepts.length > 0 && (
-          <div>
-            <h4 className="font-semibold text-neutral-900 dark:text-white mb-2">{t('sessions.keyConcepts')}</h4>
-            <div className="flex flex-wrap gap-2">
+          <details className="group">
+            <summary className="flex items-center gap-2 cursor-pointer py-2 text-sm font-semibold text-neutral-900 dark:text-white select-none">
+              <ChevronRight className="h-4 w-4 text-neutral-400 transition-transform group-open:rotate-90" />
+              {t('sessions.keyConcepts')} ({plan.key_concepts.length})
+            </summary>
+            <div className="flex flex-wrap gap-2 ml-6 pb-2">
               {plan.key_concepts.map((concept, i) => (
                 <Badge key={i} variant="info">
                   {concept}
                 </Badge>
               ))}
             </div>
-          </div>
+          </details>
         )}
 
         {plan.case && (
-          <div>
-            <h4 className="font-semibold text-neutral-900 dark:text-white mb-2">{t('sessions.caseStudy')}</h4>
-            <div className="bg-primary-50 dark:bg-primary-900/30 p-4 rounded-xl text-sm border border-primary-100 dark:border-primary-800">
+          <details className="group">
+            <summary className="flex items-center gap-2 cursor-pointer py-2 text-sm font-semibold text-neutral-900 dark:text-white select-none">
+              <ChevronRight className="h-4 w-4 text-neutral-400 transition-transform group-open:rotate-90" />
+              {t('sessions.caseStudy')}
+            </summary>
+            <div className="bg-primary-50 dark:bg-primary-900/30 p-4 rounded-lg text-sm border border-primary-100 dark:border-primary-800 ml-6 mb-2">
               {typeof plan.case === 'string' ? (
                 <p className="text-primary-800 dark:text-primary-200">{plan.case}</p>
               ) : (
@@ -545,18 +558,21 @@ export default function SessionsPage() {
                 </>
               )}
             </div>
-          </div>
+          </details>
         )}
 
         {plan.discussion_prompts && plan.discussion_prompts.length > 0 && (
-          <div>
-            <h4 className="font-semibold text-neutral-900 dark:text-white mb-2">{t('sessions.discussionPrompts')}</h4>
-            <ol className="text-sm text-neutral-600 dark:text-neutral-400 space-y-2 list-decimal list-inside">
+          <details className="group">
+            <summary className="flex items-center gap-2 cursor-pointer py-2 text-sm font-semibold text-neutral-900 dark:text-white select-none">
+              <ChevronRight className="h-4 w-4 text-neutral-400 transition-transform group-open:rotate-90" />
+              {t('sessions.discussionPrompts')} ({plan.discussion_prompts.length})
+            </summary>
+            <ol className="text-sm text-neutral-600 dark:text-neutral-400 space-y-2 list-decimal list-inside ml-6 pb-2">
               {plan.discussion_prompts.map((prompt, i) => (
                 <li key={i}>{prompt}</li>
               ))}
             </ol>
-          </div>
+          </details>
         )}
       </div>
     );
@@ -564,34 +580,32 @@ export default function SessionsPage() {
 
   return (
     <div className="space-y-6 max-w-6xl pb-4">
-      {/* Page Header */}
-      <div className="flex items-center justify-between rounded-lg border border-emerald-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-800 px-6 py-5 shadow-sm">
-        <div>
-          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('sessions.title')}</h1>
-          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('sessions.subtitle')}</p>
+      {/* Header + course selector merged into one row */}
+      <div className="pb-4 border-b border-neutral-200 dark:border-neutral-700">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1">
+            <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('sessions.title')}</h1>
+            <p className="text-neutral-600 dark:text-neutral-400 mt-1 text-sm">{t('sessions.subtitle')}</p>
+          </div>
+          <Select
+            label={t('courses.selectCourse')}
+            value={selectedCourseId?.toString() || ''}
+            onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
+            data-voice-id="select-course"
+          >
+            <option value="">Select a course...</option>
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.title} (ID: {course.id})
+              </option>
+            ))}
+          </Select>
         </div>
       </div>
 
-      {/* Course Selector */}
-      <Card variant="default" padding="md" className="border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800">
-        <Select
-          label={t('courses.selectCourse')}
-          value={selectedCourseId?.toString() || ''}
-          onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
-          data-voice-id="select-course"
-        >
-          <option value="">Select a course...</option>
-          {courses.map((course) => (
-            <option key={course.id} value={course.id}>
-              {course.title} (ID: {course.id})
-            </option>
-          ))}
-        </Select>
-      </Card>
-
       {selectedCourseId && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800 rounded-xl">
+          <TabsList>
             <TabsTrigger value="sessions" data-voice-id="tab-sessions">{t('sessions.viewSessions')}</TabsTrigger>
             <TabsTrigger value="materials" data-voice-id="tab-materials">
               <FileText className="w-4 h-4 mr-1.5" />
@@ -622,17 +636,11 @@ export default function SessionsPage() {
                 </div>
               </div>
             ) : sessions.length === 0 ? (
-              <Card variant="default" padding="lg">
-                <div className="text-center py-8">
-                  <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-                    <Calendar className="h-10 w-10 text-primary-600 dark:text-primary-400" />
-                  </div>
-                  <p className="text-neutral-600 dark:text-neutral-400">{t('sessions.noSessions')}</p>
-                  <p className="text-sm text-neutral-500 dark:text-neutral-500 mt-2">
-                    {t('sessions.createOrGenerate')}
-                  </p>
-                </div>
-              </Card>
+              <EmptyState
+                icon={Calendar}
+                message={t('sessions.noSessions')}
+                submessage={t('sessions.createOrGenerate')}
+              />
             ) : (
               <div className="grid lg:grid-cols-3 gap-6">
                 {/* Session List */}
@@ -685,13 +693,47 @@ export default function SessionsPage() {
                 <div className="lg:col-span-2 space-y-4">
                   {selectedSession ? (
                     <>
+                      {/* Compact status toolbar */}
+                      {hasInstructorPrivileges && (
+                        <div className="flex items-center gap-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 px-3 py-2">
+                          <Badge variant={statusColors[selectedSession.status]} size="sm">
+                            {selectedSession.status.toUpperCase()}
+                          </Badge>
+                          <div className="flex-1" />
+                          {selectedSession.status !== 'draft' && (
+                            <Button variant="ghost" size="sm" onClick={() => handleStatusChange(selectedSession.id, 'draft')} data-voice-id="set-to-draft">
+                              {t('sessions.setToDraft')}
+                            </Button>
+                          )}
+                          {selectedSession.status === 'draft' && (
+                            <Button variant="ghost" size="sm" onClick={() => handleStatusChange(selectedSession.id, 'scheduled')} data-voice-id="schedule-session">
+                              {t('sessions.schedule')}
+                            </Button>
+                          )}
+                          {(selectedSession.status === 'draft' || selectedSession.status === 'scheduled') && (
+                            <Button size="sm" onClick={() => handleStatusChange(selectedSession.id, 'live')} data-voice-id="go-live">
+                              <Play className="h-4 w-4 mr-1" />
+                              {t('sessions.goLive')}
+                            </Button>
+                          )}
+                          {selectedSession.status === 'live' && (
+                            <Button variant="secondary" size="sm" onClick={() => handleStatusChange(selectedSession.id, 'completed')} data-voice-id="complete-session">
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              {t('sessions.complete')}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
                       <Card variant="default">
                         <CardHeader>
                           <div className="flex items-center justify-between">
                             <CardTitle>{selectedSession.title}</CardTitle>
-                            <Badge variant={statusColors[selectedSession.status]}>
-                              {selectedSession.status.toUpperCase()}
-                            </Badge>
+                            {!hasInstructorPrivileges && (
+                              <Badge variant={statusColors[selectedSession.status]}>
+                                {selectedSession.status.toUpperCase()}
+                              </Badge>
+                            )}
                           </div>
                           <CardDescription>
                             Created: {formatTimestamp(selectedSession.created_at)}
@@ -704,57 +746,6 @@ export default function SessionsPage() {
                           {/* Instructor Controls */}
                           {hasInstructorPrivileges && (
                             <>
-                              {/* Status Control */}
-                              <div className="pt-4 border-t border-neutral-200 dark:border-neutral-700">
-                                <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
-                                  {t('sessions.statusControl')}
-                                </h4>
-                                <div className="flex flex-wrap gap-2">
-                                  {selectedSession.status !== 'draft' && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleStatusChange(selectedSession.id, 'draft')}
-                                      data-voice-id="set-to-draft"
-                                    >
-                                      {t('sessions.setToDraft')}
-                                    </Button>
-                                  )}
-                                  {selectedSession.status === 'draft' && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleStatusChange(selectedSession.id, 'scheduled')}
-                                      data-voice-id="schedule-session"
-                                    >
-                                      {t('sessions.schedule')}
-                                    </Button>
-                                  )}
-                                  {(selectedSession.status === 'draft' ||
-                                    selectedSession.status === 'scheduled') && (
-                                    <Button
-                                      size="sm"
-                                      onClick={() => handleStatusChange(selectedSession.id, 'live')}
-                                      data-voice-id="go-live"
-                                    >
-                                      <Play className="h-4 w-4 mr-2" />
-                                      {t('sessions.goLive')}
-                                    </Button>
-                                  )}
-                                  {selectedSession.status === 'live' && (
-                                    <Button
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() => handleStatusChange(selectedSession.id, 'completed')}
-                                      data-voice-id="complete-session"
-                                    >
-                                      <CheckCircle className="h-4 w-4 mr-2" />
-                                      {t('sessions.complete')}
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-
                               {/* Edit and Delete */}
                               <div className="flex gap-2 pt-4 border-t border-neutral-200 dark:border-neutral-700">
                                 <Button
@@ -960,11 +951,10 @@ export default function SessionsPage() {
                       )}
                     </>
                   ) : (
-                    <Card variant="default" padding="lg">
-                      <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
-                        {t('sessions.selectSession')}
-                      </div>
-                    </Card>
+                    <EmptyState
+                      icon={Calendar}
+                      message={t('sessions.selectSession')}
+                    />
                   )}
                 </div>
               </div>
@@ -1115,14 +1105,10 @@ export default function SessionsPage() {
                     </Card>
                   </>
                 ) : (
-                  <Card variant="default" padding="lg">
-                    <div className="text-center py-8">
-                      <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-                        <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
-                      </div>
-                      <p className="text-neutral-600 dark:text-neutral-400">Select a session to view insights</p>
-                    </div>
-                  </Card>
+                  <EmptyState
+                    icon={BookOpen}
+                    message="Select a session to view insights"
+                  />
                 )}
               </div>
             </TabsContent>
@@ -1175,14 +1161,10 @@ export default function SessionsPage() {
                     </Card>
                   </>
                 ) : (
-                  <Card variant="default" padding="lg">
-                    <div className="text-center py-8">
-                      <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-                        <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
-                      </div>
-                      <p className="text-neutral-600 dark:text-neutral-400">Select a session to access AI features</p>
-                    </div>
-                  </Card>
+                  <EmptyState
+                    icon={BookOpen}
+                    message="Select a session to access AI features"
+                  />
                 )}
               </div>
             </TabsContent>

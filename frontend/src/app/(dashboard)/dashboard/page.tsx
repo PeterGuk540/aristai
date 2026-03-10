@@ -1,49 +1,13 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
-import { BookOpen, Calendar, MessageSquare, TrendingUp, Users, Activity, ArrowRight } from 'lucide-react';
+import { BookOpen, Calendar, MessageSquare, Users, Activity } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import Link from 'next/link';
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const t = useTranslations();
-
-  const stats = [
-    {
-      name: t('dashboard.activeCourses'),
-      value: '4',
-      icon: BookOpen,
-      gradient: 'from-primary-500 to-primary-700',
-      bgLight: 'bg-primary-50 dark:bg-primary-900/30',
-      textColor: 'text-primary-600 dark:text-primary-400'
-    },
-    {
-      name: t('dashboard.upcomingSessions'),
-      value: '12',
-      icon: Calendar,
-      gradient: 'from-success-500 to-success-700',
-      bgLight: 'bg-success-50 dark:bg-success-900/30',
-      textColor: 'text-success-600 dark:text-success-400'
-    },
-    {
-      name: t('dashboard.forumPosts'),
-      value: '89',
-      icon: MessageSquare,
-      gradient: 'from-accent-400 to-accent-600',
-      bgLight: 'bg-accent-50 dark:bg-accent-900/30',
-      textColor: 'text-accent-600 dark:text-accent-400'
-    },
-    {
-      name: t('dashboard.studentsEngaged'),
-      value: '156',
-      icon: Users,
-      gradient: 'from-info-500 to-info-700',
-      bgLight: 'bg-info-50 dark:bg-info-900/30',
-      textColor: 'text-info-600 dark:text-info-400'
-    },
-  ];
 
   const recentActivity = [
     { title: t('dashboard.activity.newDiscussion'), time: t('dashboard.activity.fiveMinutesAgo'), type: 'discussion' },
@@ -53,169 +17,78 @@ export default function DashboardPage() {
   ];
 
   const quickActions = [
-    {
-      icon: BookOpen,
-      label: t('dashboard.createCourse'),
-      href: '/courses',
-      description: 'Set up a new course'
-    },
-    {
-      icon: Calendar,
-      label: t('dashboard.startSession'),
-      href: '/sessions',
-      description: 'Begin live discussion'
-    },
-    {
-      icon: MessageSquare,
-      label: t('dashboard.newDiscussion'),
-      href: '/forum',
-      description: 'Start a conversation'
-    },
-    {
-      icon: Users,
-      label: t('dashboard.inviteStudents'),
-      href: '/courses',
-      description: 'Add participants'
-    },
+    { icon: BookOpen, label: t('dashboard.createCourse'), href: '/courses' },
+    { icon: Calendar, label: t('dashboard.startSession'), href: '/sessions' },
+    { icon: MessageSquare, label: t('dashboard.newDiscussion'), href: '/forum' },
+    { icon: Users, label: t('dashboard.inviteStudents'), href: '/courses' },
   ];
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'discussion': return MessageSquare;
-      case 'session': return Calendar;
-      case 'report': return Activity;
-      case 'enrollment': return Users;
-      default: return Activity;
-    }
-  };
-
-  const getActivityColor = (type: string) => {
-    switch (type) {
-      case 'discussion': return 'bg-accent-100 dark:bg-accent-900/50 text-accent-600 dark:text-accent-400';
-      case 'session': return 'bg-success-100 dark:bg-success-900/50 text-success-600 dark:text-success-400';
-      case 'report': return 'bg-info-100 dark:bg-info-900/50 text-info-600 dark:text-info-400';
-      case 'enrollment': return 'bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400';
-      default: return 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400';
-    }
-  };
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg bg-white px-6 py-6 dark:bg-neutral-800">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-3">
-            <Badge variant="warning">Overview</Badge>
-            <h1 className="text-3xl font-semibold tracking-tight text-neutral-900 dark:text-white">
-              {t('dashboard.welcomeBack', { name: user?.name || user?.email?.split('@')[0] || 'User' })}
-            </h1>
-            <p className="max-w-2xl text-neutral-600 dark:text-neutral-400">{t('dashboard.subtitle')}</p>
+      {/* Plain greeting with border-bottom */}
+      <div className="pb-4 border-b border-neutral-200 dark:border-neutral-700">
+        <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">
+          {t('dashboard.welcomeBack', { name: user?.name || user?.email?.split('@')[0] || 'User' })}
+        </h1>
+        <p className="text-neutral-600 dark:text-neutral-400 mt-1 text-sm">{t('dashboard.subtitle')}</p>
+      </div>
+
+      {/* Inline stat bar */}
+      <div className="flex items-center gap-6 text-sm text-neutral-700 dark:text-neutral-300">
+        <span><strong className="text-neutral-900 dark:text-white">4</strong> {t('dashboard.activeCourses')}</span>
+        <span className="text-neutral-300 dark:text-neutral-600">|</span>
+        <span><strong className="text-neutral-900 dark:text-white">12</strong> {t('dashboard.upcomingSessions')}</span>
+        <span className="text-neutral-300 dark:text-neutral-600">|</span>
+        <span><strong className="text-neutral-900 dark:text-white">89</strong> {t('dashboard.forumPosts')}</span>
+        <span className="text-neutral-300 dark:text-neutral-600">|</span>
+        <span><strong className="text-neutral-900 dark:text-white">156</strong> {t('dashboard.studentsEngaged')}</span>
+      </div>
+
+      {/* Asymmetric layout */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
+        {/* Recent Activity - simple text list */}
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
+            {t('dashboard.recentActivity')}
+          </h2>
+          <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
+            {recentActivity.map((activity, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between py-3"
+              >
+                <span className="text-sm text-neutral-900 dark:text-white">
+                  {activity.title}
+                </span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-4 flex-shrink-0">
+                  {activity.time}
+                </span>
+              </div>
+            ))}
+          </div>
+          <button className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium mt-3">
+            {t('dashboard.viewAllActivity')}
+          </button>
+        </div>
+
+        {/* Quick Actions - pill-style links */}
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
+            {t('dashboard.quickActions')}
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {quickActions.map((action, index) => (
+              <Link
+                key={index}
+                href={action.href}
+                className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 dark:border-neutral-700 px-3 py-1.5 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+              >
+                <action.icon className="h-3.5 w-3.5" />
+                {action.label}
+              </Link>
+            ))}
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card
-            key={stat.name}
-            variant="default"
-            hover
-            className="overflow-hidden border-neutral-100 dark:border-neutral-800"
-          >
-            <div className="p-6">
-              <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-xl ${stat.bgLight}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.textColor}`} />
-                </div>
-                <div>
-                  <p className="text-3xl font-bold text-neutral-900 dark:text-white">{stat.value}</p>
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400">{stat.name}</p>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 pb-4">
-              <div className="h-px bg-neutral-200 dark:bg-neutral-800" />
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card variant="default">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-primary-100 dark:bg-primary-900/50">
-                <Activity className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-              </div>
-              {t('dashboard.recentActivity')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
-              {recentActivity.map((activity, index) => {
-                const Icon = getActivityIcon(activity.type);
-                return (
-                  <div
-                    key={index}
-                    className="group cursor-pointer px-6 py-4 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800/25"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-lg ${getActivityColor(activity.type)}`}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-neutral-900 dark:text-white truncate">
-                          {activity.title}
-                        </p>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                          {activity.time}
-                        </p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-neutral-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-          <div className="rounded-b-xl border-t border-neutral-200 bg-neutral-50 px-6 py-4 dark:border-neutral-800 dark:bg-neutral-800/25">
-            <button className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium flex items-center gap-1">
-              {t('dashboard.viewAllActivity')}
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </Card>
-
-        <Card variant="default">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-accent-100 dark:bg-accent-900/50">
-                <TrendingUp className="h-4 w-4 text-accent-600 dark:text-accent-400" />
-              </div>
-              {t('dashboard.quickActions')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              {quickActions.map((action, index) => (
-                <Link
-                  key={index}
-                  href={action.href}
-                  className="group flex flex-col items-center justify-center rounded-xl border border-neutral-200 p-5 transition-all duration-200 hover:border-primary-400 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:border-primary-500 dark:hover:bg-neutral-800/25"
-                >
-                  <div className="mb-3 rounded-xl bg-neutral-100 p-3 transition-colors group-hover:bg-primary-100 dark:bg-neutral-800/40 dark:group-hover:bg-primary-900/40">
-                    <action.icon className="h-6 w-6 text-neutral-500 transition-colors group-hover:text-primary-600 dark:text-neutral-400 dark:group-hover:text-primary-400" />
-                  </div>
-                  <span className="text-center text-sm font-medium text-neutral-700 transition-colors group-hover:text-primary-700 dark:text-neutral-300 dark:group-hover:text-primary-300">
-                    {action.label}
-                  </span>
-                  <span className="mt-1 hidden text-center text-xs text-neutral-400 dark:text-neutral-500 sm:block">
-                    {action.description}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

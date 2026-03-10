@@ -34,6 +34,7 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
+  EmptyState,
 } from '@/components/ui';
 
 const LABEL_OPTIONS = [
@@ -472,65 +473,57 @@ export default function ForumPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 max-w-6xl">
-      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 shadow-sm px-5 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">{t('forum.title')}</h1>
+      {/* Header + selectors merged into one row */}
+      <div className="pb-4 border-b border-neutral-200 dark:border-neutral-700">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1">
+            <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('forum.title')}</h1>
             <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">{t('forum.subtitle')}</p>
           </div>
-          <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId} data-voice-id="refresh">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            {t('common.refresh')}
-          </Button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+            <Select
+              label={t('courses.selectCourse')}
+              value={selectedCourseId?.toString() || ''}
+              onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
+              data-voice-id="select-course"
+            >
+              <option value="">Select a course...</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.title}
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              label="Select Live Session"
+              value={selectedSessionId?.toString() || ''}
+              onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
+              disabled={!selectedCourseId}
+              data-voice-id="select-session"
+            >
+              <option value="">Select a session...</option>
+              {sessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.title} (ID: {session.id})
+                </option>
+              ))}
+            </Select>
+
+            <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId} data-voice-id="refresh">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {t('common.refresh')}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Course & Session Selector – Card handles styling */}
-      <Card variant="default" padding="md">
-        <div className="grid md:grid-cols-2 gap-4">
-          <Select
-            label={t('courses.selectCourse')}
-            value={selectedCourseId?.toString() || ''}
-            onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
-            data-voice-id="select-course"
-          >
-            <option value="">Select a course...</option>
-            {courses.map((course) => (
-              <option key={course.id} value={course.id}>
-                {course.title}
-              </option>
-            ))}
-          </Select>
-
-          <Select
-            label="Select Live Session"
-            value={selectedSessionId?.toString() || ''}
-            onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
-            disabled={!selectedCourseId}
-            data-voice-id="select-session"
-          >
-            <option value="">Select a session...</option>
-            {sessions.map((session) => (
-              <option key={session.id} value={session.id}>
-                {session.title} (ID: {session.id})
-              </option>
-            ))}
-          </Select>
-        </div>
-      </Card>
-
       {!selectedSessionId ? (
-        <Card variant="default" padding="lg">
-          <div className="text-center py-8">
-            <div className="p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
-              <MessageSquare className="h-10 w-10 text-neutral-500 dark:text-neutral-400" />
-            </div>
-            <p className="text-neutral-600 dark:text-neutral-400">Select a live session to open the discussion space.</p>
-            {selectedCourseId && sessions.length === 0 && (
-              <p className="text-sm text-neutral-500 dark:text-neutral-500 mt-2">No live sessions available for this course.</p>
-            )}
-          </div>
-        </Card>
+        <EmptyState
+          icon={MessageSquare}
+          message="Select a live session to open the discussion space."
+          submessage={selectedCourseId && sessions.length === 0 ? 'No live sessions available for this course.' : undefined}
+        />
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
@@ -543,14 +536,10 @@ export default function ForumPage() {
 
           <TabsContent value="cases">
             {cases.length === 0 ? (
-              <Card variant="default" padding="lg">
-                <div className="text-center py-8">
-                  <div className="p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
-                    <FileText className="h-10 w-10 text-neutral-500 dark:text-neutral-400" />
-                  </div>
-                  <p className="text-neutral-600 dark:text-neutral-400">No case prompts have been posted for this session.</p>
-                </div>
-              </Card>
+              <EmptyState
+                icon={FileText}
+                message="No case prompts have been posted for this session."
+              />
             ) : (
               <div className="space-y-4">
                 {cases.map((caseItem) => (
@@ -583,31 +572,26 @@ export default function ForumPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* New Post Form */}
-                <Card variant="default">
-                  <CardHeader>
-                    <CardTitle className="text-base">Write a discussion post</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                {/* New Post Form - chat-style inline */}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
                     <Textarea
                       placeholder="Share your response, question, or reflection..."
-                      rows={3}
+                      rows={2}
                       value={newPostContent}
                       onChange={(e) => setNewPostContent(e.target.value)}
                       data-voice-id="textarea-post-content"
                     />
-                    <div className="flex justify-end mt-3">
-                      <Button
-                        onClick={handleCreatePost}
-                        disabled={submitting || !newPostContent.trim()}
-                        data-voice-id="submit-post"
-                      >
-                        <Send className="h-4 w-4 mr-2" />
-                        Post
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                  <Button
+                    onClick={handleCreatePost}
+                    disabled={submitting || !newPostContent.trim()}
+                    data-voice-id="submit-post"
+                    className="flex-shrink-0"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
 
                 {/* Pinned Posts */}
                 {pinnedPosts.length > 0 && (
@@ -629,14 +613,10 @@ export default function ForumPage() {
                     {regularPosts.map((post) => renderPost(post))}
                   </div>
                 ) : pinnedPosts.length === 0 ? (
-                  <Card variant="default" padding="lg">
-                    <div className="text-center py-8">
-                      <div className="p-4 rounded-lg bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
-                        <MessageSquare className="h-10 w-10 text-neutral-500 dark:text-neutral-400" />
-                      </div>
-                      <p className="text-neutral-600 dark:text-neutral-400">No posts yet. Start the conversation.</p>
-                    </div>
-                  </Card>
+                  <EmptyState
+                    icon={MessageSquare}
+                    message="No posts yet. Start the conversation."
+                  />
                 ) : null}
               </div>
             )}

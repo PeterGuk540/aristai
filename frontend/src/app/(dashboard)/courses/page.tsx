@@ -26,6 +26,7 @@ import {
   TabsTrigger,
   TabsContent,
   Badge,
+  EmptyState,
 } from '@/components/ui';
 
 // Enhanced AI Features
@@ -774,11 +775,11 @@ export default function CoursesPage() {
 
   return (
     <div className="space-y-6 max-w-6xl pb-4">
-      {/* Page Header */}
-      <div className="flex items-center justify-between rounded-lg border border-amber-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-800 px-6 py-5 shadow-sm">
+      {/* Page Header - plain title with border-bottom */}
+      <div className="flex items-center justify-between pb-4 border-b border-neutral-200 dark:border-neutral-700">
         <div>
-          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('courses.title')}</h1>
-          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('courses.subtitle')}</p>
+          <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('courses.title')}</h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mt-1 text-sm">{t('courses.subtitle')}</p>
         </div>
         <Button onClick={fetchCourses} variant="outline" size="sm">
           <RefreshCw className="h-4 w-4 mr-2" />
@@ -786,37 +787,14 @@ export default function CoursesPage() {
         </Button>
       </div>
 
-      {/* Workspace Overview */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card variant="default" padding="sm">
-          <CardContent className="py-4">
-            <p className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Workspace</p>
-            <p className="mt-1 text-2xl font-semibold text-neutral-900 dark:text-white">{courses.length}</p>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              {isInstructor ? 'Courses you manage' : 'Courses you joined'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card variant="default" padding="sm">
-          <CardContent className="py-4">
-            <p className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Pending Actions</p>
-            <p className="mt-1 text-2xl font-semibold text-neutral-900 dark:text-white">{pendingActionCount}</p>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              {pendingActionCount > 0 ? 'Tasks need attention' : 'No urgent tasks'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card variant="default" padding="sm">
-          <CardContent className="py-4">
-            <p className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Recent Activity</p>
-            <p className="mt-1 text-sm font-medium text-neutral-900 dark:text-white">{lastUpdatedLabel}</p>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">Operational snapshot for this workspace</p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Single info line replacing stat cards */}
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        {courses.length} {isInstructor ? 'courses managed' : 'courses joined'}
+        {pendingActionCount > 0 && ` (${pendingActionCount} pending actions)`}
+      </p>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800 rounded-xl">
+        <TabsList>
           <TabsTrigger value="courses" data-voice-id="tab-courses">Overview</TabsTrigger>
           {isInstructor && <TabsTrigger value="create" data-voice-id="tab-create">{t('courses.createCourse')}</TabsTrigger>}
           {!isInstructor && <TabsTrigger value="join" data-voice-id="tab-join">{t('courses.joinCourse')}</TabsTrigger>}
@@ -837,70 +815,24 @@ export default function CoursesPage() {
               </div>
             </div>
           ) : courses.length === 0 ? (
-            <Card variant="default" padding="lg">
-              <div className="text-center py-8">
-                <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-                  <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
-                </div>
-                {isInstructor ? (
-                  <p className="text-neutral-600 dark:text-neutral-400">{t('courses.noCourses')}</p>
-                ) : (
-                  <div>
-                    <p className="text-neutral-700 dark:text-neutral-300 font-medium mb-1">{t('courses.noEnrolledCourses')}</p>
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('courses.useJoinCode')}</p>
-                  </div>
-                )}
-              </div>
-            </Card>
+            <EmptyState
+              icon={BookOpen}
+              message={isInstructor ? t('courses.noCourses') : t('courses.noEnrolledCourses')}
+              submessage={!isInstructor ? t('courses.useJoinCode') : undefined}
+            />
           ) : (
             <div className="grid gap-5">
               {courses.map((course) => (
                 <Card key={course.id} variant="default" hover className="overflow-hidden">
                   <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-primary-100 dark:bg-primary-900/50">
-                          <BookOpen className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-                        </div>
-                        <div>
-                          <CardTitle>{course.title}</CardTitle>
-                          <CardDescription>Course ID: {course.id}</CardDescription>
-                        </div>
-                      </div>
-                      {canEditCourse(course) && (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleStartEdit(course)}
-                            title={t('common.edit')}
-                            data-voice-id={`edit-course-${course.id}`}
-                            data-voice-label={`Edit ${course.title}`}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteCourse(course.id)}
-                            disabled={deleting === course.id}
-                            title={t('common.delete')}
-                            data-voice-id={`delete-course-${course.id}`}
-                            data-voice-label={`Delete ${course.title}`}
-                            className="text-danger-600 hover:text-danger-700 hover:bg-danger-50 dark:text-danger-400 dark:hover:bg-danger-900/20"
-                          >
-                            {deleting === course.id ? (
-                              <RefreshCw className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      )}
+                    <div>
+                      <CardTitle>{course.title}</CardTitle>
+                      <CardDescription>Course ID: {course.id}</CardDescription>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid md:grid-cols-2 gap-6">
+                    {/* Stacked layout: syllabus full-width, then objectives below */}
+                    <div className="space-y-4">
                       <div>
                         <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">{t('courses.syllabus')}</h4>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400 whitespace-pre-wrap leading-relaxed">
@@ -910,15 +842,12 @@ export default function CoursesPage() {
                       <div>
                         <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">{t('courses.learningObjectives')}</h4>
                         {course.objectives_json && course.objectives_json.length > 0 ? (
-                          <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1.5">
+                          <ul className="list-disc list-inside text-sm text-neutral-600 dark:text-neutral-400 space-y-1">
                             {course.objectives_json.slice(0, 5).map((obj, i) => (
-                              <li key={i} className="flex items-start gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-primary-500 mt-2 flex-shrink-0"></span>
-                                <span>{obj}</span>
-                              </li>
+                              <li key={i}>{obj}</li>
                             ))}
                             {course.objectives_json.length > 5 && (
-                              <li className="text-neutral-400 dark:text-neutral-500 text-xs">
+                              <li className="text-neutral-400 dark:text-neutral-500 text-xs list-none">
                                 ...and {course.objectives_json.length - 5} more
                               </li>
                             )}
@@ -971,25 +900,57 @@ export default function CoursesPage() {
                     <span className="text-xs text-neutral-500 dark:text-neutral-400">
                       Created: {formatTimestamp(course.created_at)}
                     </span>
-                    {isInstructor && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={async () => {
-                          try {
-                            await api.generatePlans(course.id);
-                            alert('Plan generation started!');
-                          } catch (error) {
-                            alert('Failed to start plan generation');
-                          }
-                        }}
-                        data-voice-id="generate-plans"
-                        data-voice-label={`Generate plans for ${course.title}`}
-                      >
-                        <FileText className="h-4 w-4 mr-2" />
-                        {t('courses.generatePlans')}
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {isInstructor && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              await api.generatePlans(course.id);
+                              alert('Plan generation started!');
+                            } catch (error) {
+                              alert('Failed to start plan generation');
+                            }
+                          }}
+                          data-voice-id="generate-plans"
+                          data-voice-label={`Generate plans for ${course.title}`}
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          {t('courses.generatePlans')}
+                        </Button>
+                      )}
+                      {canEditCourse(course) && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleStartEdit(course)}
+                            title={t('common.edit')}
+                            data-voice-id={`edit-course-${course.id}`}
+                            data-voice-label={`Edit ${course.title}`}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteCourse(course.id)}
+                            disabled={deleting === course.id}
+                            title={t('common.delete')}
+                            data-voice-id={`delete-course-${course.id}`}
+                            data-voice-label={`Delete ${course.title}`}
+                            className="text-danger-600 hover:text-danger-700 hover:bg-danger-50 dark:text-danger-400 dark:hover:bg-danger-900/20"
+                          >
+                            {deleting === course.id ? (
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </CardFooter>
                 </Card>
               ))}
@@ -1524,21 +1485,17 @@ export default function CoursesPage() {
                   </div>
                 </div>
               ) : syllabi.length === 0 ? (
-                <Card variant="default" padding="lg">
-                  <div className="text-center py-8">
-                    <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-                      <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
-                    </div>
-                    <p className="text-neutral-700 dark:text-neutral-300 font-medium mb-1">No syllabi saved yet</p>
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
-                      Use the Syllabus Tool to create and save syllabi for your courses.
-                    </p>
-                    <Button onClick={() => openSyllabusTool()} variant="accent">
+                <EmptyState
+                  icon={FileText}
+                  message="No syllabi saved yet"
+                  submessage="Use the Syllabus Tool to create and save syllabi for your courses."
+                  action={
+                    <Button onClick={() => openSyllabusTool()} variant="accent" size="sm">
                       <Plus className="h-4 w-4 mr-2" />
                       Create New Syllabus
                     </Button>
-                  </div>
-                </Card>
+                  }
+                />
               ) : (
                 <div className="grid gap-4">
                   {syllabi.map((record) => {
@@ -1706,14 +1663,10 @@ export default function CoursesPage() {
                   </Card>
                 </>
               ) : (
-                <Card variant="default" padding="lg">
-                  <div className="text-center py-8">
-                    <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-                      <BookOpen className="h-10 w-10 text-primary-600 dark:text-primary-400" />
-                    </div>
-                    <p className="text-neutral-600 dark:text-neutral-400">Select a course to view AI insights</p>
-                  </div>
-                </Card>
+                <EmptyState
+                  icon={BookOpen}
+                  message="Select a course to view AI insights"
+                />
               )}
             </div>
           </TabsContent>

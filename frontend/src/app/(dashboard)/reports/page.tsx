@@ -35,6 +35,7 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
+  EmptyState,
 } from '@/components/ui';
 
 // Instructor enhancement components
@@ -235,12 +236,7 @@ export default function ReportsPage() {
   const renderParticipation = () => {
     if (!reportJson?.participation) {
       return (
-        <Card>
-          <CardContent className="py-8 text-center text-neutral-500">
-            <Users className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
-            <p>Participation data not available.</p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={Users} message="Participation data not available." />
       );
     }
 
@@ -249,89 +245,54 @@ export default function ReportsPage() {
 
     return (
       <div className="space-y-4">
-        {/* Summary Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <Users className="mx-auto mb-2 h-8 w-8 text-primary-500" />
-                <p className="text-2xl font-bold">{participation.total_enrolled_students}</p>
-                <p className="text-sm text-neutral-500">Enrolled Students</p>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Inline text summary replacing stat cards */}
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          <strong className="text-neutral-900 dark:text-white">{participation.total_enrolled_students}</strong> enrolled
+          {' \u00B7 '}
+          <strong className="text-neutral-900 dark:text-white">{participation.participation_count}</strong> participated
+          {' \u00B7 '}
+          <strong className="text-neutral-900 dark:text-white">{rate.toFixed(1)}%</strong> participation rate
+        </p>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <CheckCircle className="h-8 w-8 mx-auto text-green-500 mb-2" />
-                <p className="text-2xl font-bold">{participation.participation_count}</p>
-                <p className="text-sm text-neutral-500">Participated</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <BarChart3 className="mx-auto mb-2 h-8 w-8 text-accent-500" />
-                <p className="text-2xl font-bold">{rate.toFixed(1)}%</p>
-                <p className="text-sm text-neutral-500">Participation Rate</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Participated */}
+        {/* Participated - table layout */}
         {participation.students_who_participated &&
           participation.students_who_participated.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                  Students Who Participated ({participation.students_who_participated.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                Students Who Participated ({participation.students_who_participated.length})
+              </h3>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-neutral-200 dark:border-neutral-700">
+                    <th className="text-left py-2 font-medium text-neutral-500 dark:text-neutral-400">Student</th>
+                    <th className="text-right py-2 font-medium text-neutral-500 dark:text-neutral-400">Posts</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {participation.students_who_participated.map((student) => (
-                    <div
-                      key={student.user_id}
-                      className="flex items-center justify-between bg-green-50 px-3 py-2 rounded"
-                    >
-                      <span className="text-sm text-neutral-700">{student.name}</span>
-                      <Badge variant="success">{student.post_count} posts</Badge>
-                    </div>
+                    <tr key={student.user_id} className="border-b border-neutral-100 dark:border-neutral-800">
+                      <td className="py-2 text-neutral-700 dark:text-neutral-300">{student.name}</td>
+                      <td className="py-2 text-right text-neutral-600 dark:text-neutral-400">{student.post_count}</td>
+                    </tr>
                   ))}
-                </div>
-              </CardContent>
-            </Card>
+                </tbody>
+              </table>
+            </div>
           )}
 
-        {/* Did Not Participate */}
+        {/* Did Not Participate - comma-separated text */}
         {participation.students_who_did_not_participate &&
           participation.students_who_did_not_participate.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <XCircle className="h-5 w-5 text-red-500" />
-                  Students Who Did Not Participate (
-                  {participation.students_who_did_not_participate.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {participation.students_who_did_not_participate.map((student) => (
-                    <div
-                      key={student.user_id}
-                      className="flex items-center bg-red-50 px-3 py-2 rounded"
-                    >
-                      <span className="text-sm text-neutral-700">{student.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2 flex items-center gap-2">
+                <XCircle className="h-4 w-4 text-red-500" />
+                Did Not Participate ({participation.students_who_did_not_participate.length})
+              </h3>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                {participation.students_who_did_not_participate.map((s) => s.name).join(', ')}
+              </p>
+            </div>
           )}
       </div>
     );
@@ -340,12 +301,7 @@ export default function ReportsPage() {
   const renderScoring = () => {
     if (!reportJson?.answer_scores) {
       return (
-        <Card>
-          <CardContent className="py-8 text-center text-neutral-500">
-            <Award className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
-            <p>Scoring data not available.</p>
-          </CardContent>
-        </Card>
+        <EmptyState icon={Award} message="Scoring data not available." />
       );
     }
 
@@ -353,162 +309,67 @@ export default function ReportsPage() {
 
     return (
       <div className="space-y-4">
-        {/* Statistics */}
+        {/* Inline statistics replacing stat cards */}
         {answer_scores.class_statistics && (
-          <div className="grid grid-cols-3 gap-4">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <BarChart3 className="mx-auto mb-2 h-8 w-8 text-primary-500" />
-                  <p className="text-2xl font-bold">
-                    {answer_scores.class_statistics.average_score.toFixed(1)}
-                  </p>
-                  <p className="text-sm text-neutral-500">Average Score</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <TrendingUp className="h-8 w-8 mx-auto text-green-500 mb-2" />
-                  <p className="text-2xl font-bold">
-                    {answer_scores.class_statistics.highest_score.toFixed(1)}
-                  </p>
-                  <p className="text-sm text-neutral-500">Highest Score</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center">
-                  <TrendingDown className="h-8 w-8 mx-auto text-red-500 mb-2" />
-                  <p className="text-2xl font-bold">
-                    {answer_scores.class_statistics.lowest_score.toFixed(1)}
-                  </p>
-                  <p className="text-sm text-neutral-500">Lowest Score</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">
+            Avg: <strong className="text-neutral-900 dark:text-white">{answer_scores.class_statistics.average_score.toFixed(1)}</strong>
+            {' \u00B7 '}
+            High: <strong className="text-green-600 dark:text-green-400">{answer_scores.class_statistics.highest_score.toFixed(1)}</strong>
+            {' \u00B7 '}
+            Low: <strong className="text-red-600 dark:text-red-400">{answer_scores.class_statistics.lowest_score.toFixed(1)}</strong>
+            {answer_scores.closest_to_correct && (
+              <>
+                {' \u00B7 '}
+                Best: {answer_scores.closest_to_correct.user_name || `User #${answer_scores.closest_to_correct.user_id}`} ({answer_scores.closest_to_correct.score.toFixed(1)})
+              </>
+            )}
+          </p>
         )}
 
-        {/* Top Performers */}
-        <div className="grid md:grid-cols-2 gap-4">
-          {answer_scores.closest_to_correct && (
-            <Card className="border-green-200 bg-green-50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Award className="h-5 w-5 text-green-600" />
-                  Closest to Correct
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-medium text-green-900">
-                  {answer_scores.closest_to_correct.user_name ||
-                    `User #${answer_scores.closest_to_correct.user_id}`}
-                </p>
-                <p className="text-sm text-green-700">
-                  Score: {answer_scores.closest_to_correct.score.toFixed(1)} / 100
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {answer_scores.furthest_from_correct && (
-            <Card className="border-red-200 bg-red-50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-red-600" />
-                  Needs Attention
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-medium text-red-900">
-                  {answer_scores.furthest_from_correct.user_name ||
-                    `User #${answer_scores.furthest_from_correct.user_id}`}
-                </p>
-                <p className="text-sm text-red-700">
-                  Score: {answer_scores.furthest_from_correct.score.toFixed(1)} / 100
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Individual Scores */}
+        {/* Student scores table */}
         {answer_scores.student_scores && answer_scores.student_scores.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">All Student Scores</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 dark:border-neutral-700">
+                  <th className="text-left py-2 font-medium text-neutral-500 dark:text-neutral-400 w-8">#</th>
+                  <th className="text-left py-2 font-medium text-neutral-500 dark:text-neutral-400">Student</th>
+                  <th className="text-right py-2 font-medium text-neutral-500 dark:text-neutral-400 w-20">Score</th>
+                  <th className="text-left py-2 font-medium text-neutral-500 dark:text-neutral-400 pl-4">Key Points</th>
+                </tr>
+              </thead>
+              <tbody>
                 {answer_scores.student_scores
                   .sort((a, b) => b.score - a.score)
                   .map((score, index) => (
-                    <div
+                    <tr
                       key={`${score.user_id}-${score.post_id}`}
-                      className="border rounded-lg p-3"
+                      className="border-b border-neutral-100 dark:border-neutral-800"
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">
-                          #{index + 1} {score.user_name || `User #${score.user_id}`}
-                        </span>
+                      <td className="py-2 text-neutral-400">{index + 1}</td>
+                      <td className="py-2 text-neutral-700 dark:text-neutral-300">
+                        {score.user_name || `User #${score.user_id}`}
+                      </td>
+                      <td className="py-2 text-right">
                         <Badge
                           variant={
-                            score.score >= 80
-                              ? 'success'
-                              : score.score >= 60
-                              ? 'warning'
-                              : 'danger'
+                            score.score >= 80 ? 'success' : score.score >= 60 ? 'warning' : 'danger'
                           }
+                          size="sm"
                         >
-                          {score.score.toFixed(1)} / 100
+                          {score.score.toFixed(1)}
                         </Badge>
-                      </div>
-
-                      {/* Score bar */}
-                      <div className="h-2 bg-neutral-200 rounded-full overflow-hidden mb-2">
-                        <div
-                          className={`h-full rounded-full ${
-                            score.score >= 80
-                              ? 'bg-green-500'
-                              : score.score >= 60
-                              ? 'bg-yellow-500'
-                              : 'bg-red-500'
-                          }`}
-                          style={{ width: `${score.score}%` }}
-                        />
-                      </div>
-
-                      {score.key_points_covered && score.key_points_covered.length > 0 && (
-                        <div className="text-sm mb-1">
-                          <span className="text-green-600 font-medium">Covered: </span>
-                          <span className="text-neutral-600">
-                            {score.key_points_covered.join(', ')}
-                          </span>
-                        </div>
-                      )}
-
-                      {score.missing_points && score.missing_points.length > 0 && (
-                        <div className="text-sm mb-1">
-                          <span className="text-red-600 font-medium">Missing: </span>
-                          <span className="text-neutral-600">
-                            {score.missing_points.join(', ')}
-                          </span>
-                        </div>
-                      )}
-
-                      {score.feedback && (
-                        <p className="text-sm text-neutral-500 mt-2 italic">{score.feedback}</p>
-                      )}
-                    </div>
+                      </td>
+                      <td className="py-2 pl-4 text-xs text-neutral-500 dark:text-neutral-400">
+                        {score.key_points_covered && score.key_points_covered.length > 0
+                          ? score.key_points_covered.join(', ')
+                          : score.feedback || '\u2014'}
+                      </td>
+                    </tr>
                   ))}
-              </div>
-            </CardContent>
-          </Card>
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     );
@@ -685,14 +546,7 @@ export default function ReportsPage() {
   // Student-only view: Show only their own performance
   const renderStudentPerformance = () => {
     if (!reportJson?.answer_scores) {
-      return (
-        <Card>
-          <CardContent className="py-8 text-center text-neutral-500">
-            <Award className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
-            <p>Your performance data is not available yet.</p>
-          </CardContent>
-        </Card>
-      );
+      return <EmptyState icon={Award} message="Your performance data is not available yet." />;
     }
 
     const { answer_scores } = reportJson;
@@ -700,14 +554,7 @@ export default function ReportsPage() {
     const studentScores = answer_scores.student_scores || [];
 
     if (studentScores.length === 0) {
-      return (
-        <Card>
-          <CardContent className="py-8 text-center text-neutral-500">
-            <Award className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
-            <p>No performance data found for this session.</p>
-          </CardContent>
-        </Card>
-      );
+      return <EmptyState icon={Award} message="No performance data found for this session." />;
     }
 
     return (
@@ -799,14 +646,7 @@ export default function ReportsPage() {
   // Student-only view: Best practice answer
   const renderBestPractice = () => {
     if (!reportJson?.best_practice_answer) {
-      return (
-        <Card>
-          <CardContent className="py-8 text-center text-neutral-500">
-            <BookOpen className="h-12 w-12 mx-auto mb-4 text-neutral-300" />
-            <p>Best practice answer is not available yet.</p>
-          </CardContent>
-        </Card>
-      );
+      return <EmptyState icon={BookOpen} message="Best practice answer is not available yet." />;
     }
 
     const { best_practice_answer } = reportJson;
@@ -852,57 +692,51 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6 pb-4">
-      {/* Page Header */}
-      <div className="flex items-center justify-between rounded-lg border border-rose-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-800 px-6 py-5 shadow-sm">
-        <div>
-          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('reports.title')}</h1>
-          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('reports.subtitle')}</p>
+      {/* Header + selectors merged into one row */}
+      <div className="pb-4 border-b border-neutral-200 dark:border-neutral-700">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1">
+            <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('reports.title')}</h1>
+            <p className="text-neutral-600 dark:text-neutral-400 mt-1 text-sm">{t('reports.subtitle')}</p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+            <Select
+              label={t('courses.selectCourse')}
+              value={selectedCourseId?.toString() || ''}
+              onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
+              data-voice-id="select-course"
+            >
+              <option value="">Select a course...</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.title}
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              label="Select Session"
+              value={selectedSessionId?.toString() || ''}
+              onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
+              disabled={!selectedCourseId}
+              data-voice-id="select-session"
+            >
+              <option value="">Select a session...</option>
+              {sessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.title} ({session.status})
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
       </div>
 
-      {/* Course & Session Selector */}
-      <Card variant="default" padding="md" className="border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800">
-        <div className="grid md:grid-cols-2 gap-4">
-        <Select
-          label={t('courses.selectCourse')}
-          value={selectedCourseId?.toString() || ''}
-          onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
-          data-voice-id="select-course"
-        >
-          <option value="">Select a course...</option>
-          {courses.map((course) => (
-            <option key={course.id} value={course.id}>
-              {course.title}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          label="Select Session"
-          value={selectedSessionId?.toString() || ''}
-          onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
-          disabled={!selectedCourseId}
-          data-voice-id="select-session"
-        >
-          <option value="">Select a session...</option>
-          {sessions.map((session) => (
-            <option key={session.id} value={session.id}>
-              {session.title} ({session.status})
-            </option>
-          ))}
-        </Select>
-        </div>
-      </Card>
-
       {!selectedSessionId ? (
-        <Card variant="default" padding="lg">
-          <div className="text-center py-8">
-            <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-              <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
-            </div>
-            <p className="text-neutral-600 dark:text-neutral-400">{t('reports.generateFirst')}</p>
-          </div>
-        </Card>
+        <EmptyState
+          icon={FileText}
+          message={t('reports.generateFirst')}
+        />
       ) : loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="flex flex-col items-center gap-3">
@@ -914,20 +748,16 @@ export default function ReportsPage() {
           </div>
         </div>
       ) : !report ? (
-        <Card variant="default" padding="lg">
-          <div className="text-center py-8">
-            <div className="p-4 rounded-lg bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-              <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
-            </div>
-            <p className="text-neutral-600 dark:text-neutral-400 mb-4">{t('reports.noReport')}</p>
-            {hasInstructorPrivileges && (
-              <Button onClick={handleGenerateReport} disabled={generating} data-voice-id="generate-report">
-                <FileText className="h-4 w-4 mr-2" />
-                {generating ? t('common.loading') : t('reports.generateReport')}
-              </Button>
-            )}
-          </div>
-        </Card>
+        <EmptyState
+          icon={FileText}
+          message={t('reports.noReport')}
+          action={hasInstructorPrivileges ? (
+            <Button onClick={handleGenerateReport} disabled={generating} data-voice-id="generate-report" size="sm">
+              <FileText className="h-4 w-4 mr-2" />
+              {generating ? t('common.loading') : t('reports.generateReport')}
+            </Button>
+          ) : undefined}
+        />
       ) : (
         <div>
           {/* Report Header */}

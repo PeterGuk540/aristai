@@ -1,4 +1,5 @@
 export { Button } from './Button';
+export { EmptyState } from './EmptyState';
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './Card';
 export { Badge } from './Badge';
 export { Select } from './Select';

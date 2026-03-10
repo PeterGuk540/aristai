@@ -19,7 +19,7 @@ export const Progress = forwardRef<HTMLDivElement, ProgressProps>(
         aria-valuemin={0}
         aria-valuemax={max}
         className={cn(
-          'w-full bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden',
+          'w-full bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden',
           className
         )}
         {...props}

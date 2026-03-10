@@ -64,9 +64,9 @@ export function UserMenu() {
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           'flex items-center gap-3 px-3 py-2 rounded-xl',
-          'bg-stone-50 dark:bg-stone-900/40 border border-stone-200 dark:border-primary-900/20',
+          'bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800',
           'text-neutral-700 dark:text-neutral-200',
-          'hover:bg-stone-100 dark:hover:bg-stone-900/60',
+          'hover:bg-neutral-100 dark:hover:bg-neutral-800/60',
           'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-neutral-800',
           'transition-all duration-200'
         )}
@@ -93,8 +93,8 @@ export function UserMenu() {
         <div
           className={cn(
             'absolute right-0 mt-2 w-72 rounded-xl',
-            'bg-white dark:bg-[#1a150c]',
-            'border border-stone-200 dark:border-primary-900/20',
+            'bg-white dark:bg-[#1c1c1e]',
+            'border border-neutral-200 dark:border-neutral-800',
             'shadow-soft-md',
             'overflow-hidden',
             'z-50',
@@ -103,7 +103,7 @@ export function UserMenu() {
           role="menu"
         >
           {/* User info header */}
-          <div className="px-4 py-4 bg-stone-50 dark:bg-stone-900/40 border-b border-stone-200 dark:border-primary-900/20">
+          <div className="px-4 py-4 bg-neutral-50 dark:bg-neutral-800/40 border-b border-neutral-200 dark:border-neutral-800">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-slate-900 dark:bg-white flex items-center justify-center shadow-sm">
                 <span className="text-sm font-semibold text-white dark:text-slate-900">{initials}</span>
@@ -130,7 +130,7 @@ export function UserMenu() {
               className={cn(
                 'w-full flex items-center gap-3 px-4 py-2.5 text-sm',
                 'text-neutral-700 dark:text-neutral-200',
-                'hover:bg-stone-100 dark:hover:bg-stone-900/50',
+                'hover:bg-neutral-100 dark:hover:bg-neutral-800/50',
                 'transition-colors duration-200'
               )}
               role="menuitem"
@@ -143,7 +143,7 @@ export function UserMenu() {
             </button>
 
             {/* Divider */}
-            <div className="my-2 mx-4 border-t border-stone-200 dark:border-primary-900/20" />
+            <div className="my-2 mx-4 border-t border-neutral-200 dark:border-neutral-800" />
 
             <button
               onClick={() => {

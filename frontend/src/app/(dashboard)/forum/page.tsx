@@ -318,19 +318,19 @@ export default function ForumPage() {
     return (
       <div
         key={post.id}
-        className={`${depth > 0 ? 'ml-6 border-l-2 border-neutral-200 dark:border-neutral-700 pl-4' : ''}`}
+        className={`${depth > 0 ? 'ml-8 border-l border-neutral-200 dark:border-neutral-700 pl-4' : ''}`}
       >
         <div
-          className={`p-4 rounded-xl ${
+          className={`p-5 rounded-2xl ${
             post.pinned
-              ? 'bg-yellow-warm border border-yellow'
-              : 'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700'
-          } ${depth === 0 ? 'mb-4' : 'mt-3'} shadow-soft`}
+              ? 'bg-[#f5c842]/5 ring-1 ring-[#f5c842]/20'
+              : 'bg-white dark:bg-[#1c1c1e]'
+          } ${depth === 0 ? 'mb-4' : 'mt-3'}`}
         >
           {/* Post Header */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-700 flex items-center justify-center">
                 <User className="h-4 w-4 text-neutral-700 dark:text-neutral-200" />
               </div>
               <span className="text-sm font-medium text-neutral-900 dark:text-white">
@@ -365,7 +365,7 @@ export default function ForumPage() {
           )}
 
           {/* Actions */}
-          <div className="flex items-center gap-2 pt-3 border-t border-neutral-100 dark:border-neutral-700">
+          <div className="flex items-center gap-2 pt-3 border-t border-neutral-100 dark:border-neutral-800">
             {hasReplies && (
               <Button variant="ghost" size="sm" onClick={() => toggleExpand(post.id)}>
                 {isExpanded ? (
@@ -404,13 +404,13 @@ export default function ForumPage() {
                     <Tag className="h-4 w-4 mr-1" />
                     Label
                   </Button>
-                  <div className="absolute left-0 top-full mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-soft-md p-2 hidden group-hover:block z-10 min-w-[150px]">
+                  <div className="absolute left-0 top-full mt-1 bg-white dark:bg-[#1c1c1e] border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-soft-md p-2 hidden group-hover:block z-10 min-w-[150px]">
                     {LABEL_OPTIONS.map((label) => (
                       <button
                         key={label}
                         onClick={() => handleLabelPost(post.id, label)}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors ${
-                          post.labels_json?.includes(label) ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' : ''
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors ${
+                          post.labels_json?.includes(label) ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100' : ''
                         }`}
                       >
                         {label}
@@ -424,7 +424,7 @@ export default function ForumPage() {
 
           {/* Reply Form */}
           {isReplying && (
-            <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-700">
+            <div className="mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800">
               <Textarea
                 placeholder="Write your reply..."
                 rows={2}
@@ -471,21 +471,23 @@ export default function ForumPage() {
   const regularPosts = posts.filter((p) => !p.pinned);
 
   return (
-    <div className="space-y-8 max-w-6xl pb-4">
-      {/* Page Header */}
-      <div className="flex items-center justify-between rounded-2xl border border-violet-200/80 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] px-6 py-5 shadow-sm">
-        <div>
-          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('forum.title')}</h1>
-          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('forum.subtitle')}</p>
+    <div className="space-y-10 max-w-5xl pb-8">
+      {/* Page Header – Borderless, more padding */}
+      <div className="bg-white dark:bg-[#1c1c1e] rounded-2xl px-8 py-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('forum.title')}</h1>
+            <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('forum.subtitle')}</p>
+          </div>
+          <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId} data-voice-id="refresh">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            {t('common.refresh')}
+          </Button>
         </div>
-        <Button onClick={fetchForumData} variant="outline" size="sm" disabled={!selectedSessionId} data-voice-id="refresh">
-          <RefreshCw className="h-4 w-4 mr-2" />
-          {t('common.refresh')}
-        </Button>
       </div>
 
-      {/* Course & Session Selector */}
-      <Card variant="default" padding="md" className="border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c]">
+      {/* Course & Session Selector – Card handles styling */}
+      <Card variant="default" padding="md">
         <div className="grid md:grid-cols-2 gap-4">
           <Select
             label={t('courses.selectCourse')}
@@ -521,8 +523,8 @@ export default function ForumPage() {
       {!selectedSessionId ? (
         <Card variant="default" padding="lg">
           <div className="text-center py-8">
-            <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-              <MessageSquare className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+            <div className="p-4 rounded-2xl bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
+              <MessageSquare className="h-10 w-10 text-neutral-500 dark:text-neutral-400" />
             </div>
             <p className="text-neutral-600 dark:text-neutral-400">Select a live session to open the discussion space.</p>
             {selectedCourseId && sessions.length === 0 && (
@@ -532,7 +534,7 @@ export default function ForumPage() {
         </Card>
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
+          <TabsList>
             <TabsTrigger value="cases" data-voice-id="tab-cases">{t('forum.cases')}</TabsTrigger>
             <TabsTrigger value="discussion" data-voice-id="tab-discussion">
               {t('forum.discussion')}
@@ -544,8 +546,8 @@ export default function ForumPage() {
             {cases.length === 0 ? (
               <Card variant="default" padding="lg">
                 <div className="text-center py-8">
-                  <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-                    <FileText className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+                  <div className="p-4 rounded-2xl bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
+                    <FileText className="h-10 w-10 text-neutral-500 dark:text-neutral-400" />
                   </div>
                   <p className="text-neutral-600 dark:text-neutral-400">No case prompts have been posted for this session.</p>
                 </div>
@@ -574,8 +576,8 @@ export default function ForumPage() {
               <div className="flex items-center justify-center py-12">
                 <div className="flex flex-col items-center gap-3">
                   <div className="relative">
-                    <div className="w-10 h-10 rounded-full border-4 border-primary-100 dark:border-primary-900"></div>
-                    <div className="absolute top-0 left-0 w-10 h-10 rounded-full border-4 border-primary-600 border-t-transparent animate-spin"></div>
+                    <div className="w-10 h-10 rounded-full border-4 border-neutral-100 dark:border-neutral-800"></div>
+                    <div className="absolute top-0 left-0 w-10 h-10 rounded-full border-4 border-neutral-900 dark:border-white border-t-transparent animate-spin"></div>
                   </div>
                   <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading discussion...</p>
                 </div>
@@ -612,7 +614,7 @@ export default function ForumPage() {
                 {pinnedPosts.length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3 flex items-center gap-2">
-                      <Pin className="h-4 w-4 text-primary-500" />
+                      <Pin className="h-4 w-4 text-[#f5c842]" />
                       Pinned Posts
                     </h3>
                     {pinnedPosts.map((post) => renderPost(post))}
@@ -630,8 +632,8 @@ export default function ForumPage() {
                 ) : pinnedPosts.length === 0 ? (
                   <Card variant="default" padding="lg">
                     <div className="text-center py-8">
-                      <div className="p-4 rounded-2xl bg-primary-50 dark:bg-primary-900/30 w-fit mx-auto mb-4">
-                        <MessageSquare className="h-10 w-10 text-primary-600 dark:text-primary-400" />
+                      <div className="p-4 rounded-2xl bg-neutral-100 dark:bg-neutral-800 w-fit mx-auto mb-4">
+                        <MessageSquare className="h-10 w-10 text-neutral-500 dark:text-neutral-400" />
                       </div>
                       <p className="text-neutral-600 dark:text-neutral-400">No posts yet. Start the conversation.</p>
                     </div>

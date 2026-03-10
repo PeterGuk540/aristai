@@ -66,7 +66,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
   const [loadingAdminRequests, setLoadingAdminRequests] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
-  
+
   // Voice state
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -106,7 +106,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
     if (currentUser && (isInstructor || isAdmin)) {
       const storageKey = `aristai_voice_onboarding_${currentUser.id}`;
       const hasSeenOnboarding = localStorage.getItem(storageKey);
-      
+
       if (!hasSeenOnboarding) {
         setShowOnboarding(true);
       } else {
@@ -297,8 +297,8 @@ export function AppShellHandsFree({ children }: AppShellProps) {
   // Show loading state while checking auth or onboarding
   if (isLoading || !isReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-100 dark:bg-neutral-950">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f5f7] dark:bg-black">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-neutral-900 dark:border-white"></div>
       </div>
     );
   }
@@ -310,7 +310,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
   return (
     <ToastProvider>
-    <div className="min-h-screen bg-stone-50 dark:bg-[#221c10]">
+    <div className="min-h-screen bg-[#f5f5f7] dark:bg-black">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -319,16 +319,16 @@ export function AppShellHandsFree({ children }: AppShellProps) {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar – No border-r, bg contrast sufficient */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-[#1a150c] border-r border-primary-200/40 dark:border-primary-900/20',
+          'fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-[#1c1c1e]',
           'transform transition-transform duration-300 ease-in-out lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         {/* Logo */}
-        <div className="flex h-16 items-center justify-between px-6 border-b border-primary-200/40 dark:border-primary-900/20">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-neutral-100 dark:border-neutral-800">
           <Link href="/courses" className="flex items-center gap-2">
             <img
               src="/AristAI_icon.png"
@@ -337,7 +337,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             />
             <div>
               <span className="block text-lg font-semibold text-neutral-900 dark:text-white tracking-tight">AristAI</span>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary-600 dark:text-primary-400">Internal Console</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500 dark:text-neutral-400">Internal Console</span>
             </div>
           </Link>
           <button
@@ -363,11 +363,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                 className={cn(
                   'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-300'
-                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#231d12] dark:hover:text-neutral-100'
+                    ? 'bg-neutral-100 text-neutral-900 font-semibold dark:bg-neutral-800 dark:text-white'
+                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
                 )}
               >
-                {isActive && <span className="absolute left-0 h-6 w-[3px] rounded-r bg-primary-500" />}
+                {isActive && <span className="absolute left-0 h-6 w-[3px] rounded-r bg-neutral-900 dark:bg-white" />}
                 <item.icon className="h-5 w-5" />
                 {t(item.key)}
               </Link>
@@ -393,11 +393,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                       className={cn(
                         'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                         isActive
-                          ? 'bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-300'
-                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#231d12] dark:hover:text-neutral-100'
+                          ? 'bg-neutral-100 text-neutral-900 font-semibold dark:bg-neutral-800 dark:text-white'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
                       )}
                     >
-                      {isActive && <span className="absolute left-0 h-6 w-[3px] rounded-r bg-primary-500" />}
+                      {isActive && <span className="absolute left-0 h-6 w-[3px] rounded-r bg-neutral-900 dark:bg-white" />}
                       <item.icon className="h-5 w-5" />
                       {t(item.key)}
                     </Link>
@@ -408,7 +408,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
           )}
 
           {managementNav.length > 0 && (
-            <div className="border-t border-stone-200 pt-3 dark:border-primary-900/20">
+            <div className="border-t border-neutral-100 pt-3 dark:border-neutral-800">
               <p className="mb-1 px-3 text-[11px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
                 Management
               </p>
@@ -426,11 +426,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                       className={cn(
                         'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                         isActive
-                          ? 'bg-primary-50 text-primary-800 dark:bg-primary-950/40 dark:text-primary-300'
-                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#231d12] dark:hover:text-neutral-100'
+                          ? 'bg-neutral-100 text-neutral-900 font-semibold dark:bg-neutral-800 dark:text-white'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
                       )}
                     >
-                      {isActive && <span className="absolute left-0 h-6 w-[3px] rounded-r bg-primary-500" />}
+                      {isActive && <span className="absolute left-0 h-6 w-[3px] rounded-r bg-neutral-900 dark:bg-white" />}
                       <item.icon className="h-5 w-5" />
                       {t(item.key)}
                     </Link>
@@ -443,8 +443,8 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
         {/* Sidebar identity block */}
         <div className="px-4 pb-3">
-          <div className="flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 p-3 dark:border-primary-900/20 dark:bg-stone-900/25">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white dark:bg-white dark:text-slate-900">
+          <div className="flex items-center gap-3 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-800/50">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white dark:bg-white dark:text-neutral-900">
               {currentUser?.name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'U'}
             </div>
             <div className="min-w-0 flex-1">
@@ -460,7 +460,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
         {/* Voice status indicator in sidebar */}
         {(isInstructor || isAdmin) && onboardingComplete && voiceConnected && (
-          <div className="px-4 py-3 border-t border-primary-200/40 dark:border-primary-900/20">
+          <div className="px-4 py-3 border-t border-neutral-100 dark:border-neutral-800">
             <div className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
               <div className={cn(
                 'w-2 h-2 rounded-full',
@@ -474,12 +474,12 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
       {/* Main content */}
       <div className="lg:pl-72">
-        {/* Top navigation */}
-        <header className="relative sticky top-0 z-30 flex h-[72px] items-center border-b border-stone-200/80 bg-white/80 px-4 backdrop-blur-md dark:border-primary-900/20 dark:bg-[#221c10]/80 sm:px-6">
+        {/* Top navigation – Enhanced frosted glass */}
+        <header className="relative sticky top-0 z-30 flex h-[72px] items-center border-b border-neutral-200/60 bg-white/80 px-4 backdrop-blur-xl backdrop-saturate-150 dark:border-neutral-800 dark:bg-black/80 sm:px-6">
           <div className="flex flex-1 items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="rounded-lg p-2 text-neutral-500 hover:bg-stone-100 dark:text-neutral-400 dark:hover:bg-[#2a2215] lg:hidden"
+              className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 lg:hidden"
               aria-label="Open navigation"
             >
               <Menu className="h-5 w-5" />
@@ -523,11 +523,11 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                   }}
                   placeholder="Search pages..."
                   data-voice-id="workspace-search"
-                  className="w-64 rounded-lg border border-stone-200 bg-stone-50 py-2 pl-9 pr-3 text-sm text-neutral-700 outline-none transition-all focus:border-primary-400 focus:bg-white dark:border-primary-900/20 dark:bg-[#221c10] dark:text-neutral-300"
+                  className="w-64 rounded-xl border border-neutral-200 bg-neutral-50 py-2 pl-9 pr-3 text-sm text-neutral-700 outline-none transition-colors focus:border-neutral-400 focus:bg-white dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300"
                 />
               </div>
               {searchFocused && searchQuery.trim() && (
-                <div className="absolute right-0 top-12 z-50 w-72 rounded-xl border border-stone-200 bg-white p-2 shadow-md dark:border-primary-900/20 dark:bg-[#1a150c]">
+                <div className="absolute right-0 top-12 z-50 w-72 rounded-2xl border border-neutral-200 bg-white p-2 shadow-soft-md dark:border-neutral-800 dark:bg-[#1c1c1e]">
                   <div className="max-h-56 overflow-auto">
                     {filteredNavigation.map((item) => (
                       <Link
@@ -537,7 +537,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                           setSearchFocused(false);
                           setSearchQuery('');
                         }}
-                        className="block rounded-lg px-3 py-2 text-sm text-neutral-700 hover:bg-stone-100 dark:text-neutral-300 dark:hover:bg-stone-900/40"
+                        className="block rounded-lg px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
                       >
                         {t(item.key)}
                       </Link>
@@ -551,7 +551,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             </div>
             <button
               onClick={showGuide}
-              className="hidden rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white lg:inline-flex"
+              className="hidden rounded-lg p-2.5 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white lg:inline-flex"
               aria-label="Help and documentation"
               data-voice-id="open-help"
             >
@@ -566,17 +566,17 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                     fetchAdminRequests();
                   }
                 }}
-                className="relative rounded-lg p-2.5 text-neutral-500 transition-all hover:bg-stone-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-[#2a2215] dark:hover:text-white"
+                className="relative rounded-lg p-2.5 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white"
                 aria-label="Notifications"
                 data-voice-id="notifications-button"
               >
                 <Bell className="h-5 w-5" />
                 {isAdmin && adminPendingRequests.length > 0 && (
-                  <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-primary-500" />
+                  <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-danger-500" />
                 )}
               </button>
               {notificationsOpen && (
-                <div className="absolute right-0 top-12 z-50 w-80 rounded-xl border border-stone-200 bg-white p-3 shadow-md dark:border-primary-900/20 dark:bg-[#1a150c]">
+                <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-neutral-200 bg-white p-3 shadow-soft-md dark:border-neutral-800 dark:bg-[#1c1c1e]">
                   <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                     Notifications
                   </p>
@@ -596,7 +596,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
                             onClick={item.action}
                             data-voice-id={item.actionVoiceId}
                             className={cn(
-                              'w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-900/25',
+                              'w-full rounded-lg px-3 py-2 text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800/50',
                               item.tone === 'warning' && 'bg-warning-50/60 dark:bg-warning-900/20'
                             )}
                           >
@@ -631,14 +631,14 @@ export function AppShellHandsFree({ children }: AppShellProps) {
             {/* Language toggle */}
             <LanguageToggleCompact />
 
-            {/* Dark mode toggle */}
+            {/* Dark mode toggle – No blue hover */}
             <button
               onClick={toggleDarkMode}
               className={cn(
                 'p-2.5 rounded-lg',
                 'text-neutral-500 dark:text-neutral-400',
-                'hover:bg-neutral-100 dark:hover:bg-[#2a2215] hover:text-primary-600 dark:hover:text-primary-400',
-                'focus:outline-none focus:ring-2 focus:ring-primary-500'
+                'hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white',
+                'focus:outline-none focus:ring-2 focus:ring-neutral-400'
               )}
               aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
               data-voice-id="toggle-theme"
@@ -646,12 +646,12 @@ export function AppShellHandsFree({ children }: AppShellProps) {
               {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
 
-            <div className="mx-1 hidden h-6 w-px bg-stone-200 dark:bg-primary-900/20 sm:block" />
+            <div className="mx-1 hidden h-6 w-px bg-neutral-200 dark:bg-neutral-800 sm:block" />
 
             {/* User menu */}
             <UserMenu />
           </div>
-          <div className="pointer-events-none absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-primary-400/40 to-transparent" />
+          {/* Gradient line removed */}
         </header>
 
         {/* Page content */}

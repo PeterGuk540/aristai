@@ -249,7 +249,7 @@ export default function MaterialsManager({
 
         {uploading && (
           <div className="mb-4">
-            <div className="w-full bg-stone-200 dark:bg-stone-800 rounded-full h-2">
+            <div className="w-full bg-neutral-200 dark:bg-neutral-800 rounded-full h-2">
               <div
                 className="bg-primary-600 h-2 rounded-full transition-all"
                 style={{ width: `${uploadProgress}%` }}
@@ -278,7 +278,7 @@ export default function MaterialsManager({
               return (
                 <div
                   key={material.id}
-                  className="flex items-center gap-3 p-3 bg-stone-50 dark:bg-stone-900/30 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-900/50 transition-colors"
+                  className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-800/30 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 transition-colors"
                 >
                   <FileIcon className="w-8 h-8 text-primary-500 flex-shrink-0" />
 

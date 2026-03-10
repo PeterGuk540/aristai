@@ -853,7 +853,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6 pb-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between rounded-2xl border border-rose-200/80 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] px-6 py-5 shadow-sm">
+      <div className="flex items-center justify-between rounded-2xl border border-rose-200/80 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] px-6 py-5 shadow-sm">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('reports.title')}</h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('reports.subtitle')}</p>
@@ -861,7 +861,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Course & Session Selector */}
-      <Card variant="default" padding="md" className="border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c]">
+      <Card variant="default" padding="md" className="border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e]">
         <div className="grid md:grid-cols-2 gap-4">
         <Select
           label={t('courses.selectCourse')}
@@ -966,7 +966,7 @@ export default function ReportsPage() {
                 fetchAnalytics();
               }
             }}>
-              <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
+              <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] rounded-xl">
                 <TabsTrigger value="summary" data-voice-id="tab-summary">{t('reports.summary')}</TabsTrigger>
                 <TabsTrigger value="participation" data-voice-id="tab-participation">{t('reports.participation')}</TabsTrigger>
                 <TabsTrigger value="scoring" data-voice-id="tab-scoring">{t('reports.answerScores')}</TabsTrigger>

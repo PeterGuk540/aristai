@@ -8,12 +8,12 @@ module.exports = {
   darkMode: 'class',
   theme: {
     extend: {
-      // Typography - Plus Jakarta Sans
+      // Typography – SF Pro fallbacks
       fontFamily: {
-        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
-        display: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'SF Pro Display', 'SF Pro Text', 'system-ui', 'sans-serif'],
+        display: ['Plus Jakarta Sans', 'SF Pro Display', 'SF Pro Text', 'system-ui', 'sans-serif'],
       },
-      // Color Palette - Editorial Educational Theme
+      // Color Palette – Apple-exact neutral tones
       colors: {
         // Primary - Deep Educational Blue
         primary: {
@@ -29,7 +29,7 @@ module.exports = {
           900: '#1a3050',
           950: '#111f35',
         },
-        // Accent - Warm Gold (like ebook.aristai.io)
+        // Accent - Warm Gold (restricted to CTAs & focus)
         accent: {
           50: '#fffbeb',
           100: '#fef3c7',
@@ -43,19 +43,19 @@ module.exports = {
           900: '#713f12',
           950: '#422006',
         },
-        // Neutral - Slate for text and backgrounds
+        // Neutral – Apple-exact tones
         neutral: {
-          50: '#fafafa',
-          100: '#f5f5f5',
-          200: '#e5e5e5',
-          300: '#d4d4d4',
-          400: '#a3a3a3',
-          500: '#737373',
-          600: '#525252',
-          700: '#404040',
-          800: '#262626',
-          900: '#171717',
-          950: '#0a0a0a',
+          50: '#f5f5f7',
+          100: '#e8e8ed',
+          200: '#d2d2d7',
+          300: '#b0b0b6',
+          400: '#86868b',
+          500: '#6e6e73',
+          600: '#48484a',
+          700: '#3a3a3c',
+          800: '#2c2c2e',
+          900: '#1d1d1f',
+          950: '#000000',
         },
         // Success
         success: {
@@ -112,12 +112,13 @@ module.exports = {
         '4xl': '2rem',
         '5xl': '2.5rem',
       },
-      // Box Shadow - Subtle, professional
+      // Box Shadow – Lighter, Apple-inspired
       boxShadow: {
-        'soft': '0 2px 8px -2px rgba(0, 0, 0, 0.05), 0 4px 12px -4px rgba(0, 0, 0, 0.05)',
-        'soft-md': '0 4px 12px -4px rgba(0, 0, 0, 0.08), 0 8px 24px -8px rgba(0, 0, 0, 0.06)',
-        'soft-lg': '0 8px 24px -8px rgba(0, 0, 0, 0.1), 0 16px 48px -16px rgba(0, 0, 0, 0.08)',
-        'lift': '0 4px 20px -4px rgba(0, 0, 0, 0.12)',
+        'soft': '0 1px 3px rgba(0, 0, 0, 0.03), 0 2px 8px rgba(0, 0, 0, 0.03)',
+        'soft-md': '0 2px 8px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04)',
+        'soft-lg': '0 4px 16px rgba(0, 0, 0, 0.05), 0 8px 32px rgba(0, 0, 0, 0.04)',
+        'lift': '0 2px 12px rgba(0, 0, 0, 0.06)',
+        'glass': '0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 12px rgba(0, 0, 0, 0.03)',
         'inner-soft': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
       },
       // Transitions

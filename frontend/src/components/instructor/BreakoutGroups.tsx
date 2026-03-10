@@ -67,10 +67,10 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
   if (loading) {
     return (
       <div className="animate-pulse p-4">
-        <div className="h-6 bg-stone-200 dark:bg-stone-700 rounded w-1/3 mb-4"></div>
+        <div className="h-6 bg-neutral-200 dark:bg-neutral-700 rounded w-1/3 mb-4"></div>
         <div className="grid grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-24 bg-stone-200 dark:bg-stone-700 rounded-xl"></div>
+            <div key={i} className="h-24 bg-neutral-200 dark:bg-neutral-700 rounded-xl"></div>
           ))}
         </div>
       </div>
@@ -160,10 +160,10 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
         <div className="flex gap-2">
           <button
             onClick={fetchGroups}
-            className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
             title="Refresh"
           >
-            <RefreshCw className="w-4 h-4 text-stone-500" />
+            <RefreshCw className="w-4 h-4 text-neutral-500" />
           </button>
           <button
             onClick={handleDissolveGroups}
@@ -180,7 +180,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
         {groups.map((group) => (
           <div
             key={group.id}
-            className="border border-stone-200 dark:border-stone-700 rounded-xl p-3 bg-stone-50 dark:bg-stone-900/30"
+            className="border border-neutral-200 dark:border-neutral-700 rounded-xl p-3 bg-neutral-50 dark:bg-neutral-800/30"
           >
             <div className="flex items-center justify-between mb-2">
               <span className="font-semibold text-neutral-900 dark:text-neutral-100">{group.name}</span>
@@ -192,7 +192,7 @@ export function BreakoutGroupsComponent({ sessionId, onGroupsChanged }: Breakout
               {group.members?.map((member) => (
                 <div
                   key={member.user_id}
-                  className="text-sm px-2 py-1 bg-white dark:bg-stone-800 rounded-lg border border-stone-100 dark:border-stone-700"
+                  className="text-sm px-2 py-1 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-100 dark:border-neutral-700"
                 >
                   {member.name}
                 </div>

@@ -21,18 +21,18 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         ref={ref}
         className={cn(
           // Base styles
-          'w-full rounded-xl px-4 py-3 transition-all duration-200',
+          'w-full rounded-2xl px-4 py-3 transition-colors duration-200',
           'text-neutral-900 dark:text-neutral-100 text-sm',
           'placeholder:text-neutral-400 dark:placeholder:text-neutral-500',
           'focus:outline-none focus:ring-2 focus:ring-offset-0',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           // Variant styles
           {
-            // Default - bordered
-            'bg-white dark:bg-[#1a150c] border border-stone-300 dark:border-stone-700 focus:border-amber-500 focus:ring-amber-500/20':
+            // Default - bordered, neutral focus
+            'bg-white dark:bg-[#1c1c1e] border border-neutral-200 dark:border-neutral-700 focus:border-neutral-400 focus:ring-neutral-400/20':
               variant === 'default' && !error,
             // Filled - subtle background
-            'bg-stone-50 dark:bg-stone-900/40 border border-transparent focus:border-amber-500 focus:ring-amber-500/20 focus:bg-white dark:focus:bg-[#1a150c]':
+            'bg-neutral-100/60 dark:bg-neutral-800/40 border border-transparent focus:border-neutral-400 focus:ring-neutral-400/20 focus:bg-white dark:focus:bg-[#1c1c1e]':
               variant === 'filled' && !error,
           },
           // Error state

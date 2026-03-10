@@ -53,7 +53,7 @@ function ProviderOAuthCallbackContent() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-300 border-t-stone-700" />
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
           <p className="mt-3 text-sm text-neutral-600">Completing {providerLabel} connection...</p>
         </div>
       </div>
@@ -84,7 +84,7 @@ function LoadingFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
-        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-300 border-t-stone-700" />
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
         <p className="mt-3 text-sm text-neutral-600">Loading...</p>
       </div>
     </div>

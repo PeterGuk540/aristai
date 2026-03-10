@@ -108,8 +108,8 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
 
   if (loading) {
     return (
-      <div className="animate-pulse p-4 bg-stone-100 dark:bg-stone-900/40 rounded-xl border border-stone-200 dark:border-stone-700">
-        <div className="h-6 bg-stone-200 dark:bg-stone-700 rounded w-24"></div>
+      <div className="animate-pulse p-4 bg-neutral-100 dark:bg-neutral-800/40 rounded-xl border border-neutral-200 dark:border-neutral-700">
+        <div className="h-6 bg-neutral-200 dark:bg-neutral-700 rounded w-24"></div>
       </div>
     );
   }
@@ -188,18 +188,18 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
 
   return (
     <div className={cn(
-      'bg-white dark:bg-[#1a150c] rounded-xl border border-stone-200 dark:border-primary-900/20 shadow-sm p-4',
+      'bg-white dark:bg-[#1c1c1e] rounded-xl border border-neutral-200 dark:border-neutral-800 shadow-sm p-4',
       isExpired && 'ring-2 ring-danger-500',
       isLow && !isExpired && 'ring-2 ring-warning-500'
     )}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-semibold text-stone-700 dark:text-stone-300">{timer.label}</span>
+        <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{timer.label}</span>
         <div className="flex gap-1">
           {timer.is_paused ? (
             <button
               onClick={handleResume}
               data-voice-id="resume-timer"
-              className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
+              className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
               title="Resume"
             >
               <Play className="w-4 h-4 text-success-600" />
@@ -208,7 +208,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
             <button
               onClick={handlePause}
               data-voice-id="pause-timer"
-              className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
+              className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
               title="Pause"
             >
               <Pause className="w-4 h-4 text-warning-600" />
@@ -217,7 +217,7 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
           <button
             onClick={handleStop}
             data-voice-id="stop-timer"
-            className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
             title="Stop"
           >
             <Square className="w-4 h-4 text-danger-600" />
@@ -227,13 +227,13 @@ export function SessionTimerComponent({ sessionId, onTimerExpired }: SessionTime
 
       <div className={cn(
         'text-4xl font-mono font-bold text-center',
-        isExpired ? 'text-danger-600' : isLow ? 'text-warning-600' : 'text-stone-900 dark:text-white'
+        isExpired ? 'text-danger-600' : isLow ? 'text-warning-600' : 'text-neutral-900 dark:text-white'
       )}>
         {isExpired ? "Time's up!" : formatTime(localRemaining)}
       </div>
 
       {/* Progress bar */}
-      <div className="mt-3 h-2 bg-stone-200 dark:bg-stone-800 rounded-full overflow-hidden">
+      <div className="mt-3 h-2 bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden">
         <div
           className={cn(
             'h-full transition-all duration-1000',

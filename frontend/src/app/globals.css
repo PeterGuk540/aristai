@@ -3,34 +3,35 @@
 @tailwind utilities;
 
 /* ============================================
-   AristAI Design System - Matching ebook.aristai.io
-   Professional Editorial Educational Theme
+   AristAI Design System – Apple-Inspired
+   Monochromatic hierarchy · Borderless surfaces
+   Generous whitespace · Refined typography
    ============================================ */
 
 :root {
-  /* Primary Yellow Accent - Signature Color */
+  /* Primary Yellow Accent – Restricted to CTAs & focus */
   --yellow: #f5c842;
   --yellow-hover: #e6ba3a;
   --yellow-bg: #fffdf5;
   --yellow-light: rgba(245, 200, 66, 0.10);
   --yellow-border: rgba(245, 200, 66, 0.25);
 
-  /* Neutral Grays - Clean and Professional */
+  /* Neutral Grays – Apple-exact values */
   --white: #ffffff;
-  --gray-50: #fafafa;
-  --gray-100: #f5f5f5;
-  --gray-200: #eeeeee;
-  --gray-300: #e0e0e0;
-  --gray-400: #bdbdbd;
-  --gray-500: #9e9e9e;
-  --gray-600: #757575;
-  --gray-700: #616161;
-  --gray-800: #424242;
-  --gray-900: #212121;
+  --gray-50: #f5f5f7;
+  --gray-100: #e8e8ed;
+  --gray-200: #d2d2d7;
+  --gray-300: #b0b0b6;
+  --gray-400: #86868b;
+  --gray-500: #6e6e73;
+  --gray-600: #6e6e73;
+  --gray-700: #48484a;
+  --gray-800: #3a3a3c;
+  --gray-900: #1d1d1f;
   --black: #000000;
 
   /* Section Backgrounds */
-  --section-alt: #f8f8f8;
+  --section-alt: #f5f5f7;
   --section-warm: var(--yellow-bg);
 
   /* Semantic Colors */
@@ -44,7 +45,7 @@
   --info-light: #dbeafe;
 
   /* Typography */
-  --font-sans: var(--font-manrope), 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: var(--font-manrope), 'Manrope', 'SF Pro Display', 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-size-xs: 0.72rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 0.9375rem;
@@ -67,23 +68,23 @@
   --spacing-2xl: 3rem;
   --spacing-3xl: 4.5rem;
   --spacing-section: 4.5rem;
-  --spacing-card: 1.75rem;
+  --spacing-card: 2rem;
 
   /* Layout */
   --max-width: 1060px;
   --container-padding: 1.75rem;
 
-  /* Borders */
-  --border-radius-sm: 0.5rem;
-  --border-radius-md: 0.875rem;
-  --border-radius-lg: 1rem;
-  --border-color: #e5e5e5;
+  /* Borders – Increased radii */
+  --border-radius-sm: 10px;
+  --border-radius-md: 16px;
+  --border-radius-lg: 20px;
+  --border-color: #d2d2d7;
 
-  /* Shadows - Subtle and Professional */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.05);
-  --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.08);
+  /* Shadows – Lighter, more refined */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.06);
 
   /* Transitions */
   --transition-fast: 0.15s ease;
@@ -95,8 +96,8 @@
   --bg-secondary: var(--gray-50);
   --bg-tertiary: var(--section-alt);
   --text-primary: var(--gray-900);
-  --text-secondary: var(--gray-600);
-  --text-muted: var(--gray-500);
+  --text-secondary: var(--gray-500);
+  --text-muted: var(--gray-400);
   --border-default: var(--gray-200);
   --border-strong: var(--gray-300);
 
@@ -135,18 +136,18 @@
 
 /* Dark Mode */
 .dark {
-  --bg-primary: #0f0f0f;
-  --bg-secondary: #1a1a1a;
-  --bg-tertiary: #252525;
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1a1;
-  --text-muted: #737373;
-  --border-default: #2a2a2a;
-  --border-strong: #404040;
-  --section-alt: #1a1a1a;
-  --section-warm: #1f1c16;
+  --bg-primary: #000000;
+  --bg-secondary: #1c1c1e;
+  --bg-tertiary: #2c2c2e;
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-muted: #6e6e73;
+  --border-default: #38383a;
+  --border-strong: #48484a;
+  --section-alt: #1c1c1e;
+  --section-warm: #1c1c1e;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: none;
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
   --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -170,24 +171,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Focus States - Accessibility */
+/* Focus States – Gold accent preserved for accessibility */
 *:focus-visible {
   outline: 2px solid var(--yellow);
   outline-offset: 2px;
 }
 
-/* Selection */
+/* Selection – Gold accent preserved */
 ::selection {
   background-color: var(--yellow);
   color: var(--black);
 }
 
 /* ============================================
-   Typography - Matching ebook.aristai.io
+   Typography – Apple-inspired
    ============================================ */
 
 h1, h2, h3, h4, h5, h6 {
-  font-weight: 700;
+  font-weight: 600;
   line-height: var(--line-height-tight);
   letter-spacing: var(--letter-spacing-tight);
   color: var(--text-primary);
@@ -195,7 +196,7 @@ h1, h2, h3, h4, h5, h6 {
 
 h1 {
   font-size: clamp(1.75rem, 4vw, 2.5rem);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 h2 {
@@ -211,6 +212,7 @@ h4 {
 }
 
 p {
+  font-weight: 400;
   line-height: var(--line-height-relaxed);
   color: var(--text-secondary);
 }
@@ -255,7 +257,7 @@ p {
 }
 
 /* ============================================
-   Utility Classes - Matching ebook.aristai.io
+   Utility Classes
    ============================================ */
 
 @layer utilities {
@@ -289,13 +291,13 @@ p {
     border-color: var(--yellow-border);
   }
 
-  /* Hero gradient */
+  /* Hero gradient – Neutral, no warm tint */
   .bg-hero-gradient {
-    background: linear-gradient(180deg, #fffdf6 0%, #ffffff 62%, #fafafa 100%);
+    background: linear-gradient(180deg, #f5f5f7 0%, #ffffff 62%, #f5f5f7 100%);
   }
 
   .dark .bg-hero-gradient {
-    background: linear-gradient(180deg, #1f1d18 0%, #161616 65%, #101010 100%);
+    background: linear-gradient(180deg, #1c1c1e 0%, #000000 65%, #000000 100%);
   }
 
   .bg-primary {
@@ -347,16 +349,20 @@ p {
     color: var(--black);
   }
 
-  /* Icon box (40px with yellow-light bg) */
+  /* Icon box – Neutral background */
   .icon-box {
     width: 40px;
     height: 40px;
-    background-color: var(--yellow-light);
+    background-color: var(--gray-50);
     border-radius: var(--border-radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+  }
+
+  .dark .icon-box {
+    background-color: var(--bg-tertiary);
   }
 
   .icon-box svg {
@@ -365,23 +371,26 @@ p {
     stroke-width: 1.5;
   }
 
-  /* Card hover effect - subtle */
+  /* Card hover effect – No lift, subtle bg tint */
   .card-hover {
-    transition: box-shadow var(--transition-base), transform var(--transition-base);
+    transition: background-color var(--transition-base);
   }
 
   .card-hover:hover {
-    box-shadow: var(--shadow-hover);
-    transform: translateY(-1px);
+    background-color: var(--gray-50);
   }
 
-  /* Link hover - yellow */
+  .dark .card-hover:hover {
+    background-color: var(--bg-tertiary);
+  }
+
+  /* Link hover – Opacity instead of yellow */
   .link-hover {
-    transition: color var(--transition-fast);
+    transition: opacity var(--transition-fast);
   }
 
   .link-hover:hover {
-    color: var(--yellow);
+    opacity: 0.7;
   }
 
   /* Text balance */
@@ -399,7 +408,7 @@ p {
     display: none;
   }
 
-  /* Step counter styling */
+  /* Step counter styling – Neutral background */
   .step-counter {
     counter-reset: step-counter;
   }
@@ -415,12 +424,17 @@ p {
     justify-content: center;
     width: 32px;
     height: 32px;
-    background-color: var(--yellow);
-    color: var(--black);
-    font-weight: 700;
+    background-color: var(--gray-100);
+    color: var(--gray-900);
+    font-weight: 600;
     font-size: var(--font-size-sm);
     border-radius: 50%;
     flex-shrink: 0;
+  }
+
+  .dark .step-item::before {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
   }
 }
 
@@ -429,22 +443,15 @@ p {
    ============================================ */
 
 @layer components {
-  /* Professional Card - 14px radius, 1px border */
+  /* Professional Card – Borderless, bg contrast */
   .card-ebook {
     background-color: var(--bg-primary);
-    border: 1px solid var(--border-default);
     border-radius: var(--border-radius-md);
     padding: var(--spacing-card);
-    transition: box-shadow var(--transition-base);
-  }
-
-  .card-ebook:hover {
-    box-shadow: var(--shadow-hover);
   }
 
   .dark .card-ebook {
     background-color: var(--bg-secondary);
-    border-color: var(--border-default);
   }
 
   /* Primary button - Yellow */
@@ -472,7 +479,7 @@ p {
     transform: translateY(0);
   }
 
-  /* Secondary button - Outlined */
+  /* Secondary button – Neutral hover instead of yellow */
   .btn-secondary-ebook {
     display: inline-flex;
     align-items: center;
@@ -489,8 +496,12 @@ p {
   }
 
   .btn-secondary-ebook:hover {
-    border-color: var(--yellow);
-    background-color: var(--yellow-light);
+    border-color: var(--border-strong);
+    background-color: var(--gray-50);
+  }
+
+  .dark .btn-secondary-ebook:hover {
+    background-color: var(--bg-tertiary);
   }
 
   /* Feature row - alternating layout */
@@ -574,7 +585,8 @@ p {
   }
 
   .faq-question:hover {
-    color: var(--yellow);
+    color: var(--text-primary);
+    opacity: 0.7;
   }
 
   .faq-toggle {
@@ -628,15 +640,13 @@ p {
   /* Legacy component compatibility */
   .card {
     @apply bg-white dark:bg-neutral-800
-           border border-neutral-200 dark:border-neutral-700
-           rounded-xl;
-    box-shadow: var(--shadow-sm);
+           rounded-2xl;
   }
 
   .btn-primary {
     @apply inline-flex items-center justify-center px-4 py-2.5
-           font-medium rounded-lg
-           transition-all duration-200
+           font-medium rounded-2xl
+           transition-colors duration-200
            focus:outline-none focus:ring-2 focus:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
            cursor-pointer;
@@ -651,9 +661,9 @@ p {
   .btn-secondary {
     @apply inline-flex items-center justify-center px-4 py-2.5
            bg-white hover:bg-neutral-50
-           text-neutral-700 font-medium rounded-lg
-           border border-neutral-300 hover:border-neutral-400
-           transition-all duration-200
+           text-neutral-700 font-medium rounded-2xl
+           border border-neutral-200 hover:border-neutral-300
+           transition-colors duration-200
            focus:outline-none focus:ring-2 focus:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
            cursor-pointer;
@@ -668,11 +678,11 @@ p {
   .input-base {
     @apply w-full px-4 py-2.5
            bg-white dark:bg-neutral-800
-           border border-neutral-300 dark:border-neutral-600
-           rounded-lg
+           border border-neutral-200 dark:border-neutral-700
+           rounded-2xl
            text-neutral-900 dark:text-neutral-100
            placeholder:text-neutral-400 dark:placeholder:text-neutral-500
-           transition-all duration-200
+           transition-colors duration-200
            focus:outline-none focus:ring-2 focus:border-transparent
            disabled:opacity-50 disabled:bg-neutral-100 dark:disabled:bg-neutral-900;
     --tw-ring-color: var(--yellow);
@@ -729,7 +739,7 @@ p {
 
   .section-title {
     font-size: var(--font-size-xl);
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-primary);
   }
 

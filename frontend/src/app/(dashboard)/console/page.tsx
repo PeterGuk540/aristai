@@ -434,7 +434,7 @@ export default function ConsolePage() {
           {suggestion.rolling_summary && (
             <div>
               <h4 className="mb-1 text-sm font-medium text-neutral-700 dark:text-neutral-300">Summary</h4>
-              <p className="rounded-lg bg-stone-50 p-3 text-sm text-neutral-600 dark:bg-stone-900/25 dark:text-neutral-300">
+              <p className="rounded-lg bg-neutral-50 p-3 text-sm text-neutral-600 dark:bg-neutral-800/25 dark:text-neutral-300">
                 {suggestion.rolling_summary}
               </p>
             </div>
@@ -536,7 +536,7 @@ export default function ConsolePage() {
 
           {/* Overall Assessment */}
           {suggestion.overall_assessment && (
-            <div className="rounded-lg bg-stone-50 p-3 dark:bg-stone-900/25">
+            <div className="rounded-lg bg-neutral-50 p-3 dark:bg-neutral-800/25">
               <h4 className="mb-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">Assessment</h4>
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <div>
@@ -559,7 +559,7 @@ export default function ConsolePage() {
                 </div>
               </div>
               {suggestion.overall_assessment.recommendation && (
-                <p className="mt-2 border-t border-stone-200 pt-2 text-sm text-neutral-600 dark:border-primary-900/20 dark:text-neutral-300">
+                <p className="mt-2 border-t border-neutral-200 pt-2 text-sm text-neutral-600 dark:border-neutral-800 dark:text-neutral-300">
                   {suggestion.overall_assessment.recommendation}
                 </p>
               )}
@@ -589,7 +589,7 @@ export default function ConsolePage() {
   return (
     <div className="space-y-6 pb-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between rounded-2xl border border-sky-200/80 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] px-6 py-5 shadow-sm">
+      <div className="flex items-center justify-between rounded-2xl border border-sky-200/80 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] px-6 py-5 shadow-sm">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('console.title')}</h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('console.subtitle')}</p>
@@ -597,7 +597,7 @@ export default function ConsolePage() {
       </div>
 
       {/* Course & Session Selector */}
-      <Card variant="default" padding="md" className="border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c]">
+      <Card variant="default" padding="md" className="border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e]">
         <div className="grid md:grid-cols-2 gap-4">
         <Select
           label={t('courses.selectCourse')}
@@ -631,7 +631,7 @@ export default function ConsolePage() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
+        <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] rounded-xl">
           <TabsTrigger value="copilot" disabled={!selectedSessionId} data-voice-id="tab-copilot">
             {t('console.copilot')}
           </TabsTrigger>
@@ -857,7 +857,7 @@ export default function ConsolePage() {
                                     %)
                                   </span>
                                 </div>
-                                <div className="h-2 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800">
+                                <div className="h-2 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800">
                                   <div
                                     className="h-full bg-primary-600 rounded-full transition-all"
                                     style={{ width: `${percentage}%` }}
@@ -1004,7 +1004,7 @@ export default function ConsolePage() {
             </Card>
 
             {/* Voice Command Hints */}
-            <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-primary-900/20 dark:bg-stone-900/25">
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-800/25">
               <h3 className="font-medium mb-3 flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 Quick Voice Commands
@@ -1019,7 +1019,7 @@ export default function ConsolePage() {
                   'Suggest a poll',
                   'Show AI drafts'
                 ].map((cmd) => (
-                  <span key={cmd} className="rounded-full border border-stone-200 bg-white px-3 py-1 text-sm text-neutral-600 dark:border-primary-900/20 dark:bg-[#1a150c] dark:text-neutral-300">
+                  <span key={cmd} className="rounded-full border border-neutral-200 bg-white px-3 py-1 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-[#1c1c1e] dark:text-neutral-300">
                     "{cmd}"
                   </span>
                 ))}
@@ -1055,7 +1055,7 @@ export default function ConsolePage() {
                   {instructorRequests.map((request) => (
                     <div
                       key={request.id}
-                      className="flex items-center justify-between rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-primary-900/20 dark:bg-stone-900/25"
+                      className="flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-800/25"
                     >
                       <div>
                         <p className="font-medium text-neutral-900 dark:text-white">{request.name}</p>
@@ -1113,7 +1113,7 @@ export default function ConsolePage() {
                   <li>Create new student accounts for unknown emails</li>
                   <li>Skip students already enrolled in the course</li>
                 </ul>
-                <div className="mt-3 rounded border border-primary-200 bg-white p-3 font-mono text-xs dark:border-primary-900/30 dark:bg-[#1a150c]">
+                <div className="mt-3 rounded border border-primary-200 bg-white p-3 font-mono text-xs dark:border-primary-900/30 dark:bg-[#1c1c1e]">
                   email,name<br />
                   student1@university.edu,John Doe<br />
                   student2@university.edu,Jane Smith
@@ -1167,28 +1167,28 @@ export default function ConsolePage() {
               </Button>
 
               {rosterResults && (
-                <div className="mt-6 rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-primary-900/20 dark:bg-stone-900/25">
+                <div className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-800/25">
                   <h4 className="mb-3 font-medium text-neutral-900 dark:text-white">Upload Results</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                    <div className="rounded bg-white p-3 text-center dark:bg-[#1a150c]">
+                    <div className="rounded bg-white p-3 text-center dark:bg-[#1c1c1e]">
                       <div className="text-2xl font-bold text-green-600">
                         {rosterResults.created_and_enrolled_count}
                       </div>
                       <div className="text-xs text-neutral-500 dark:text-neutral-400">Created & Enrolled</div>
                     </div>
-                    <div className="rounded bg-white p-3 text-center dark:bg-[#1a150c]">
+                    <div className="rounded bg-white p-3 text-center dark:bg-[#1c1c1e]">
                       <div className="text-2xl font-bold text-primary-600">
                         {rosterResults.existing_enrolled_count}
                       </div>
                       <div className="text-xs text-neutral-500 dark:text-neutral-400">Existing Enrolled</div>
                     </div>
-                    <div className="rounded bg-white p-3 text-center dark:bg-[#1a150c]">
+                    <div className="rounded bg-white p-3 text-center dark:bg-[#1c1c1e]">
                       <div className="text-2xl font-bold text-neutral-600 dark:text-neutral-300">
                         {rosterResults.already_enrolled_count}
                       </div>
                       <div className="text-xs text-neutral-500 dark:text-neutral-400">Already Enrolled</div>
                     </div>
-                    <div className="rounded bg-white p-3 text-center dark:bg-[#1a150c]">
+                    <div className="rounded bg-white p-3 text-center dark:bg-[#1c1c1e]">
                       <div className="text-2xl font-bold text-red-600">
                         {rosterResults.error_count}
                       </div>

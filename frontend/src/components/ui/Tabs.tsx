@@ -57,8 +57,8 @@ export function TabsList({ children, className, variant = 'default' }: TabsListP
       className={cn(
         'inline-flex items-center',
         {
-          // Default - contained pills
-          'gap-1 rounded-xl border border-stone-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] p-1':
+          // Default – Apple segmented control (no border, bg container)
+          'gap-1 rounded-2xl bg-neutral-100 dark:bg-neutral-800 p-1':
             variant === 'default',
           // Pills - separate buttons
           'gap-2':
@@ -98,12 +98,12 @@ export function TabsTrigger({ value, children, className, disabled, 'data-voice-
       data-state={isActive ? 'active' : 'inactive'}
       className={cn(
         // Base styles
-        'px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200',
-        'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-        // Active state
+        'px-4 py-2 text-sm font-medium rounded-xl transition-colors duration-200',
+        'focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2',
+        // Active state – White pill, no gold
         isActive
-          ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 shadow-sm'
-          : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-900/40',
+          ? 'bg-white text-neutral-900 dark:bg-neutral-700 dark:text-white shadow-sm'
+          : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-50/50 dark:hover:bg-neutral-700/40',
         // Disabled state
         disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
         className

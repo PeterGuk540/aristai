@@ -565,7 +565,7 @@ export default function SessionsPage() {
   return (
     <div className="space-y-8 max-w-6xl pb-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between rounded-2xl border border-emerald-200/80 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] px-6 py-5 shadow-sm">
+      <div className="flex items-center justify-between rounded-2xl border border-emerald-200/80 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] px-6 py-5 shadow-sm">
         <div>
           <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">{t('sessions.title')}</h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('sessions.subtitle')}</p>
@@ -573,7 +573,7 @@ export default function SessionsPage() {
       </div>
 
       {/* Course Selector */}
-      <Card variant="default" padding="md" className="border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c]">
+      <Card variant="default" padding="md" className="border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e]">
         <Select
           label={t('courses.selectCourse')}
           value={selectedCourseId?.toString() || ''}
@@ -591,7 +591,7 @@ export default function SessionsPage() {
 
       {selectedCourseId && (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="border border-neutral-200 dark:border-primary-900/20 bg-white dark:bg-[#1a150c] rounded-xl">
+          <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#1c1c1e] rounded-xl">
             <TabsTrigger value="sessions" data-voice-id="tab-sessions">{t('sessions.viewSessions')}</TabsTrigger>
             <TabsTrigger value="materials" data-voice-id="tab-materials">
               <FileText className="w-4 h-4 mr-1.5" />

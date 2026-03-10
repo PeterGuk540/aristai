@@ -13,29 +13,29 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
       ref={ref}
       className={cn(
         // Base styles
-        'inline-flex items-center font-semibold rounded-full transition-colors',
+        'inline-flex items-center font-medium rounded-full transition-colors',
         // Variant styles
         {
           // Default - neutral
-          'bg-stone-100 text-stone-700 dark:bg-stone-900/50 dark:text-stone-300':
+          'bg-neutral-100 text-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-300':
             variant === 'default',
-          // Primary - blue
-          'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300':
+          // Primary - monochromatic neutral (no blue tint)
+          'bg-neutral-100 text-neutral-700 dark:bg-neutral-800/40 dark:text-neutral-300':
             variant === 'primary',
-          // Success - green
-          'bg-success-100 text-success-700 dark:bg-success-900/40 dark:text-success-300':
+          // Success - green (muted to 50 level)
+          'bg-success-50 text-success-700 dark:bg-success-900/40 dark:text-success-300':
             variant === 'success',
-          // Warning - orange/amber
-          'bg-warning-100 text-warning-700 dark:bg-warning-900/40 dark:text-warning-300':
+          // Warning - orange/amber (muted to 50 level)
+          'bg-warning-50 text-warning-700 dark:bg-warning-900/40 dark:text-warning-300':
             variant === 'warning',
-          // Danger - red
-          'bg-danger-100 text-danger-700 dark:bg-danger-900/40 dark:text-danger-300':
+          // Danger - red (muted to 50 level)
+          'bg-danger-50 text-danger-700 dark:bg-danger-900/40 dark:text-danger-300':
             variant === 'danger',
-          // Info - blue (lighter than primary)
-          'bg-info-100 text-info-700 dark:bg-info-900/40 dark:text-info-300':
+          // Info - blue (muted to 50 level)
+          'bg-info-50 text-info-700 dark:bg-info-900/40 dark:text-info-300':
             variant === 'info',
-          // Accent - gold
-          'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300':
+          // Accent - gold token
+          'bg-[#f5c842]/10 text-[#a16207] dark:bg-[#f5c842]/20 dark:text-[#f5c842]':
             variant === 'accent',
         },
         // Size styles
@@ -59,7 +59,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
             },
             {
               'bg-neutral-500': variant === 'default',
-              'bg-primary-500': variant === 'primary',
+              'bg-neutral-500': variant === 'primary',
               'bg-success-500': variant === 'success',
               'bg-warning-500': variant === 'warning',
               'bg-danger-500': variant === 'danger',

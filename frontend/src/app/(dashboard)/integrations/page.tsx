@@ -665,14 +665,14 @@ export default function IntegrationsPage() {
           onClick={() => void refreshAll()}
           disabled={refreshing}
           data-voice-id="refresh-integrations"
-          className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+          className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
         >
           {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           {refreshing ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-[#1a150c]">
+      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Plug className="h-4 w-4 text-primary-600" />
@@ -682,7 +682,7 @@ export default function IntegrationsPage() {
             onClick={() => void handleConnectionCheck()}
             disabled={checkingConnection || !canReadExternal}
             data-voice-id="check-integration-connection"
-            className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-1.5 text-xs hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+            className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
           >
             {checkingConnection ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
             Check connection
@@ -693,7 +693,7 @@ export default function IntegrationsPage() {
           {providers.map((p) => (
             <div
               key={p.name}
-              className="rounded-xl border border-stone-200 p-3 dark:border-stone-700"
+              className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-700"
               data-voice-id={`provider-${p.name}`}
             >
               <div className="flex items-center justify-between">
@@ -711,7 +711,7 @@ export default function IntegrationsPage() {
           ))}
         </div>
 
-        <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs dark:border-stone-700 dark:bg-stone-900/30">
+        <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs dark:border-neutral-700 dark:bg-neutral-800/30">
           {connectionCheck ? (
             <span className="text-emerald-700 dark:text-emerald-300">
               Connected as {connectionCheck.provider_user_name || `user ${connectionCheck.user_id}`}.
@@ -722,8 +722,8 @@ export default function IntegrationsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-[#1a150c]">
-        <div className="mb-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-neutral-700 dark:border-stone-700 dark:bg-stone-900/30 dark:text-neutral-200">
+      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
+        <div className="mb-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800/30 dark:text-neutral-200">
           {isAdmin
             ? `Admin scope: showing all saved ${provider.toUpperCase()} connections.`
             : `Instructor scope: showing only your saved ${provider.toUpperCase()} connections.`}
@@ -737,7 +737,7 @@ export default function IntegrationsPage() {
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
               data-voice-id="select-integration-provider"
-              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
             >
               {providers
                 .filter((p) => p.enabled)
@@ -757,7 +757,7 @@ export default function IntegrationsPage() {
               value={selectedConnectionId}
               onChange={(e) => setSelectedConnectionId(e.target.value)}
               data-voice-id="select-provider-connection"
-              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
             >
               <option value="">Use global env credentials</option>
               {providerConnections.map((c) => (
@@ -781,14 +781,14 @@ export default function IntegrationsPage() {
               onChange={(e) => setNewConnLabel(e.target.value)}
               data-voice-id="new-provider-connection-label"
               placeholder="Connection label (e.g., UPP Canvas)"
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
             />
             <input
               value={newConnUrl}
               onChange={(e) => setNewConnUrl(e.target.value)}
               data-voice-id="new-provider-connection-url"
               placeholder="API base URL (e.g., https://.../api/v1)"
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
             />
             <input
               value={newConnToken}
@@ -796,7 +796,7 @@ export default function IntegrationsPage() {
               data-voice-id="new-provider-connection-token"
               placeholder={provider === 'upp' ? 'API token (optional if using username/password)' : 'API token'}
               type="password"
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
             />
           </div>
           {provider === 'upp' && (
@@ -806,7 +806,7 @@ export default function IntegrationsPage() {
                 onChange={(e) => setNewConnUsername(e.target.value)}
                 data-voice-id="new-provider-connection-username"
                 placeholder="UPP username"
-                className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
               />
               <input
                 value={newConnPassword}
@@ -814,7 +814,7 @@ export default function IntegrationsPage() {
                 data-voice-id="new-provider-connection-password"
                 placeholder="UPP password"
                 type="password"
-                className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
               />
             </div>
           )}
@@ -824,7 +824,7 @@ export default function IntegrationsPage() {
               onClick={handleAddProviderConnection}
               disabled={savingProviderConnection}
               data-voice-id="add-provider-connection"
-              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
             >
               {savingProviderConnection ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />}
               Add connection
@@ -833,7 +833,7 @@ export default function IntegrationsPage() {
               onClick={handleStartProviderOAuth}
               disabled={startingOAuth}
               data-voice-id="connect-canvas-oauth"
-              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
             >
               {startingOAuth ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
               {provider === 'upp' ? 'Connect UPP (username/password)' : `Connect ${provider.toUpperCase()}`}
@@ -842,7 +842,7 @@ export default function IntegrationsPage() {
               onClick={handleTestActiveConnection}
               data-voice-id="test-provider-connection"
               disabled={!activeConnectionId}
-              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
             >
               Test selected
             </button>
@@ -850,7 +850,7 @@ export default function IntegrationsPage() {
               onClick={handleActivateConnection}
               data-voice-id="activate-provider-connection"
               disabled={!activeConnectionId}
-              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
             >
               Set default
             </button>
@@ -858,7 +858,7 @@ export default function IntegrationsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-[#1a150c]">
+      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-neutral-500">
@@ -868,7 +868,7 @@ export default function IntegrationsPage() {
               value={selectedMappingId}
               onChange={(e) => setSelectedMappingId(e.target.value)}
               data-voice-id="select-integration-mapping"
-              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
             >
               <option value="">No mapping selected</option>
               {mappings.map((m) => (
@@ -887,7 +887,7 @@ export default function IntegrationsPage() {
               value={selectedExternalCourse}
               onChange={(e) => setSelectedExternalCourse(e.target.value)}
               data-voice-id="select-external-course"
-              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
               disabled={!canReadExternal}
             >
               <option value="">{canReadExternal ? 'Select external course' : 'Select or add a connection first'}</option>
@@ -907,7 +907,7 @@ export default function IntegrationsPage() {
               value={selectedLocalCourse}
               onChange={(e) => setSelectedLocalCourse(e.target.value)}
               data-voice-id="select-target-course"
-              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
             >
               <option value="">Select target course</option>
               {localCourses.map((c) => (
@@ -926,7 +926,7 @@ export default function IntegrationsPage() {
               value={selectedLocalSession}
               onChange={(e) => setSelectedLocalSession(e.target.value)}
               data-voice-id="select-target-session"
-              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
+              className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
               disabled={!selectedLocalCourse}
             >
               <option value="">Course-level material (no session)</option>
@@ -944,7 +944,7 @@ export default function IntegrationsPage() {
               onClick={handleImportCourseToForum}
               disabled={importingCourse}
               data-voice-id="import-external-course"
-              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
             >
               {importingCourse ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               Create Forum course
@@ -953,7 +953,7 @@ export default function IntegrationsPage() {
               onClick={handleSaveMapping}
               disabled={savingMapping}
               data-voice-id="save-course-mapping"
-              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
             >
               {savingMapping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
               Save mapping
@@ -962,7 +962,7 @@ export default function IntegrationsPage() {
               onClick={handleSyncAll}
               disabled={syncing}
               data-voice-id="sync-all-materials"
-              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
             >
               {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
               Sync all
@@ -971,7 +971,7 @@ export default function IntegrationsPage() {
               onClick={handleSyncRoster}
               disabled={syncingRoster}
               data-voice-id="sync-roster"
-              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm hover:bg-stone-100 disabled:opacity-60 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 disabled:opacity-60 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
             >
               {syncingRoster ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
               Sync students
@@ -980,14 +980,14 @@ export default function IntegrationsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-[#1a150c]">
+      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-semibold text-neutral-900 dark:text-neutral-100">External Materials</h2>
           <div className="flex gap-2">
             <button
               onClick={selectAllMaterials}
               data-voice-id="select-all-external-materials"
-              className="rounded-lg border border-stone-300 px-2 py-1 text-xs hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="rounded-lg border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
               disabled={!externalMaterials.length}
             >
               Select all
@@ -995,7 +995,7 @@ export default function IntegrationsPage() {
             <button
               onClick={clearMaterials}
               data-voice-id="clear-external-materials"
-              className="rounded-lg border border-stone-300 px-2 py-1 text-xs hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-900/30"
+              className="rounded-lg border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800/30"
               disabled={!selectedMaterialIds.length}
             >
               Clear
@@ -1014,7 +1014,7 @@ export default function IntegrationsPage() {
               return (
                 <label
                   key={m.external_id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-stone-200 px-3 py-2 text-sm dark:border-stone-700"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-700"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <input
@@ -1048,7 +1048,7 @@ export default function IntegrationsPage() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-[#1a150c]">
+      <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-[#1c1c1e]">
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleImport}
@@ -1066,7 +1066,7 @@ export default function IntegrationsPage() {
           )}
         </div>
 
-        <div className="mt-5 border-t border-stone-200 pt-4 dark:border-stone-700">
+        <div className="mt-5 border-t border-neutral-200 pt-4 dark:border-neutral-700">
           <h3 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">Recent Sync Jobs</h3>
           {!jobs.length ? (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">No sync jobs recorded yet.</p>
@@ -1075,7 +1075,7 @@ export default function IntegrationsPage() {
               {jobs.map((j) => (
                 <div
                   key={j.id}
-                  className="rounded-lg border border-stone-200 px-3 py-2 text-xs dark:border-stone-700"
+                  className="rounded-lg border border-neutral-200 px-3 py-2 text-xs dark:border-neutral-700"
                   data-voice-id={`sync-job-${j.id}`}
                 >
                   <div className="flex items-center justify-between gap-3">

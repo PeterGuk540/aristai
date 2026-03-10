@@ -13,24 +13,24 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       ref={ref}
       className={cn(
         // Base styles
-        'rounded-xl transition-all duration-200',
+        'rounded-2xl transition-colors duration-200',
         // Variant styles
         {
-          // Default - stitched surface
-          'bg-white dark:bg-[#1a150c] border border-stone-200 dark:border-primary-900/20 shadow-sm':
+          // Default – borderless, bg contrast only
+          'bg-white dark:bg-[#1c1c1e]':
             variant === 'default',
-          // Elevated - more prominent shadow
-          'bg-white dark:bg-[#1a150c] border border-stone-200 dark:border-primary-900/20 shadow-md':
+          // Elevated – shadow, no border
+          'bg-white dark:bg-[#1c1c1e] shadow-soft-md':
             variant === 'elevated',
-          // Outlined - border only
-          'bg-transparent border border-stone-300 dark:border-stone-700':
+          // Outlined – border only
+          'bg-transparent border border-neutral-200 dark:border-neutral-700':
             variant === 'outlined',
-          // Ghost - minimal
-          'bg-stone-50 dark:bg-stone-900/30':
+          // Ghost – minimal
+          'bg-neutral-50 dark:bg-neutral-800/30':
             variant === 'ghost',
         },
-        // Hover effect
-        hover && 'cursor-pointer hover:shadow-md hover:-translate-y-[1px]',
+        // Hover effect – subtle bg tint, no lift
+        hover && 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/60',
         // Padding
         {
           'p-0': padding === 'none',
@@ -56,7 +56,7 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(
       ref={ref}
       className={cn(
         'px-6 py-4',
-        border && 'border-b border-stone-200 dark:border-primary-900/20',
+        border && 'border-b border-neutral-100 dark:border-neutral-800',
         className
       )}
       {...props}
@@ -116,8 +116,8 @@ export const CardFooter = forwardRef<HTMLDivElement, CardFooterProps>(
       ref={ref}
       className={cn(
         'px-6 py-4',
-        border && 'border-t border-stone-200 dark:border-primary-900/20',
-        background && 'bg-stone-50 dark:bg-stone-900/25',
+        border && 'border-t border-neutral-100 dark:border-neutral-800',
+        background && 'bg-neutral-50 dark:bg-neutral-800/25',
         className
       )}
       {...props}

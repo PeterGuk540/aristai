@@ -1002,7 +1002,7 @@ export default function CoursesPage() {
                       onClick={() => setSyllabusInputMode('paste')}
                       className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all ${
                         syllabusInputMode === 'paste'
-                          ? 'bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 font-medium'
+                          ? 'bg-[#f5c842]/15 dark:bg-[#f5c842]/20 text-[#a16207] dark:text-[#f5c842] font-medium'
                           : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-600'
                       }`}
                     >
@@ -1014,7 +1014,7 @@ export default function CoursesPage() {
                       onClick={() => setSyllabusInputMode('upload')}
                       className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all ${
                         syllabusInputMode === 'upload'
-                          ? 'bg-primary-100 dark:bg-primary-900/50 text-primary-700 dark:text-primary-300 font-medium'
+                          ? 'bg-[#f5c842]/15 dark:bg-[#f5c842]/20 text-[#a16207] dark:text-[#f5c842] font-medium'
                           : 'bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-600'
                       }`}
                     >
@@ -1025,7 +1025,7 @@ export default function CoursesPage() {
                       type="button"
                       onClick={generateSyllabusWithAI}
                       disabled={generatingSyllabus || !title.trim()}
-                      className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                      className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all bg-[#f5c842] text-neutral-900 hover:bg-[#e6ba3a] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                       data-voice-id="generate-syllabus"
                     >
                       {generatingSyllabus ? (
@@ -1038,7 +1038,7 @@ export default function CoursesPage() {
                     <button
                       type="button"
                       onClick={() => openSyllabusTool({ course_title: title || '' })}
-                      className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700 shadow-sm"
+                      className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all bg-[#f5c842]/80 text-neutral-900 hover:bg-[#f5c842] shadow-sm"
                       data-voice-id="open-syllabus-tool"
                     >
                       <ExternalLink className="h-4 w-4" />
@@ -1509,8 +1509,8 @@ export default function CoursesPage() {
                         <CardHeader>
                           <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
-                                <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                              <div className="p-2 rounded-xl bg-[#f5c842]/15 dark:bg-[#f5c842]/20">
+                                <FileText className="h-5 w-5 text-[#a16207] dark:text-[#f5c842]" />
                               </div>
                               <div>
                                 <CardTitle>{record.title}</CardTitle>
@@ -1568,7 +1568,7 @@ export default function CoursesPage() {
                                 <ul className="text-sm text-neutral-600 dark:text-neutral-400 space-y-1">
                                   {goals.slice(0, 3).map((g: any, i: number) => (
                                     <li key={i} className="flex items-start gap-2">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></span>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-[#f5c842] mt-2 flex-shrink-0"></span>
                                       <span>{typeof g === 'string' ? g : g.text}</span>
                                     </li>
                                   ))}

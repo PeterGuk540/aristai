@@ -14,6 +14,15 @@
   --yellow-light: rgba(245, 200, 66, 0.10);
   --yellow-border: rgba(245, 200, 66, 0.25);
 
+  /* Secondary Accent – Ink Blue */
+  --ink: #1e3a5f;
+  --ink-light: rgba(30, 58, 95, 0.08);
+  --ink-border: rgba(30, 58, 95, 0.18);
+
+  /* Warm Neutrals */
+  --warm-50: #faf9f7;
+  --warm-100: #f5f3ef;
+
   /* Neutral Grays */
   --white: #ffffff;
   --gray-50: #fafafa;
@@ -29,7 +38,7 @@
   --black: #000000;
 
   /* Section Backgrounds */
-  --section-alt: #fafafa;
+  --section-alt: var(--warm-50);
   --section-warm: var(--yellow-bg);
 
   /* Semantic Colors */
@@ -43,6 +52,7 @@
   --info-light: #dbeafe;
 
   /* Typography */
+  --font-display: var(--font-instrument-serif), 'Instrument Serif', Georgia, serif;
   --font-sans: var(--font-manrope), 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-size-xs: 0.72rem;
   --font-size-sm: 0.875rem;
@@ -83,6 +93,8 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   --shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
 
   /* Transitions */
   --transition-fast: 0.15s ease;
@@ -134,6 +146,12 @@
 
 /* Dark Mode */
 .dark {
+  --ink: #7ba3cc;
+  --ink-light: rgba(123, 163, 204, 0.10);
+  --ink-border: rgba(123, 163, 204, 0.20);
+  --warm-50: #1a1917;
+  --warm-100: #201f1c;
+
   --bg-primary: #0a0a0a;
   --bg-secondary: #171717;
   --bg-tertiary: #262626;
@@ -149,6 +167,8 @@
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
   --shadow-hover: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================
@@ -193,8 +213,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 h1 {
+  font-family: var(--font-display);
+  font-style: italic;
   font-size: clamp(1.75rem, 4vw, 2.5rem);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 h2 {
@@ -215,8 +237,20 @@ p {
   color: var(--text-secondary);
 }
 
-/* Section Labels - Uppercase tracking */
+/* Section Labels - Editorial em-dash style */
 .section-label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.section-label::before {
+  content: '— ';
+  color: var(--ink);
+}
+
+/* Legacy uppercase variant */
+.section-label-caps {
   font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -322,6 +356,22 @@ p {
     background-color: var(--section-warm);
   }
 
+  /* Background grain texture */
+  .bg-grain {
+    position: relative;
+  }
+
+  .bg-grain::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.035;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
+  }
+
   /* Accent bar (4px yellow left border) */
   .accent-bar {
     border-left: 4px solid var(--yellow);
@@ -346,7 +396,7 @@ p {
     color: var(--black);
   }
 
-  /* Icon box – Neutral background */
+  /* Icon box – Base size/shape */
   .icon-box {
     width: 40px;
     height: 40px;
@@ -368,13 +418,54 @@ p {
     stroke-width: 1.5;
   }
 
-  /* Card hover effect – No lift, subtle bg tint */
+  /* Icon box color variants */
+  .icon-box--ink {
+    background-color: var(--ink-light);
+  }
+  .icon-box--ink svg {
+    color: var(--ink);
+  }
+  .dark .icon-box--ink {
+    background-color: rgba(123, 163, 204, 0.12);
+  }
+  .dark .icon-box--ink svg {
+    color: var(--ink);
+  }
+
+  .icon-box--warm {
+    background-color: var(--warm-100);
+  }
+  .icon-box--warm svg {
+    color: #8b6914;
+  }
+  .dark .icon-box--warm {
+    background-color: rgba(245, 243, 239, 0.08);
+  }
+  .dark .icon-box--warm svg {
+    color: #d4a84b;
+  }
+
+  .icon-box--yellow {
+    background-color: var(--yellow-light);
+  }
+  .icon-box--yellow svg {
+    color: var(--yellow);
+  }
+  .dark .icon-box--yellow {
+    background-color: rgba(245, 200, 66, 0.12);
+  }
+  .dark .icon-box--yellow svg {
+    color: var(--yellow);
+  }
+
+  /* Card hover effect – Shadow lift */
   .card-hover {
-    transition: background-color var(--transition-base);
+    transition: box-shadow var(--transition-base), transform var(--transition-base), background-color var(--transition-base);
   }
 
   .card-hover:hover {
-    background-color: var(--gray-50);
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
   }
 
   .dark .card-hover:hover {
@@ -421,17 +512,17 @@ p {
     justify-content: center;
     width: 32px;
     height: 32px;
-    background-color: var(--gray-100);
-    color: var(--gray-900);
+    background-color: var(--ink-light);
+    color: var(--ink);
     font-weight: 600;
     font-size: var(--font-size-sm);
-    border-radius: 50%;
+    border-radius: 6px;
     flex-shrink: 0;
   }
 
   .dark .step-item::before {
-    background-color: var(--bg-tertiary);
-    color: var(--text-primary);
+    background-color: rgba(123, 163, 204, 0.12);
+    color: var(--ink);
   }
 }
 

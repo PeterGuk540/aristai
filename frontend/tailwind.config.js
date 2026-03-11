@@ -10,7 +10,7 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
-        display: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        display: ['Instrument Serif', 'Georgia', 'serif'],
       },
       colors: {
         // Primary - Educational Blue
@@ -26,6 +26,27 @@ module.exports = {
           800: '#1e3a5f',
           900: '#1a3050',
           950: '#111f35',
+        },
+        // Ink Blue – Secondary accent
+        ink: {
+          DEFAULT: '#1e3a5f',
+          50: '#f0f5fa',
+          100: '#e0ebf5',
+          200: '#c2d7eb',
+          300: '#94b8d9',
+          400: '#6094c4',
+          500: '#4078ad',
+          600: '#2d5a94',
+          700: '#234876',
+          800: '#1e3a5f',
+          900: '#1a3050',
+        },
+        // Warm Neutrals
+        warm: {
+          50: '#faf9f7',
+          100: '#f5f3ef',
+          200: '#ede9e1',
+          300: '#ddd6ca',
         },
         // Accent - Warm Gold (CTAs only)
         accent: {
@@ -106,6 +127,7 @@ module.exports = {
       },
       // Border Radius
       borderRadius: {
+        'card': '10px',
         '4xl': '2rem',
         '5xl': '2.5rem',
       },

@@ -42,8 +42,11 @@ const valueCards = [
 export function AuthCard({ children, title, subtitle }: AuthCardProps) {
   return (
     <div className="min-h-screen grid lg:grid-cols-[1.08fr_1fr] bg-stone-50 dark:bg-slate-950">
-      <aside className="hidden lg:flex flex-col justify-between border-r border-stone-200/70 dark:border-slate-800 bg-[radial-gradient(circle_at_20%_25%,#ffd19f_0%,#ff8a7a_34%,#8f52d7_70%,#5a36b8_100%)] px-10 py-10 text-white">
-        <div className="space-y-9">
+      <aside className="hidden lg:flex flex-col justify-between border-r border-stone-200/70 dark:border-slate-800 bg-grain relative overflow-hidden px-10 py-10 text-white" style={{ backgroundColor: '#1e3a5f' }}>
+        {/* Decorative radial overlays */}
+        <div className="absolute top-0 left-0 w-[400px] h-[400px] rounded-full opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(245,200,66,0.4) 0%, transparent 70%)' }} />
+        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] rounded-full opacity-15 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(15,30,50,0.6) 0%, transparent 70%)' }} />
+        <div className="space-y-9 relative z-10">
           <div className="space-y-5">
             <div className="rounded-xl border border-white/25 bg-white/10 p-4 backdrop-blur-sm">
               <div className="inline-flex rounded-lg bg-white p-2 shadow-sm">
@@ -82,7 +85,7 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
           </div>
         </div>
 
-        <p className="text-xs text-white/70">&copy; {new Date().getFullYear()} AristAI</p>
+        <p className="text-xs text-white/70 relative z-10">&copy; {new Date().getFullYear()} AristAI</p>
       </aside>
 
       <div className="flex items-center justify-center px-6 py-10 sm:px-12 bg-white dark:bg-slate-950">

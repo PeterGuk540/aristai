@@ -74,7 +74,7 @@ export default function PublicIntroductionPage() {
         <section className="container-ebook py-16 lg:py-24">
           <p className="section-label mb-4">Product Introduction</p>
           <h1 className="max-w-4xl text-balance mb-6">
-            A teaching platform for live, case-based learning.
+            A teaching platform for live, <span style={{ color: 'var(--ink)' }}>case-based</span> learning.
           </h1>
           <p className="max-w-3xl text-lg text-secondary mb-8">
             AristAI helps instructors run high-quality discussion sessions with a consistent structure,
@@ -98,7 +98,7 @@ export default function PublicIntroductionPage() {
             <div className="grid md:grid-cols-3 gap-6">
               {steps.map((step, index) => (
                 <div key={step} className="card-ebook">
-                  <div className="mb-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-yellow text-black text-sm font-semibold">
+                  <div className="mb-4 inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-semibold" style={{ backgroundColor: 'var(--ink-light)', color: 'var(--ink)' }}>
                     {index + 1}
                   </div>
                   <p className="text-sm text-secondary">{step}</p>
@@ -112,20 +112,24 @@ export default function PublicIntroductionPage() {
           <p className="section-label mb-3">Capabilities</p>
           <h2 className="mb-10">Built for classroom discussion workflows</h2>
           <div className="grid-3-col">
-            {sections.map((section) => (
-              <article key={section.title} className="card-ebook card-hover">
-                <div className="icon-box mb-4">
-                  <section.icon className="text-yellow" />
-                </div>
-                <h3 className="text-base mb-2">{section.title}</h3>
-                <p className="text-sm text-secondary">{section.body}</p>
-              </article>
-            ))}
+            {sections.map((section, idx) => {
+              const variants = ['icon-box--ink', 'icon-box--yellow', 'icon-box--warm'];
+              const variant = variants[idx % variants.length];
+              return (
+                <article key={section.title} className="card-ebook card-hover">
+                  <div className={`icon-box ${variant} mb-4`}>
+                    <section.icon />
+                  </div>
+                  <h3 className="text-base mb-2">{section.title}</h3>
+                  <p className="text-sm text-secondary">{section.body}</p>
+                </article>
+              );
+            })}
           </div>
         </section>
 
-        <section id="demo" className="bg-section-warm py-16">
-          <div className="container-ebook">
+        <section id="demo" className="py-16 bg-grain" style={{ background: 'linear-gradient(135deg, var(--warm-50) 0%, var(--yellow-bg) 100%)' }}>
+          <div className="container-ebook relative z-10">
             <div className="card-ebook max-w-3xl">
               <p className="section-label mb-3">Access</p>
               <h2 className="mb-4">Request a demo to access the platform</h2>
@@ -135,7 +139,7 @@ export default function PublicIntroductionPage() {
               </p>
               <ul className="space-y-3 mb-8">
                 <li className="flex items-start gap-2 text-sm text-secondary">
-                  <CheckCircle2 className="h-4 w-4 mt-0.5 text-yellow" />
+                  <CheckCircle2 className="h-4 w-4 mt-0.5" style={{ color: 'var(--ink)' }} />
                   Product walkthrough tailored to your teaching context
                 </li>
                 <li className="flex items-start gap-2 text-sm text-secondary">
@@ -143,7 +147,7 @@ export default function PublicIntroductionPage() {
                   Role-specific setup for instructors and learners
                 </li>
                 <li className="flex items-start gap-2 text-sm text-secondary">
-                  <CheckCircle2 className="h-4 w-4 mt-0.5 text-yellow" />
+                  <CheckCircle2 className="h-4 w-4 mt-0.5" style={{ color: 'var(--ink)' }} />
                   Supported rollout plan for live sessions
                 </li>
               </ul>

@@ -82,13 +82,6 @@ PAGE_REGISTRY: Dict[str, PageDefinition] = {
                          "bulk upload students", "manage instructor access"],
                 requires_instructor=True
             ),
-            TabDefinition(
-                voice_id="tab-ai-insights",
-                label="AI Insights",
-                description="AI-powered participation insights and objective coverage for courses",
-                features=["participation insights", "objective coverage", "course analytics"],
-                requires_instructor=True
-            ),
         ]
     ),
 
@@ -125,21 +118,6 @@ PAGE_REGISTRY: Dict[str, PageDefinition] = {
                          "schedule session", "manage status"],
                 requires_instructor=True
             ),
-            TabDefinition(
-                voice_id="tab-insights",
-                label="Insights",
-                description="View session engagement and analytics",
-                features=["session insights", "engagement analytics", "participation metrics"],
-                requires_instructor=True
-            ),
-            TabDefinition(
-                voice_id="tab-ai-features",
-                label="AI Features",
-                description="AI-enhanced features: live summary, question bank, peer review",
-                features=["live summary", "generate summary", "question bank", "generate questions",
-                         "peer review", "AI features", "enhanced features"],
-                requires_instructor=True
-            ),
         ]
     ),
 
@@ -160,12 +138,6 @@ PAGE_REGISTRY: Dict[str, PageDefinition] = {
                 label="Polls",
                 description="Create and monitor live polls",
                 features=["create poll", "launch poll", "view poll results", "close poll"]
-            ),
-            TabDefinition(
-                voice_id="tab-cases",
-                label="Cases",
-                description="Post case studies for discussion",
-                features=["post case", "case study", "discussion prompt"]
             ),
             TabDefinition(
                 voice_id="tab-tools",
@@ -203,8 +175,8 @@ PAGE_REGISTRY: Dict[str, PageDefinition] = {
             TabDefinition(
                 voice_id="tab-cases",
                 label="Cases",
-                description="View case studies",
-                features=["view cases", "case studies"]
+                description="View and post case studies",
+                features=["view cases", "case studies", "post case", "case study"]
             ),
         ]
     ),
@@ -236,8 +208,18 @@ PAGE_REGISTRY: Dict[str, PageDefinition] = {
             TabDefinition(
                 voice_id="tab-analytics",
                 label="Analytics",
-                description="Course-level analytics",
-                features=["course analytics", "trends", "session comparisons"]
+                description="Course-level analytics, participation insights, and objective coverage",
+                features=["course analytics", "trends", "session comparisons",
+                         "participation insights", "objective coverage"]
+            ),
+            TabDefinition(
+                voice_id="tab-ai-tools",
+                label="AI Tools",
+                description="AI-powered session analysis tools: live summary, question bank, peer review, pre/post class insights",
+                features=["live summary", "generate summary", "question bank", "generate questions",
+                         "peer review", "AI features", "enhanced features", "pre-class insights",
+                         "post-class summary"],
+                requires_instructor=True
             ),
         ]
     ),
@@ -324,14 +306,14 @@ WORKFLOW_REGISTRY: Dict[str, WorkflowDefinition] = {
 
     "view_ai_features": WorkflowDefinition(
         name="view_ai_features",
-        description="Navigate to AI features tab on sessions page",
+        description="Navigate to AI tools tab on reports page",
         triggers=[
-            "AI features", "enhanced features", "live summary", "question bank",
-            "peer review", "funciones de IA", "caracteristicas de IA"
+            "AI features", "AI tools", "enhanced features", "live summary", "question bank",
+            "peer review", "funciones de IA", "caracteristicas de IA", "herramientas de IA"
         ],
         steps=[
-            WorkflowStep("navigate", "/sessions", "Go to sessions page", wait_for_load=True),
-            WorkflowStep("switch_tab", "tab-ai-features", "Switch to AI features tab"),
+            WorkflowStep("navigate", "/reports", "Go to reports page", wait_for_load=True),
+            WorkflowStep("switch_tab", "tab-ai-tools", "Switch to AI tools tab"),
         ]
     ),
 
@@ -376,14 +358,14 @@ WORKFLOW_REGISTRY: Dict[str, WorkflowDefinition] = {
 
     "view_participation": WorkflowDefinition(
         name="view_participation",
-        description="View participation insights for a course",
+        description="View participation insights on reports analytics tab",
         triggers=[
             "participation insights", "who participated", "engagement",
             "participation metrics", "ver participacion"
         ],
         steps=[
-            WorkflowStep("navigate", "/courses", "Go to courses page", wait_for_load=True),
-            WorkflowStep("switch_tab", "tab-ai-insights", "Switch to AI insights tab"),
+            WorkflowStep("navigate", "/reports", "Go to reports page", wait_for_load=True),
+            WorkflowStep("switch_tab", "tab-analytics", "Switch to analytics tab"),
         ]
     ),
 
@@ -413,14 +395,14 @@ WORKFLOW_REGISTRY: Dict[str, WorkflowDefinition] = {
 
     "view_session_insights": WorkflowDefinition(
         name="view_session_insights",
-        description="View session engagement insights and analytics",
+        description="View session AI tools and insights on reports page",
         triggers=[
             "session insights", "view insights", "engagement insights", "session analytics",
             "ver insights", "analisis de sesion"
         ],
         steps=[
-            WorkflowStep("navigate", "/sessions", "Go to sessions page", wait_for_load=True),
-            WorkflowStep("switch_tab", "tab-insights", "Switch to insights tab"),
+            WorkflowStep("navigate", "/reports", "Go to reports page", wait_for_load=True),
+            WorkflowStep("switch_tab", "tab-ai-tools", "Switch to AI tools tab"),
         ]
     ),
 
@@ -433,6 +415,19 @@ WORKFLOW_REGISTRY: Dict[str, WorkflowDefinition] = {
         steps=[
             WorkflowStep("navigate", "/sessions", "Go to sessions page", wait_for_load=True),
             WorkflowStep("switch_tab", "tab-manage", "Switch to manage tab"),
+        ]
+    ),
+
+    "post_case": WorkflowDefinition(
+        name="post_case",
+        description="Navigate to forum to post a case study",
+        triggers=[
+            "post case", "create case", "case study", "post a case",
+            "publicar caso", "crear caso de estudio"
+        ],
+        steps=[
+            WorkflowStep("navigate", "/forum", "Go to forum page", wait_for_load=True),
+            WorkflowStep("switch_tab", "tab-cases", "Switch to cases tab"),
         ]
     ),
 
@@ -599,8 +594,9 @@ def generate_full_topology_for_llm() -> str:
 
     lines.append("=== IMPORTANT RULES ===")
     lines.append("1. ENROLLMENT is under /courses → tab-advanced (NOT create tab)")
-    lines.append("2. AI FEATURES is under /sessions → tab-ai-features")
+    lines.append("2. AI TOOLS is under /reports → tab-ai-tools (NOT sessions)")
     lines.append("3. POLLS are under /console → tab-polls")
-    lines.append("4. If target tab is on DIFFERENT page, NAVIGATE FIRST then SWITCH TAB")
+    lines.append("4. CASES (post + view) are under /forum → tab-cases (NOT console)")
+    lines.append("5. If target tab is on DIFFERENT page, NAVIGATE FIRST then SWITCH TAB")
 
     return "\n".join(lines)

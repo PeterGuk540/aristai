@@ -158,16 +158,17 @@ export const COMMON_TAB_MAPPINGS: Record<string, string> = {
   'update': 'edit',
 
   // AI-related
-  'aifeatures': 'ai-features',
-  'aifeature': 'ai-features',
-  'aitools': 'ai-features',
-  'enhancedfeatures': 'ai-features',
-  'enhancedai': 'ai-features',
-  'tabaifeatures': 'ai-features',
-  'aiinsights': 'ai-insights',
-  'aiinsight': 'ai-insights',
-  'aianalytics': 'ai-insights',
-  'tabaiinsights': 'ai-insights',
+  'aifeatures': 'ai-tools',
+  'aifeature': 'ai-tools',
+  'aitools': 'ai-tools',
+  'enhancedfeatures': 'ai-tools',
+  'enhancedai': 'ai-tools',
+  'tabaifeatures': 'ai-tools',
+  'tabaitools': 'ai-tools',
+  'aiinsights': 'analytics',
+  'aiinsight': 'analytics',
+  'aianalytics': 'analytics',
+  'tabaiinsights': 'analytics',
   'aicopilot': 'copilot',
   'aiassistant': 'copilot',
 
@@ -181,14 +182,14 @@ export const COMMON_TAB_MAPPINGS: Record<string, string> = {
   'documents': 'materials',
 
   // Insights/Analytics
-  'insights': 'insights',
-  'insight': 'insights',
-  'tabinsights': 'insights',
-  'sessioninsights': 'insights',
+  'insights': 'ai-tools',
+  'insight': 'ai-tools',
+  'tabinsights': 'ai-tools',
+  'sessioninsights': 'ai-tools',
   'analytics': 'analytics',
   'tabanalytics': 'analytics',
-  'sessionanalytics': 'insights',
-  'engagement': 'insights',
+  'sessionanalytics': 'ai-tools',
+  'engagement': 'analytics',
 
   // Advanced/Enrollment
   'advanced': 'advanced',

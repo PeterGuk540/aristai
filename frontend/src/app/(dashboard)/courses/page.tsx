@@ -29,9 +29,6 @@ import {
   EmptyState,
 } from '@/components/ui';
 
-// Enhanced AI Features
-import { ParticipationInsightsComponent } from '@/components/enhanced/ParticipationInsights';
-import { ObjectiveCoverageComponent } from '@/components/enhanced/ObjectiveCoverage';
 
 export default function CoursesPage() {
   const { isInstructor, currentUser, refreshUser } = useUser();
@@ -115,11 +112,6 @@ export default function CoursesPage() {
     'instructoraccess': 'advanced',
     'manageenrollment': 'advanced',
     'managestudents': 'advanced',
-    // AI Insights tab
-    'aiinsights': 'ai-insights',
-    'aiinsight': 'ai-insights',
-    'objectivecoverage': 'ai-insights',
-    'courseinsights': 'ai-insights',
     // Syllabi tab
     'syllabi': 'syllabi',
     'mysyllabi': 'syllabi',
@@ -800,7 +792,6 @@ export default function CoursesPage() {
           {!isInstructor && <TabsTrigger value="join" data-voice-id="tab-join">{t('courses.joinCourse')}</TabsTrigger>}
           <TabsTrigger value="advanced" data-voice-id="tab-advanced">Advanced</TabsTrigger>
           {isInstructor && <TabsTrigger value="syllabi" data-voice-id="tab-syllabi">My Syllabi</TabsTrigger>}
-          {isInstructor && <TabsTrigger value="ai-insights" data-voice-id="tab-ai-insights">AI Insights</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="courses">
@@ -1615,62 +1606,6 @@ export default function CoursesPage() {
           </TabsContent>
         )}
 
-        {isInstructor && (
-          <TabsContent value="ai-insights">
-            <div className="space-y-6">
-              {/* Course Selector for AI Insights */}
-              <Card variant="default" padding="md">
-                <Select
-                  label="Select Course for AI Insights"
-                  value={selectedCourseId?.toString() || ''}
-                  onChange={(e) => setSelectedCourseId(e.target.value ? Number(e.target.value) : null)}
-                  data-voice-id="select-course-ai"
-                >
-                  <option value="">Select a course...</option>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id}>
-                      {course.title} (ID: {course.id})
-                    </option>
-                  ))}
-                </Select>
-              </Card>
-
-              {selectedCourseId ? (
-                <>
-                  {/* Participation Insights */}
-                  <ParticipationInsightsComponent courseId={selectedCourseId} />
-
-                  {/* Learning Objective Coverage */}
-                  <ObjectiveCoverageComponent courseId={selectedCourseId} />
-
-                  {/* Voice Command Hints */}
-                  <Card variant="ghost" padding="md">
-                    <h3 className="font-semibold text-neutral-900 dark:text-white mb-3">AI Insights Voice Commands</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        'Show participation insights',
-                        'Who are the at-risk students?',
-                        'Analyze participation trends',
-                        'Check objective coverage',
-                        'What topics need more attention?',
-                        'Generate student follow-ups'
-                      ].map((cmd) => (
-                        <span key={cmd} className="px-3 py-1.5 text-sm bg-white dark:bg-neutral-700 rounded-full text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-600">
-                          "{cmd}"
-                        </span>
-                      ))}
-                    </div>
-                  </Card>
-                </>
-              ) : (
-                <EmptyState
-                  icon={BookOpen}
-                  message="Select a course to view AI insights"
-                />
-              )}
-            </div>
-          </TabsContent>
-        )}
       </Tabs>
 
       {/* Edit Course Modal */}

@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Clock,
   DollarSign,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUser } from '@/lib/context';
@@ -40,6 +41,15 @@ import {
 
 // Instructor enhancement components
 import { StudentProgressComponent } from '@/components/instructor/StudentProgress';
+import { PreClassInsightsComponent } from '@/components/instructor/PreClassInsights';
+import { PostClassSummaryComponent } from '@/components/instructor/PostClassSummary';
+
+// Enhanced AI Features
+import { LiveSummaryComponent } from '@/components/enhanced/LiveSummary';
+import { QuestionBankComponent } from '@/components/enhanced/QuestionBank';
+import { PeerReviewPanelComponent } from '@/components/enhanced/PeerReviewPanel';
+import { ParticipationInsightsComponent } from '@/components/enhanced/ParticipationInsights';
+import { ObjectiveCoverageComponent } from '@/components/enhanced/ObjectiveCoverage';
 
 export default function ReportsPage() {
   const { isInstructor, isAdmin, currentUser } = useUser();
@@ -63,6 +73,10 @@ export default function ReportsPage() {
   const [courseAnalytics, setCourseAnalytics] = useState<any>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
+  // AI Tools tab state
+  const [allSessions, setAllSessions] = useState<Session[]>([]);
+  const [selectedAiSessionId, setSelectedAiSessionId] = useState<number | null>(null);
+
   // Tab state for voice control
   const [activeTab, setActiveTab] = useState('summary');
 
@@ -81,6 +95,22 @@ export default function ReportsPage() {
     'analytics': 'analytics',
     'reportanalytics': 'analytics',
     'dataanalytics': 'analytics',
+    // AI Tools tab
+    'aitools': 'ai-tools',
+    'aitool': 'ai-tools',
+    'aifeatures': 'ai-tools',
+    'aifeature': 'ai-tools',
+    'livesummary': 'ai-tools',
+    'questionbank': 'ai-tools',
+    'peerreview': 'ai-tools',
+    'preclassinsights': 'ai-tools',
+    'postclasssummary': 'ai-tools',
+    'sessioninsights': 'ai-tools',
+    'insights': 'ai-tools',
+    // Analytics tab extras
+    'aiinsights': 'analytics',
+    'objectivecoverage': 'analytics',
+    'participationinsights': 'analytics',
     // Student tabs
     'myperformance': 'my-performance',
     'performance': 'my-performance',
@@ -156,6 +186,18 @@ export default function ReportsPage() {
       }
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
+    }
+  };
+
+  const fetchAllSessions = async (courseId: number) => {
+    try {
+      const data = await api.getCourseSessions(courseId);
+      setAllSessions(data);
+      if (data.length > 0 && !selectedAiSessionId) {
+        setSelectedAiSessionId(data[0].id);
+      }
+    } catch (error) {
+      console.error('Failed to fetch all sessions:', error);
     }
   };
 
@@ -795,6 +837,9 @@ export default function ReportsPage() {
               if (value === 'analytics') {
                 fetchAnalytics();
               }
+              if (value === 'ai-tools' && selectedCourseId) {
+                fetchAllSessions(selectedCourseId);
+              }
             }}>
               <TabsList className="border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-800 rounded-xl">
                 <TabsTrigger value="summary" data-voice-id="tab-summary">{t('reports.summary')}</TabsTrigger>
@@ -803,6 +848,9 @@ export default function ReportsPage() {
                 <TabsTrigger value="analytics" data-voice-id="tab-analytics">
                   <TrendingUp className="h-4 w-4 mr-1" />
                   Analytics
+                </TabsTrigger>
+                <TabsTrigger value="ai-tools" data-voice-id="tab-ai-tools">
+                  <Sparkles className="h-4 w-4 mr-1" /> AI Tools
                 </TabsTrigger>
               </TabsList>
 
@@ -936,6 +984,16 @@ export default function ReportsPage() {
                       </Card>
                     )}
 
+                    {/* Participation Insights (merged from Courses AI Insights) */}
+                    {selectedCourseId && (
+                      <ParticipationInsightsComponent courseId={selectedCourseId} sessionId={selectedSessionId ?? undefined} />
+                    )}
+
+                    {/* Learning Objective Coverage (merged from Courses AI Insights) */}
+                    {selectedCourseId && (
+                      <ObjectiveCoverageComponent courseId={selectedCourseId} />
+                    )}
+
                     {/* Voice Command Hints */}
                     <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                       <h3 className="font-medium mb-3">Quick Voice Commands</h3>
@@ -955,6 +1013,81 @@ export default function ReportsPage() {
                     </div>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="ai-tools">
+                <div className="space-y-6">
+                  {/* Session Selector for AI Tools */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-accent-500" />
+                        AI Tools
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Select
+                        label="Select Session"
+                        value={selectedAiSessionId?.toString() || ''}
+                        onChange={(e) => setSelectedAiSessionId(e.target.value ? Number(e.target.value) : null)}
+                        data-voice-id="select-ai-session"
+                      >
+                        <option value="">Select a session...</option>
+                        {allSessions.map((session) => (
+                          <option key={session.id} value={session.id}>
+                            {session.title} ({session.status})
+                          </option>
+                        ))}
+                      </Select>
+                    </CardContent>
+                  </Card>
+
+                  {selectedAiSessionId ? (() => {
+                    const selectedAiSession = allSessions.find(s => s.id === selectedAiSessionId);
+                    const status = selectedAiSession?.status;
+                    return (
+                      <div className="space-y-6">
+                        {/* Pre-Class Insights (draft/scheduled) */}
+                        {(status === 'draft' || status === 'scheduled') && (
+                          <PreClassInsightsComponent sessionId={selectedAiSessionId} />
+                        )}
+
+                        {/* Live Summary (live/completed) */}
+                        {(status === 'live' || status === 'completed') && (
+                          <LiveSummaryComponent sessionId={selectedAiSessionId} />
+                        )}
+
+                        {/* Post-Class Summary (completed) */}
+                        {status === 'completed' && (
+                          <PostClassSummaryComponent sessionId={selectedAiSessionId} />
+                        )}
+
+                        {/* Question Bank (any status with courseId) */}
+                        {selectedCourseId && (
+                          <QuestionBankComponent
+                            courseId={selectedCourseId}
+                            sessionId={selectedAiSessionId}
+                          />
+                        )}
+
+                        {/* Peer Review Panel */}
+                        {currentUser && (
+                          <PeerReviewPanelComponent
+                            sessionId={selectedAiSessionId}
+                            userId={currentUser.id}
+                            isInstructor={hasInstructorPrivileges}
+                          />
+                        )}
+                      </div>
+                    );
+                  })() : (
+                    <EmptyState
+                      icon={Sparkles}
+                      message="Select a session to access AI tools"
+                      submessage="Choose a session above to use pre-class insights, live summaries, question bank, and peer review tools."
+                    />
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
           ) : (

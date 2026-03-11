@@ -52,8 +52,10 @@ const TAB_ALIASES: Record<string, string> = {
   'enrollment': 'tab-advanced',
   'enroll': 'tab-advanced',
   'students': 'tab-advanced',
-  'ai insights': 'tab-ai-insights',
-  'insights': 'tab-insights',
+  'ai tools': 'tab-ai-tools',
+  'ai features': 'tab-ai-tools',
+  'ai insights': 'tab-ai-tools',
+  'insights': 'tab-ai-tools',
 
   // Sessions page
   'sessions': 'tab-sessions',
@@ -61,16 +63,11 @@ const TAB_ALIASES: Record<string, string> = {
   'upload': 'tab-materials',
   'manage': 'tab-manage',
   'status': 'tab-manage',
-  'ai features': 'tab-ai-features',
-  'ai': 'tab-ai-features',
-  'enhanced': 'tab-ai-features',
 
   // Console page
   'copilot': 'tab-copilot',
   'polls': 'tab-polls',
   'poll': 'tab-polls',
-  'cases': 'tab-cases',
-  'case': 'tab-cases',
   'tools': 'tab-tools',
   'timer': 'tab-tools',
   'breakout': 'tab-tools',
@@ -80,6 +77,8 @@ const TAB_ALIASES: Record<string, string> = {
   // Forum page
   'discussion': 'tab-discussion',
   'posts': 'tab-discussion',
+  'cases': 'tab-cases',
+  'case': 'tab-cases',
 
   // Reports page
   'summary': 'tab-summary',

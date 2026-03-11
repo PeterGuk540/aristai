@@ -121,7 +121,6 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
             Tab(name="Create Course", voice_id="tab-create", description="Create a new course as an instructor"),
             Tab(name="Advanced", voice_id="tab-advanced", description="Advanced features including student enrollment management"),
             Tab(name="Join Course", voice_id="tab-join", description="Join an existing course using an access code"),
-            Tab(name="AI Insights", voice_id="tab-ai-insights", description="View AI-powered participation insights and learning objective coverage"),
         ],
         forms={
             "create_course": [
@@ -214,9 +213,7 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
             Tab(name="Past", voice_id="tab-past", description="View past sessions"),
             Tab(name="Create", voice_id="tab-create", description="Create a new session"),
             Tab(name="Materials", voice_id="tab-materials", description="View and manage course materials and files"),
-            Tab(name="Insights", voice_id="tab-insights", description="View session analytics, engagement data, and AI summaries"),
             Tab(name="Manage", voice_id="tab-manage", description="Manage session status - go live, end, or schedule sessions"),
-            Tab(name="AI Features", voice_id="tab-ai-features", description="Access enhanced AI features like pre-class prep and discussion summaries"),
         ],
         forms={
             "create_session": [
@@ -293,10 +290,19 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
         name="Forum",
         description="View and participate in course discussions",
         tabs=[
-            Tab(name="Cases", voice_id="tab-cases", description="View case studies and scenarios"),
+            Tab(name="Cases", voice_id="tab-cases", description="View and post case studies and scenarios"),
             Tab(name="Discussion", voice_id="tab-discussion", description="General discussion posts"),
         ],
         forms={
+            "post_case": [
+                FormField(
+                    name="Case Prompt",
+                    voice_id="case-prompt",
+                    field_type="textarea",
+                    required=True,
+                    prompt="What case scenario would you like to present to students?",
+                ),
+            ],
             "create_post": [
                 FormField(
                     name="Post Content",
@@ -323,6 +329,12 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
         ],
         buttons=[
             ActionButton(
+                name="Post Case",
+                voice_id="post-case",
+                description="Post a case study for students (instructor only)",
+                destructive=False
+            ),
+            ActionButton(
                 name="Submit Post",
                 voice_id="submit-post",
                 description="Post your message to the forum",
@@ -339,7 +351,6 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
         tabs=[
             Tab(name="Copilot", voice_id="tab-copilot", description="AI teaching assistant for live sessions"),
             Tab(name="Polls", voice_id="tab-polls", description="Create and manage live polls"),
-            Tab(name="Cases", voice_id="tab-cases", description="Present case studies to students"),
             Tab(name="Tools", voice_id="tab-tools", description="Instructor tools including timers and breakout groups"),
             Tab(name="Requests", voice_id="tab-requests", description="View student questions and requests"),
             Tab(name="Roster", voice_id="tab-roster", description="View class roster and attendance"),
@@ -380,15 +391,6 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                     field_type="input",
                     required=False,
                     prompt="Would you like to add a fourth option?",
-                ),
-            ],
-            "post_case": [
-                FormField(
-                    name="Case Prompt",
-                    voice_id="case-prompt",
-                    field_type="textarea",
-                    required=True,
-                    prompt="What case scenario would you like to present to students?",
                 ),
             ],
             "create_breakout_groups": [
@@ -462,12 +464,6 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
                 confirmation_prompt="Are you sure you want to end this poll? Students will no longer be able to respond."
             ),
             ActionButton(
-                name="Post Case",
-                voice_id="post-case",
-                description="Post the case study for students",
-                destructive=False
-            ),
-            ActionButton(
                 name="Create Breakout Groups",
                 voice_id="create-breakout-groups",
                 description="Create breakout groups for the current session",
@@ -491,7 +487,8 @@ PAGE_STRUCTURES: Dict[str, PageStructure] = {
             Tab(name="Summary", voice_id="tab-summary", description="Summary of course activity and reports"),
             Tab(name="Participation", voice_id="tab-participation", description="Student participation metrics"),
             Tab(name="Scoring", voice_id="tab-scoring", description="Student scores and grades"),
-            Tab(name="Analytics", voice_id="tab-analytics", description="Advanced data analytics"),
+            Tab(name="Analytics", voice_id="tab-analytics", description="Advanced data analytics, participation insights, and objective coverage"),
+            Tab(name="AI Tools", voice_id="tab-ai-tools", description="AI-powered session analysis: live summary, question bank, peer review, pre/post class insights"),
             Tab(name="My Performance", voice_id="tab-my-performance", description="View your personal performance and progress"),
             Tab(name="Best Practice", voice_id="tab-best-practice", description="View best practice answers and examples"),
         ],

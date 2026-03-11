@@ -74,10 +74,6 @@ export default function ConsolePage() {
   const [activePollId, setActivePollId] = useState<number | null>(null);
   const [pollResults, setPollResults] = useState<PollResults | null>(null);
 
-  // Case posting
-  const [casePrompt, setCasePrompt] = useState('');
-  const [postingCase, setPostingCase] = useState(false);
-
   // Instructor requests
   const [instructorRequests, setInstructorRequests] = useState<User[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
@@ -103,11 +99,6 @@ export default function ConsolePage() {
     'createpoll': 'polls',
     'newpoll': 'polls',
     'polling': 'polls',
-    // Cases tab
-    'cases': 'cases',
-    'case': 'cases',
-    'casestudy': 'cases',
-    'postcase': 'cases',
     // Tools tab
     'tools': 'tools',
     'instructortools': 'tools',
@@ -143,7 +134,7 @@ export default function ConsolePage() {
     console.log('🎤 Console: Switching to tab:', targetTab);
 
     // Check if the tab requires a session and we don't have one
-    const requiresSession = ['copilot', 'polls', 'cases'].includes(targetTab);
+    const requiresSession = ['copilot', 'polls'].includes(targetTab);
     if (requiresSession && !selectedSessionId) {
       console.warn('🎤 Console: Tab requires session but none selected:', targetTab);
       // Still switch the tab - the UI will show the "select session" message
@@ -377,22 +368,6 @@ export default function ConsolePage() {
       setPollResults(results);
     } catch (error) {
       console.error('Failed to fetch poll results:', error);
-    }
-  };
-
-  const handlePostCase = async () => {
-    if (!selectedSessionId || !casePrompt.trim()) return;
-
-    setPostingCase(true);
-    try {
-      await api.postCase(selectedSessionId, casePrompt);
-      setCasePrompt('');
-      alert('Case posted!');
-    } catch (error) {
-      console.error('Failed to post case:', error);
-      alert('Failed to post case');
-    } finally {
-      setPostingCase(false);
     }
   };
 
@@ -630,9 +605,6 @@ export default function ConsolePage() {
           <TabsTrigger value="polls" disabled={!selectedSessionId} data-voice-id="tab-polls">
             {t('console.polls')}
           </TabsTrigger>
-          <TabsTrigger value="cases" disabled={!selectedSessionId} data-voice-id="tab-cases">
-            {t('console.postCase')}
-          </TabsTrigger>
           <TabsTrigger value="tools" disabled={!selectedSessionId} data-voice-id="tab-tools">
             <Activity className="h-4 w-4 mr-1" />
             Instructor Tools
@@ -659,7 +631,7 @@ export default function ConsolePage() {
               <div className="p-3 rounded-xl bg-primary-100 dark:bg-primary-900/50 w-fit mx-auto mb-3">
                 <Bot className="h-8 w-8 text-primary-600 dark:text-primary-400" />
               </div>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">Select a live session above to use AI Copilot, Polls, and Post Case features.</p>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">Select a live session above to use AI Copilot, Polls, and Instructor Tools.</p>
             </div>
           </Card>
         )}
@@ -873,33 +845,6 @@ export default function ConsolePage() {
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
-
-        <TabsContent value="cases">
-          <Card>
-            <CardHeader>
-              <CardTitle>Post Case Study</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                label="Case Prompt"
-                placeholder="Describe the case study scenario for students to discuss..."
-                rows={6}
-                value={casePrompt}
-                onChange={(e) => setCasePrompt(e.target.value)}
-                data-voice-id="case-prompt"
-              />
-
-              <Button
-                onClick={handlePostCase}
-                disabled={postingCase || !casePrompt.trim()}
-                data-voice-id="post-case"
-              >
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Post Case
-              </Button>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="tools">

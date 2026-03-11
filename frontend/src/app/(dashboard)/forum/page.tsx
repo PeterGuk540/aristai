@@ -72,6 +72,10 @@ export default function ForumPage() {
   const [replyContent, setReplyContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Case posting (instructor)
+  const [casePrompt, setCasePrompt] = useState('');
+  const [postingCase, setPostingCase] = useState(false);
+
   // Moderation
   const [expandedPosts, setExpandedPosts] = useState<Set<number>>(new Set());
 
@@ -84,6 +88,11 @@ export default function ForumPage() {
     'discussions': 'discussion',
     'posts': 'discussion',
     'forum': 'discussion',
+    'cases': 'cases',
+    'case': 'cases',
+    'casestudy': 'cases',
+    'casestudies': 'cases',
+    'postcase': 'cases',
   });
 
   // Voice tab handler
@@ -282,6 +291,20 @@ export default function ForumPage() {
       fetchForumData();
     } catch (error) {
       console.error('Failed to label post:', error);
+    }
+  };
+
+  const handlePostCase = async () => {
+    if (!selectedSessionId || !casePrompt.trim()) return;
+    setPostingCase(true);
+    try {
+      await api.postCase(selectedSessionId, casePrompt);
+      setCasePrompt('');
+      fetchForumData();
+    } catch (error) {
+      console.error('Failed to post case:', error);
+    } finally {
+      setPostingCase(false);
     }
   };
 
@@ -535,6 +558,33 @@ export default function ForumPage() {
           </TabsList>
 
           <TabsContent value="cases">
+            {/* Instructor case posting form */}
+            {isInstructor && selectedSessionId && (
+              <Card className="mb-4">
+                <CardHeader>
+                  <CardTitle>Post Case Study</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Textarea
+                    placeholder="Describe the case study scenario for students to discuss..."
+                    rows={6}
+                    value={casePrompt}
+                    onChange={(e) => setCasePrompt(e.target.value)}
+                    data-voice-id="case-prompt"
+                  />
+                  <Button
+                    onClick={handlePostCase}
+                    disabled={postingCase || !casePrompt.trim()}
+                    data-voice-id="post-case"
+                    className="mt-3"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Post Case
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {cases.length === 0 ? (
               <EmptyState
                 icon={FileText}

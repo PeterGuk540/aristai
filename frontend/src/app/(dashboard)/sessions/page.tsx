@@ -29,15 +29,6 @@ import {
 } from '@/components/ui';
 import MaterialsManager from '@/components/materials/MaterialsManager';
 
-// Instructor enhancement components
-import { PreClassInsightsComponent } from '@/components/instructor/PreClassInsights';
-import { PostClassSummaryComponent } from '@/components/instructor/PostClassSummary';
-import { StudentProgressComponent } from '@/components/instructor/StudentProgress';
-
-// Enhanced AI Features
-import { LiveSummaryComponent } from '@/components/enhanced/LiveSummary';
-import { QuestionBankComponent } from '@/components/enhanced/QuestionBank';
-import { PeerReviewPanelComponent } from '@/components/enhanced/PeerReviewPanel';
 
 const statusIcons: Record<SessionStatus, any> = {
   draft: FileEdit,
@@ -143,25 +134,6 @@ export default function SessionsPage() {
     'documents': 'materials',
     'uploads': 'materials',
 
-    // Insights tab - IMPORTANT: These were missing!
-    'insights': 'insights',
-    'insight': 'insights',
-    'sessioninsights': 'insights',
-    'preclassinsights': 'insights',
-    'preclass': 'insights',
-    'postclass': 'insights',
-    'analytics': 'insights',
-    'summary': 'insights',
-    'progress': 'insights',
-
-    // AI Features tab
-    'aifeatures': 'ai-features',
-    'aifeature': 'ai-features',
-    'ai': 'ai-features',
-    'features': 'ai-features',
-    'livesummary': 'ai-features',
-    'questionbank': 'ai-features',
-    'peerreview': 'ai-features',
   });
 
   // Voice tab handler
@@ -612,16 +584,6 @@ export default function SessionsPage() {
               {t('sessions.materials')}
             </TabsTrigger>
             {hasInstructorPrivileges && <TabsTrigger value="create" data-voice-id="tab-create">{t('sessions.createSession')}</TabsTrigger>}
-            {hasInstructorPrivileges && (
-              <TabsTrigger value="insights" data-voice-id="tab-insights">
-                Insights
-              </TabsTrigger>
-            )}
-            {hasInstructorPrivileges && (
-              <TabsTrigger value="ai-features" data-voice-id="tab-ai-features">
-                AI Features
-              </TabsTrigger>
-            )}
           </TabsList>
 
           <TabsContent value="sessions">
@@ -1013,162 +975,6 @@ export default function SessionsPage() {
             </TabsContent>
           )}
 
-          {hasInstructorPrivileges && (
-            <TabsContent value="insights">
-              <div className="space-y-6">
-                {selectedSession ? (
-                  <>
-                    {/* Pre-Class / Post-Class based on session status */}
-                    {(selectedSession.status === 'draft' || selectedSession.status === 'scheduled') && (
-                      <Card variant="default">
-                        <CardHeader>
-                          <CardTitle>Pre-Class Insights</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <PreClassInsightsComponent sessionId={selectedSession.id} />
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {selectedSession.status === 'completed' && (
-                      <Card variant="default">
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2">
-                            <div className="p-1.5 rounded-lg bg-success-100 dark:bg-success-900/50">
-                              <FileText className="h-4 w-4 text-success-600 dark:text-success-400" />
-                            </div>
-                            Session Summary
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <PostClassSummaryComponent sessionId={selectedSession.id} />
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {selectedSession.status === 'live' && (
-                      <Card variant="ghost" padding="md" className="bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800">
-                        <div className="text-center py-4">
-                          <div className="p-3 rounded-xl bg-warning-100 dark:bg-warning-800/50 w-fit mx-auto mb-3">
-                            <Play className="h-8 w-8 text-warning-600 dark:text-warning-400" />
-                          </div>
-                          <p className="text-warning-800 dark:text-warning-200">
-                            Session is currently live. Use the <strong>Console</strong> page for real-time instructor tools.
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-4"
-                            onClick={() => window.location.href = '/console'}
-                          >
-                            Go to Console
-                          </Button>
-                        </div>
-                      </Card>
-                    )}
-
-                    {/* Student Progress - always visible */}
-                    {selectedCourseId && (
-                      <Card variant="default">
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2">
-                            <div className="p-1.5 rounded-lg bg-info-100 dark:bg-info-900/50">
-                              <Calendar className="h-4 w-4 text-info-600 dark:text-info-400" />
-                            </div>
-                            Student Progress
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <StudentProgressComponent courseId={selectedCourseId} />
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Voice Command Hints */}
-                    <Card variant="ghost" padding="md">
-                      <h3 className="font-semibold text-neutral-900 dark:text-white mb-3">Quick Voice Commands</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          'Pre-class completion status',
-                          'Who didn\'t do the homework?',
-                          'Generate session summary',
-                          'Send summary to students',
-                          'How has Maria been doing?',
-                          'Save this as a template',
-                          'Clone this session'
-                        ].map((cmd) => (
-                          <span key={cmd} className="px-3 py-1.5 text-sm bg-white dark:bg-neutral-700 rounded-full text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-600">
-                            "{cmd}"
-                          </span>
-                        ))}
-                      </div>
-                    </Card>
-                  </>
-                ) : (
-                  <EmptyState
-                    icon={BookOpen}
-                    message="Select a session to view insights"
-                  />
-                )}
-              </div>
-            </TabsContent>
-          )}
-
-          {hasInstructorPrivileges && (
-            <TabsContent value="ai-features">
-              <div className="space-y-6">
-                {selectedSession ? (
-                  <>
-                    {/* Live Discussion Summary */}
-                    {(selectedSession.status === 'live' || selectedSession.status === 'completed') && (
-                      <LiveSummaryComponent sessionId={selectedSession.id} />
-                    )}
-
-                    {/* Question Bank */}
-                    {selectedCourseId && (
-                      <QuestionBankComponent
-                        courseId={selectedCourseId}
-                        sessionId={selectedSession.id}
-                      />
-                    )}
-
-                    {/* Peer Review Panel */}
-                    {currentUser && (
-                      <PeerReviewPanelComponent
-                        sessionId={selectedSession.id}
-                        userId={currentUser.id}
-                        isInstructor={hasInstructorPrivileges}
-                      />
-                    )}
-
-                    {/* Voice Command Hints for AI Features */}
-                    <Card variant="ghost" padding="md">
-                      <h3 className="font-semibold text-neutral-900 dark:text-white mb-3">AI Feature Voice Commands</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          'Generate live summary',
-                          'Create quiz questions',
-                          'Show participation insights',
-                          'Create peer review assignments',
-                          'Analyze objective coverage',
-                          'Generate follow-ups for struggling students'
-                        ].map((cmd) => (
-                          <span key={cmd} className="px-3 py-1.5 text-sm bg-white dark:bg-neutral-700 rounded-full text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-600">
-                            "{cmd}"
-                          </span>
-                        ))}
-                      </div>
-                    </Card>
-                  </>
-                ) : (
-                  <EmptyState
-                    icon={BookOpen}
-                    message="Select a session to access AI features"
-                  />
-                )}
-              </div>
-            </TabsContent>
-          )}
 
           {/* Edit Session Modal - accessible from any tab */}
           {editingSession && (

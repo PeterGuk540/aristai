@@ -473,7 +473,7 @@ export function AppShellHandsFree({ children }: AppShellProps) {
 
       {/* Main content */}
       <div className="lg:pl-72">
-        <header className="relative sticky top-0 z-30 flex h-16 items-center border-b border-neutral-200 bg-white/95 px-4 backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-950/95 sm:px-6">
+        <header className="relative sticky top-0 z-30 flex h-16 items-center border-b border-neutral-200 bg-white/[.92] backdrop-blur-[14px] px-4 sm:px-6 dark:border-neutral-800 dark:bg-[rgba(10,10,10,.92)]">
           <div className="flex flex-1 items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}

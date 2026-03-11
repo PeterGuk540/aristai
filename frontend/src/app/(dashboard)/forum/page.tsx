@@ -322,7 +322,7 @@ export default function ForumPage() {
         className={`${depth > 0 ? 'ml-8 border-l border-neutral-200 dark:border-neutral-700 pl-4' : ''}`}
       >
         <div
-          className={`p-4 rounded-lg border ${
+          className={`p-4 rounded-[14px] border transition-shadow duration-200 hover:shadow-[0_8px_24px_rgba(0,0,0,0.05)] ${
             post.pinned
               ? 'bg-[#f5c842]/5 border-[#f5c842]/20'
               : 'bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 shadow-sm'
@@ -405,7 +405,7 @@ export default function ForumPage() {
                     <Tag className="h-4 w-4 mr-1" />
                     Label
                   </Button>
-                  <div className="absolute left-0 top-full mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-md p-1.5 hidden group-hover:block z-10 min-w-[150px]">
+                  <div className="absolute left-0 top-full mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-[14px] shadow-md p-1.5 hidden group-hover:block z-10 min-w-[150px]">
                     {LABEL_OPTIONS.map((label) => (
                       <button
                         key={label}
@@ -572,32 +572,36 @@ export default function ForumPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* New Post Form - chat-style inline */}
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Textarea
-                      placeholder="Share your response, question, or reflection..."
-                      rows={2}
-                      value={newPostContent}
-                      onChange={(e) => setNewPostContent(e.target.value)}
-                      data-voice-id="textarea-post-content"
-                    />
+                {/* New Post Form - contained card */}
+                <div className="rounded-[14px] border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-4">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Textarea
+                        placeholder="Share your response, question, or reflection..."
+                        rows={2}
+                        value={newPostContent}
+                        onChange={(e) => setNewPostContent(e.target.value)}
+                        data-voice-id="textarea-post-content"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleCreatePost}
+                      disabled={submitting || !newPostContent.trim()}
+                      data-voice-id="submit-post"
+                      className="flex-shrink-0"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button
-                    onClick={handleCreatePost}
-                    disabled={submitting || !newPostContent.trim()}
-                    data-voice-id="submit-post"
-                    className="flex-shrink-0"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
                 </div>
 
                 {/* Pinned Posts */}
                 {pinnedPosts.length > 0 && (
                   <div>
                     <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3 flex items-center gap-2">
-                      <Pin className="h-4 w-4 text-[#f5c842]" />
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[rgba(245,200,66,0.10)]">
+                        <Pin className="h-3 w-3 text-[#f5c842]" />
+                      </span>
                       Pinned Posts
                     </h3>
                     {pinnedPosts.map((post) => renderPost(post))}
@@ -608,7 +612,12 @@ export default function ForumPage() {
                 {regularPosts.length > 0 ? (
                   <div>
                     {pinnedPosts.length > 0 && (
-                      <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">All Posts</h3>
+                      <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3 flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[rgba(245,200,66,0.10)]">
+                          <MessageSquare className="h-3 w-3 text-[#f5c842]" />
+                        </span>
+                        All Posts
+                      </h3>
                     )}
                     {regularPosts.map((post) => renderPost(post))}
                   </div>

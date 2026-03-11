@@ -33,16 +33,16 @@ export default function DashboardPage() {
         <p className="text-neutral-600 dark:text-neutral-400 mt-1 text-sm">{t('dashboard.subtitle')}</p>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { value: '4', label: t('dashboard.activeCourses'), bg: 'var(--ink-light)' },
-          { value: '12', label: t('dashboard.upcomingSessions'), bg: 'var(--yellow-light)' },
-          { value: '89', label: t('dashboard.forumPosts'), bg: 'var(--warm-100)' },
-          { value: '156', label: t('dashboard.studentsEngaged'), bg: 'var(--ink-light)' },
-        ].map((stat, i) => (
-          <div key={i} className="rounded-[10px] p-4 border border-neutral-200 dark:border-neutral-700" style={{ backgroundColor: stat.bg }}>
-            <p className="text-2xl font-semibold text-neutral-900 dark:text-white">{stat.value}</p>
+          { value: '4', label: t('dashboard.activeCourses') },
+          { value: '12', label: t('dashboard.upcomingSessions') },
+          { value: '89', label: t('dashboard.forumPosts') },
+          { value: '156', label: t('dashboard.studentsEngaged') },
+        ].map((stat, idx) => (
+          <div key={idx} className="rounded-[14px] border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 py-7 px-5 text-center">
+            <p className="text-2xl font-bold text-neutral-900 dark:text-white">{stat.value}</p>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{stat.label}</p>
           </div>
         ))}
@@ -50,44 +50,39 @@ export default function DashboardPage() {
 
       {/* Asymmetric layout */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
-        {/* Recent Activity - simple text list */}
-        <div>
+        {/* Recent Activity - contained card with colored dots */}
+        <div className="rounded-[14px] border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-5">
           <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
             {t('dashboard.recentActivity')}
           </h2>
-          <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
-            {recentActivity.map((activity, index) => {
-              const dotColors: Record<string, string> = {
-                discussion: 'bg-blue-500',
-                session: 'bg-emerald-500',
-                report: 'bg-amber-500',
-                enrollment: 'bg-violet-500',
-              };
-              return (
-                <div
-                  key={index}
-                  className="flex items-center justify-between py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColors[activity.type] || 'bg-neutral-400'}`} />
-                    <span className="text-sm text-neutral-900 dark:text-white">
-                      {activity.title}
-                    </span>
-                  </div>
-                  <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-4 flex-shrink-0">
-                    {activity.time}
-                  </span>
-                </div>
-              );
-            })}
+          <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
+            {recentActivity.map((activity, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between py-3"
+              >
+                <span className="flex items-center gap-2.5 text-sm text-neutral-900 dark:text-white">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                    activity.type === 'discussion' ? 'bg-blue-500' :
+                    activity.type === 'session' ? 'bg-green-500' :
+                    activity.type === 'report' ? 'bg-amber-500' :
+                    'bg-purple-500'
+                  }`} />
+                  {activity.title}
+                </span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-4 flex-shrink-0">
+                  {activity.time}
+                </span>
+              </div>
+            ))}
           </div>
           <button className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium mt-3">
             {t('dashboard.viewAllActivity')}
           </button>
         </div>
 
-        {/* Quick Actions - pill-style links */}
-        <div>
+        {/* Quick Actions - contained card, first action dark */}
+        <div className="rounded-[14px] border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-5">
           <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">
             {t('dashboard.quickActions')}
           </h2>
@@ -98,8 +93,8 @@ export default function DashboardPage() {
                 href={action.href}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
                   index === 0
-                    ? 'bg-[#1e3a5f] text-white border border-[#1e3a5f] hover:bg-[#234876] dark:bg-[#7ba3cc] dark:text-neutral-900 dark:border-[#7ba3cc] dark:hover:bg-[#94b8d9]'
-                    : 'border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                    ? 'bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200'
+                    : 'border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
                 }`}
               >
                 <action.icon className="h-3.5 w-3.5" />

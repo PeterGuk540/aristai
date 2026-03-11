@@ -74,7 +74,7 @@ export default function PublicIntroductionPage() {
         <section className="container-ebook py-16 lg:py-24">
           <p className="section-label mb-4">Product Introduction</p>
           <h1 className="max-w-4xl text-balance mb-6">
-            A teaching platform for live, <span style={{ color: 'var(--ink)' }}>case-based</span> learning.
+            A teaching platform for live, case-based learning.
           </h1>
           <p className="max-w-3xl text-lg text-secondary mb-8">
             AristAI helps instructors run high-quality discussion sessions with a consistent structure,
@@ -95,11 +95,13 @@ export default function PublicIntroductionPage() {
           <div className="container-ebook">
             <p className="section-label mb-3">How It Works</p>
             <h2 className="mb-10">From planning to facilitation to review</h2>
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-3 gap-6 step-counter">
               {steps.map((step, index) => (
-                <div key={step} className="card-ebook">
-                  <div className="mb-4 inline-flex h-8 w-8 items-center justify-center rounded-md text-sm font-semibold" style={{ backgroundColor: 'var(--ink-light)', color: 'var(--ink)' }}>
-                    {index + 1}
+                <div key={step} className="step-item card-ebook text-center">
+                  <div className="flex justify-center mb-4">
+                    <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow text-black text-sm font-semibold">
+                      {index + 1}
+                    </div>
                   </div>
                   <p className="text-sm text-secondary">{step}</p>
                 </div>
@@ -112,50 +114,44 @@ export default function PublicIntroductionPage() {
           <p className="section-label mb-3">Capabilities</p>
           <h2 className="mb-10">Built for classroom discussion workflows</h2>
           <div className="grid-3-col">
-            {sections.map((section, idx) => {
-              const variants = ['icon-box--ink', 'icon-box--yellow', 'icon-box--warm'];
-              const variant = variants[idx % variants.length];
-              return (
-                <article key={section.title} className="card-ebook card-hover">
-                  <div className={`icon-box ${variant} mb-4`}>
-                    <section.icon />
-                  </div>
-                  <h3 className="text-base mb-2">{section.title}</h3>
-                  <p className="text-sm text-secondary">{section.body}</p>
-                </article>
-              );
-            })}
+            {sections.map((section) => (
+              <article key={section.title} className="card-ebook card-hover">
+                <div className="icon-box mb-4">
+                  <section.icon className="text-yellow" />
+                </div>
+                <h3 className="text-base mb-2">{section.title}</h3>
+                <p className="text-sm text-secondary">{section.body}</p>
+              </article>
+            ))}
           </div>
         </section>
 
-        <section id="demo" className="py-16 bg-grain" style={{ background: 'linear-gradient(135deg, var(--warm-50) 0%, var(--yellow-bg) 100%)' }}>
-          <div className="container-ebook relative z-10">
-            <div className="card-ebook max-w-3xl">
-              <p className="section-label mb-3">Access</p>
-              <h2 className="mb-4">Request a demo to access the platform</h2>
-              <p className="text-secondary mb-6">
-                We use a guided onboarding process for institutions and teaching teams. Sign in to submit
-                your request and continue to setup.
-              </p>
-              <ul className="space-y-3 mb-8">
-                <li className="flex items-start gap-2 text-sm text-secondary">
-                  <CheckCircle2 className="h-4 w-4 mt-0.5" style={{ color: 'var(--ink)' }} />
-                  Product walkthrough tailored to your teaching context
-                </li>
-                <li className="flex items-start gap-2 text-sm text-secondary">
-                  <CheckCircle2 className="h-4 w-4 mt-0.5 text-yellow" />
-                  Role-specific setup for instructors and learners
-                </li>
-                <li className="flex items-start gap-2 text-sm text-secondary">
-                  <CheckCircle2 className="h-4 w-4 mt-0.5" style={{ color: 'var(--ink)' }} />
-                  Supported rollout plan for live sessions
-                </li>
-              </ul>
-              <Link href="/login" className="btn-primary-ebook gap-2">
-                Continue to request demo
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
+        <section id="demo" className="cta-dark py-16">
+          <div className="container-ebook text-center">
+            <p className="section-label mb-3 text-neutral-400">Access</p>
+            <h2 className="mb-4 text-white">Request a demo to access the platform</h2>
+            <p className="text-neutral-400 mb-6 max-w-2xl mx-auto">
+              We use a guided onboarding process for institutions and teaching teams. Sign in to submit
+              your request and continue to setup.
+            </p>
+            <ul className="space-y-3 mb-8 max-w-md mx-auto text-left">
+              <li className="flex items-start gap-2 text-sm text-neutral-300">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 text-yellow" />
+                Product walkthrough tailored to your teaching context
+              </li>
+              <li className="flex items-start gap-2 text-sm text-neutral-300">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 text-yellow" />
+                Role-specific setup for instructors and learners
+              </li>
+              <li className="flex items-start gap-2 text-sm text-neutral-300">
+                <CheckCircle2 className="h-4 w-4 mt-0.5 text-yellow" />
+                Supported rollout plan for live sessions
+              </li>
+            </ul>
+            <Link href="/login" className="btn-primary-ebook gap-2">
+              Continue to request demo
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
         </section>
       </main>

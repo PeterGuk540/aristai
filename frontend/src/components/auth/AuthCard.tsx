@@ -42,26 +42,23 @@ const valueCards = [
 export function AuthCard({ children, title, subtitle }: AuthCardProps) {
   return (
     <div className="min-h-screen grid lg:grid-cols-[1.08fr_1fr] bg-stone-50 dark:bg-slate-950">
-      <aside className="hidden lg:flex flex-col justify-between border-r border-stone-200/70 dark:border-slate-800 bg-grain relative overflow-hidden px-10 py-10 text-white" style={{ backgroundColor: '#1e3a5f' }}>
-        {/* Decorative radial overlays */}
-        <div className="absolute top-0 left-0 w-[400px] h-[400px] rounded-full opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(245,200,66,0.4) 0%, transparent 70%)' }} />
-        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] rounded-full opacity-15 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(15,30,50,0.6) 0%, transparent 70%)' }} />
-        <div className="space-y-9 relative z-10">
+      <aside className="hidden lg:flex flex-col justify-between border-r border-stone-200/70 dark:border-slate-800 bg-[#111] px-10 py-10 text-white">
+        <div className="space-y-9">
           <div className="space-y-5">
-            <div className="rounded-xl border border-white/25 bg-white/10 p-4 backdrop-blur-sm">
+            <div className="rounded-xl border border-white/15 bg-white/90 p-4">
               <div className="inline-flex rounded-lg bg-white p-2 shadow-sm">
                 <img src="/AristAI_logo.png" alt="AristAI" className="h-11 w-auto object-contain" />
               </div>
-              <p className="mt-2 text-xs uppercase tracking-[0.12em] text-white/75">Teaching Platform</p>
+              <p className="mt-2 text-xs uppercase tracking-[0.12em] text-neutral-500">Teaching Platform</p>
             </div>
 
-            <div className="flex items-center justify-between gap-4 rounded-xl border border-white/25 bg-white/10 px-4 py-3 backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-white/15 bg-white/90 px-4 py-3">
               <img
                 src="/EPGUPP_logo_light.png"
                 alt="Postgrado Universidad Politecnica"
                 className="h-8 w-auto object-contain rounded bg-white p-1 shadow-sm"
               />
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80">Academic Partner</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Academic Partner</span>
             </div>
           </div>
 
@@ -69,14 +66,14 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
             <h1 className="text-4xl font-bold leading-tight max-w-xl">
               Internal workspace for case-based learning operations.
             </h1>
-            <p className="text-base text-white/85 max-w-xl">
+            <p className="text-base text-neutral-400 max-w-xl">
               Structured for instructors and teaching teams who need dependable classroom workflows.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {valueCards.map((card) => (
-              <article key={card.title} className="rounded-xl border border-white/15 bg-white/90 p-4 text-slate-900 shadow-sm">
+              <article key={card.title} className="rounded-[14px] border border-white/15 bg-white/90 p-4 text-slate-900 shadow-sm">
                 <card.icon className={`h-4 w-4 mb-2 ${card.iconTone}`} />
                 <h2 className="text-sm font-semibold">{card.title}</h2>
                 <p className="mt-1 text-xs leading-relaxed text-slate-600">{card.body}</p>
@@ -85,7 +82,7 @@ export function AuthCard({ children, title, subtitle }: AuthCardProps) {
           </div>
         </div>
 
-        <p className="text-xs text-white/70 relative z-10">&copy; {new Date().getFullYear()} AristAI</p>
+        <p className="text-xs text-neutral-500">&copy; {new Date().getFullYear()} AristAI</p>
       </aside>
 
       <div className="flex items-center justify-center px-6 py-10 sm:px-12 bg-white dark:bg-slate-950">

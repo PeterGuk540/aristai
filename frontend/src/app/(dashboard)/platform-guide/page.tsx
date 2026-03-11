@@ -223,12 +223,11 @@ export default function IntroductionPage() {
   return (
     <div className="animate-fade-in" data-voice-id="introduction-page">
       {/* Hero Section */}
-      <section className="bg-hero-gradient -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-12 pb-16 mb-12 relative overflow-hidden">
-        <div className="absolute top-[-40%] right-[-10%] w-[500px] h-[500px] rounded-full opacity-[0.07] pointer-events-none" style={{ background: 'radial-gradient(circle, var(--ink) 0%, transparent 70%)' }} />
-        <div className="container-ebook relative z-10">
+      <section className="bg-hero-gradient -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-12 pb-16 mb-12">
+        <div className="container-ebook">
           <p className="section-label mb-4">Platform Guide</p>
           <h1 className="text-balance mb-6">
-            Welcome to Arist<span style={{ color: 'var(--ink)' }}>AI</span>
+            Welcome to Arist<span className="text-yellow">AI</span>
           </h1>
           <p className="text-lg max-w-2xl mb-8" style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
             An AI-powered platform for synchronous classroom discussions. Create engaging case-based learning experiences with real-time AI assistance, voice control, and comprehensive analytics.
@@ -257,21 +256,17 @@ export default function IntroductionPage() {
         <div className="grid-3-col">
           {platformFeatures
             .filter(f => f.forRole === 'all' || (showInstructorContent && f.forRole === 'instructor'))
-            .map((feature, idx) => {
-              const variants = ['icon-box--ink', 'icon-box--yellow', 'icon-box--warm'];
-              const variant = variants[idx % variants.length];
-              return (
-                <div key={idx} className="card-ebook card-hover">
-                  <div className={`icon-box ${variant} mb-4`}>
-                    <feature.icon />
-                  </div>
-                  <h4 className="mb-2">{feature.title}</h4>
-                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {feature.description}
-                  </p>
+            .map((feature, idx) => (
+              <div key={idx} className="card-ebook card-hover">
+                <div className="icon-box mb-4">
+                  <feature.icon className="text-yellow" />
                 </div>
-              );
-            })}
+                <h4 className="mb-2">{feature.title}</h4>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  {feature.description}
+                </p>
+              </div>
+            ))}
         </div>
       </section>
 
@@ -288,15 +283,18 @@ export default function IntroductionPage() {
               : 'Follow these steps to join a course and participate in discussions.'}
           </p>
 
-          <div className="step-counter space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 step-counter">
             {steps.map((step, idx) => (
-              <div key={idx} className="step-item flex gap-5">
-                <div className="flex-1 accent-bar">
-                  <h4 className="mb-1">{step.title}</h4>
-                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                    {step.description}
-                  </p>
+              <div key={idx} className="step-item card-ebook text-center">
+                <div className="flex justify-center mb-3">
+                  <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-[#f5c842] text-black font-semibold text-sm">
+                    {idx + 1}
+                  </div>
                 </div>
+                <h4 className="mb-2 text-base">{step.title}</h4>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  {step.description}
+                </p>
               </div>
             ))}
           </div>
@@ -349,14 +347,11 @@ export default function IntroductionPage() {
               }
               return true;
             })
-            .map((group, idx) => {
-              const variants = ['icon-box--ink', 'icon-box--yellow', 'icon-box--warm'];
-              const variant = variants[idx % variants.length];
-              return (
+            .map((group, idx) => (
               <div key={idx} className="card-ebook">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className={`icon-box ${variant}`}>
-                    <group.icon />
+                  <div className="icon-box">
+                    <group.icon className="text-yellow" />
                   </div>
                   <div>
                     <h4 className="mb-0">{group.category}</h4>
@@ -394,7 +389,7 @@ export default function IntroductionPage() {
                     ))}
                 </div>
               </div>
-            );})}
+            ))}
         </div>
       </section>
 
@@ -441,16 +436,14 @@ export default function IntroductionPage() {
                   description: 'Set clear time limits for responses. It creates urgency and keeps discussions focused.',
                 },
               ].map((tip, idx) => (
-                <div key={idx} className="flex gap-4">
-                  <div className="check-dot flex-shrink-0">
+                <div key={idx} className="card-ebook card-hover">
+                  <div className="icon-box mb-4">
                     <tip.icon />
                   </div>
-                  <div>
-                    <h4 className="text-base mb-1">{tip.title}</h4>
-                    <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                      {tip.description}
-                    </p>
-                  </div>
+                  <h4 className="text-base mb-2">{tip.title}</h4>
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                    {tip.description}
+                  </p>
                 </div>
               ))}
             </div>
@@ -487,24 +480,19 @@ export default function IntroductionPage() {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="container-ebook mb-8">
-        <div
-          className="card-ebook text-center py-12 bg-grain relative overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, var(--warm-50) 0%, var(--yellow-bg) 100%)' }}
-        >
-          <div className="relative z-10">
-            <h2 className="mb-4">Ready to Get Started?</h2>
-            <p className="mb-6 max-w-xl mx-auto" style={{ color: 'var(--text-secondary)' }}>
-              {showInstructorContent
-                ? 'Create your first course and experience AI-powered classroom discussions.'
-                : 'Join a course and start participating in engaging discussions.'}
-            </p>
-            <Link href="/courses" className="btn-primary-ebook gap-2" data-voice-id="intro-cta-courses">
-              {showInstructorContent ? 'Create Your First Course' : 'View Available Courses'}
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
+      {/* CTA Section – Dark */}
+      <section className="cta-dark -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-16 mb-8">
+        <div className="container-ebook text-center">
+          <h2 className="mb-4 text-white">Ready to Get Started?</h2>
+          <p className="mb-6 max-w-xl mx-auto text-neutral-400">
+            {showInstructorContent
+              ? 'Create your first course and experience AI-powered classroom discussions.'
+              : 'Join a course and start participating in engaging discussions.'}
+          </p>
+          <Link href="/courses" className="btn-primary-ebook gap-2" data-voice-id="intro-cta-courses">
+            {showInstructorContent ? 'Create Your First Course' : 'View Available Courses'}
+            <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       </section>
     </div>

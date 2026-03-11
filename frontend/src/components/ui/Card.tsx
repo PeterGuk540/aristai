@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 import { HTMLAttributes, forwardRef } from 'react';
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'elevated' | 'outlined' | 'ghost' | 'accent' | 'feature';
+  variant?: 'default' | 'elevated' | 'outlined' | 'ghost';
   hover?: boolean;
   padding?: 'none' | 'sm' | 'md' | 'lg';
 }
@@ -12,9 +12,9 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
     <div
       ref={ref}
       className={cn(
-        'rounded-[10px] transition-all duration-200',
+        'rounded-[14px] transition-shadow duration-200',
         {
-          'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700':
+          'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm':
             variant === 'default',
           'bg-white dark:bg-neutral-800 shadow-md':
             variant === 'elevated',
@@ -22,13 +22,8 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
             variant === 'outlined',
           'bg-neutral-50 dark:bg-neutral-800/30':
             variant === 'ghost',
-          'bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 border-l-[3px] border-l-[#1e3a5f] dark:border-l-[#7ba3cc]':
-            variant === 'accent',
-          'bg-[var(--warm-50)] dark:bg-neutral-800/50 border border-[var(--ink-border)] dark:border-neutral-700 rounded-xl':
-            variant === 'feature',
         },
-        (variant === 'default' || variant === 'accent' || variant === 'feature') && 'shadow-[var(--shadow-card)]',
-        hover && 'cursor-pointer hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-0.5',
+        hover && 'cursor-pointer hover:shadow-[0_8px_24px_rgba(0,0,0,0.05)] dark:hover:shadow-[0_8px_24px_rgba(0,0,0,0.3)]',
         {
           'p-0': padding === 'none',
           'p-4': padding === 'sm',
